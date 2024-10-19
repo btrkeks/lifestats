@@ -1,0 +1,16 @@
+[workspace]
+
+resolver = "2"
+members = [
+    "logger",
+    "backend",
+    "plotter_backend",
+    "stopwatch_logger",
+    "fitbit",
+    "heart_beat_logger",
+    "monthly_stats",
+    "web_server",
+    "cli",
+    "internet_logger",
+    "plotter_cli"
+, "midi_logger", "goal_setter", "db_insertion_listener", "pubsub_proxy"]

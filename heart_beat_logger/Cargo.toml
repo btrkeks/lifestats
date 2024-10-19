@@ -1,0 +1,10 @@
+[package]
+name = "heart_beat_logger"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+backend = { path = "../backend" }
+chrono = "0.4"
+ureq = { version = "2.5", features = ["json"] }
+anyhow = "1.0.89"
