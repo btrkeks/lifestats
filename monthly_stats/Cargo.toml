@@ -1,0 +1,9 @@
+[package]
+name = "monthly_stats"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# backend = { path = "../backend" }
+# chrono = "0.4.38"
+# anyhow = "1.0.89"

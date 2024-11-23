@@ -2,15 +2,17 @@
 
 resolver = "2"
 members = [
-    "logger",
+    "logging/heart_beat_logger",
+    "logging/cli_logger",
+    "logging/midi_logger",
     "backend",
-    "plotter_backend",
-    "stopwatch_logger",
-    "fitbit",
-    "heart_beat_logger",
+    "logging/stopwatch_logger",
+    "third_party/fitbit",
     "monthly_stats",
-    "web_server",
+    "webserver",
     "cli",
-    "internet_logger",
-    "plotter_cli"
-, "midi_logger", "goal_setter", "db_insertion_listener", "pubsub_proxy"]
+    "plotting/plotter_cli",
+    "plotting/plotting_backend",
+    "goal_setter",
+    "db_insertion_listener"
+, "wallpaper", "api_client"]

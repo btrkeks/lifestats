@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-plotter_backend = { path = "../plotter_backend" }
+plotting_backend = { path = "../plotting/plotting_backend" }
 backend = { path = "../backend" }
 anyhow = "1.0.89"

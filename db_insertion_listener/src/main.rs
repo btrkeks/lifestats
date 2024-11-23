@@ -1,29 +1,38 @@
-use anyhow::Result;
-use backend::db_events::{listen_for_db_event, Event};
-use plotter_backend::regenerate_all_plots;
-use std::process::Command;
+// db_insertion_listener/src/main.rs
+// Background service that listens for database events and triggers plot regeneration
+// and wallpaper updates when statistics are modified.
 
-fn update_wallpaper() -> bool {
-    Command::new("sh")
+use anyhow::Result;
+use backend::database::db_events::{listen_for_db_event, Event};
+use plotting_backend::{regenerate_plots_for_id};
+use std::process::Command;
+use backend::statistics::objects::StatisticId;
+
+fn update_wallpaper(_id: StatisticId) -> Result<(), ()> {
+    let success = Command::new("sh")
         .arg("-c")
         .arg("~/.local/bin/update_wallpaper")
         .status()
         .expect("failed to update wallpaper")
-        .success()
+        .success();
+
+    if success { Ok(()) } else { Err(()) }
 }
 
-fn main() -> Result<()> {
-    Ok(listen_for_db_event(|event| {
+fn main() {
+    listen_for_db_event(|event| {
         match event {
-            Event::RowUpdated(id) => {
-                // TODO: Update only plots corresponding to id
-                println!("Received RowUpdated event for id {}", id);
+            Event::ValueUpdated(id) | Event::GoalUpdated(id) => {
+                println!("Received event for id {}", id);
 
-                regenerate_all_plots().expect("Could not regenerate plots");
-                if !update_wallpaper() {
-                    eprintln!("Failed to update wallpaper");
+                if regenerate_plots_for_id(id).is_err() {
+                    eprintln!("Could not regenerate plots for id {}", id);
+                }
+
+                if update_wallpaper(id).is_err() {
+                    eprintln!("Failed to update wallpaper for id {}", id);
                 }
             }
         }
-    }))
+    })
 }

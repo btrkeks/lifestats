@@ -1,0 +1,66 @@
+{% extends "base" %}
+
+{% block title %}Statistics Plots{% endblock %}
+
+{% block additional_styles %}
+.masonry-container {
+columns: 3 300px;
+column-gap: 1.5rem;
+margin: 0 auto;
+}
+
+.plot-card {
+display: inline-block;
+width: 100%;
+background: white;
+border-radius: 8px;
+box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+margin-bottom: 1.5rem;
+break-inside: avoid;
+transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.plot-card:hover {
+transform: translateY(-2px);
+box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.plot-card img {
+width: 100%;
+height: auto;
+border-radius: 8px;
+display: block;
+}
+
+@media (max-width: 768px) {
+.masonry-container {
+columns: 2 200px;
+}
+}
+
+@media (max-width: 480px) {
+.masonry-container {
+columns: 1;
+}
+}
+
+@media (prefers-color-scheme: dark) {
+.plot-card {
+background: #2b3035;
+}
+}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="masonry-container">
+        {% for plot in plots %}
+        <div class="plot-card">
+            <img src="/plots/{{ plot.id }}.png"
+                 alt="Plot {{ plot.id }}"
+                 loading="lazy">
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

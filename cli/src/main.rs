@@ -1,12 +1,15 @@
-// cli/src/main.rs
+// cli/src/main.
+
 use anyhow::Result;
-use backend::db_ops::open_db;
-use backend::statistic_getter::get_all_statistics;
-use backend::statistics::{AnyStatistic, Statistic, StatisticTypeSpecific};
 use chrono::{Duration, Local, NaiveDate};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use serde_json::json;
+use backend::database::db_ops::open_db;
+use backend::statistics::objects::StatisticId;
+use backend::statistics::statistic_definition_storage::get_all_statistics;
+use backend::statistics::type_definitions::{AnyStatistic, StatisticTypeSpecific};
+use backend::statistics::type_definitions::Statistic;
 
 fn get_date_for_days_in_past(days_in_past: i64) -> NaiveDate {
     Local::now().date_naive() - Duration::days(days_in_past)
@@ -89,7 +92,7 @@ fn score_command(days_in_past: i64) -> Result<()> {
 
 #[derive(Serialize)]
 struct StatisticDump {
-    id: u32,
+    id: StatisticId,
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<String>,
@@ -112,7 +115,7 @@ fn dump_command(days_in_past: i64) -> Result<()> {
             AnyStatistic::TimeAmount(s) => dump_statistic(s, &conn, date)?,
             AnyStatistic::PointInTime(s) => dump_statistic(s, &conn, date)?,
             AnyStatistic::TimeSpans(s) => dump_statistic(s, &conn, date)?,
-            AnyStatistic::TimeSpan(s) => dump_statistic(s, &conn, date)?,
+            // AnyStatistic::TimeSpan(s) => dump_statistic(s, &conn, date)?,
             AnyStatistic::Habit(s) => dump_statistic(s, &conn, date)?,
         };
 
@@ -135,7 +138,7 @@ fn dump_statistic<T, U>(
     date: NaiveDate,
 ) -> Result<StatisticDump>
 where
-    T: backend::db_ops::DbStorable,
+    T: backend::database::db_ops::DbStorable,
 {
     let row = stat.get_row_for_date(conn, date)?;
     let score = stat.calculate_score(&row);
