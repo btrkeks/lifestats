@@ -3,7 +3,7 @@ pub mod http_logger;
 // logging/heart_beat_logger/src/lib.rs
 use anyhow::{anyhow, Result};
 use backend::statistics::objects::{StatisticId, TimeFrame};
-use backend::statistics::update_policy::TimeFrameListUpdatePolicy;
+use backend::statistics::objects::update_policy::TimeFrameListUpdatePolicy;
 use chrono::{Local, NaiveTime};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{mpsc, Arc};
@@ -11,7 +11,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use backend::database::db_ops::open_db;
-use backend::statistics::statistic_definition_storage::get_statistic_by_id;
+use backend::statistics::statistic_repository::get_statistic_by_id;
 use backend::statistics::type_definitions::{AnyStatistic, StatisticTypeSpecific};
 
 const LOG_FREQUENCY: Duration = Duration::from_secs(60);

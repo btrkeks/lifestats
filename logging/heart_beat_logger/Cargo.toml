@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+statistics = { path = "../../domain/models/statistics" }
+web_api = { path = "../../interfaces/web/api" }
 anyhow = "1.0"
-backend = { path = "../../backend" }
-api_client = { path = "../../api_client" }
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
 thiserror = "2.0.3"

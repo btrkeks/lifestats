@@ -3,3 +3,4 @@ aigen.sh
 Cargo.lock
 target
 .idea
+.env

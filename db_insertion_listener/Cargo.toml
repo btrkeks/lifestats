@@ -1,9 +1,0 @@
-[package]
-name = "db_insertion_listener"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-plotting_backend = { path = "../plotting/plotting_backend" }
-backend = { path = "../backend" }
-anyhow = "1.0.89"

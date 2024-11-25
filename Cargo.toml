@@ -2,17 +2,19 @@
 
 resolver = "2"
 members = [
+    "util",
+    "persistence",
     "logging/heart_beat_logger",
     "logging/cli_logger",
     "logging/midi_logger",
-    "backend",
     "logging/stopwatch_logger",
-    "third_party/fitbit",
-    "monthly_stats",
-    "webserver",
-    "cli",
-    "plotting/plotter_cli",
-    "plotting/plotting_backend",
-    "goal_setter",
-    "db_insertion_listener"
-, "wallpaper", "api_client"]
+    "logging/third_party/fitbit",
+    "domain/models/statistics",
+    "domain/models/plotting",
+    "interfaces/cli",
+    "interfaces/regen_plots",
+    "interfaces/wallpaper",
+    "interfaces/web/server",
+    "interfaces/web/api",
+    "services/regen_plots_service",
+]

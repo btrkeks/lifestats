@@ -13,7 +13,7 @@ use log::LevelFilter;
 use std::fs::OpenOptions;
 use std::io::Write;
 use backend::statistics::objects::StatisticId;
-use backend::statistics::statistic_definition_storage::get_statistic_by_id;
+use backend::statistics::statistic_repository::get_statistic_by_id;
 use backend::statistics::type_definitions::Statistic;
 
 #[derive(Parser, Debug, Clone)]

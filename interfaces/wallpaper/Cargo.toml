@@ -1,0 +1,9 @@
+[package]
+name = "wallpaper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+statistics = { path = "../../domain/models/statistics" }
+image = "0.25.4"
+anyhow = "1.0.89"

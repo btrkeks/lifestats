@@ -1,9 +1,0 @@
-[package]
-name = "wallpaper"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-image = "0.25.4"
-backend = { path = "../backend" }
-anyhow = "1.0.89"

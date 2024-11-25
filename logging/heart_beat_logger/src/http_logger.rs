@@ -2,7 +2,7 @@ use std::io::Write;
 use anyhow::{anyhow, Context, Result};
 use api_client::client::{ApiClient, ClientError};
 use backend::statistics::objects::{StatisticId, TimeFrame};
-use backend::statistics::update_policy::TimeFrameListUpdatePolicy;
+use backend::statistics::objects::update_policy::TimeFrameListUpdatePolicy;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 

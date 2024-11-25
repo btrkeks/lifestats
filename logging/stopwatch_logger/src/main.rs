@@ -19,7 +19,7 @@ use heart_beat_logger::HeartbeatLogger;
 use std::io::{self, Write};
 use std::time::Duration as StdDuration;
 use backend::statistics::objects::StatisticId;
-use backend::statistics::statistic_definition_storage::{get_all_time_amount_statistics, get_all_time_spans_statistics};
+use backend::statistics::statistic_repository::{get_all_time_amount_statistics, get_all_time_spans_statistics};
 use backend::statistics::type_definitions::{Statistic};
 use backend::statistics::type_definitions::time_amount::TimeAmountStatistic;
 

@@ -1,0 +1,2 @@
+pub mod statistic_data_repository;
+pub mod statistic_definition_repository;
