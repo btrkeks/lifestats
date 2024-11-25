@@ -1,0 +1,13 @@
+[package]
+name = "database"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+diesel = { version = "2.2.5", features = ["sqlite"] }
+dotenvy = "0.15"
+diesel_migrations = "2.1.0"
+chrono = "0.4.38"
+anyhow = "1.0.93"
+serde = "1.0.214"
+serde_json = "1.0.133"
