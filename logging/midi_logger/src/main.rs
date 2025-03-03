@@ -1,23 +1,21 @@
-// logging/midi_logger/src/main.rs
-// Logger for MIDI device activity, tracking practice sessions by monitoring MIDI input
-// and integrating with the statistics system for automated time tracking.
-
-mod midi;
 mod config;
+/// This application connects a midi device to the hearbeat logger.
+/// It is used to track the time where the user played an instrument (e.g. a piano).
+mod midi;
 mod port_selection;
 
+use crate::config::MidiLoggerConfig;
+use crate::midi::midi_device::MidiDevice;
+use crate::midi::{LoggerMessage, MidiLogger};
+use crate::port_selection::PortSelector;
 use anyhow::{Context, Result};
+use heart_beat_logger::logger::http_logger::HttpLogger;
 use log::{error, info, warn};
 use std::io::{stdin, stdout, Write};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
-use backend::statistics::{
-    objects::StatisticId
-};
-use crate::config::MidiLoggerConfig;
-use crate::midi::{LoggerMessage, MidiLogger};
-use crate::midi::midi_device::MidiDevice;
-use crate::port_selection::PortSelector;
+use transfer_objects::statistic_id::StatisticId;
+use util::stdout_logging::init_logging;
 
 const SERVER_URL: &str = "http://192.168.0.103:8000";
 const HEARTBEAT_TIMEOUT_SECS: u64 = 60;
@@ -29,12 +27,6 @@ fn main() {
         Ok(_) => info!("Application terminated successfully"),
         Err(err) => error!("Application error: {}", err),
     }
-}
-
-fn init_logging() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .format_timestamp(Some(env_logger::TimestampPrecision::Millis))
-        .init();
 }
 
 fn run() -> Result<()> {
@@ -83,10 +75,10 @@ fn select_midi_port(midi_device: &mut MidiDevice) -> Result<()> {
     let port_selector = PortSelector::default();
     let available_ports = midi_device.get_available_ports();
 
-    let chosen_port_index = port_selector.select_port(&available_ports, |ports| {
-        select_port_interactive(ports)
-    })?;
-    let chosen_port = available_ports.get(chosen_port_index).context("Invalid port index")?;
+    let chosen_port_index = port_selector.select_port(&available_ports, select_port_interactive)?;
+    let chosen_port = available_ports
+        .get(chosen_port_index)
+        .context("Invalid port index")?;
 
     midi_device.select_port(chosen_port)?;
     port_selector.save_port_selection(chosen_port)?;

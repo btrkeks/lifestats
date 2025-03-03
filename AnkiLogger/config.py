@@ -39,7 +39,8 @@ class Configuration:
 
         self._config = config.get("time_frame", {})
 
-    def _save_config(self, config: dict) -> None:
+    @staticmethod
+    def _save_config(config: dict) -> None:
         """Save configuration to disk."""
         mw.addonManager.writeConfig(ADDON_NAME, config)
 
@@ -88,7 +89,7 @@ class Configuration:
 
 
 # Global configuration instance
-config = Configuration()
+application_config = Configuration()
 
 
 # Convenience function for getting statistic ID
@@ -101,4 +102,4 @@ def get_statistic_id_for_deck(deck_id: DeckId) -> Optional[int]:
     Returns:
         The configured statistic ID or None if no mapping exists
     """
-    return config.get_statistic_id_for_deck(deck_id)
+    return application_config.get_statistic_id_for_deck(deck_id)

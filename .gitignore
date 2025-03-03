@@ -1,6 +1,7 @@
 TODO
 aigen.sh
-Cargo.lock
 target
 .idea
 .env
+concat_script
+project_dump.txt

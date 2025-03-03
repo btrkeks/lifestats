@@ -7,6 +7,12 @@ pub struct ActivitySummaryResponse {
     pub goals: Goals,
 }
 
+impl ActivitySummaryResponse {
+    pub fn get_steps(&self) -> u32 {
+        self.summary.steps
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Activity {
     // TODO
@@ -20,7 +26,7 @@ pub struct Summary {
     #[serde(rename = "caloriesBMR")]
     pub calories_bmr: i32,
     pub active_score: i32,
-    pub steps: i32,
+    pub steps: u32,
     pub floors: i32,
     pub elevation: f64,
     pub sedentary_minutes: i32,
@@ -75,7 +81,7 @@ pub struct HeartRateZone {
 #[serde(rename_all = "camelCase")]
 pub struct Goals {
     pub calories_out: i32,
-    pub steps: i32,
+    pub steps: u32,
     pub distance: f64,
     pub floors: i32,
     pub active_minutes: i32,

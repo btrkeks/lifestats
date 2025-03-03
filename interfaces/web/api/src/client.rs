@@ -1,9 +1,11 @@
 use crate::types::{LogRequest, LogResponse};
-use anyhow::{Result};
-use backend::statistics::objects::StatisticId;
+use anyhow::Result;
+use chrono::NaiveTime;
+use lifestats_core::TimeFrameListUpdatePolicy;
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
 use thiserror::Error;
+use transfer_objects::statistic_id::StatisticId;
 
 #[derive(Error, Debug)]
 pub enum ClientError {
@@ -52,28 +54,6 @@ impl ApiClient {
     /// # Returns
     ///
     /// Returns a Result containing the LogResponse on success, or a ClientError on failure.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use api_client::client::ApiClient;
-    /// use backend::statistics::objects::StatisticId;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> anyhow::Result<()> {
-    ///     let client = ApiClient::new_local()?;
-    ///
-    ///     let result = client.log_statistic(
-    ///         StatisticId(1),
-    ///         "10.5",
-    ///         Some("Replace"),
-    ///         None
-    ///     ).await?;
-    ///
-    ///     println!("Log result: {}", result.message);
-    ///     Ok(())
-    /// }
-    /// ```
     pub async fn log_statistic(
         &self,
         statistic_id: StatisticId,
@@ -90,11 +70,7 @@ impl ApiClient {
             date: date.unwrap_or_else(|| time::OffsetDateTime::now_utc().date()),
         };
 
-        let response = self.client
-            .post(&endpoint)
-            .json(&payload)
-            .send()
-            .await?;
+        let response = self.client.post(&endpoint).json(&payload).send().await?;
 
         match response.status() {
             StatusCode::OK => {
@@ -103,29 +79,52 @@ impl ApiClient {
                     return Err(ClientError::ServerError(response_data.message));
                 }
                 Ok(response_data)
-            },
+            }
             status if status.is_client_error() => {
-                let error_response = response.json::<LogResponse>().await
-                    .unwrap_or_else(|_| LogResponse {
-                        success: false,
-                        message: "Bad Request".to_string(),
-                    });
+                let error_response =
+                    response
+                        .json::<LogResponse>()
+                        .await
+                        .unwrap_or_else(|_| LogResponse {
+                            success: false,
+                            message: "Bad Request".to_string(),
+                        });
                 Err(ClientError::ServerError(error_response.message))
-            },
-            status if status.is_server_error() => {
-                Err(ClientError::ServerError("Server error occurred".to_string()))
-            },
-            _ => Err(ClientError::ServerError("Unexpected response".to_string()))
+            }
+            status if status.is_server_error() => Err(ClientError::ServerError(
+                "Server error occurred".to_string(),
+            )),
+            _ => Err(ClientError::ServerError("Unexpected response".to_string())),
         }
+    }
+
+    pub async fn log_time_frame(
+        &self,
+        statistic_id: StatisticId,
+        start_time: NaiveTime,
+        end_time: NaiveTime,
+        update_policy: Option<TimeFrameListUpdatePolicy>,
+    ) -> Result<LogResponse, ClientError> {
+        // FIXME: This conversion is dangerous!
+        let time_frame_str = format!("{} - {}", start_time, end_time);
+        let update_policy_str = update_policy.map(|p| p.to_string());
+
+        self.log_statistic(
+            statistic_id,
+            &time_frame_str,
+            update_policy_str.as_deref(),
+            None,
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::{MockServer, Mock, ResponseTemplate};
-    use wiremock::matchers::{method, path};
     use serde_json::json;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
     async fn test_successful_log() {
@@ -142,12 +141,9 @@ mod tests {
 
         let client = ApiClient::new(mock_server.uri()).unwrap();
 
-        let result = client.log_statistic(
-            StatisticId(1),
-            "10.5",
-            Some("Replace"),
-            None,
-        ).await;
+        let result = client
+            .log_statistic(StatisticId(1), "10.5", Some("Replace"), None)
+            .await;
 
         assert!(result.is_ok());
         let response = result.unwrap();
@@ -167,12 +163,9 @@ mod tests {
 
         let client = ApiClient::new(mock_server.uri()).unwrap();
 
-        let result = client.log_statistic(
-            StatisticId(1),
-            "10.5",
-            None,
-            None,
-        ).await;
+        let result = client
+            .log_statistic(StatisticId(1), "10.5", None, None)
+            .await;
 
         assert!(matches!(result, Err(ClientError::ServerError(_))));
     }
@@ -192,12 +185,9 @@ mod tests {
 
         let client = ApiClient::new(mock_server.uri()).unwrap();
 
-        let result = client.log_statistic(
-            StatisticId(999),
-            "invalid",
-            None,
-            None,
-        ).await;
+        let result = client
+            .log_statistic(StatisticId(999), "invalid", None, None)
+            .await;
 
         assert!(matches!(result, Err(ClientError::ServerError(_))));
     }

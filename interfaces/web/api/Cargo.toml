@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-statistics = { path = "../../../domain/models/statistics" }
+lifestats_core = { path = "../../../core/application_service" }
+transfer_objects = { path = "../../../transfer_objects" }
+chrono = "0.4.39"
 anyhow = "1.0"
 thiserror = "2.0.3"
 reqwest = { version = "0.12.9", features = ["json"] }

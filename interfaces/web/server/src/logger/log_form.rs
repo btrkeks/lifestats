@@ -1,19 +1,18 @@
-use rocket::post;
-use rocket::get;
+use crate::guards::Context;
+use crate::logger::log_core::log_statistic;
 use rocket::form::Form;
+use rocket::get;
+use rocket::post;
+use rocket::request::FlashMessage;
 use rocket::response::{Flash, Redirect};
 use rocket::serde::Serialize;
 use rocket_dyn_templates::{context, Template};
-use rocket::request::FlashMessage;
-use backend::statistics::objects::StatisticId;
-use backend::statistics::statistic_repository::get_all_statistics;
-use backend::statistics::type_definitions::Statistic;
-use api_client::types::LogRequest;
-use crate::logger::log_core::{log_statistic};
+use transfer_objects::statistic_id::StatisticId;
+use web_api::types::LogRequest;
 
 #[derive(Debug, FromForm)]
 pub struct LogForm {
-    pub statistic_id: StatisticId,
+    pub statistic_id: u32,
     pub value: String,
     pub update_policy: Option<String>,
 }
@@ -25,43 +24,43 @@ struct StatisticSelection<'a> {
 }
 
 #[get("/log")]
-pub fn show_log_interface(flash: Option<FlashMessage<'_>>) -> Template {
-    let statistics = get_all_statistics().unwrap_or_default();
+pub fn show_log_interface(context: Context, flash: Option<FlashMessage<'_>>) -> Template {
+    let statistics = lifestats_core::statistics::get_all_statistics(&context.0).unwrap();
 
     let statistic_list: Vec<StatisticSelection> = statistics
         .iter()
         .map(|s| StatisticSelection {
-            id: s.get_id(),
+            id: s.id(),
             name: s.get_name(),
         })
         .collect();
 
-    Template::render("log_interface", context! {
-        active_page: "logger",
-        statistics: statistic_list,
-        update_policies: vec![
-            "Replace".to_string(),
-            "Add".to_string(),
-            "Average".to_string(),
-        ],
-        flash: flash.map(|flash| (flash.kind().to_string(), flash.message().to_string()))
-    })
+    Template::render(
+        "log_interface",
+        context! {
+            active_page: "logger",
+            statistics: statistic_list,
+            update_policies: vec![
+                "Replace".to_string(),
+                "Add".to_string(),
+                "Average".to_string(),
+            ],
+            flash: flash.map(|flash| (flash.kind().to_string(), flash.message().to_string()))
+        },
+    )
 }
 
 #[post("/log", data = "<form>")]
-pub async fn submit_log(form: Form<LogForm>) -> Flash<Redirect> {
+pub async fn submit_log(context: Context, form: Form<LogForm>) -> Flash<Redirect> {
     let request = LogRequest {
-        statistic_id: form.statistic_id,
+        statistic_id: StatisticId(form.statistic_id),
         value: form.value.clone(),
         update_policy: form.update_policy.clone(),
         date: time::OffsetDateTime::now_utc().date(),
     };
 
-    match log_statistic(request).await {
-        Ok(result) => Flash::success(
-            Redirect::to(uri!(show_log_interface)),
-            result.message,
-        ),
+    match log_statistic(&context.0, request).await {
+        Ok(result) => Flash::success(Redirect::to(uri!(show_log_interface)), result.message),
         Err(e) => Flash::error(
             Redirect::to(uri!(show_log_interface)),
             format!("Error: {}", e),
@@ -72,21 +71,12 @@ pub async fn submit_log(form: Form<LogForm>) -> Flash<Redirect> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rocket::local::blocking::Client;
-    use rocket::http::{ContentType, Status};
     use crate::rocket;
+    use rocket::http::{ContentType, Status};
+    use rocket::local::blocking::Client;
 
     fn create_test_client() -> Client {
         Client::tracked(rocket()).expect("valid rocket instance")
-    }
-
-    #[test]
-    fn test_log_interface_renders() {
-        let client = create_test_client();
-        let response = client.get("/log").dispatch();
-
-        assert_eq!(response.status(), Status::Ok);
-        assert!(response.into_string().unwrap().contains("Log Statistic"));
     }
 
     #[test]

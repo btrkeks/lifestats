@@ -2,7 +2,7 @@ from aqt import mw
 from anki.decks import DeckId
 
 
-def get_deck_finished(deck_id: DeckId) -> bool:
+def deck_is_finished(deck_id: DeckId) -> bool:
     if deck_id is None:
         return False
 

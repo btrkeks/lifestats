@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use backend::statistics::objects::StatisticId;
+use transfer_objects::statistic_id::StatisticId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogRequest {

@@ -1,5 +1,6 @@
-[debug]
+[global]
 address = "0.0.0.0"
 
-[release]
-address = "0.0.0.0"
+[global.cors]
+allowed_origins = "http://localhost:8000,http://localhost:80,chrome-extension://pamdenbdnapjopegneblfdelpgekpipl"
+max_age = 3600

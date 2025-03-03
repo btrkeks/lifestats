@@ -1,148 +1,157 @@
-use anyhow::{Context, Result};
+// web_server/src/goal_edit/goal_edit_page.rs
+use crate::guards::Context;
+use chrono::NaiveDate;
 use rocket::form::Form;
+use rocket::http::Status;
 use rocket::request::FlashMessage;
+use rocket::response::status::Custom;
 use rocket::response::{Flash, Redirect};
-use rocket::serde::{Serialize};
+use rocket::serde::json::Json;
+use rocket::serde::Serialize;
 use rocket_dyn_templates::{context, Template};
-use backend::database::db_ops;
-use backend::statistics::objects::{StatisticId, TimeFrameList};
-use backend::statistics::statistic_repository::get_all_statistics;
-use backend::statistics::type_definitions::{AnyStatistic, StatisticTypeSpecific};
-use backend::util;
-use backend::util::to_string::format_duration;
-use backend::util::util::get_date_today;
-use backend::statistics::type_definitions::Statistic;
+use transfer_objects::statistic_id::StatisticId;
+use web_api::goal::{DeleteGoalRequest, GoalResponse, SetGoalRequest};
 
-#[derive(FromForm)]
-pub struct GoalUpdateForm {
-    statistic_id: StatisticId,
-    goal_value: String,
+#[derive(Debug, FromForm)]
+pub struct GoalForm {
+    statistic_id: u32,
+    target: String,
+    extra_data: Option<String>,
+    date: Option<String>, // Will be validated in handler
 }
 
 #[derive(Debug, Serialize)]
-struct StatisticGoalInfo {
-    id: u32,
+struct StatisticSelection {
+    id: StatisticId,
     name: String,
-    category: String,
-    current_goal: Option<String>,
-    example_format: Option<String>,
-}
-
-impl StatisticGoalInfo {
-    fn from_statistic(stat: &AnyStatistic) -> Result<Self> {
-        let conn = db_ops::open_db()?;
-        let today = get_date_today();
-
-        let (current_goal, example_format) = match stat {
-            AnyStatistic::IntegerAmount(s) => {
-                let row = s.get_row_for_date(&conn, today)?;
-                (row.goal.map(|g| g.to_string()), Some("Example: 42".to_string()))
-            },
-            AnyStatistic::TimeAmount(s) => {
-                let row = s.get_row_for_date(&conn, today)?;
-                (
-                    row.goal.map(|d| format_duration(d)),
-                    Some("Example: 2h, 30m, or 90m".to_string())
-                )
-            },
-            AnyStatistic::TimeSpans(s) => {
-                let row = s.get_row_for_date(&conn, today)?;
-                (
-                    row.goal.map(|tf| tf.to_string()),
-                    Some("Example: 09:00-12:00, 14:00-17:00".to_string())
-                )
-            },
-            AnyStatistic::PointInTime(s) => {
-                let row = s.get_row_for_date(&conn, today)?;
-                (
-                    row.goal.map(|t| t.format("%H:%M:%S").to_string()),
-                    Some("Example: 09:00:00".to_string())
-                )
-            },
-            AnyStatistic::Habit(s) => {
-                let row = s.get_row_for_date(&conn, today)?;
-                (row.goal.map(|b| b.to_string()), Some("Example: true or false".to_string()))
-            },
-        };
-
-        Ok(StatisticGoalInfo {
-            id: stat.get_id().0,
-            name: stat.get_name().to_string(),
-            category: stat.get_category().to_string(),
-            current_goal,
-            example_format,
-        })
-    }
+    #[serde(rename = "type")]
+    stat_type: String,
 }
 
 #[get("/goals")]
-pub async fn show_goals(flash: Option<FlashMessage<'_>>) -> Template {
-    let statistics = get_all_statistics()
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|stat| StatisticGoalInfo::from_statistic(&stat).ok())
-        .collect::<Vec<_>>();
+pub async fn show_goals(context: Context, flash: Option<FlashMessage<'_>>) -> Template {
+    let statistics = lifestats_core::statistics::get_all_statistics(&context.0).unwrap();
 
-    Template::render("edit_goals", context! {
-        active_page: "goals",
-        statistics: statistics,
-        flash: flash.map(|msg| (msg.kind().to_string(), msg.message().to_string()))
-    })
+    Template::render(
+        "goals",
+        context! {
+            active_page: "goals",
+            statistics: statistics.iter().map(|s| StatisticSelection {
+                id: s.id(),
+                name: s.get_name().to_string(),
+                stat_type: s.get_type_name().to_string(),
+            }).collect::<Vec<_>>(),
+            flash: flash.map(|f| (f.kind().to_string(), f.message().to_string()))
+        },
+    )
 }
 
-#[post("/goals", data = "<form>")]
-pub async fn update_goal(form: Form<GoalUpdateForm>) -> Flash<Redirect> {
-    match update_statistic_goal(form.into_inner()) {
-        Ok(_) => Flash::success(
-            Redirect::to(uri!(show_goals)),
-            "Goal updated successfully"
-        ),
-        Err(e) => Flash::error(
-            Redirect::to(uri!(show_goals)),
-            format!("Failed to update goal: {}", e)
+#[post("/api/goals", format = "json", data = "<request>")]
+pub async fn set_goal_api(
+    context: Context,
+    request: Json<SetGoalRequest>,
+) -> Result<Json<GoalResponse>, Custom<Json<GoalResponse>>> {
+    let date = request
+        .date
+        .as_ref()
+        .map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d"))
+        .transpose()
+        .map_err(|_| {
+            Custom(
+                Status::BadRequest,
+                Json(GoalResponse::error("Invalid date format".into())),
+            )
+        })?;
+
+    let result = if let Some(date) = date {
+        lifestats_core::goal_management::set_goal_for_date(
+            &context.0,
+            request.statistic_id,
+            date,
+            &request.target,
+            request.extra_data.as_deref(),
         )
+    } else {
+        lifestats_core::goal_management::set_default_goal(
+            &context.0,
+            request.statistic_id,
+            &request.target,
+            request.extra_data.as_deref(),
+        )
+    };
+
+    match result {
+        Ok(_) => Ok(Json(GoalResponse::success("Goal set successfully".into()))),
+        Err(e) => Err(Custom(
+            Status::BadRequest,
+            Json(GoalResponse::error(e.to_string())),
+        )),
     }
 }
 
-fn update_statistic_goal(form: GoalUpdateForm) -> Result<()> {
-    let conn = db_ops::open_db()?;
-    let stat = get_all_statistics()?
-        .into_iter()
-        .find(|s| s.get_id() == form.statistic_id)
-        .context("Statistic not found")?;
+#[delete("/api/goals", format = "json", data = "<request>")]
+pub async fn delete_goal_api(
+    context: Context,
+    request: Json<DeleteGoalRequest>,
+) -> Result<Json<GoalResponse>, Custom<Json<GoalResponse>>> {
+    let date = request
+        .date
+        .as_ref()
+        .map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d"))
+        .transpose()
+        .map_err(|_| {
+            Custom(
+                Status::BadRequest,
+                Json(GoalResponse::error("Invalid date format".into())),
+            )
+        })?;
 
-    let today = get_date_today();
+    let result = if let Some(date) = date {
+        lifestats_core::goal_management::delete_goal_for_date(
+            &context.0,
+            request.statistic_id,
+            date,
+        )
+    } else {
+        lifestats_core::goal_management::delete_default_goal(&context.0, request.statistic_id)
+    };
 
-    match stat {
-        AnyStatistic::IntegerAmount(s) => {
-            let value = form.goal_value.parse()?;
-            s.set_goal(&conn, today, Some(value))?;
-        },
-        AnyStatistic::TimeAmount(s) => {
-            let value = util::string_parsers::parse_duration(&form.goal_value)?;
-            s.set_goal(&conn, today, Some(value))?;
-        },
-        AnyStatistic::TimeSpans(s) => {
-            // Assume comma-separated list of time frames
-            let frames = form.goal_value
-                .split(',')
-                .map(str::trim)
-                .map(util::string_parsers::parse_time_frame)
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let time_frame_list = TimeFrameList::new_from_vec(frames);
-            s.set_goal(&conn, today, Some(time_frame_list))?;
-        },
-        AnyStatistic::PointInTime(s) => {
-            let value = util::string_parsers::parse_unknown_time_format(&form.goal_value)
-                .context("Invalid time format")?;
-            s.set_goal(&conn, today, Some(value))?;
-        },
-        AnyStatistic::Habit(s) => {
-            let value = util::string_parsers::parse_bool(&form.goal_value)?;
-            s.set_goal(&conn, today, Some(value))?;
-        },
+    match result {
+        Ok(_) => Ok(Json(GoalResponse::success(
+            "Goal deleted successfully".into(),
+        ))),
+        Err(e) => Err(Custom(
+            Status::BadRequest,
+            Json(GoalResponse::error(e.to_string())),
+        )),
     }
+}
 
-    Ok(())
+#[get("/api/goals/current?<statisticId>&<date>")]
+pub async fn get_current_goal(
+    context: Context,
+    statisticId: u32,
+    date: Option<String>,
+) -> Result<Json<Option<CurrentGoal>>, Custom<Json<GoalResponse>>> {
+    let stat_id = StatisticId(statisticId);
+
+    let date = date.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
+
+    let goal = if let Some(date) = date {
+        lifestats_core::goal_management::get_goal_for_date(&context.0, stat_id, date)
+    } else {
+        lifestats_core::goal_management::get_default_goal(&context.0, stat_id)
+    }
+    .map_err(|e| Custom(Status::BadRequest, Json(GoalResponse::error(e.to_string()))))?;
+
+    Ok(Json(goal.map(|g| CurrentGoal {
+        target: g.target,
+        extra_data: g.extra_data_1,
+    })))
+}
+
+#[derive(Serialize)]
+struct CurrentGoal {
+    target: String,
+    extra_data: Option<String>,
 }

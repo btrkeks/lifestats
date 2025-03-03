@@ -4,8 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-statistics = { path = "../../domain/models/statistics" }
+lifestats_core = { path = "../../core/application_service" }
 heart_beat_logger = { path = "../heart_beat_logger" }
+transfer_objects = { path = "../../transfer_objects" }
 crossterm = "0.28.1"
 anyhow = "1.0.89"
 chrono = "0.4.38"
+tokio = { version = "1.42.0", features = ["full"] }
+testing_utilities = { path = "../../testing_utilities" }
+log = "0.4.22"
+env_logger = "0.11.6"

@@ -1,8 +1,0 @@
-[package]
-name = "regen_plots_service"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-plotting = { path = "../../domain/models/plotting" }
-anyhow = "1.0.89"

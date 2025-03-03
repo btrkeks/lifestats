@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-statistics = { path = "../../domain/models/statistics" }
+core_application = { path = "../../core_application/application_service" }
 anyhow = "1.0.89"
 chrono = "0.4.38"
 clap = { version = "4.5.17", features = ["derive"] }

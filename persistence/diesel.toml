@@ -1,5 +1,5 @@
 [print_schema]
-file = "src/database/schema.rs"
+file = "src/sqlite_database/schema.rs"
 custom_type_derives = ["diesel::sql_types::SqlType"]
 
 [migrations_directory]

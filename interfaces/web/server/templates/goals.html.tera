@@ -1,0 +1,476 @@
+{% extends "base" %}
+
+{% block title %}Manage Goals{% endblock %}
+
+{% block additional_styles %}
+.form-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.time-frame-entry {
+    transition: all 0.3s ease;
+}
+
+.time-frame-entry:hover {
+    background-color: rgba(0,0,0,0.02);
+    border-radius: 4px;
+}
+
+.remove-time-frame {
+    padding: 0 8px;
+    font-size: 20px;
+    line-height: 1;
+}
+
+.hidden-until-selection {
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.hidden-until-selection.visible {
+    display: block;
+    opacity: 1;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .form-control:disabled, .form-select:disabled {
+        background-color: #343a40;
+        color: #adb5bd;
+    }
+    .time-frame-entry:hover {
+        background-color: rgba(255,255,255,0.05);
+    }
+}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="form-container">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h2 class="card-title h4 mb-4">Set Goal</h2>
+
+                {% if flash %}
+                <div class="alert alert-{{ flash.0 }} alert-dismissible fade show mb-4" role="alert">
+                    {{ flash.1 }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+
+                <form id="goalForm">
+                    <div class="form-group">
+                        <label for="statistic" class="form-label">Statistic</label>
+                        <select class="form-select form-select-lg" id="statistic" name="statistic" required>
+                            <option value="" selected disabled>Choose statistic...</option>
+                            {% for stat in statistics %}
+                            <option value="{{ stat.id }}" data-type="{{ stat.type }}">{{ stat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Hidden sections -->
+                    <div class="hidden-until-selection">
+                        <div class="form-group target-input">
+                            <!-- This div will be populated dynamically based on the statistic type -->
+                        </div>
+
+                        <div class="form-group" id="extra_data_container" style="display: none;">
+                            <label for="extra_data" class="form-label" id="extra_data_label"></label>
+                            <div id="extra_data_input_container">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                            <div class="form-text" id="extra_data_help"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="isDefaultGoal" name="isDefaultGoal">
+                                <label class="form-check-label" for="isDefaultGoal">
+                                    Set as default goal
+                                </label>
+                            </div>
+
+                            <div id="dateGroup">
+                                <label for="date" class="form-label">Date</label>
+                                <input type="date" class="form-control form-control-lg" id="date" name="date">
+                            </div>
+                        </div>
+
+                        <div class="form-footer">
+                            <button type="submit" class="btn btn-primary btn-lg">Set Goal</button>
+                            <button type="button" class="btn btn-danger btn-lg ms-2" id="deleteBtn">Delete Goal</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_scripts %}
+<script>
+const targetInputTemplates = {
+    IntegerAmount: `
+        <label for="target" class="form-label">Target Amount</label>
+        <input type="number" class="form-control form-control-lg" id="target" name="target" required>
+        <div class="form-text">The target amount to achieve</div>
+    `,
+    TimeAmount: `
+        <label for="target" class="form-label">Target Duration</label>
+        <div class="input-group input-group-lg">
+            <input type="number" class="form-control" id="target" name="target" required>
+            <select class="form-select" id="duration_unit" style="max-width: 100px;">
+                <option value="s">Seconds</option>
+                <option value="m">Minutes</option>
+                <option value="h">Hours</option>
+            </select>
+        </div>
+        <div class="form-text">The target duration to achieve</div>
+    `,
+    TimeSpans: `
+        <label for="timeFrameList" class="form-label">Target Time Frames</label>
+        <div id="timeFrameList" class="mb-3">
+            <div class="time-frame-entry row mb-2">
+                <div class="col-5">
+                    <input type="time" class="form-control form-control-lg time-start" required>
+                </div>
+                <div class="col-1 d-flex align-items-center justify-content-center">
+                    <span>to</span>
+                </div>
+                <div class="col-5">
+                    <input type="time" class="form-control form-control-lg time-end" required>
+                </div>
+                <div class="col-1 d-flex align-items-center">
+                    <button type="button" class="btn btn-danger btn-sm remove-time-frame">×</button>
+                </div>
+            </div>
+        </div>
+        <button type="button" class="btn btn-secondary" id="addTimeFrame">
+            Add Time Frame
+        </button>
+        <input type="hidden" id="target" name="target">
+        <div class="form-text">Add one or more time frames for your target schedule</div>
+    `,
+    PointInTime: `
+        <label for="target" class="form-label">Target Time</label>
+        <input type="time" class="form-control form-control-lg" id="target" name="target" required>
+        <div class="form-text">The target time to achieve</div>
+    `,
+    Habit: `
+        <label for="target" class="form-label">Target Value</label>
+        <select class="form-select form-select-lg" id="target" name="target" required>
+            <option value="true">True</option>
+            <option value="false">False</option>
+        </select>
+        <div class="form-text">The target state to achieve</div>
+    `
+};
+
+const extraDataConfigs = {
+    IntegerAmount: {
+        label: "Higher values are better?",
+        type: "boolean",
+        help: "Select whether achieving higher values is considered better"
+    },
+    TimeAmount: {
+        label: "More time is better?",
+        type: "boolean",
+        help: "Select whether spending more time is considered better"
+    },
+    TimeSpans: {
+        label: "Target Efficiency (%)",
+        type: "number",
+        help: "Target efficiency percentage (1-100)",
+        min: 1,
+        max: 100
+    },
+    PointInTime: null,
+    Habit: null
+};
+
+function createTimeFrameEntry() {
+    const entry = document.createElement('div');
+    entry.className = 'time-frame-entry row mb-2';
+    entry.innerHTML = `
+        <div class="col-5">
+            <input type="time" class="form-control form-control-lg time-start" required>
+        </div>
+        <div class="col-1 d-flex align-items-center justify-content-center">
+            <span>to</span>
+        </div>
+        <div class="col-5">
+            <input type="time" class="form-control form-control-lg time-end" required>
+        </div>
+        <div class="col-1 d-flex align-items-center">
+            <button type="button" class="btn btn-danger btn-sm remove-time-frame">×</button>
+        </div>
+    `;
+    return entry;
+}
+
+function createExtraDataInput(config) {
+    const container = document.getElementById('extra_data_container');
+    const label = document.getElementById('extra_data_label');
+    const inputContainer = document.getElementById('extra_data_input_container');
+    const helpText = document.getElementById('extra_data_help');
+
+    if (!config) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    label.textContent = config.label;
+    helpText.textContent = config.help;
+
+    let inputHtml = '';
+    if (config.type === 'boolean') {
+        inputHtml = `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="extra_data" name="extra_data">
+                <label class="form-check-label" for="extra_data">Yes</label>
+            </div>
+        `;
+    } else if (config.type === 'number') {
+        inputHtml = `
+            <input type="number" class="form-control form-control-lg"
+                   id="extra_data" name="extra_data"
+                   min="${config.min}" max="${config.max}">
+        `;
+    }
+    inputContainer.innerHTML = inputHtml;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('date').value = today;
+
+    const isDefaultGoal = document.getElementById('isDefaultGoal');
+    const dateGroup = document.getElementById('dateGroup');
+    const dateInput = document.getElementById('date');
+    const statisticSelect = document.getElementById('statistic');
+    const hiddenSections = document.querySelector('.hidden-until-selection');
+
+    isDefaultGoal.addEventListener('change', function() {
+        dateInput.disabled = this.checked;
+        if (this.checked) {
+            dateInput.value = '';
+        } else {
+            dateInput.value = today;
+        }
+    });
+
+    statisticSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const statType = selectedOption.dataset.type;
+
+        // Show hidden sections with animation
+        if (this.value) {
+            hiddenSections.classList.add('visible');
+        } else {
+            hiddenSections.classList.remove('visible');
+        }
+
+        document.querySelector('.target-input').innerHTML = targetInputTemplates[statType] || '';
+        createExtraDataInput(extraDataConfigs[statType]);
+
+        loadCurrentGoal(this.value, isDefaultGoal.checked ? null : dateInput.value);
+    });
+
+    // Initialize visibility
+    if (!statisticSelect.value) {
+        hiddenSections.classList.remove('visible');
+    }
+});
+
+document.addEventListener('click', function(e) {
+    if (e.target.id === 'addTimeFrame') {
+        const timeFrameList = document.getElementById('timeFrameList');
+        timeFrameList.appendChild(createTimeFrameEntry());
+    }
+
+    if (e.target.classList.contains('remove-time-frame')) {
+        const timeFrameList = document.getElementById('timeFrameList');
+        if (timeFrameList.children.length > 1) {
+            e.target.closest('.time-frame-entry').remove();
+        }
+    }
+});
+
+async function loadCurrentGoal(statisticId, date) {
+    try {
+        const response = await fetch(`/api/goals/current?statisticId=${statisticId}${date ? `&date=${date}` : ''}`);
+        if (response.ok) {
+            const goal = await response.json();
+            if (goal) {
+                const statType = document.getElementById('statistic').options[
+                    document.getElementById('statistic').selectedIndex
+                ].dataset.type;
+
+                if (statType === 'TimeSpans') {
+                    const timeFrameList = document.getElementById('timeFrameList');
+                    timeFrameList.innerHTML = ''; // Clear existing entries
+
+                    const timeFrames = goal.target.split(',').map(tf => tf.trim());
+                    timeFrames.forEach(timeFrame => {
+                        const [start, end] = timeFrame.split('-').map(t => t.trim());
+                        const entry = createTimeFrameEntry();
+                        entry.querySelector('.time-start').value = start;
+                        entry.querySelector('.time-end').value = end;
+                        timeFrameList.appendChild(entry);
+                    });
+
+                    if (timeFrames.length === 0) {
+                        timeFrameList.appendChild(createTimeFrameEntry());
+                    }
+                } else {
+                    document.getElementById('target').value = goal.target;
+                }
+
+                const extraDataConfig = extraDataConfigs[statType];
+                if (extraDataConfig && goal.extra_data) {
+                    const extraDataInput = document.getElementById('extra_data');
+                    if (extraDataConfig.type === 'boolean') {
+                        extraDataInput.checked = goal.extra_data.toLowerCase() === 'true';
+                    } else {
+                        extraDataInput.value = goal.extra_data;
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error loading current goal:', err);
+    }
+}
+
+document.getElementById('goalForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const statType = document.getElementById('statistic').options[
+        document.getElementById('statistic').selectedIndex
+    ].dataset.type;
+
+    let extraData = null;
+    const extraDataConfig = extraDataConfigs[statType];
+    if (extraDataConfig) {
+        const extraDataInput = document.getElementById('extra_data');
+        if (extraDataConfig.type === 'boolean') {
+            extraData = extraDataInput.checked.toString();
+        } else {
+            extraData = extraDataInput.value;
+        }
+    }
+
+    // Handle TimeSpans specially
+    if (statType === 'TimeSpans') {
+        const timeFrames = [];
+        document.querySelectorAll('.time-frame-entry').forEach(entry => {
+            const start = entry.querySelector('.time-start').value;
+            const end = entry.querySelector('.time-end').value;
+            if (start && end) {
+                timeFrames.push(`${start}-${end}`);
+            }
+        });
+        document.getElementById('target').value = timeFrames.join(', ');
+    }
+
+    const data = {
+        statistic_id: parseInt(document.getElementById('statistic').value),
+        target: document.getElementById('target').value,
+        extra_data: extraData,
+        date: document.getElementById('date').value || null
+    };
+
+    try {
+            const response = await fetch('/api/goals', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            // Create and show an alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${response.ok ? 'success' : 'danger'} alert-dismissible fade show mb-4`;
+            alertDiv.innerHTML = `
+                ${result.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('form'));
+
+            if (response.ok) {
+                // Clear all alerts after 2 seconds and reload the form
+                // setTimeout(() => {
+                //     location.reload();
+                // }, 2000);
+            }
+        } catch (err) {
+            console.error('Error setting goal:', err);
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger alert-dismissible fade show mb-4';
+            alertDiv.innerHTML = `
+                Network error occurred
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('form'));
+        }
+});
+
+document.getElementById('deleteBtn').addEventListener('click', async function() {
+    if (!confirm('Are you sure you want to delete this goal?')) return;
+
+    const data = {
+        statistic_id: parseInt(document.getElementById('statistic').value),
+        date: document.getElementById('date').value || null
+    };
+
+    try {
+            const response = await fetch('/api/goals', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            // Create and show an alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${response.ok ? 'success' : 'danger'} alert-dismissible fade show mb-4`;
+            alertDiv.innerHTML = `
+                ${result.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('form'));
+
+            if (response.ok) {
+                // Clear all alerts after 2 seconds and reload the form
+                //setTimeout(() => {
+                //    location.reload();
+                //}, 2000);
+            }
+        } catch (err) {
+            console.error('Error deleting goal:', err);
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger alert-dismissible fade show mb-4';
+            alertDiv.innerHTML = `
+                Network error occurred
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('form'));
+        }
+});
+</script>
+{% endblock %}

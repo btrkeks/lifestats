@@ -1,21 +1,21 @@
-use backend::statistics::objects::TimeFrame;
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 
 pub trait SleepResponse {
     fn get_total_duration_asleep(&self) -> Duration;
+    fn get_sleep_efficiency(&self) -> Option<u8>;
     fn get_time_fell_asleep(&self) -> Option<NaiveTime>;
     fn get_wake_up_time(&self) -> Option<NaiveTime>;
     fn get_total_duration_awake_during_sleep(&self) -> Option<Duration>;
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct SleepResponseV1_2 {
     pub sleep: Vec<SleepData>,
     pub summary: SleepSummary,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SleepData {
     pub date_of_sleep: NaiveDate,
@@ -37,7 +37,7 @@ pub struct SleepData {
     pub sleep_type: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SleepLevels {
     pub data: Vec<LevelData>,
@@ -45,12 +45,13 @@ pub struct SleepLevels {
     pub summary: LevelsSummary,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SleepLevel {
     Deep,
     Light,
     Rem,
+    #[default]
     Wake,
 }
 
@@ -62,7 +63,7 @@ pub struct LevelData {
     pub seconds: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct LevelsSummary {
     pub deep: LevelSummary,
     pub light: LevelSummary,
@@ -70,7 +71,7 @@ pub struct LevelsSummary {
     pub wake: LevelSummary,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LevelSummary {
     pub count: u32,
@@ -78,7 +79,7 @@ pub struct LevelSummary {
     pub thirty_day_avg_minutes: f32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SleepSummary {
     pub stages: StagesSummary,
@@ -87,7 +88,7 @@ pub struct SleepSummary {
     pub total_time_in_bed: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 pub struct StagesSummary {
     pub deep: u32,
     pub light: u32,
@@ -98,9 +99,13 @@ pub struct StagesSummary {
 impl SleepResponse for SleepResponseV1_2 {
     fn get_total_duration_asleep(&self) -> chrono::Duration {
         Duration::minutes(self.summary.total_minutes_asleep as i64)
-        // Duration::minutes(
-        //     (self.summary.stages.deep + self.summary.stages.light + self.summary.stages.rem) as i64,
-        // )
+    }
+
+    fn get_sleep_efficiency(&self) -> Option<u8> {
+        self.sleep
+            .iter()
+            .find(|s| s.is_main_sleep)
+            .map(|main_sleep| main_sleep.efficiency)
     }
 
     fn get_time_fell_asleep(&self) -> Option<NaiveTime> {
@@ -139,7 +144,7 @@ impl SleepResponse for SleepResponseV1_2 {
 impl SleepResponseV1_2 {
     pub fn get_time_awake_between(&self, start: NaiveDateTime, end: NaiveDateTime) -> Duration {
         let main_sleep = self.sleep.iter().find(|s| s.is_main_sleep);
-        let mut total_awake = end - start;
+        let total_awake = end - start;
 
         if let Some(sleep) = main_sleep {
             let total_duration_not_awake = sleep

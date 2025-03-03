@@ -1,5 +1,3 @@
-// cli/src/main.
-
 use anyhow::Result;
 use chrono::{Duration, Local, NaiveDate};
 use clap::{Parser, Subcommand};

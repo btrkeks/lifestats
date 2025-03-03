@@ -1,0 +1,9 @@
+[package]
+name = "transfer_objects"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.215", features = ["derive"] }
+image = "0.25.5"
+anyhow = "1.0.93"

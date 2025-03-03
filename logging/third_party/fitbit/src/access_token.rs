@@ -21,6 +21,7 @@ fn get_config_path() -> Result<PathBuf, AccessTokenError> {
 }
 
 pub fn get_access_token() -> Result<String, AccessTokenError> {
+    // TODO: Rework this
     let config_path = get_config_path()?;
     let config = Ini::load_from_file(config_path)?;
 
