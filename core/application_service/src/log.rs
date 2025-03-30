@@ -1,8 +1,8 @@
 use crate::app_context::AppContext;
 use anyhow::{anyhow, Context, Result};
 use chrono::{NaiveDate, NaiveTime};
-use domain_models::statistic::objects::time_frame_list::TimeFrame;
-use domain_models::statistic::objects::update_policy::time_frame_list::TimeFrameListUpdatePolicy;
+use domain_models::objects::time_frame_list::TimeFrame;
+use domain_models::statistic::statistic_types::statistic_types::logable_statistics::update_policy::time_frame_list::TimeFrameListUpdatePolicy;
 use domain_models::statistic::statistic::Statistic;
 use domain_models::statistic::statistic_types::any_statistic::AnyStatistic;
 use events::event_port::Event;

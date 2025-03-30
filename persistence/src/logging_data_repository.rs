@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use domain_models::repositories::logging_data_repository::LoggingDataRepositoryTrait;
-use domain_models::statistic::objects::logging_data::DateValue;
+use domain_models::objects::logging_data::DateValue;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::Arc;
@@ -122,8 +122,8 @@ mod tests {
     use crate::pool::MIGRATIONS;
     use chrono::NaiveTime;
     use diesel_migrations::MigrationHarness;
-    use domain_models::statistic::objects::my_duration::MyDuration;
-    use domain_models::statistic::objects::time_frame_list::{TimeFrame, TimeFrameList};
+    use domain_models::objects::seconds::MyDuration;
+    use domain_models::objects::time_frame_list::{TimeFrame, TimeFrameList};
 
     fn create_test_pool() -> Arc<Pool<ConnectionManager<SqliteConnection>>> {
         let manager = ConnectionManager::<SqliteConnection>::new(":memory:");

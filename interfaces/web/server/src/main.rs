@@ -5,11 +5,11 @@
 #[macro_use]
 extern crate rocket;
 
+mod cors;
 mod goal_edit;
 mod guards;
-pub mod logger;
 mod heartbeat;
-mod cors;
+pub mod logger;
 
 use crate::goal_edit::goal_edit_page::{
     delete_goal_api, get_current_goal, set_goal_api, show_goals,
@@ -17,12 +17,12 @@ use crate::goal_edit::goal_edit_page::{
 use crate::guards::Context;
 use crate::logger::log_api::log_statistic_api;
 use crate::logger::log_form::{show_log_interface, submit_log};
+use heartbeat::manager::HeartbeatManager;
 use lifestats_core::app_context::{build_application, AppContext};
 use rocket::request::FromRequest;
+use rocket_cors::{AllowedHeaders, AllowedOrigins, Cors};
 use rocket_dyn_templates::Template;
 use std::sync::Arc;
-use heartbeat::manager::HeartbeatManager;
-use rocket_cors::{AllowedHeaders, AllowedOrigins, Cors};
 
 #[launch]
 fn rocket() -> _ {

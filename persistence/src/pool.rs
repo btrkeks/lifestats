@@ -28,7 +28,7 @@ impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for SQLiteConnec
         PRAGMA journal_mode = WAL;
         ",
         )
-            .map_err(diesel::r2d2::Error::QueryError)
+        .map_err(diesel::r2d2::Error::QueryError)
     }
 }
 

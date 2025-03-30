@@ -2,5 +2,5 @@
 #![feature(array_chunks)]
 #![feature(trait_alias)]
 pub mod plot;
-pub mod repositories;
 pub mod statistic;
+pub mod objects;

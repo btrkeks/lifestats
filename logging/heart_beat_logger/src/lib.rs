@@ -237,8 +237,9 @@ impl<TL: TimeFrameLogger, TP: TimeProvider> Heart<TL, TP> {
                         }
                         TimeoutAction::EmitDurationUpdate(elapsed_seconds) => {
                             debug!("Emitting duration update");
-                            let new_total_duration =
-                                self.total_duration_manager.add_and_fetch_total(elapsed_seconds);
+                            let new_total_duration = self
+                                .total_duration_manager
+                                .add_and_fetch_total(elapsed_seconds);
                             self.emit_duration_update(new_total_duration);
                         }
                         TimeoutAction::IdleTimeout((start_time, end_time)) => {

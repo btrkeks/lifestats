@@ -13,9 +13,9 @@ use crate::config::{FitbitLoggingConfig, FitbitMetric};
 use crate::fitbit_client::FitbitClient;
 use crate::sleep::SleepResponse;
 use anyhow::{Context, Result};
+use clap::Parser;
 use lifestats_core::app_context::AppContext;
 use transfer_objects::statistic_id::StatisticId;
-use clap::Parser;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -53,7 +53,10 @@ fn run(
             FitbitMetric::FellAsleepTime => {
                 let sleep_data = response_cache.get_sleep_response(target_date)?;
                 let time_fell_asleep = sleep_data.get_time_fell_asleep().unwrap();
-                (previous_date, time_fell_asleep.format("%H:%M:%S").to_string())
+                (
+                    previous_date,
+                    time_fell_asleep.format("%H:%M:%S").to_string(),
+                )
             }
             FitbitMetric::SleepEfficiency => {
                 let sleep_data = response_cache.get_sleep_response(target_date)?;
@@ -73,7 +76,10 @@ fn run(
                 let sleep_data = response_cache.get_sleep_response(target_date)?;
                 let total_duration_awake =
                     sleep_data.get_total_duration_awake_during_sleep().unwrap();
-                (target_date, format!("{}s", total_duration_awake.num_seconds()))
+                (
+                    target_date,
+                    format!("{}s", total_duration_awake.num_seconds()),
+                )
             }
         };
 

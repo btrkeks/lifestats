@@ -1,8 +1,13 @@
 use crate::plot::objects::mutable_image::MutableImage;
 use crate::plot::objects::plot_data::PlotDataPoint;
 use crate::plot::objects::y_axis_conversion::YAxisConversion;
-use crate::plot::plot_backends::plotters::common::{add_y_padding, calculate_y_axis_bounds, calculate_y_min_max, color_to_plotters, get_bar, get_border, get_horizontal_line, get_streak_text};
-use crate::plot::plot_backends::plotters::constants::{BACKGROUND_COLOR, GOAL_LINE_COLOR, Y_MARGIN_PERCENT};
+use crate::plot::plot_backends::plotters::common::{
+    add_y_padding, calculate_y_axis_bounds, calculate_y_min_max, color_to_plotters, get_bar,
+    get_border, get_horizontal_line, get_streak_text,
+};
+use crate::plot::plot_backends::plotters::constants::{
+    BACKGROUND_COLOR, GOAL_LINE_COLOR, Y_MARGIN_PERCENT,
+};
 use anyhow::Result;
 use chrono::NaiveDate;
 use plotters::prelude::*;
@@ -94,8 +99,8 @@ fn barplot_calculate_axis_max(data: &Vec<PlotDataPoint<i64>>) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::plot::objects::color;
     use super::*;
+    use crate::plot::objects::color;
 
     #[test]
     fn test_correct_maximum_case_value_more_than_goal() {

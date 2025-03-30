@@ -73,7 +73,7 @@ pub(crate) fn calculate_y_min_max(data: &[PlotDataPoint<i64>]) -> Option<(i64, i
 
 pub fn add_y_padding(y0: i64, y1: i64, percent: i64) -> (i64, i64) {
     // TODO: Switch y0 and y1 if y1 < y0
-    let diff = (y0-y1).abs();
+    let diff = (y0 - y1).abs();
 
     debug_assert!(1 <= percent && percent < 100);
     let denom = 100 - 2 * percent;

@@ -5,3 +5,5 @@ target
 .env
 concat_script
 project_dump.txt
+/generate_graph.sh
+/graph.png

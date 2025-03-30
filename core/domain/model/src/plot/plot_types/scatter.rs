@@ -4,12 +4,12 @@ use crate::plot::plot::Plot;
 use crate::plot::plot_backends::plotting_backend::PlottingBackend;
 use crate::plot::util::percent_to_color::percent_to_color;
 use crate::repositories::statistic_repository::StatisticRepositoryTrait;
+use crate::statistic::integer_statistic::IntegerStatistic;
+use crate::statistic::statistic::StatisticBase;
 use chrono::NaiveDate;
 use std::sync::Arc;
 use transfer_objects::image::Image;
 use transfer_objects::statistic_id::StatisticId;
-use crate::statistic::statistic::StatisticBase;
-use crate::statistic::integer_statistic::IntegerStatistic;
 
 pub struct ScatterPlot {
     pub metadata: PlotMetadata,

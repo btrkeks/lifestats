@@ -2,7 +2,7 @@ use crate::testing::mock_repositories::{
     MockTimeSpansGoalsRepository, MockTimeSpansLogsRepository,
 };
 use chrono::NaiveDate;
-use domain_models::statistic::objects::time_frame_list::TimeFrameList;
+use domain_models::objects::time_frame_list::TimeFrameList;
 use domain_models::statistic::statistic_types::any_statistic::AnyStatistic;
 use domain_models::statistic::statistic_types::time_spans::TimeSpansStatistic;
 use std::sync::Arc;
@@ -14,7 +14,11 @@ pub fn create_mock_time_spans_statistic(
     name: &str,
     category: &str,
 ) -> AnyStatistic {
-    let metadata = StatisticMetadata::new(id, name.to_string().into_boxed_str(), category.to_string().into_boxed_str());
+    let metadata = StatisticMetadata::new(
+        id,
+        name.to_string().into_boxed_str(),
+        category.to_string().into_boxed_str(),
+    );
 
     // Create minimal mock repositories
     let logging_repo = Arc::new(MockTimeSpansLogsRepository::new());
@@ -82,7 +86,11 @@ impl MockTimeSpansStatisticBuilder {
             .category
             .unwrap_or_else(|| "Testing Category".to_string());
 
-        let metadata = StatisticMetadata::new(id, name.to_string().into_boxed_str(), category.to_string().into_boxed_str());
+        let metadata = StatisticMetadata::new(
+            id,
+            name.to_string().into_boxed_str(),
+            category.to_string().into_boxed_str(),
+        );
 
         let mut logging_repo = MockTimeSpansLogsRepository::new();
         let logs = self.logs.clone();

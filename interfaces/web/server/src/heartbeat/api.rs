@@ -1,11 +1,11 @@
 use crate::guards::Context;
+use crate::heartbeat::manager::HeartbeatManager;
 use rocket::get;
 use rocket::serde::json::Json;
+use rocket::yansi::Paint;
+use rocket::State;
 use transfer_objects::statistic_id::StatisticId;
 use web_api::types::LogResponse;
-use rocket::State;
-use rocket::yansi::Paint;
-use crate::heartbeat::manager::HeartbeatManager;
 
 #[post("/api/heartbeatlogger/<id>/ping")]
 pub async fn ping_heartbeat(

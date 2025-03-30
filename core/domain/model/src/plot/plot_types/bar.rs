@@ -4,14 +4,14 @@ use crate::plot::plot::Plot;
 use crate::plot::plot_backends::plotting_backend::PlottingBackend;
 use crate::plot::util::percent_to_color::percent_to_color;
 use crate::repositories::statistic_repository::StatisticRepositoryTrait;
+use crate::statistic::integer_statistic::IntegerStatistic;
+use crate::statistic::statistic::StatisticBase;
 use anyhow::Result;
 use chrono::NaiveDate;
 use log::debug;
 use std::sync::Arc;
 use transfer_objects::image::Image;
 use transfer_objects::statistic_id::StatisticId;
-use crate::statistic::integer_statistic::IntegerStatistic;
-use crate::statistic::statistic::StatisticBase;
 
 pub struct BarPlot {
     pub metadata: PlotMetadata,

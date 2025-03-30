@@ -2,8 +2,8 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use domain_models::plot::any_plot::AnyPlot;
-use domain_models::statistic::objects::goal::Goal;
-use domain_models::statistic::objects::logging_data::{DateValue, StatisticData};
+use domain_models::objects::goal::Goal;
+use domain_models::objects::logging_data::{DateValue, StatisticData};
 use transfer_objects::statistic_id::StatisticId;
 
 #[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]

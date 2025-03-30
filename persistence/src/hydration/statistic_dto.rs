@@ -52,7 +52,7 @@ impl FromSql<Text, Sqlite> for StatisticTypeDto {
             "PointInTime" => Ok(Self::PointInTime),
             "TimeSpans" => Ok(Self::TimeSpans),
             "Habit" => Ok(Self::Habit),
-            _ => Err("Invalid statistic type".into())
+            _ => Err("Invalid statistic type".into()),
         }
     }
 }
