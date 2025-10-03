@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 #[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]
-#[diesel(table_name = crate::sqlite_database::schema::logging_data)]
+#[diesel(table_name = crate::db::schema::logging_data)]
 pub struct LoggingDataRaw {
     pub statistic_id: i32,
     pub date: String,
@@ -38,7 +38,7 @@ impl LoggingDataRaw {
 }
 
 #[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]
-#[diesel(table_name = crate::sqlite_database::schema::goals)]
+#[diesel(table_name = crate::db::schema::goals)]
 pub struct GoalDataRaw {
     pub statistic_id: i32,
     pub date: String,
@@ -106,7 +106,7 @@ impl GoalDataRaw {
 }
 
 #[derive(Debug, Queryable, Selectable, Insertable, AsChangeset, Clone)]
-#[diesel(table_name = crate::sqlite_database::schema::default_goals)]
+#[diesel(table_name = crate::db::schema::default_goals)]
 pub struct DefaultGoalRaw {
     pub statistic_id: i32,
     pub target_value: String,

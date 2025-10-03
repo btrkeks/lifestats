@@ -21,7 +21,7 @@ use lifestats_domain::statistic::value_objects::goals::time_spans_goal::TimeSpan
 use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use serde::{Deserialize, Serialize};
 
-use crate::sqlite_database::models::DefaultGoalRaw;
+use crate::db::models::DefaultGoalRaw;
 
 #[derive(Debug, Serialize, Deserialize, AsExpression, FromSqlRow, Clone, Copy)]
 #[diesel(sql_type = Text)]
@@ -64,7 +64,7 @@ impl FromSql<Text, Sqlite> for StatisticTypeDto {
 }
 
 #[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]
-#[diesel(table_name = crate::sqlite_database::schema::statistics)]
+#[diesel(table_name = crate::db::schema::statistics)]
 pub struct StatisticDto {
     pub id: i32,
     pub name: String,

@@ -1,4 +1,0 @@
-mod postgres_goal_repository;
-mod postgres_log_repository;
-mod typed_postgres_goal_repository;
-pub mod typed_postgres_log_repository;

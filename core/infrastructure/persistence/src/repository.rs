@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -12,9 +11,10 @@ use lifestats_domain::shared::ids::StatisticId;
 use lifestats_domain::statistic::any_statistic::AnyStatistic;
 use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
 
-use crate::hydration::statistic_dto::StatisticDto;
-use crate::sqlite_database::models::{DefaultGoalRaw, GoalDataRaw, LoggingDataRaw};
-use crate::sqlite_database::schema::{default_goals, goals, logging_data, statistics};
+use crate::db::mappers::StatisticDto;
+use crate::db::models::{DefaultGoalRaw, GoalDataRaw, LoggingDataRaw};
+use crate::db::queries;
+use crate::db::schema::{default_goals, goals, logging_data, statistics};
 
 type SqlitePool = Pool<ConnectionManager<SqliteConnection>>;
 
@@ -32,36 +32,6 @@ impl SqliteStatisticRepository {
             .get()
             .context("failed to get SQLite connection from pool")
     }
-
-    fn fetch_default_goal(
-        conn: &mut SqliteConnection,
-        statistic_id: StatisticId,
-    ) -> Result<Option<DefaultGoalRaw>> {
-        default_goals::table
-            .find(statistic_id.0 as i32)
-            .first::<DefaultGoalRaw>(conn)
-            .optional()
-            .context("failed to fetch default goal")
-    }
-
-    fn fetch_default_goals(
-        conn: &mut SqliteConnection,
-        statistic_ids: &[i32],
-    ) -> Result<HashMap<i32, DefaultGoalRaw>> {
-        if statistic_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let rows = default_goals::table
-            .filter(default_goals::statistic_id.eq_any(statistic_ids))
-            .load::<DefaultGoalRaw>(conn)
-            .context("failed to fetch default goals batch")?;
-
-        Ok(rows
-            .into_iter()
-            .map(|raw| (raw.statistic_id, raw))
-            .collect())
-    }
 }
 
 impl StatisticRepository for SqliteStatisticRepository {
@@ -73,7 +43,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             .first::<StatisticDto>(&mut conn)
             .with_context(|| format!("statistic {} not found", id.0))?;
 
-        let default_goal = Self::fetch_default_goal(&mut conn, id)?;
+        let default_goal = queries::fetch_default_goal(&mut conn, id)?;
         dto.into_any_statistic(default_goal)
     }
 
@@ -85,7 +55,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             .context("failed to load statistics")?;
 
         let ids: Vec<i32> = dtos.iter().map(|dto| dto.id).collect();
-        let default_goal_map = Self::fetch_default_goals(&mut conn, &ids)?;
+        let default_goal_map = queries::fetch_default_goals(&mut conn, &ids)?;
 
         let mut result = Vec::with_capacity(dtos.len());
         for dto in dtos {
@@ -265,7 +235,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         G: serde::de::DeserializeOwned,
     {
         let mut conn = self.connection()?;
-        let row = Self::fetch_default_goal(&mut conn, id)?;
+        let row = queries::fetch_default_goal(&mut conn, id)?;
         row.map(|raw| raw.into_goal::<G>()).transpose()
     }
 
@@ -492,7 +462,7 @@ impl StatisticRepository for SqliteStatisticRepository {
 
     fn find_default_goal_json(&self, id: StatisticId) -> Result<Option<serde_json::Value>> {
         let mut conn = self.connection()?;
-        let row = Self::fetch_default_goal(&mut conn, id)?;
+        let row = queries::fetch_default_goal(&mut conn, id)?;
 
         match row {
             Some(raw) => {
