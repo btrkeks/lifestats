@@ -4,13 +4,13 @@ use crate::sqlite_database::schema::statistics;
 use anyhow::{Context, Result};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
-use lifestats_domain::statistic::repositories::goal_repositories::GoalRepositories;
-use lifestats_domain::statistic::repositories::logging_repositories::LoggingRepositories;
-use lifestats_domain::statistic::repositories::statistic_repository::StatisticRepositoryTrait;
+use lifestats_domain::shared::ids::StatisticId;
+use lifestats_domain::statistic::ports::goal_repositories::GoalRepositories;
+use lifestats_domain::statistic::ports::logging_repositories::LoggingRepositories;
+use lifestats_domain::statistic::ports::statistic_repository::StatisticRepositoryTrait;
 use lifestats_domain::statistic::statistic_types::any_statistic::AnyStatistic;
 use lifestats_domain::statistic::statistic_types::time_spans::TimeSpansStatistic;
 use std::sync::Arc;
-use lifestats_domain::shared::ids::StatisticId;
 
 pub struct StatisticRepository {
     pool: Arc<Pool<ConnectionManager<SqliteConnection>>>,
@@ -105,8 +105,8 @@ mod tests {
     use crate::logging_data_repository::LoggingDataRepository;
     use crate::pool::MIGRATIONS;
     use diesel_migrations::MigrationHarness;
-    use lifestats_domain::statistic::repositories::goal_repositories::GoalRepositories;
-    use lifestats_domain::statistic::repositories::logging_repositories::LoggingRepositories;
+    use lifestats_domain::statistic::ports::goal_repositories::GoalRepositories;
+    use lifestats_domain::statistic::ports::logging_repositories::LoggingRepositories;
     use lifestats_domain::statistic::statistic::Statistic;
     use lifestats_domain::statistic::statistic_types::habit::HabitStatistic;
     use lifestats_domain::statistic::statistic_types::integer_amount::IntegerAmountStatistic;

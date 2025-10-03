@@ -1,55 +1,53 @@
-use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
-use crate::statistic::repositories::goal_repository::GoalRepository;
-use crate::statistic::repositories::log_repository::StatisticLogRepository;
+use crate::statistic::ports::goal_repository::GoalRepositoryTrait;
+use crate::statistic::ports::logging_data_repository::LoggingDataRepositoryTrait;
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use chrono::NaiveDate;
+use crate::statistic::error::Result;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
-use crate::statistic::value_objects::update_policies::amount::AmountUpdatePolicy;
-use crate::statistic::error::{Result, StatisticError};
+use crate::statistic::value_objects::goals::habit_goal::HabitGoal;
+use crate::statistic::value_objects::update_policies::fixed_value::FixedValueUpdatePolicy;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
 
-/// A statistic that represents an arbitrary integer amount
+/// A statistic that represents a habit
 ///
 /// Examples:
-/// - Amount of pages read
-/// - Number of sit-ups done
-pub struct IntegerAmountStatistic {
+/// - Whether you brushed your teeth that day
+/// - Whether you went to the gym that day
+/// - Whether you avoided touching your phone in the morning
+pub struct HabitStatistic {
     // Metadata
     metadata: StatisticMetadata,
 
     // Logging related
-    logged_values: Box<dyn StatisticLogRepository<LogValueType=<Self as Statistic>::LogValueType>>,
+    logged_values: Box<dyn LoggingDataRepositoryTrait<StoredType=<Self as Statistic>::LogValueType>>,
 
     // Goal related
-    goals: Box<dyn GoalRepository<GoalType=<Self as Statistic>::GoalType>>,
+    goals: Box<dyn GoalRepositoryTrait<GoalType=<Self as Statistic>::GoalType>>,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
     default_goal_start: NaiveDate,
 }
 
-impl Statistic for IntegerAmountStatistic {
-    type LogValueType = i64;
-    type GoalType = AmountGoal<i64>;
+impl Statistic for HabitStatistic {
+    type LogValueType = bool;
+    type GoalType = HabitGoal;
 
     fn get_metadata(&self) -> &StatisticMetadata {
         &self.metadata
     }
 
     fn get_log_value(&self, date: NaiveDate) -> Result<Option<Self::LogValueType>> {
-        self.logged_values.get(self.id(), date)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Ok(self.logged_values.get(self.id(), date)?)
     }
 
     fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        self.goals.get(self.id(), date)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Ok(self.goals.get(self.id(), date)?)
     }
 
     fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        self.goals.save(self.id(), date, goal)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Ok(self.goals.insert_or_update(self.id(), date, goal)?)
     }
 
     fn get_default_goal(&self) -> Option<&Self::GoalType> {
@@ -66,8 +64,8 @@ impl Statistic for IntegerAmountStatistic {
     }
 }
 
-impl LogableStatistic for IntegerAmountStatistic {
-    type UpdatePolicyType = AmountUpdatePolicy;
+impl LogableStatistic for HabitStatistic {
+    type UpdatePolicyType = FixedValueUpdatePolicy;
 
     fn log_value(
         &self,
@@ -79,7 +77,7 @@ impl LogableStatistic for IntegerAmountStatistic {
         let (new_value, changed) = update_policy.apply(current_value, log_value);
 
         if changed {
-            self.logged_values.save(self.id(), date, new_value)?;
+            self.logged_values.insert_or_update(self.id(), date, new_value)?;
         }
 
         Ok(())

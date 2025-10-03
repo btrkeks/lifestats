@@ -1,13 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use diesel::prelude::*;
-use lifestats_domain::statistic::repositories::goal_repository::GoalRepository;
-use lifestats_domain::statistic::value_objects::goals::goal_trait::Goal;
 use lifestats_domain::shared::dated_value::DatedValue;
+use lifestats_domain::shared::ids::StatisticId;
+use lifestats_domain::statistic::ports::goal_repository::GoalRepository;
+use lifestats_domain::statistic::value_objects::goals::goal_trait::Goal;
 use serde::Serialize;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use lifestats_domain::shared::ids::StatisticId;
 
 use crate::sqlite_database::models::{DefaultGoalRaw, GoalDataRaw};
 use crate::sqlite_database::schema::default_goals;

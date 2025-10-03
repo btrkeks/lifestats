@@ -1,7 +1,7 @@
 use crate::shared::percentage::Percentage;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct HabitGoal {
     target: bool,
 }

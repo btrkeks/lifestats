@@ -5,19 +5,19 @@ use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::sql_types::Text;
 use diesel::sqlite::Sqlite;
 use diesel::{deserialize, serialize, AsExpression, FromSqlRow};
-use lifestats_domain::statistic::repositories::goal_repositories::GoalRepositories;
-use lifestats_domain::statistic::repositories::logging_repositories::LoggingRepositories;
+use lifestats_domain::shared::ids::StatisticId;
+use lifestats_domain::statistic::ports::goal_repositories::GoalRepositories;
+use lifestats_domain::statistic::ports::logging_repositories::LoggingRepositories;
 use lifestats_domain::statistic::statistic_types::any_statistic::{AnyStatistic, StatisticType};
 use lifestats_domain::statistic::statistic_types::habit::HabitStatistic;
 use lifestats_domain::statistic::statistic_types::integer_amount::IntegerAmountStatistic;
 use lifestats_domain::statistic::statistic_types::point_in_time::PointInTimeStatistic;
 use lifestats_domain::statistic::statistic_types::time_amount::TimeAmountStatistic;
 use lifestats_domain::statistic::statistic_types::time_spans::TimeSpansStatistic;
+use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
-use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
 #[derive(Debug, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text)]

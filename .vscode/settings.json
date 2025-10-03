@@ -38,6 +38,6 @@
   },
 
   // --- Multi-root niceties ---
-  "workbench.editor.enablePreview": false,
+  "workbench.editor.enablePreview": true,
   "explorer.compactFolders": false
 }

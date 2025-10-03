@@ -1,6 +1,6 @@
 use crate::statistic::error::{Result, StatisticError};
-use crate::statistic::repositories::goal_repository::GoalRepository;
-use crate::statistic::repositories::log_repository::StatisticLogRepository;
+use crate::statistic::ports::goal_repository::GoalRepositoryTrait;
+use crate::statistic::ports::logging_data_repository::LoggingDataRepositoryTrait;
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
@@ -21,10 +21,10 @@ pub struct PointInTimeStatistic {
 
     // Logging related
     logged_values:
-        Box<dyn StatisticLogRepository<LogValueType = <Self as Statistic>::LogValueType>>,
+        Box<dyn LoggingDataRepositoryTrait<StoredType = <Self as Statistic>::LogValueType>>,
 
     // Goal related
-    goals: Box<dyn GoalRepository<GoalType = <Self as Statistic>::GoalType>>,
+    goals: Box<dyn GoalRepositoryTrait<GoalType = <Self as Statistic>::GoalType>>,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
@@ -53,7 +53,7 @@ impl Statistic for PointInTimeStatistic {
 
     fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
         self.goals
-            .save(self.id(), date, goal)
+            .insert_or_update(self.id(), date, goal)
             .map_err(|e| StatisticError::Repository(e.to_string()))
     }
 
@@ -84,7 +84,8 @@ impl LogableStatistic for PointInTimeStatistic {
         let (new_value, changed) = update_policy.apply(current_value, log_value);
 
         if changed {
-            self.logged_values.save(self.id(), date, new_value)?;
+            self.logged_values
+                .insert_or_update(self.id(), date, new_value)?;
         }
 
         Ok(())

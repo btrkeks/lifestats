@@ -1,28 +1,27 @@
-use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
-use crate::statistic::repositories::goal_repository::GoalRepository;
-use crate::statistic::traits::base_statistic::Statistic;
-use crate::statistic::traits::integer_statistic::IntegerStatistic;
-use crate::statistic::entities::logable_statistics::point_in_time::PointInTimeStatistic;
-use chrono::NaiveDate;
-use std::ops::Sub;
-use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use crate::shared::seconds::Seconds;
 use crate::statistic::error::{Result, StatisticError};
+use crate::statistic::ports::goal_repository::GoalRepositoryTrait;
+use crate::statistic::traits::base_statistic::Statistic;
+use crate::statistic::traits::integer_statistic::IntegerStatistic;
+use crate::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
+use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
+use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
+use chrono::{NaiveDate, TimeDelta};
 
-pub struct TimeDifferenceStatistic {
+/// This statistic takes a list of time spans statistics and sum the total time
+pub struct SummingStatistic {
     metadata: StatisticMetadata,
 
-    statistic0: PointInTimeStatistic,
-    statistic1: PointInTimeStatistic,
+    statistics: Vec<TimeSpansStatistic>,
 
-    goals: Box<dyn GoalRepository<GoalType = <Self as Statistic>::GoalType>>,
+    goals: Box<dyn GoalRepositoryTrait<GoalType = <Self as Statistic>::GoalType>>,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
     default_goal_start: NaiveDate,
 }
 
-impl Statistic for TimeDifferenceStatistic {
+impl Statistic for SummingStatistic {
     type LogValueType = Seconds;
     type GoalType = AmountGoal<Self::LogValueType>;
 
@@ -31,28 +30,32 @@ impl Statistic for TimeDifferenceStatistic {
     }
 
     fn get_log_value(&self, date: NaiveDate) -> Result<Option<Self::LogValueType>> {
-        // TODO: It should be possible to write this cleaner
-        let x0 = if let Some(x0) = self.statistic0.get_log_value(date)? {
-            x0
-        } else {
-            return Ok(None);
-        };
-        let x1 = if let Some(x1) = self.statistic1.get_log_value(date)? {
-            x1
-        } else {
-            return Ok(None);
-        };
+        let total = self
+            .statistics
+            .iter()
+            .try_fold(chrono::Duration::zero(), |acc, s| {
+                // Propagate any errors using ?
+                let value = s.get_log_value(date)?;
 
-        Ok(Some(if x1 >= x0 { Seconds::from(x1.sub(x0)) } else { Seconds::from(x0.sub(x0)) }))
+                // Extract the duration or use zero if the value is None
+                Ok::<TimeDelta, StatisticError>(
+                    acc + value.map_or(chrono::Duration::zero(), |v| v.get_total_duration()),
+                )
+            })?;
+
+        // Return the total duration wrapped in Result and Some
+        Ok(Some(total.into()))
     }
 
     fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        self.goals.get(self.id(), date)
+        self.goals
+            .get(self.id(), date)
             .map_err(|e| StatisticError::Repository(e.to_string()))
     }
 
     fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        self.goals.save(self.id(), date, goal)
+        self.goals
+            .insert_or_update(self.id(), date, goal)
             .map_err(|e| StatisticError::Repository(e.to_string()))
     }
 
@@ -70,7 +73,7 @@ impl Statistic for TimeDifferenceStatistic {
     }
 }
 
-impl IntegerStatistic for TimeDifferenceStatistic {
+impl IntegerStatistic for SummingStatistic {
     fn value_into_i64(&self, value: Self::LogValueType) -> i64 {
         value.into()
     }

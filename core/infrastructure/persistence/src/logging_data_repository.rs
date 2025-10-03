@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
-use lifestats_domain::statistic::repositories::logging_data_repository::LoggingDataRepositoryTrait;
+use lifestats_domain::statistic::ports::logging_data_repository::LoggingDataRepositoryTrait;
 use lifestats_domain::shared::logging_data::DateValue;
 use serde::de::DeserializeOwned;
 use serde::Serialize;

@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use lifestats_domain::statistic::repositories::log_repository::StatisticLogRepository;
+use lifestats_domain::statistic::ports::log_repository::StatisticLogRepository;
 use lifestats_domain::value_objects::date_range::DateRange;
 use lifestats_domain::value_objects::dated_value::DatedValue;
 use lifestats_domain::shared::ids::StatisticId;

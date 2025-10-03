@@ -1,2 +1,2 @@
 pub mod summing_statistic;
-mod time_difference;
+pub mod time_difference;
