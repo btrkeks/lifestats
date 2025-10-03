@@ -1,12 +1,11 @@
 use crate::shared::time_frame_list::TimeFrameList;
-use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use crate::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
-use chrono::{NaiveDate, NaiveTime};
+use chrono::NaiveDate;
 
 /// A statistic that represents a list of time spans
 ///
@@ -44,29 +43,6 @@ impl Statistic for TimeSpansStatistic {
         &self.metadata
     }
 
-    fn get_log_value(&self, date: NaiveDate) -> Result<Option<Self::LogValueType>> {
-        Err(StatisticError::InvalidOperation(format!(
-            "Statistic {} cannot fetch log values without an external repository (date: {date})",
-            self.id()
-        )))
-    }
-
-    fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        Err(StatisticError::InvalidOperation(format!(
-            "Statistic {} cannot fetch goals without an external repository (date: {date})",
-            self.id()
-        )))
-    }
-
-    fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        Err(StatisticError::InvalidOperation(
-            format!(
-                "Statistic {} cannot persist goals without an external repository (date: {date}, goal: {goal:?})",
-                self.id()
-            ),
-        ))
-    }
-
     fn get_default_goal(&self) -> Option<&Self::GoalType> {
         self.default_goal.as_ref()
     }
@@ -95,12 +71,6 @@ impl LogableStatistic for TimeSpansStatistic {
 }
 
 impl TimeSpansStatistic {
-    /// Returns the start time of the first recorded time span
-    fn get_start_time(&self, date: NaiveDate) -> Result<Option<NaiveTime>> {
-        let log_value = self.get_log_value(date)?;
-        Ok(log_value.map(|v| v.start_time()).flatten())
-    }
-
     pub fn calculate_new_log_value(
         &self,
         current_value: Option<TimeFrameList>,

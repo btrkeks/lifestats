@@ -1,4 +1,3 @@
-use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
@@ -28,29 +27,6 @@ impl Statistic for PointInTimeStatistic {
 
     fn get_metadata(&self) -> &StatisticMetadata {
         &self.metadata
-    }
-
-    fn get_log_value(&self, date: NaiveDate) -> Result<Option<Self::LogValueType>> {
-        Err(StatisticError::InvalidOperation(format!(
-            "Statistic {} cannot fetch log values without an external repository (date: {date})",
-            self.id()
-        )))
-    }
-
-    fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        Err(StatisticError::InvalidOperation(format!(
-            "Statistic {} cannot fetch goals without an external repository (date: {date})",
-            self.id()
-        )))
-    }
-
-    fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        Err(StatisticError::InvalidOperation(
-            format!(
-                "Statistic {} cannot persist goals without an external repository (date: {date}, goal: {goal:?})",
-                self.id()
-            ),
-        ))
     }
 
     fn get_default_goal(&self) -> Option<&Self::GoalType> {

@@ -17,16 +17,6 @@ use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::{NaiveDate, NaiveDateTime};
 use std::any::{type_name, Any};
 
-/// Type-erased wrapper for log values from any statistic type
-#[derive(Debug, Clone)]
-pub enum AnyLogValue {
-    Bool(bool),
-    Integer(i64),
-    DateTime(NaiveDateTime),
-    TimeFrames(TimeFrameList),
-    Seconds(Seconds),
-}
-
 fn downcast_option<'a, T: 'static>(
     metadata: &StatisticMetadata,
     input: Option<&'a dyn Any>,
@@ -122,46 +112,6 @@ impl AnyStatistic {
         self.get_metadata().id()
     }
 
-    /// Get the log value for a specific date, wrapped in AnyLogValue
-    pub fn get_log_value(&self, date: NaiveDate) -> Result<Option<AnyLogValue>> {
-        match self {
-            AnyStatistic::Habit(s) => s.get_log_value(date).map(|opt| opt.map(AnyLogValue::Bool)),
-            AnyStatistic::IntegerAmount(s) => s
-                .get_log_value(date)
-                .map(|opt| opt.map(AnyLogValue::Integer)),
-            AnyStatistic::PointInTime(s) => s
-                .get_log_value(date)
-                .map(|opt| opt.map(AnyLogValue::DateTime)),
-            AnyStatistic::TimeSpans(s) => s
-                .get_log_value(date)
-                .map(|opt| opt.map(AnyLogValue::TimeFrames)),
-            AnyStatistic::Summing(s) => s
-                .get_log_value(date)
-                .map(|opt| opt.map(AnyLogValue::Seconds)),
-            AnyStatistic::TimeDifference(s) => s
-                .get_log_value(date)
-                .map(|opt| opt.map(AnyLogValue::Seconds)),
-        }
-    }
-
-    /// Get the goal for a specific date, wrapped in AnyGoal
-    pub fn get_goal(&self, date: NaiveDate) -> Result<Option<AnyGoal>> {
-        match self {
-            AnyStatistic::Habit(s) => s.get_goal(date).map(|opt| opt.map(AnyGoal::Habit)),
-            AnyStatistic::IntegerAmount(s) => {
-                s.get_goal(date).map(|opt| opt.map(AnyGoal::IntegerAmount))
-            }
-            AnyStatistic::PointInTime(s) => {
-                s.get_goal(date).map(|opt| opt.map(AnyGoal::FinishedInTime))
-            }
-            AnyStatistic::TimeSpans(s) => s.get_goal(date).map(|opt| opt.map(AnyGoal::TimeSpans)),
-            AnyStatistic::Summing(s) => s.get_goal(date).map(|opt| opt.map(AnyGoal::SecondsAmount)),
-            AnyStatistic::TimeDifference(s) => {
-                s.get_goal(date).map(|opt| opt.map(AnyGoal::SecondsAmount))
-            }
-        }
-    }
-
     /// Get the default goal, returning an owned AnyGoal
     pub fn get_default_goal(&self) -> Option<AnyGoal> {
         match self {
@@ -220,80 +170,6 @@ impl AnyStatistic {
                 Seconds,
                 AmountGoal<Seconds>,
             >(metadata, log_value, goal),
-        }
-    }
-
-    //===========================================================================
-    // TYPE-SAFE GOAL SETTERS
-    //===========================================================================
-
-    /// Set a goal for a Habit statistic
-    pub fn set_habit_goal(&self, date: NaiveDate, goal: HabitGoal) -> Result<()> {
-        if let AnyStatistic::Habit(s) = self {
-            s.set_goal(date, goal)
-        } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
-                "Not a Habit statistic".into(),
-            ))
-        }
-    }
-
-    /// Set a goal for an IntegerAmount statistic
-    pub fn set_integer_amount_goal(&self, date: NaiveDate, goal: AmountGoal<i64>) -> Result<()> {
-        if let AnyStatistic::IntegerAmount(s) = self {
-            s.set_goal(date, goal)
-        } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
-                "Not an IntegerAmount statistic".into(),
-            ))
-        }
-    }
-
-    /// Set a goal for a PointInTime statistic
-    pub fn set_point_in_time_goal(&self, date: NaiveDate, goal: FinishedInTimeGoal) -> Result<()> {
-        if let AnyStatistic::PointInTime(s) = self {
-            s.set_goal(date, goal)
-        } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
-                "Not a PointInTime statistic".into(),
-            ))
-        }
-    }
-
-    /// Set a goal for a TimeSpans statistic
-    pub fn set_time_spans_goal(&self, date: NaiveDate, goal: TimeSpansGoal) -> Result<()> {
-        if let AnyStatistic::TimeSpans(s) = self {
-            s.set_goal(date, goal)
-        } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
-                "Not a TimeSpans statistic".into(),
-            ))
-        }
-    }
-
-    /// Set a goal for a Summing statistic
-    pub fn set_summing_goal(&self, date: NaiveDate, goal: AmountGoal<Seconds>) -> Result<()> {
-        if let AnyStatistic::Summing(s) = self {
-            s.set_goal(date, goal)
-        } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
-                "Not a Summing statistic".into(),
-            ))
-        }
-    }
-
-    /// Set a goal for a TimeDifference statistic
-    pub fn set_time_difference_goal(
-        &self,
-        date: NaiveDate,
-        goal: AmountGoal<Seconds>,
-    ) -> Result<()> {
-        if let AnyStatistic::TimeDifference(s) = self {
-            s.set_goal(date, goal)
-        } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
-                "Not a TimeDifference statistic".into(),
-            ))
         }
     }
 

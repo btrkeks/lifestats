@@ -1,11 +1,10 @@
 use crate::shared::seconds::Seconds;
-use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
 use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
-use chrono::{NaiveDate, TimeDelta};
+use chrono::NaiveDate;
 
 /// This statistic takes a list of time spans statistics and sum the total time
 pub struct SummingStatistic {
@@ -24,40 +23,6 @@ impl Statistic for SummingStatistic {
 
     fn get_metadata(&self) -> &StatisticMetadata {
         &self.metadata
-    }
-
-    fn get_log_value(&self, date: NaiveDate) -> Result<Option<Self::LogValueType>> {
-        let total = self
-            .statistics
-            .iter()
-            .try_fold(chrono::Duration::zero(), |acc, s| {
-                // Propagate any errors using ?
-                let value = s.get_log_value(date)?;
-
-                // Extract the duration or use zero if the value is None
-                Ok::<TimeDelta, StatisticError>(
-                    acc + value.map_or(chrono::Duration::zero(), |v| v.get_total_duration()),
-                )
-            })?;
-
-        // Return the total duration wrapped in Result and Some
-        Ok(Some(total.into()))
-    }
-
-    fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        Err(StatisticError::InvalidOperation(format!(
-            "Statistic {} cannot fetch goals without an external repository (date: {date})",
-            self.id()
-        )))
-    }
-
-    fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        Err(StatisticError::InvalidOperation(
-            format!(
-                "Statistic {} cannot persist goals without an external repository (date: {date}, goal: {goal:?})",
-                self.id()
-            ),
-        ))
     }
 
     fn get_default_goal(&self) -> Option<&Self::GoalType> {

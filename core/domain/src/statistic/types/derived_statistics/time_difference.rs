@@ -1,12 +1,10 @@
 use crate::shared::seconds::Seconds;
-use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;
 use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::NaiveDate;
-use std::ops::Sub;
 
 pub struct TimeDifferenceStatistic {
     metadata: StatisticMetadata,
@@ -25,42 +23,6 @@ impl Statistic for TimeDifferenceStatistic {
 
     fn get_metadata(&self) -> &StatisticMetadata {
         &self.metadata
-    }
-
-    fn get_log_value(&self, date: NaiveDate) -> Result<Option<Self::LogValueType>> {
-        // TODO: It should be possible to write this cleaner
-        let x0 = if let Some(x0) = self.statistic0.get_log_value(date)? {
-            x0
-        } else {
-            return Ok(None);
-        };
-        let x1 = if let Some(x1) = self.statistic1.get_log_value(date)? {
-            x1
-        } else {
-            return Ok(None);
-        };
-
-        Ok(Some(if x1 >= x0 {
-            Seconds::from(x1.sub(x0))
-        } else {
-            Seconds::from(x0.sub(x0))
-        }))
-    }
-
-    fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        Err(StatisticError::InvalidOperation(format!(
-            "Statistic {} cannot fetch goals without an external repository (date: {date})",
-            self.id()
-        )))
-    }
-
-    fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        Err(StatisticError::InvalidOperation(
-            format!(
-                "Statistic {} cannot persist goals without an external repository (date: {date}, goal: {goal:?})",
-                self.id()
-            ),
-        ))
     }
 
     fn get_default_goal(&self) -> Option<&Self::GoalType> {
