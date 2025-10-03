@@ -734,3 +734,590 @@ impl AnyStatistic {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::statistic::types::logable_statistics::*;
+    use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use chrono::NaiveDate;
+    use std::collections::HashMap;
+
+    // =========================================================================
+    // FACTORY FUNCTIONS
+    // =========================================================================
+
+    fn integer_amount_stat() -> AnyStatistic {
+        let metadata = StatisticMetadata::new(1.into(), "Test".into(), "IntegerAmount".into());
+        AnyStatistic::IntegerAmount(integer_amount::IntegerAmountStatistic::new(
+            metadata,
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        ))
+    }
+
+    fn time_spans_stat() -> AnyStatistic {
+        let metadata = StatisticMetadata::new(2.into(), "Test".into(), "TimeSpans".into());
+        AnyStatistic::TimeSpans(time_spans::TimeSpansStatistic::new(
+            metadata,
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        ))
+    }
+
+    fn habit_stat() -> AnyStatistic {
+        let metadata = StatisticMetadata::new(3.into(), "Test".into(), "Habit".into());
+        AnyStatistic::Habit(habit::HabitStatistic::new(
+            metadata,
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        ))
+    }
+
+    fn point_in_time_stat() -> AnyStatistic {
+        let metadata = StatisticMetadata::new(4.into(), "Test".into(), "PointInTime".into());
+        AnyStatistic::PointInTime(point_in_time::PointInTimeStatistic::new(
+            metadata,
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        ))
+    }
+
+    fn summing_stat() -> AnyStatistic {
+        let metadata = StatisticMetadata::new(5.into(), "Test".into(), "Summing".into());
+        AnyStatistic::Summing(SummingStatistic::new(
+            metadata,
+            vec![],
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        ))
+    }
+
+    fn time_difference_stat() -> AnyStatistic {
+        let metadata = StatisticMetadata::new(6.into(), "Test".into(), "TimeDifference".into());
+        let pit1_meta = StatisticMetadata::new(7.into(), "PIT1".into(), "PointInTime".into());
+        let pit2_meta = StatisticMetadata::new(8.into(), "PIT2".into(), "PointInTime".into());
+        let pit1 = point_in_time::PointInTimeStatistic::new(
+            pit1_meta,
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        );
+        let pit2 = point_in_time::PointInTimeStatistic::new(
+            pit2_meta,
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        );
+        AnyStatistic::TimeDifference(TimeDifferenceStatistic::new(
+            metadata,
+            pit1,
+            pit2,
+            None,
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        ))
+    }
+
+    // =========================================================================
+    // PHASE 2: TEST calculate_new_log_value_from_primitives
+    // =========================================================================
+
+    #[test]
+    fn test_log_value_integer_amount() {
+        let stat = integer_amount_stat();
+
+        // Test case 1: Summing with an existing value
+        let current_value = serde_json::to_value(10).unwrap();
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(Some(current_value), "5", Some("sum"))
+            .unwrap();
+        assert!(changed);
+        assert_eq!(new_value, serde_json::to_value(15).unwrap());
+
+        // Test case 2: Summing with no existing value
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(None, "5", Some("sum"))
+            .unwrap();
+        assert!(changed);
+        assert_eq!(new_value, serde_json::to_value(5).unwrap());
+
+        // Test case 3: Overwriting a value
+        let current_value = serde_json::to_value(10).unwrap();
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(Some(current_value), "20", Some("overwrite"))
+            .unwrap();
+        assert!(changed);
+        assert_eq!(new_value, serde_json::to_value(20).unwrap());
+
+        // Test case 4: Ignoring a new value
+        let current_value = serde_json::to_value(10).unwrap();
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(Some(current_value), "5", Some("ignore"))
+            .unwrap();
+        assert!(!changed);
+        assert_eq!(new_value, serde_json::to_value(10).unwrap());
+
+        // Test case 5: Invalid new value string
+        let result =
+            stat.calculate_new_log_value_from_primitives(None, "not-a-number", Some("sum"));
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidValue(_)
+        ));
+
+        // Test case 6: Invalid update policy
+        let result =
+            stat.calculate_new_log_value_from_primitives(None, "5", Some("invalid-policy"));
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::UpdatePolicy(_)
+        ));
+    }
+
+    #[test]
+    fn test_log_value_time_spans() {
+        let stat = time_spans_stat();
+
+        // Test case 1: Adding new time spans with default (append) policy
+        let time_spans_json = r#"[{"start":"09:00:00","end":"10:00:00"}]"#;
+        let (_new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(None, time_spans_json, None)
+            .unwrap();
+        assert!(changed);
+
+        // Test case 2: Adding time spans with explicit append policy
+        let (_new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(None, time_spans_json, Some("append"))
+            .unwrap();
+        assert!(changed);
+
+        // Test case 3: Invalid JSON format
+        let result = stat.calculate_new_log_value_from_primitives(None, "not-json", None);
+        assert!(result.is_err());
+
+        // Test case 4: Invalid update policy
+        let result = stat.calculate_new_log_value_from_primitives(
+            None,
+            time_spans_json,
+            Some("invalid-policy"),
+        );
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::UpdatePolicy(_)
+        ));
+    }
+
+    #[test]
+    fn test_log_value_habit() {
+        let stat = habit_stat();
+
+        // Test case 1: Setting to true with no existing value
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(None, "true", None)
+            .unwrap();
+        assert!(changed);
+        assert_eq!(new_value, serde_json::to_value(true).unwrap());
+
+        // Test case 2: Setting to false with no existing value
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(None, "false", None)
+            .unwrap();
+        assert!(changed);
+        assert_eq!(new_value, serde_json::to_value(false).unwrap());
+
+        // Test case 3: Explicitly overwriting existing value with different value
+        let current_value = serde_json::to_value(false).unwrap();
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(Some(current_value), "true", Some("overwrite"))
+            .unwrap();
+        assert!(changed);
+        assert_eq!(new_value, serde_json::to_value(true).unwrap());
+
+        // Test case 4: Using default (ignore) policy with existing value
+        let current_value = serde_json::to_value(true).unwrap();
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(Some(current_value), "false", None)
+            .unwrap();
+        assert!(!changed); // Default is ignore, so existing value is kept
+        assert_eq!(new_value, serde_json::to_value(true).unwrap());
+
+        // Test case 5: Invalid boolean string
+        let result = stat.calculate_new_log_value_from_primitives(None, "not-a-bool", None);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidValue(_)
+        ));
+    }
+
+    #[test]
+    fn test_log_value_point_in_time() {
+        let stat = point_in_time_stat();
+
+        // Test case 1: Setting a timestamp with no existing value
+        let timestamp = "2024-01-15T09:30:00";
+        let (_new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(None, timestamp, None)
+            .unwrap();
+        assert!(changed);
+
+        // Test case 2: Explicitly overwriting existing timestamp with different value
+        let current_value = serde_json::to_value("2024-01-15T08:00:00").unwrap();
+        let (_new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(
+                Some(current_value),
+                timestamp,
+                Some("overwrite"),
+            )
+            .unwrap();
+        assert!(changed);
+
+        // Test case 3: Using default (ignore) policy with existing value
+        let current_value = serde_json::to_value("2024-01-15T08:00:00").unwrap();
+        let (new_value, changed) = stat
+            .calculate_new_log_value_from_primitives(Some(current_value.clone()), timestamp, None)
+            .unwrap();
+        assert!(!changed); // Default is ignore, so existing value is kept
+        assert_eq!(new_value, current_value);
+
+        // Test case 4: Invalid timestamp format
+        let result = stat.calculate_new_log_value_from_primitives(None, "not-a-timestamp", None);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidValue(_)
+        ));
+    }
+
+    #[test]
+    fn test_log_value_on_derived_stat_fails() {
+        let summing_stat = summing_stat();
+        let result = summing_stat.calculate_new_log_value_from_primitives(None, "100", None);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidOperation(_)
+        ));
+
+        let time_diff_stat = time_difference_stat();
+        let result = time_diff_stat.calculate_new_log_value_from_primitives(None, "100", None);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidOperation(_)
+        ));
+    }
+
+    // =========================================================================
+    // PHASE 3: TEST create_goal_from_primitives
+    // =========================================================================
+
+    #[test]
+    fn test_create_goal_time_spans() {
+        let stat = time_spans_stat();
+
+        // Test case 1: Happy path with all data
+        let mut data = HashMap::new();
+        data.insert(
+            "target".to_string(),
+            r#"[{"start":"09:00:00","end":"10:00:00"}]"#.to_string(),
+        );
+        data.insert("efficiency".to_string(), "80".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: TimeSpansGoal = serde_json::from_value(goal_json).unwrap();
+        assert_eq!(goal.efficiency().as_num(), 80);
+        assert_eq!(goal.target().len(), 1);
+
+        // Test case 2: Happy path with default efficiency
+        let mut data = HashMap::new();
+        data.insert(
+            "target".to_string(),
+            r#"[{"start":"09:00:00","end":"10:00:00"}]"#.to_string(),
+        );
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: TimeSpansGoal = serde_json::from_value(goal_json).unwrap();
+        assert_eq!(goal.efficiency().as_num(), 100);
+
+        // Test case 3: Error on missing 'target' key
+        let data = HashMap::new();
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidValue(_)
+        ));
+
+        // Test case 4: Error on malformed JSON in 'target'
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "not-json".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+
+        // Test case 5: Error on invalid 'efficiency' value
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), r#"[]"#.to_string());
+        data.insert("efficiency".to_string(), "not-a-number".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_goal_integer_amount() {
+        let stat = integer_amount_stat();
+
+        // Test case 1: Happy path with all data
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "100".to_string());
+        data.insert("is_at_least".to_string(), "true".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: AmountGoal<i64> = serde_json::from_value(goal_json).unwrap();
+        assert_eq!(goal.target_amount(), 100);
+        assert!(goal.is_at_least());
+
+        // Test case 2: Happy path with default is_at_least
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "50".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: AmountGoal<i64> = serde_json::from_value(goal_json).unwrap();
+        assert_eq!(goal.target_amount(), 50);
+        assert!(goal.is_at_least()); // Default is true
+
+        // Test case 3: Error on missing 'target' key
+        let data = HashMap::new();
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidValue(_)
+        ));
+
+        // Test case 4: Error on invalid target value
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "not-a-number".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+
+        // Test case 5: Error on invalid is_at_least value
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "100".to_string());
+        data.insert("is_at_least".to_string(), "not-a-bool".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_goal_habit() {
+        let stat = habit_stat();
+
+        // Test case 1: Happy path with occurred = true
+        let mut data = HashMap::new();
+        data.insert("occurred".to_string(), "true".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: HabitGoal = serde_json::from_value(goal_json).unwrap();
+        assert!(goal.occurred());
+
+        // Test case 2: Happy path with occurred = false
+        let mut data = HashMap::new();
+        data.insert("occurred".to_string(), "false".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: HabitGoal = serde_json::from_value(goal_json).unwrap();
+        assert!(!goal.occurred());
+
+        // Test case 3: Error on missing 'occurred' key
+        let data = HashMap::new();
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidValue(_)
+        ));
+
+        // Test case 4: Error on invalid occurred value
+        let mut data = HashMap::new();
+        data.insert("occurred".to_string(), "not-a-bool".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_goal_point_in_time() {
+        let stat = point_in_time_stat();
+
+        // Test case 1: Happy path with HH:MM:SS format
+        let mut data = HashMap::new();
+        data.insert("deadline".to_string(), "09:30:00".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+        assert!(goal_json.is_object());
+
+        // Test case 2: Happy path with HH:MM format
+        let mut data = HashMap::new();
+        data.insert("deadline".to_string(), "09:30".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+        assert!(goal_json.is_object());
+
+        // Test case 3: Error on missing 'deadline' key
+        let data = HashMap::new();
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StatisticError::InvalidValue(_)
+        ));
+
+        // Test case 4: Error on invalid deadline format
+        let mut data = HashMap::new();
+        data.insert("deadline".to_string(), "not-a-time".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_goal_summing() {
+        let stat = summing_stat();
+
+        // Test case 1: Happy path with all data
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "3600".to_string()); // 1 hour in seconds
+        data.insert("is_at_least".to_string(), "true".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: AmountGoal<crate::shared::seconds::Seconds> =
+            serde_json::from_value(goal_json).unwrap();
+        assert!(goal.is_at_least());
+
+        // Test case 2: Happy path with default is_at_least
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "1800".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+        assert!(goal_json.is_object());
+
+        // Test case 3: Error on missing 'target' key
+        let data = HashMap::new();
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+
+        // Test case 4: Error on invalid target value
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "not-a-number".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_goal_time_difference() {
+        let stat = time_difference_stat();
+
+        // Test case 1: Happy path with all data
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "28800".to_string()); // 8 hours in seconds
+        data.insert("is_at_least".to_string(), "false".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+
+        let goal: AmountGoal<crate::shared::seconds::Seconds> =
+            serde_json::from_value(goal_json).unwrap();
+        assert!(!goal.is_at_least());
+
+        // Test case 2: Happy path with default is_at_least
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "7200".to_string());
+        let goal_json = stat.create_goal_from_primitives(&data).unwrap();
+        assert!(goal_json.is_object());
+
+        // Test case 3: Error on missing 'target' key
+        let data = HashMap::new();
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+
+        // Test case 4: Error on invalid target value
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "not-a-number".to_string());
+        let result = stat.create_goal_from_primitives(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_default_goal_updates_state() {
+        let mut stat = integer_amount_stat();
+
+        // Verify no default goal initially
+        assert!(stat.get_default_goal().is_none());
+
+        let mut data = HashMap::new();
+        data.insert("target".to_string(), "100".to_string());
+        data.insert("is_at_least".to_string(), "true".to_string());
+
+        let start_date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let _ = stat
+            .set_default_goal_from_primitives(&data, start_date)
+            .unwrap();
+
+        // Verify the default goal is now set
+        let any_goal = stat.get_default_goal().unwrap();
+        if let AnyGoal::IntegerAmount(goal) = any_goal {
+            assert_eq!(goal.target_amount(), 100);
+        } else {
+            panic!("Incorrect goal type was set");
+        }
+        assert_eq!(stat.get_default_goal_valid_since(), start_date);
+    }
+
+    #[test]
+    fn test_set_default_goal_time_spans() {
+        let mut stat = time_spans_stat();
+
+        // Verify no default goal initially
+        assert!(stat.get_default_goal().is_none());
+
+        let mut data = HashMap::new();
+        data.insert(
+            "target".to_string(),
+            r#"[{"start":"09:00:00","end":"10:00:00"}]"#.to_string(),
+        );
+        data.insert("efficiency".to_string(), "90".to_string());
+
+        let start_date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let _ = stat
+            .set_default_goal_from_primitives(&data, start_date)
+            .unwrap();
+
+        // Verify the default goal is now set
+        let any_goal = stat.get_default_goal().unwrap();
+        if let AnyGoal::TimeSpans(goal) = any_goal {
+            assert_eq!(goal.efficiency().as_num(), 90);
+            assert_eq!(goal.target().len(), 1);
+        } else {
+            panic!("Incorrect goal type was set");
+        }
+        assert_eq!(stat.get_default_goal_valid_since(), start_date);
+    }
+
+    #[test]
+    fn test_set_default_goal_habit() {
+        let mut stat = habit_stat();
+
+        assert!(stat.get_default_goal().is_none());
+
+        let mut data = HashMap::new();
+        data.insert("occurred".to_string(), "true".to_string());
+
+        let start_date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let _ = stat
+            .set_default_goal_from_primitives(&data, start_date)
+            .unwrap();
+
+        let any_goal = stat.get_default_goal().unwrap();
+        if let AnyGoal::Habit(goal) = any_goal {
+            assert!(goal.occurred());
+        } else {
+            panic!("Incorrect goal type was set");
+        }
+        assert_eq!(stat.get_default_goal_valid_since(), start_date);
+    }
+}

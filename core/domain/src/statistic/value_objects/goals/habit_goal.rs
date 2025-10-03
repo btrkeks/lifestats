@@ -11,6 +11,10 @@ impl HabitGoal {
     pub fn new(target: bool) -> Self {
         Self { target }
     }
+
+    pub fn occurred(&self) -> bool {
+        self.target
+    }
 }
 
 impl Goal for HabitGoal {

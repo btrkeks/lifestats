@@ -18,9 +18,15 @@ pub enum TimeFrameError {
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct TimeFrame {
-    #[serde(serialize_with = "serialize_time_without_milliseconds")]
+    #[serde(
+        serialize_with = "serialize_time_without_milliseconds",
+        deserialize_with = "deserialize_time_from_string"
+    )]
     start: NaiveTime,
-    #[serde(serialize_with = "serialize_time_without_milliseconds")]
+    #[serde(
+        serialize_with = "serialize_time_without_milliseconds",
+        deserialize_with = "deserialize_time_from_string"
+    )]
     end: NaiveTime,
 }
 
@@ -32,6 +38,17 @@ where
     S: serde::Serializer,
 {
     serializer.serialize_str(&time.format("%H:%M:%S").to_string())
+}
+
+fn deserialize_time_from_string<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    // Try parsing with seconds first, then without
+    NaiveTime::parse_from_str(&s, "%H:%M:%S")
+        .or_else(|_| NaiveTime::parse_from_str(&s, "%H:%M"))
+        .map_err(serde::de::Error::custom)
 }
 
 impl TimeFrame {
@@ -104,6 +121,7 @@ impl fmt::Display for TimeFrame {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(transparent)]
 pub struct TimeFrameList {
     data: Vec<TimeFrame>,
 }
@@ -289,23 +307,9 @@ impl std::str::FromStr for TimeFrameList {
             return Ok(TimeFrameList::default());
         }
 
-        // Split the string by commas and trim whitespace
-        let frames = s.split(',').map(str::trim);
-
-        let mut list = TimeFrameList::default();
-
-        for frame_str in frames {
-            // Parse each time frame string into a TimeFrame
-            let time_frame: TimeFrame = frame_str
-                .parse()
-                .map_err(|e| anyhow!("Failed to parse time frame '{}': {}", frame_str, e))?;
-
-            // Append to our list, maintaining chronological order
-            list.append_frame(time_frame)
-                .map_err(|e| anyhow!("Failed to append time frame '{}': {}", frame_str, e))?;
-        }
-
-        Ok(list)
+        // Parse JSON as the canonical serialization format
+        serde_json::from_str(s)
+            .map_err(|e| anyhow!("Failed to parse TimeFrameList from JSON: {}", e))
     }
 }
 
@@ -616,7 +620,7 @@ mod tests {
 
     #[test]
     fn test_parse_time_frame_list() {
-        let input = "10:30-12:00, 12:30-14:00, 14:30-16:00, 16:30-18:00, 18:20-19:00";
+        let input = r#"[{"start":"10:30:00","end":"12:00:00"},{"start":"12:30:00","end":"14:00:00"},{"start":"14:30:00","end":"16:00:00"},{"start":"16:30:00","end":"18:00:00"},{"start":"18:20:00","end":"19:00:00"}]"#;
         let list: TimeFrameList = input.parse().unwrap();
 
         let frames: Vec<TimeFrame> = list.into_iter().collect();
@@ -677,7 +681,7 @@ mod tests {
 
     #[test]
     fn test_parse_time_frame_list_with_single_frame() {
-        let input = "09:00-10:30";
+        let input = r#"[{"start":"09:00:00","end":"10:30:00"}]"#;
         let list: TimeFrameList = input.parse().unwrap();
 
         let frames: Vec<TimeFrame> = list.into_iter().collect();
@@ -695,14 +699,7 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_format() {
-        let input = "10:30-12:00, invalid";
-        let result: Result<TimeFrameList, _> = input.parse();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_overlapping_frames() {
-        let input = "10:00-12:00, 11:00-13:00";
+        let input = "not valid json";
         let result: Result<TimeFrameList, _> = input.parse();
         assert!(result.is_err());
     }

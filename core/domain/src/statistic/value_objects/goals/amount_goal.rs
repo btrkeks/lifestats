@@ -19,6 +19,10 @@ impl<T: Default + Into<i64> + Copy> AmountGoal<T> {
     pub fn target_amount(&self) -> T {
         self.target_amount
     }
+
+    pub fn is_at_least(&self) -> bool {
+        self.is_good
+    }
 }
 
 impl<T> Goal for AmountGoal<T>
