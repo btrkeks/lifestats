@@ -6,6 +6,7 @@ use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::NaiveDate;
 
+#[derive(Clone)]
 pub struct TimeDifferenceStatistic {
     metadata: StatisticMetadata,
 
@@ -42,5 +43,23 @@ impl Statistic for TimeDifferenceStatistic {
 impl IntegerStatistic for TimeDifferenceStatistic {
     fn value_into_i64(&self, value: Self::LogValueType) -> i64 {
         value.into()
+    }
+}
+
+impl TimeDifferenceStatistic {
+    pub fn new(
+        metadata: StatisticMetadata,
+        statistic0: PointInTimeStatistic,
+        statistic1: PointInTimeStatistic,
+        default_goal: Option<<Self as Statistic>::GoalType>,
+        default_goal_start: NaiveDate,
+    ) -> Self {
+        Self {
+            metadata,
+            statistic0,
+            statistic1,
+            default_goal,
+            default_goal_start,
+        }
     }
 }

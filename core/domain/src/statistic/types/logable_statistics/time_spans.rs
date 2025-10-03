@@ -12,6 +12,7 @@ use chrono::NaiveDate;
 /// Examples:
 /// - Time studied (e.g. [10:00 am - 11:00 am, 1 pm - 2 pm])
 /// - Time book read
+#[derive(Clone)]
 pub struct TimeSpansStatistic {
     // Metadata
     metadata: StatisticMetadata,

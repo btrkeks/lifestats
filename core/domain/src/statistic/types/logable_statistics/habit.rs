@@ -12,6 +12,7 @@ use chrono::NaiveDate;
 /// - Whether you brushed your teeth that day
 /// - Whether you went to the gym that day
 /// - Whether you avoided touching your phone in the morning
+#[derive(Clone)]
 pub struct HabitStatistic {
     // Metadata
     metadata: StatisticMetadata,
@@ -57,6 +58,18 @@ impl LogableStatistic for HabitStatistic {
 }
 
 impl HabitStatistic {
+    pub fn new(
+        metadata: StatisticMetadata,
+        default_goal: Option<<Self as Statistic>::GoalType>,
+        default_goal_start: NaiveDate,
+    ) -> Self {
+        Self {
+            metadata,
+            default_goal,
+            default_goal_start,
+        }
+    }
+
     pub fn calculate_new_log_value(
         &self,
         current_value: Option<bool>,

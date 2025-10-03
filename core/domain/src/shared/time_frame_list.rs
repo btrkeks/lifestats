@@ -169,7 +169,7 @@ impl TimeFrameList {
     fn can_append_to_end(&self, new_frame: &TimeFrame) -> bool {
         self.data
             .last()
-            .map_or(true, |last_frame| last_frame.end <= new_frame.start)
+            .is_none_or(|last_frame| last_frame.end <= new_frame.start)
     }
 
     /// Updates the end time of an existing TimeFrame or creates a new one.
@@ -229,13 +229,12 @@ impl TimeFrameList {
     fn find_index_with_matching_start_time(&self, start_time: NaiveTime) -> Option<usize> {
         let target_seconds = start_time.num_seconds_from_midnight();
 
-        match self.data.binary_search_by(|frame| {
-            let frame_seconds = frame.start.num_seconds_from_midnight();
-            frame_seconds.cmp(&target_seconds)
-        }) {
-            Ok(index) => Some(index),
-            Err(_) => None,
-        }
+        self.data
+            .binary_search_by(|frame| {
+                let frame_seconds = frame.start.num_seconds_from_midnight();
+                frame_seconds.cmp(&target_seconds)
+            })
+            .ok()
     }
 
     pub fn get_total_duration(&self) -> Duration {

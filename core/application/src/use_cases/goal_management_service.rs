@@ -8,6 +8,7 @@ use lifestats_domain::shared::percentage::Percentage;
 use lifestats_domain::shared::time_frame_list::TimeFrameList;
 use lifestats_domain::statistic::any_statistic::AnyStatistic;
 use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_domain::statistic::traits::base_statistic::Statistic;
 use lifestats_domain::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
 use lifestats_domain::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use serde_json;

@@ -15,37 +15,37 @@ pub trait StatisticRepository {
     // --- Log Value Operations ---
     fn find_log_value<V>(&self, id: StatisticId, date: NaiveDate) -> Result<Option<V>>
     where
-        V: serde::de::DeserializeOwned;
+        V: serde::de::DeserializeOwned + 'static;
     fn find_log_values_in_range<V>(
         &self,
         id: StatisticId,
         range: DateRange,
     ) -> Result<Vec<DatedValue<V>>>
     where
-        V: serde::de::DeserializeOwned;
+        V: serde::de::DeserializeOwned + 'static;
     fn save_log_value<V>(&self, id: StatisticId, date: NaiveDate, value: V) -> Result<()>
     where
-        V: serde::Serialize;
+        V: serde::Serialize + 'static;
 
     // --- Goal Operations ---
     fn find_goal<G>(&self, id: StatisticId, date: NaiveDate) -> Result<Option<G>>
     where
-        G: serde::de::DeserializeOwned;
+        G: serde::de::DeserializeOwned + 'static;
     fn find_goals_in_range<G>(
         &self,
         id: StatisticId,
         range: DateRange,
     ) -> Result<Vec<DatedValue<G>>>
     where
-        G: serde::de::DeserializeOwned;
+        G: serde::de::DeserializeOwned + 'static;
     fn save_goal<G>(&self, id: StatisticId, date: NaiveDate, goal: Option<G>) -> Result<()>
     where
-        G: serde::Serialize;
+        G: serde::Serialize + 'static;
     fn find_default_goal<G>(&self, id: StatisticId) -> Result<Option<G>>
     where
-        G: serde::de::DeserializeOwned;
+        G: serde::de::DeserializeOwned + 'static;
     fn save_default_goal<G>(&self, id: StatisticId, goal: G) -> Result<()>
     where
-        G: serde::Serialize;
+        G: serde::Serialize + 'static;
     fn delete_default_goal(&self, id: StatisticId) -> Result<()>;
 }

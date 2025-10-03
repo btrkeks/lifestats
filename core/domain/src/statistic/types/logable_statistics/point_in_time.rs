@@ -12,6 +12,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 /// - Wake-up time
 /// - Time went to bed
 /// - Time workout finished
+#[derive(Clone)]
 pub struct PointInTimeStatistic {
     // Metadata
     metadata: StatisticMetadata,
@@ -57,6 +58,18 @@ impl LogableStatistic for PointInTimeStatistic {
 }
 
 impl PointInTimeStatistic {
+    pub fn new(
+        metadata: StatisticMetadata,
+        default_goal: Option<<Self as Statistic>::GoalType>,
+        default_goal_start: NaiveDate,
+    ) -> Self {
+        Self {
+            metadata,
+            default_goal,
+            default_goal_start,
+        }
+    }
+
     pub fn calculate_new_log_value(
         &self,
         current_value: Option<NaiveDateTime>,

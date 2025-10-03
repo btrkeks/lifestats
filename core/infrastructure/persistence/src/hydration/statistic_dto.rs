@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use chrono::NaiveDate;
 use diesel::backend::Backend;
 use diesel::deserialize::FromSql;
@@ -9,6 +9,7 @@ use diesel::sqlite::Sqlite;
 use diesel::{deserialize, serialize, AsExpression, FromSqlRow};
 use lifestats_domain::shared::ids::StatisticId;
 use lifestats_domain::statistic::any_statistic::AnyStatistic;
+use lifestats_domain::statistic::traits::base_statistic::Statistic;
 use lifestats_domain::statistic::types::logable_statistics::habit::HabitStatistic;
 use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_domain::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;

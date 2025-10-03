@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use diesel::prelude::*;
-use lifestats_domain::plot::any_plot::AnyPlot;
 use lifestats_domain::shared::dated_value::DatedValue;
 use lifestats_domain::shared::ids::StatisticId;
 use serde::de::DeserializeOwned;
@@ -106,7 +105,7 @@ impl GoalDataRaw {
     }
 }
 
-#[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]
+#[derive(Debug, Queryable, Selectable, Insertable, AsChangeset, Clone)]
 #[diesel(table_name = crate::sqlite_database::schema::default_goals)]
 pub struct DefaultGoalRaw {
     pub statistic_id: i32,
@@ -156,40 +155,6 @@ impl DefaultGoalRaw {
             statistic_id: statistic_id.0 as i32,
             target_value,
             extra_data1: Some(start_date.to_string()),
-        })
-    }
-}
-
-#[derive(Debug, Queryable, Selectable, Insertable, AsChangeset, Identifiable)]
-#[diesel(table_name = crate::sqlite_database::schema::plots)]
-#[diesel(primary_key(id))]
-pub struct PlotRaw {
-    pub id: i32,
-    pub statistic_id: i32,
-    pub title: String,
-    pub width: i32,
-    pub height: i32,
-    pub plot_type: String,
-}
-
-impl TryFrom<&AnyPlot> for PlotRaw {
-    type Error = anyhow::Error;
-
-    fn try_from(plot: &AnyPlot) -> Result<Self, Self::Error> {
-        let plot_type = match plot {
-            AnyPlot::Bar(_) => "Bar".to_string(),
-            AnyPlot::CircularProgressBar(_) => "CircularProgressBar".to_string(),
-            AnyPlot::Scatter(_) => "Scatter".to_string(),
-            AnyPlot::TimeFrames(_) => "TimeFrames".to_string(),
-        };
-
-        Ok(PlotRaw {
-            id: plot.get_id().0 as i32,
-            statistic_id: plot.get_statistic_id().0 as i32,
-            width: plot.get_width() as i32,
-            height: plot.get_height() as i32,
-            title: plot.get_title().to_string(),
-            plot_type,
         })
     }
 }

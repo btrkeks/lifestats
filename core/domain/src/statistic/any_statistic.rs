@@ -77,6 +77,7 @@ pub enum StreakDayResult {
 }
 
 /// Type-erased statistic wrapper that can hold any statistic type
+#[derive(Clone)]
 pub enum AnyStatistic {
     Habit(HabitStatistic),
     IntegerAmount(IntegerAmountStatistic),

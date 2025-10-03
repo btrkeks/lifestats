@@ -11,6 +11,7 @@ use chrono::NaiveDate;
 /// Examples:
 /// - Amount of pages read
 /// - Number of sit-ups done
+#[derive(Clone)]
 pub struct IntegerAmountStatistic {
     // Metadata
     metadata: StatisticMetadata,
@@ -56,6 +57,18 @@ impl LogableStatistic for IntegerAmountStatistic {
 }
 
 impl IntegerAmountStatistic {
+    pub fn new(
+        metadata: StatisticMetadata,
+        default_goal: Option<<Self as Statistic>::GoalType>,
+        default_goal_start: NaiveDate,
+    ) -> Self {
+        Self {
+            metadata,
+            default_goal,
+            default_goal_start,
+        }
+    }
+
     pub fn calculate_new_log_value(
         &self,
         current_value: Option<i64>,
