@@ -132,23 +132,6 @@ pub trait Statistic {
         Ok(result)
     }
 
-    fn get_streak(&self) -> Result<u32> {
-        const MAX_NO_GOALS: u32 = 20;
-
-        let mut current_date = chrono::Local::now().date_naive();
-        let mut streak = 0;
-        let mut num_consecutive_no_goal = 0;
-        loop {
-            match self.goal_achieved_on(current_date)? {
-                Some(true) => streak += 1,
-                None if num_consecutive_no_goal < MAX_NO_GOALS => num_consecutive_no_goal += 1,
-                _ => break,
-            }
-            current_date = current_date.pred_opt().unwrap();
-        }
-        Ok(streak)
-    }
-
     //===========================================================================
     // DEFAULT GOAL MANAGEMENT
     //===========================================================================

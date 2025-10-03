@@ -69,24 +69,28 @@ impl Statistic for IntegerAmountStatistic {
 impl LogableStatistic for IntegerAmountStatistic {
     type UpdatePolicyType = AmountUpdatePolicy;
 
-    fn log_value(
+    fn calculate_new_log_value(
         &self,
-        date: NaiveDate,
-        log_value: Self::LogValueType,
+        current_value: Option<Self::LogValueType>,
+        new_value: Self::LogValueType,
         update_policy: Self::UpdatePolicyType,
-    ) -> Result<()> {
-        let current_value = self.get_log_value(date)?;
-        let (new_value, changed) = update_policy.apply(current_value, log_value);
+    ) -> (Self::LogValueType, bool) {
+        update_policy.apply(current_value, new_value)
+    }
+}
 
-        if changed {
-            return Err(StatisticError::InvalidOperation(
-                format!(
-                    "Statistic {} cannot persist log values without an external repository (date: {date}, value: {new_value})",
-                    self.id()
-                ),
-            ));
-        }
-
-        Ok(())
+impl IntegerAmountStatistic {
+    pub fn calculate_new_log_value(
+        &self,
+        current_value: Option<i64>,
+        new_value: i64,
+        update_policy: AmountUpdatePolicy,
+    ) -> (i64, bool) {
+        <Self as LogableStatistic>::calculate_new_log_value(
+            self,
+            current_value,
+            new_value,
+            update_policy,
+        )
     }
 }

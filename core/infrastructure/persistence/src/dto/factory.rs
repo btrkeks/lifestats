@@ -1,6 +1,6 @@
 use crate::dto::statistic_dto::{StatisticDTO, StatisticKind};
-use lifestats_domain::statistic::traits::base_statistic::Statistic;
 use anyhow::Result;
+use lifestats_domain::statistic::traits::base_statistic::Statistic;
 
 /// Factory to create domain objects from DTOs and vice versa
 pub struct StatisticFactory {

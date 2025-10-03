@@ -84,25 +84,13 @@ impl Statistic for TimeSpansStatistic {
 impl LogableStatistic for TimeSpansStatistic {
     type UpdatePolicyType = TimeFrameListUpdatePolicy;
 
-    fn log_value(
+    fn calculate_new_log_value(
         &self,
-        date: NaiveDate,
-        log_value: Self::LogValueType,
+        current_value: Option<Self::LogValueType>,
+        new_value: Self::LogValueType,
         update_policy: Self::UpdatePolicyType,
-    ) -> Result<()> {
-        let current_value = self.get_log_value(date)?;
-        let (_new_value, changed) = update_policy.apply(current_value, log_value);
-
-        if changed {
-            return Err(StatisticError::InvalidOperation(
-                format!(
-                    "Statistic {} cannot persist log values without an external repository (date: {date})",
-                    self.id()
-                ),
-            ));
-        }
-
-        Ok(())
+    ) -> (Self::LogValueType, bool) {
+        update_policy.apply(current_value, new_value)
     }
 }
 
@@ -111,5 +99,19 @@ impl TimeSpansStatistic {
     fn get_start_time(&self, date: NaiveDate) -> Result<Option<NaiveTime>> {
         let log_value = self.get_log_value(date)?;
         Ok(log_value.map(|v| v.start_time()).flatten())
+    }
+
+    pub fn calculate_new_log_value(
+        &self,
+        current_value: Option<TimeFrameList>,
+        new_value: TimeFrameList,
+        update_policy: TimeFrameListUpdatePolicy,
+    ) -> (TimeFrameList, bool) {
+        <Self as LogableStatistic>::calculate_new_log_value(
+            self,
+            current_value,
+            new_value,
+            update_policy,
+        )
     }
 }

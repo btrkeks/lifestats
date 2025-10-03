@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
-use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_domain::shared::ids::StatisticId;
+use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub enum StatisticKind {
@@ -30,8 +30,8 @@ pub struct StatisticDTO {
 pub struct LogEntryDTO {
     statistic_id: StatisticId,
     date: NaiveDate,
-    value_type: String,  // e.g., "TimeFrameList", "bool", "i64"
-    value_json: String,  // JSON serialized value
+    value_type: String, // e.g., "TimeFrameList", "bool", "i64"
+    value_json: String, // JSON serialized value
     timestamp: DateTime<Utc>,
 }
 
@@ -39,6 +39,6 @@ pub struct LogEntryDTO {
 pub struct GoalDTO {
     statistic_id: StatisticId,
     date: NaiveDate,
-    goal_type: String,   // e.g., "TimeSpansGoal", "HabitGoal"
-    goal_json: String,   // JSON serialized goal
+    goal_type: String, // e.g., "TimeSpansGoal", "HabitGoal"
+    goal_json: String, // JSON serialized goal
 }

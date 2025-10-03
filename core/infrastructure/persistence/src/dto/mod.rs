@@ -1,2 +1,2 @@
-mod statistic_dto;
 mod factory;
+mod statistic_dto;

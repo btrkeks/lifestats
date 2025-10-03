@@ -3,8 +3,8 @@ use chrono::NaiveDate;
 use diesel::prelude::*;
 use lifestats_domain::plot::any_plot::AnyPlot;
 use lifestats_domain::shared::goal::Goal;
-use lifestats_domain::shared::logging_data::{DateValue, StatisticData};
 use lifestats_domain::shared::ids::StatisticId;
+use lifestats_domain::shared::logging_data::{DateValue, StatisticData};
 
 #[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]
 #[diesel(table_name = crate::sqlite_database::schema::logging_data)]

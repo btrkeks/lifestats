@@ -1,7 +1,6 @@
 use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
-use chrono::NaiveDate;
 use std::str::FromStr;
 
 pub trait LogableStatistic: Statistic
@@ -10,42 +9,39 @@ where
 {
     type UpdatePolicyType: UpdatePolicy<Self::LogValueType>;
 
-    fn log_value(
+    fn calculate_new_log_value(
         &self,
-        date: NaiveDate,
-        value: Self::LogValueType,
+        current_value: Option<Self::LogValueType>,
+        new_value: Self::LogValueType,
         update_policy: Self::UpdatePolicyType,
-    ) -> Result<()>;
+    ) -> (Self::LogValueType, bool);
 
-    fn log_from_string(
+    fn parse_log_value(&self, value_str: &str) -> Result<Self::LogValueType> {
+        value_str
+            .parse::<Self::LogValueType>()
+            .map_err(|_| StatisticError::InvalidValue(format!("Could not parse: {}", value_str)))
+    }
+
+    fn parse_update_policy(
         &self,
-        date: NaiveDate,
+        update_policy_str: Option<&str>,
+    ) -> Result<Self::UpdatePolicyType> {
+        match update_policy_str {
+            Some(up_str) => up_str.parse::<Self::UpdatePolicyType>().map_err(|_| {
+                StatisticError::UpdatePolicy(format!("Invalid update policy: {}", up_str))
+            }),
+            None => Ok(Self::UpdatePolicyType::default()),
+        }
+    }
+
+    fn calculate_new_log_value_from_str(
+        &self,
+        current_value: Option<Self::LogValueType>,
         value_str: &str,
         update_policy_str: Option<&str>,
-    ) -> Result<()> {
-        let value = match value_str.parse::<Self::LogValueType>() {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(StatisticError::InvalidValue(format!(
-                    "Could not parse: {}",
-                    value_str
-                )))
-            }
-        };
-
-        let update_policy = match update_policy_str {
-            Some(up_str) => match up_str.parse::<Self::UpdatePolicyType>() {
-                Ok(up) => up,
-                Err(_) => {
-                    return Err(StatisticError::UpdatePolicy(format!(
-                        "Invalid update policy: {}",
-                        up_str
-                    )))
-                }
-            },
-            None => Self::UpdatePolicyType::default(),
-        };
-
-        self.log_value(date, value, update_policy)
+    ) -> Result<(Self::LogValueType, bool)> {
+        let value = self.parse_log_value(value_str)?;
+        let update_policy = self.parse_update_policy(update_policy_str)?;
+        Ok(self.calculate_new_log_value(current_value, value, update_policy))
     }
 }

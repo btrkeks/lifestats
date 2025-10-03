@@ -1,6 +1,6 @@
 use crate::shared::seconds::Seconds;
 use crate::shared::time_frame_list::TimeFrameList;
-use crate::statistic::error::Result;
+use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
 use crate::statistic::types::derived_statistics::time_difference::TimeDifferenceStatistic;
@@ -10,10 +10,12 @@ use crate::statistic::types::logable_statistics::point_in_time::PointInTimeStati
 use crate::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
 use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
+use crate::statistic::value_objects::goals::goal_trait::Goal;
 use crate::statistic::value_objects::goals::habit_goal::HabitGoal;
 use crate::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::{NaiveDate, NaiveDateTime};
+use std::any::{type_name, Any};
 
 /// Type-erased wrapper for log values from any statistic type
 #[derive(Debug, Clone)]
@@ -25,6 +27,48 @@ pub enum AnyLogValue {
     Seconds(Seconds),
 }
 
+fn downcast_option<'a, T: 'static>(
+    metadata: &StatisticMetadata,
+    input: Option<&'a dyn Any>,
+    label: &str,
+) -> Result<Option<&'a T>> {
+    match input {
+        Some(raw) => raw.downcast_ref::<T>().map(Some).ok_or_else(|| {
+            StatisticError::InvalidOperation(format!(
+                "Statistic {} ({}) expected {label} of type {} but received incompatible type",
+                metadata.id(),
+                metadata.name(),
+                type_name::<T>(),
+            ))
+        }),
+        None => Ok(None),
+    }
+}
+
+fn evaluate_streak_for_day_inner<'a, V, G>(
+    metadata: &StatisticMetadata,
+    log_value: Option<&'a dyn Any>,
+    goal: Option<&'a dyn Any>,
+) -> Result<StreakDayResult>
+where
+    V: 'static,
+    G: Goal<LogValue = V> + 'static,
+{
+    let goal_ref = downcast_option::<G>(metadata, goal, "goal")?;
+
+    if let Some(goal_ref) = goal_ref {
+        let value_ref = downcast_option::<V>(metadata, log_value, "log value")?;
+
+        if goal_ref.is_achieved(value_ref) {
+            Ok(StreakDayResult::Achieved)
+        } else {
+            Ok(StreakDayResult::Missed)
+        }
+    } else {
+        Ok(StreakDayResult::NoGoalContinue)
+    }
+}
+
 /// Type-erased wrapper for goals from any statistic type
 #[derive(Debug, Clone)]
 pub enum AnyGoal {
@@ -33,6 +77,13 @@ pub enum AnyGoal {
     FinishedInTime(FinishedInTimeGoal),
     TimeSpans(TimeSpansGoal),
     SecondsAmount(AmountGoal<Seconds>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreakDayResult {
+    Achieved,
+    Missed,
+    NoGoalContinue,
 }
 
 /// Type-erased statistic wrapper that can hold any statistic type
@@ -136,6 +187,40 @@ impl AnyStatistic {
     /// Get the date from which the current default goal became active
     pub fn get_default_goal_valid_since(&self) -> NaiveDate {
         dispatch_statistic!(self, get_default_goal_valid_since,)
+    }
+
+    pub fn evaluate_streak_for_day(
+        &self,
+        log_value: Option<&dyn Any>,
+        goal: Option<&dyn Any>,
+    ) -> Result<StreakDayResult> {
+        let metadata = self.get_metadata();
+
+        match self {
+            AnyStatistic::Habit(_) => {
+                evaluate_streak_for_day_inner::<bool, HabitGoal>(metadata, log_value, goal)
+            }
+            AnyStatistic::IntegerAmount(_) => {
+                evaluate_streak_for_day_inner::<i64, AmountGoal<i64>>(metadata, log_value, goal)
+            }
+            AnyStatistic::PointInTime(_) => evaluate_streak_for_day_inner::<
+                NaiveDateTime,
+                FinishedInTimeGoal,
+            >(metadata, log_value, goal),
+            AnyStatistic::TimeSpans(_) => evaluate_streak_for_day_inner::<
+                TimeFrameList,
+                TimeSpansGoal,
+            >(metadata, log_value, goal),
+            AnyStatistic::Summing(_) => {
+                evaluate_streak_for_day_inner::<Seconds, AmountGoal<Seconds>>(
+                    metadata, log_value, goal,
+                )
+            }
+            AnyStatistic::TimeDifference(_) => evaluate_streak_for_day_inner::<
+                Seconds,
+                AmountGoal<Seconds>,
+            >(metadata, log_value, goal),
+        }
     }
 
     //===========================================================================

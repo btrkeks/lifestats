@@ -1,6 +1,6 @@
 // web_api/src/types/goal.rs
-use serde::{Deserialize, Serialize};
 use lifestats_domain::shared::ids::StatisticId;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SetGoalRequest {

@@ -1,11 +1,11 @@
 use crate::types::{LogRequest, LogResponse};
 use anyhow::Result;
 use chrono::NaiveTime;
+use lifestats_domain::shared::ids::StatisticId;
 use lifestats_domain::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
 use thiserror::Error;
-use lifestats_domain::shared::ids::StatisticId;
 
 #[derive(Error, Debug)]
 pub enum ClientError {

@@ -70,24 +70,28 @@ impl Statistic for HabitStatistic {
 impl LogableStatistic for HabitStatistic {
     type UpdatePolicyType = FixedValueUpdatePolicy;
 
-    fn log_value(
+    fn calculate_new_log_value(
         &self,
-        date: NaiveDate,
-        log_value: Self::LogValueType,
+        current_value: Option<Self::LogValueType>,
+        new_value: Self::LogValueType,
         update_policy: Self::UpdatePolicyType,
-    ) -> Result<()> {
-        let current_value = self.get_log_value(date)?;
-        let (_new_value, changed) = update_policy.apply(current_value, log_value);
+    ) -> (Self::LogValueType, bool) {
+        update_policy.apply(current_value, new_value)
+    }
+}
 
-        if changed {
-            return Err(StatisticError::InvalidOperation(
-                format!(
-                    "Statistic {} cannot persist log values without an external repository (date: {date})",
-                    self.id()
-                ),
-            ));
-        }
-
-        Ok(())
+impl HabitStatistic {
+    pub fn calculate_new_log_value(
+        &self,
+        current_value: Option<bool>,
+        new_value: bool,
+        update_policy: FixedValueUpdatePolicy,
+    ) -> (bool, bool) {
+        <Self as LogableStatistic>::calculate_new_log_value(
+            self,
+            current_value,
+            new_value,
+            update_policy,
+        )
     }
 }

@@ -4,12 +4,12 @@ use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
-use lifestats_domain::statistic::ports::logging_data_repository::LoggingDataRepositoryTrait;
+use lifestats_domain::shared::ids::StatisticId;
 use lifestats_domain::shared::logging_data::DateValue;
+use lifestats_domain::statistic::ports::logging_data_repository::LoggingDataRepositoryTrait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::Arc;
-use lifestats_domain::shared::ids::StatisticId;
 
 pub struct LoggingDataRepository<T> {
     pool: Arc<Pool<ConnectionManager<SqliteConnection>>>,
