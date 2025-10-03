@@ -4,9 +4,7 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
 use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::shared::time_frame_list::TimeFrameList;
 use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_domain::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
 
 #[derive(Clone)]
 pub struct LoggingService<R, E>
@@ -73,12 +71,4 @@ pub struct LogValueCommand {
     pub date: NaiveDate,
     pub value_str: String,
     pub update_policy_str: Option<String>,
-}
-
-/// Legacy command for logging time frame lists
-pub struct LogTimeFrameListCommand {
-    pub statistic_id: StatisticId,
-    pub date: NaiveDate,
-    pub value: TimeFrameList,
-    pub update_policy: Option<TimeFrameListUpdatePolicy>,
 }
