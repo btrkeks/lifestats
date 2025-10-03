@@ -1,0 +1,11 @@
+[package]
+name = "event_sender"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+events = { path = "../../events" }
+anyhow = "1.0.95"
+clap = { version = "4.5.26", features = ["derive"] }
+log = "0.4.25"
+env_logger = "0.11.6"
