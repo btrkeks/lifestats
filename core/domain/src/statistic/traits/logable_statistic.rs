@@ -25,13 +25,23 @@ where
     ) -> Result<()> {
         let value = match value_str.parse::<Self::LogValueType>() {
             Ok(v) => v,
-            Err(_) => return Err(StatisticError::InvalidValue(format!("Could not parse: {}", value_str))),
+            Err(_) => {
+                return Err(StatisticError::InvalidValue(format!(
+                    "Could not parse: {}",
+                    value_str
+                )))
+            }
         };
 
         let update_policy = match update_policy_str {
             Some(up_str) => match up_str.parse::<Self::UpdatePolicyType>() {
                 Ok(up) => up,
-                Err(_) => return Err(StatisticError::UpdatePolicy(format!("Invalid update policy: {}", up_str))),
+                Err(_) => {
+                    return Err(StatisticError::UpdatePolicy(format!(
+                        "Invalid update policy: {}",
+                        up_str
+                    )))
+                }
             },
             None => Self::UpdatePolicyType::default(),
         };

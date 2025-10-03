@@ -12,7 +12,6 @@ use std::str::FromStr;
 /// The set of allowed (or meaningful) operations can differ for each statistic.
 /// E.g. while 12 o'clock and 1 o'clock can be added, their sum doesn't need to make sense.
 pub trait UpdatePolicy<T>: Default + FromStr {
-
     /// Apply the update policy to the current value with a new value
     ///
     /// Returns:

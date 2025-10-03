@@ -1,5 +1,5 @@
-use chrono::NaiveDate;
 use crate::shared::time_frame_list::TimeFrameError;
+use chrono::NaiveDate;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StatisticError {

@@ -12,11 +12,7 @@ pub enum AmountUpdatePolicy {
 }
 
 impl<T: Add<Output = T> + Copy + Default + PartialEq> UpdatePolicy<T> for AmountUpdatePolicy {
-    fn apply(
-        &self,
-        current: Option<T>,
-        new: T,
-    ) -> (T, bool) {
+    fn apply(&self, current: Option<T>, new: T) -> (T, bool) {
         match (self, current) {
             // Always mark a sum operation as changed as there is no guarantee that
             // LogValueType::default() corresponds to the 0 element

@@ -1,6 +1,5 @@
 use crate::shared::seconds::Seconds;
 use crate::statistic::error::{Result, StatisticError};
-use crate::statistic::ports::goal_repository::GoalRepositoryTrait;
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;
@@ -14,8 +13,6 @@ pub struct TimeDifferenceStatistic {
 
     statistic0: PointInTimeStatistic,
     statistic1: PointInTimeStatistic,
-
-    goals: Box<dyn GoalRepositoryTrait<GoalType = <Self as Statistic>::GoalType>>,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
@@ -51,15 +48,19 @@ impl Statistic for TimeDifferenceStatistic {
     }
 
     fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        self.goals
-            .get(self.id(), date)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Err(StatisticError::InvalidOperation(format!(
+            "Statistic {} cannot fetch goals without an external repository (date: {date})",
+            self.id()
+        )))
     }
 
     fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        self.goals
-            .insert_or_update(self.id(), date, goal)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Err(StatisticError::InvalidOperation(
+            format!(
+                "Statistic {} cannot persist goals without an external repository (date: {date}, goal: {goal:?})",
+                self.id()
+            ),
+        ))
     }
 
     fn get_default_goal(&self) -> Option<&Self::GoalType> {

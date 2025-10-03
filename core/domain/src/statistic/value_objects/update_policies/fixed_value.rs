@@ -10,20 +10,15 @@ pub enum FixedValueUpdatePolicy {
 }
 
 impl<T: std::cmp::PartialEq> UpdatePolicy<T> for FixedValueUpdatePolicy {
-    fn apply(
-        &self,
-        existing: Option<T>,
-        new: T,
-    ) -> (T, bool) {
+    fn apply(&self, existing: Option<T>, new: T) -> (T, bool) {
         match (self, existing) {
             (FixedValueUpdatePolicy::Overwrite, Some(current)) => {
                 if current == new {
                     (new, false)
-                }
-                else {
+                } else {
                     (new, true)
                 }
-            },
+            }
             (FixedValueUpdatePolicy::Overwrite, _) => (new, true),
             (FixedValueUpdatePolicy::Ignore, Some(current)) => (current, false),
             (FixedValueUpdatePolicy::Ignore, _) => (new, true),

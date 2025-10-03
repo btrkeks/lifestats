@@ -1,10 +1,10 @@
+use crate::shared::dated_value::DatedValue;
+use crate::shared::ids::StatisticId;
+use crate::shared::percentage::Percentage;
 use crate::statistic::error::Result;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
-use crate::shared::dated_value::DatedValue;
-use crate::shared::percentage::Percentage;
 use chrono::NaiveDate;
-use crate::shared::ids::StatisticId;
 
 pub trait Statistic {
     type LogValueType;
@@ -42,15 +42,17 @@ pub trait Statistic {
     ) -> Vec<DatedValue<Self::LogValueType>> {
         let mut result = Vec::new();
         let mut current_date = start;
-        
+
         while current_date <= end {
             if let Ok(Some(value)) = self.get_log_value(current_date) {
                 result.push(DatedValue::new(current_date, value));
             }
             current_date = current_date.succ_opt().unwrap_or(current_date);
-            if current_date == start { break; } // Prevent infinite loop
+            if current_date == start {
+                break;
+            } // Prevent infinite loop
         }
-        
+
         result
     }
 
@@ -70,14 +72,16 @@ pub trait Statistic {
     ) -> Vec<DatedValue<Option<Self::GoalType>>> {
         let mut result = Vec::new();
         let mut current_date = start;
-        
+
         while current_date <= end {
             let goal = self.get_goal(current_date).unwrap_or(None);
             result.push(DatedValue::new(current_date, goal));
             current_date = current_date.succ_opt().unwrap_or(current_date);
-            if current_date == start { break; } // Prevent infinite loop
+            if current_date == start {
+                break;
+            } // Prevent infinite loop
         }
-        
+
         result
     }
 
@@ -114,15 +118,17 @@ pub trait Statistic {
     ) -> Result<Vec<DatedValue<Percentage>>> {
         let mut result = Vec::new();
         let mut current_date = start;
-        
+
         while current_date <= end {
             if let Some(score) = self.get_score(current_date)? {
                 result.push(DatedValue::new(current_date, score));
             }
             current_date = current_date.succ_opt().unwrap_or(current_date);
-            if current_date == start { break; } // Prevent infinite loop
+            if current_date == start {
+                break;
+            } // Prevent infinite loop
         }
-        
+
         Ok(result)
     }
 

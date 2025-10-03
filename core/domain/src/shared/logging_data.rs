@@ -9,9 +9,6 @@ pub struct LogData<T> {
 
 impl<T> LogData<T> {
     pub fn new(date: NaiveDate, value: Option<T>) -> Self {
-        Self {
-            date,
-            value,
-        }
+        Self { date, value }
     }
 }

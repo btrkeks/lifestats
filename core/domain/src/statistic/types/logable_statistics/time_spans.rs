@@ -1,13 +1,11 @@
+use crate::shared::time_frame_list::TimeFrameList;
 use crate::statistic::error::{Result, StatisticError};
-use crate::statistic::ports::goal_repository::GoalRepositoryTrait;
-use crate::statistic::ports::logging_data_repository::LoggingDataRepositoryTrait;
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use crate::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
-use crate::shared::time_frame_list::TimeFrameList;
 use chrono::{NaiveDate, NaiveTime};
 
 /// A statistic that represents a list of time spans
@@ -18,13 +16,6 @@ use chrono::{NaiveDate, NaiveTime};
 pub struct TimeSpansStatistic {
     // Metadata
     metadata: StatisticMetadata,
-
-    // Logging related
-    logged_values:
-        Box<dyn LoggingDataRepositoryTrait<StoredType = <Self as Statistic>::LogValueType>>,
-
-    // Goal related
-    goals: Box<dyn GoalRepositoryTrait<GoalType = <Self as Statistic>::GoalType>>,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
@@ -34,17 +25,11 @@ pub struct TimeSpansStatistic {
 impl TimeSpansStatistic {
     pub fn new(
         metadata: StatisticMetadata,
-        logged_values: Box<
-            dyn LoggingDataRepositoryTrait<StoredType = <Self as Statistic>::LogValueType>,
-        >,
-        goals: Box<dyn GoalRepositoryTrait<GoalType = <Self as Statistic>::GoalType>>,
         default_goal: Option<<Self as Statistic>::GoalType>,
         default_goal_start: NaiveDate,
     ) -> Self {
         Self {
             metadata,
-            logged_values,
-            goals,
             default_goal,
             default_goal_start,
         }
@@ -60,21 +45,26 @@ impl Statistic for TimeSpansStatistic {
     }
 
     fn get_log_value(&self, date: NaiveDate) -> Result<Option<Self::LogValueType>> {
-        self.logged_values
-            .get(self.id(), date)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Err(StatisticError::InvalidOperation(format!(
+            "Statistic {} cannot fetch log values without an external repository (date: {date})",
+            self.id()
+        )))
     }
 
     fn get_goal(&self, date: NaiveDate) -> Result<Option<Self::GoalType>> {
-        self.goals
-            .get(self.id(), date)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Err(StatisticError::InvalidOperation(format!(
+            "Statistic {} cannot fetch goals without an external repository (date: {date})",
+            self.id()
+        )))
     }
 
     fn set_goal(&self, date: NaiveDate, goal: Self::GoalType) -> Result<()> {
-        self.goals
-            .insert_or_update(self.id(), date, goal)
-            .map_err(|e| StatisticError::Repository(e.to_string()))
+        Err(StatisticError::InvalidOperation(
+            format!(
+                "Statistic {} cannot persist goals without an external repository (date: {date}, goal: {goal:?})",
+                self.id()
+            ),
+        ))
     }
 
     fn get_default_goal(&self) -> Option<&Self::GoalType> {
@@ -101,10 +91,15 @@ impl LogableStatistic for TimeSpansStatistic {
         update_policy: Self::UpdatePolicyType,
     ) -> Result<()> {
         let current_value = self.get_log_value(date)?;
-        let (new_value, changed) = update_policy.apply(current_value, log_value);
+        let (_new_value, changed) = update_policy.apply(current_value, log_value);
 
         if changed {
-            self.logged_values.insert_or_update(self.id(), date, new_value)?;
+            return Err(StatisticError::InvalidOperation(
+                format!(
+                    "Statistic {} cannot persist log values without an external repository (date: {date})",
+                    self.id()
+                ),
+            ));
         }
 
         Ok(())

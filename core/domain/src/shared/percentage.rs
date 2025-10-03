@@ -12,7 +12,6 @@ pub enum PercentageError {
 pub struct Percentage(u8);
 
 impl Percentage {
-
     /// Creates a percentage as a number
     pub fn new(value: u8) -> Self {
         Self(value)

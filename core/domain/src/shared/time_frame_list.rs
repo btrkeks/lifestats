@@ -1,9 +1,9 @@
+use crate::shared::my_time::MyTime;
 use anyhow::anyhow;
 use chrono::{Duration, NaiveTime, Timelike};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::slice::Iter;
-use crate::shared::my_time::MyTime;
 // TODO: Replace Vec with BTreeSet?
 
 #[derive(Debug, thiserror::Error)]

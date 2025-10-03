@@ -41,7 +41,7 @@ Our first priority is to redefine the contracts (ports) and remove all persisten
     // The GoalRepositoryTrait is similarly structured. This part is already in good shape.
     ```
 
-- [ ] **1.2. Purge Repository Fields from all Domain Entities:** This is the core of the refactoring. Entities must become pure data + logic containers. They should not hold references to repositories.
+- [x] **1.2. Purge Repository Fields from all Domain Entities:** This is the core of the refactoring. Entities must become pure data + logic containers. They should not hold references to repositories.
   - **Action:** Go through every struct in `lifestats-domain/src/statistic/entities/` (e.g., `TimeSpansStatistic`, `IntegerAmountStatistic`, `HabitStatistic`, etc.).
   - **Remove** the `logged_values` and `goals` fields from each of them. These structs will now only contain their `metadata` and potentially other configuration.
 

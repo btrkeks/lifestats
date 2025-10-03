@@ -75,21 +75,21 @@ impl AnyStatistic {
     pub fn get_log_value(&self, date: NaiveDate) -> Result<Option<AnyLogValue>> {
         match self {
             AnyStatistic::Habit(s) => s.get_log_value(date).map(|opt| opt.map(AnyLogValue::Bool)),
-            AnyStatistic::IntegerAmount(s) => {
-                s.get_log_value(date).map(|opt| opt.map(AnyLogValue::Integer))
-            }
-            AnyStatistic::PointInTime(s) => {
-                s.get_log_value(date).map(|opt| opt.map(AnyLogValue::DateTime))
-            }
-            AnyStatistic::TimeSpans(s) => {
-                s.get_log_value(date).map(|opt| opt.map(AnyLogValue::TimeFrames))
-            }
-            AnyStatistic::Summing(s) => {
-                s.get_log_value(date).map(|opt| opt.map(AnyLogValue::Seconds))
-            }
-            AnyStatistic::TimeDifference(s) => {
-                s.get_log_value(date).map(|opt| opt.map(AnyLogValue::Seconds))
-            }
+            AnyStatistic::IntegerAmount(s) => s
+                .get_log_value(date)
+                .map(|opt| opt.map(AnyLogValue::Integer)),
+            AnyStatistic::PointInTime(s) => s
+                .get_log_value(date)
+                .map(|opt| opt.map(AnyLogValue::DateTime)),
+            AnyStatistic::TimeSpans(s) => s
+                .get_log_value(date)
+                .map(|opt| opt.map(AnyLogValue::TimeFrames)),
+            AnyStatistic::Summing(s) => s
+                .get_log_value(date)
+                .map(|opt| opt.map(AnyLogValue::Seconds)),
+            AnyStatistic::TimeDifference(s) => s
+                .get_log_value(date)
+                .map(|opt| opt.map(AnyLogValue::Seconds)),
         }
     }
 
@@ -103,12 +103,8 @@ impl AnyStatistic {
             AnyStatistic::PointInTime(s) => {
                 s.get_goal(date).map(|opt| opt.map(AnyGoal::FinishedInTime))
             }
-            AnyStatistic::TimeSpans(s) => {
-                s.get_goal(date).map(|opt| opt.map(AnyGoal::TimeSpans))
-            }
-            AnyStatistic::Summing(s) => {
-                s.get_goal(date).map(|opt| opt.map(AnyGoal::SecondsAmount))
-            }
+            AnyStatistic::TimeSpans(s) => s.get_goal(date).map(|opt| opt.map(AnyGoal::TimeSpans)),
+            AnyStatistic::Summing(s) => s.get_goal(date).map(|opt| opt.map(AnyGoal::SecondsAmount)),
             AnyStatistic::TimeDifference(s) => {
                 s.get_goal(date).map(|opt| opt.map(AnyGoal::SecondsAmount))
             }
@@ -119,21 +115,21 @@ impl AnyStatistic {
     pub fn get_default_goal(&self) -> Option<AnyGoal> {
         match self {
             AnyStatistic::Habit(s) => s.get_default_goal().map(|g| AnyGoal::Habit(g.clone())),
-            AnyStatistic::IntegerAmount(s) => {
-                s.get_default_goal().map(|g| AnyGoal::IntegerAmount(g.clone()))
-            }
-            AnyStatistic::PointInTime(s) => {
-                s.get_default_goal().map(|g| AnyGoal::FinishedInTime(g.clone()))
-            }
+            AnyStatistic::IntegerAmount(s) => s
+                .get_default_goal()
+                .map(|g| AnyGoal::IntegerAmount(g.clone())),
+            AnyStatistic::PointInTime(s) => s
+                .get_default_goal()
+                .map(|g| AnyGoal::FinishedInTime(g.clone())),
             AnyStatistic::TimeSpans(s) => {
                 s.get_default_goal().map(|g| AnyGoal::TimeSpans(g.clone()))
             }
-            AnyStatistic::Summing(s) => {
-                s.get_default_goal().map(|g| AnyGoal::SecondsAmount(g.clone()))
-            }
-            AnyStatistic::TimeDifference(s) => {
-                s.get_default_goal().map(|g| AnyGoal::SecondsAmount(g.clone()))
-            }
+            AnyStatistic::Summing(s) => s
+                .get_default_goal()
+                .map(|g| AnyGoal::SecondsAmount(g.clone())),
+            AnyStatistic::TimeDifference(s) => s
+                .get_default_goal()
+                .map(|g| AnyGoal::SecondsAmount(g.clone())),
         }
     }
 
@@ -202,7 +198,11 @@ impl AnyStatistic {
     }
 
     /// Set a goal for a TimeDifference statistic
-    pub fn set_time_difference_goal(&self, date: NaiveDate, goal: AmountGoal<Seconds>) -> Result<()> {
+    pub fn set_time_difference_goal(
+        &self,
+        date: NaiveDate,
+        goal: AmountGoal<Seconds>,
+    ) -> Result<()> {
         if let AnyStatistic::TimeDifference(s) = self {
             s.set_goal(date, goal)
         } else {
@@ -228,7 +228,11 @@ impl AnyStatistic {
     }
 
     /// Set a new default goal for an IntegerAmount statistic
-    pub fn set_integer_amount_default_goal(&mut self, goal: AmountGoal<i64>, start_date: NaiveDate) -> Result<()> {
+    pub fn set_integer_amount_default_goal(
+        &mut self,
+        goal: AmountGoal<i64>,
+        start_date: NaiveDate,
+    ) -> Result<()> {
         if let AnyStatistic::IntegerAmount(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
@@ -239,7 +243,11 @@ impl AnyStatistic {
     }
 
     /// Set a new default goal for a PointInTime statistic
-    pub fn set_point_in_time_default_goal(&mut self, goal: FinishedInTimeGoal, start_date: NaiveDate) -> Result<()> {
+    pub fn set_point_in_time_default_goal(
+        &mut self,
+        goal: FinishedInTimeGoal,
+        start_date: NaiveDate,
+    ) -> Result<()> {
         if let AnyStatistic::PointInTime(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
@@ -250,7 +258,11 @@ impl AnyStatistic {
     }
 
     /// Set a new default goal for a TimeSpans statistic
-    pub fn set_time_spans_default_goal(&mut self, goal: TimeSpansGoal, start_date: NaiveDate) -> Result<()> {
+    pub fn set_time_spans_default_goal(
+        &mut self,
+        goal: TimeSpansGoal,
+        start_date: NaiveDate,
+    ) -> Result<()> {
         if let AnyStatistic::TimeSpans(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
@@ -261,7 +273,11 @@ impl AnyStatistic {
     }
 
     /// Set a new default goal for a Summing statistic
-    pub fn set_summing_default_goal(&mut self, goal: AmountGoal<Seconds>, start_date: NaiveDate) -> Result<()> {
+    pub fn set_summing_default_goal(
+        &mut self,
+        goal: AmountGoal<Seconds>,
+        start_date: NaiveDate,
+    ) -> Result<()> {
         if let AnyStatistic::Summing(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
@@ -272,7 +288,11 @@ impl AnyStatistic {
     }
 
     /// Set a new default goal for a TimeDifference statistic
-    pub fn set_time_difference_default_goal(&mut self, goal: AmountGoal<Seconds>, start_date: NaiveDate) -> Result<()> {
+    pub fn set_time_difference_default_goal(
+        &mut self,
+        goal: AmountGoal<Seconds>,
+        start_date: NaiveDate,
+    ) -> Result<()> {
         if let AnyStatistic::TimeDifference(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
