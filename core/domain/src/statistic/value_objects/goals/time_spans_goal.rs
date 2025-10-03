@@ -1,8 +1,9 @@
 use crate::shared::percentage::Percentage;
 use crate::shared::time_frame_list::TimeFrameList;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimeSpansGoal {
     target: TimeFrameList,
     efficiency: Percentage, // Target percentage between 0 and 100
@@ -14,6 +15,14 @@ impl TimeSpansGoal {
             target: target_frames,
             efficiency,
         }
+    }
+
+    pub fn target(&self) -> &TimeFrameList {
+        &self.target
+    }
+
+    pub fn efficiency(&self) -> Percentage {
+        self.efficiency
     }
 }
 

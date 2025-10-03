@@ -101,7 +101,7 @@ mod tests {
     use std::sync::mpsc;
     use std::time::Duration;
     use tempfile::TempDir;
-    use transfer_objects::statistic_id::StatisticId;
+    use lifestats_domain::shared::ids::StatisticId;
 
     #[derive(Debug)]
     struct TestEventHandler {

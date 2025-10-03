@@ -1,8 +1,8 @@
 use anyhow::Result;
+use lifestats_domain::shared::ids::StatisticId;
 use mockall::automock;
 use serde::{Deserialize, Serialize};
 use std::thread::JoinHandle;
-use transfer_objects::statistic_id::StatisticId;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum Event {

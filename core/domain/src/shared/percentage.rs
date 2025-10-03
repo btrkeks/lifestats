@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -8,7 +9,7 @@ pub enum PercentageError {
 }
 
 // TODO: u8 precision doesn't need to make sense everywhere!
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Percentage(u8);
 
 impl Percentage {
