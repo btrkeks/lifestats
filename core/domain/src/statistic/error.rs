@@ -9,6 +9,9 @@ pub enum StatisticError {
     #[error("Invalid value: {0}")]
     InvalidValue(String),
 
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
+
     #[error("Goal not found for date {0}")]
     GoalNotFound(NaiveDate),
 
