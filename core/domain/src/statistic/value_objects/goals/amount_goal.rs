@@ -1,7 +1,8 @@
 use crate::shared::percentage::Percentage;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AmountGoal<T: Default + Clone + Into<i64> + Copy> {
     target_amount: T,
     is_good: bool,

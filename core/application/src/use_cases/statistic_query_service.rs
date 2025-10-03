@@ -1,9 +1,17 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
+use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
 use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::statistic::any_statistic::AnyStatistic;
+use lifestats_domain::shared::seconds::Seconds;
+use lifestats_domain::shared::time_frame_list::TimeFrameList;
+use lifestats_domain::statistic::any_statistic::{AnyGoal, AnyStatistic, StreakDayResult};
 use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_domain::statistic::value_objects::goals::amount_goal::AmountGoal;
+use lifestats_domain::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
+use lifestats_domain::statistic::value_objects::goals::habit_goal::HabitGoal;
+use lifestats_domain::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
 #[derive(Clone)]
@@ -56,5 +64,117 @@ where
         self.statistic_repository
             .find_metadata_by_id(statistic_id)
             .map(|stat| stat.get_metadata().clone())
+    }
+
+    pub fn get_streak(&self, statistic_id: StatisticId) -> Result<u32> {
+        let statistic = self
+            .statistic_repository
+            .find_metadata_by_id(statistic_id)?;
+        let default_goal_valid_since = statistic.get_default_goal_valid_since();
+
+        let streak = match &statistic {
+            AnyStatistic::Habit(_) => self.compute_streak_for::<bool, HabitGoal>(
+                statistic_id,
+                &statistic,
+                statistic.get_default_goal().and_then(|goal| match goal {
+                    AnyGoal::Habit(goal) => Some(goal),
+                    _ => None,
+                }),
+                default_goal_valid_since,
+            )?,
+            AnyStatistic::IntegerAmount(_) => self.compute_streak_for::<i64, AmountGoal<i64>>(
+                statistic_id,
+                &statistic,
+                statistic.get_default_goal().and_then(|goal| match goal {
+                    AnyGoal::IntegerAmount(goal) => Some(goal),
+                    _ => None,
+                }),
+                default_goal_valid_since,
+            )?,
+            AnyStatistic::PointInTime(_) => self
+                .compute_streak_for::<NaiveDateTime, FinishedInTimeGoal>(
+                    statistic_id,
+                    &statistic,
+                    statistic.get_default_goal().and_then(|goal| match goal {
+                        AnyGoal::FinishedInTime(goal) => Some(goal),
+                        _ => None,
+                    }),
+                    default_goal_valid_since,
+                )?,
+            AnyStatistic::TimeSpans(_) => self.compute_streak_for::<TimeFrameList, TimeSpansGoal>(
+                statistic_id,
+                &statistic,
+                statistic.get_default_goal().and_then(|goal| match goal {
+                    AnyGoal::TimeSpans(goal) => Some(goal),
+                    _ => None,
+                }),
+                default_goal_valid_since,
+            )?,
+            AnyStatistic::Summing(_) => self.compute_streak_for::<Seconds, AmountGoal<Seconds>>(
+                statistic_id,
+                &statistic,
+                statistic.get_default_goal().and_then(|goal| match goal {
+                    AnyGoal::SecondsAmount(goal) => Some(goal),
+                    _ => None,
+                }),
+                default_goal_valid_since,
+            )?,
+            AnyStatistic::TimeDifference(_) => self
+                .compute_streak_for::<Seconds, AmountGoal<Seconds>>(
+                    statistic_id,
+                    &statistic,
+                    statistic.get_default_goal().and_then(|goal| match goal {
+                        AnyGoal::SecondsAmount(goal) => Some(goal),
+                        _ => None,
+                    }),
+                    default_goal_valid_since,
+                )?,
+        };
+
+        Ok(streak)
+    }
+
+    fn compute_streak_for<LogValue, GoalType>(
+        &self,
+        statistic_id: StatisticId,
+        statistic: &AnyStatistic,
+        default_goal: Option<GoalType>,
+        default_goal_valid_since: NaiveDate,
+    ) -> Result<u32>
+    where
+        LogValue: serde::de::DeserializeOwned + 'static,
+        GoalType: serde::de::DeserializeOwned + Clone + 'static,
+    {
+        const MAX_LOOKBACK_DAYS: usize = 90;
+        let mut streak: u32 = 0;
+        let today = Local::now().date_naive();
+
+        for offset in 0..MAX_LOOKBACK_DAYS {
+            let date_to_check = today - Duration::days(offset as i64);
+
+            let log_value = self
+                .statistic_repository
+                .find_log_value::<LogValue>(statistic_id, date_to_check)?;
+            let mut goal = self
+                .statistic_repository
+                .find_goal::<GoalType>(statistic_id, date_to_check)?;
+
+            if goal.is_none() && date_to_check >= default_goal_valid_since {
+                goal = default_goal.clone();
+            }
+
+            let result = statistic.evaluate_streak_for_day(
+                log_value.as_ref().map(|value| value as &dyn Any),
+                goal.as_ref().map(|goal| goal as &dyn Any),
+            )?;
+
+            match result {
+                StreakDayResult::Achieved => streak += 1,
+                StreakDayResult::Missed => break,
+                StreakDayResult::NoGoalContinue => continue,
+            }
+        }
+
+        Ok(streak)
     }
 }

@@ -1,4 +1,6 @@
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Seconds(u64);
 
 impl Into<i64> for Seconds {

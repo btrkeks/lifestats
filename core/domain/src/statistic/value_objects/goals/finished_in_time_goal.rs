@@ -1,8 +1,9 @@
 use crate::shared::percentage::Percentage;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
 use chrono::{NaiveDateTime, Timelike};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct FinishedInTimeGoal {
     target: NaiveDateTime,
 }
