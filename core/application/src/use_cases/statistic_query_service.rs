@@ -152,12 +152,18 @@ where
         for offset in 0..MAX_LOOKBACK_DAYS {
             let date_to_check = today - Duration::days(offset as i64);
 
-            let log_value = self
+            let log_value_json = self
                 .statistic_repository
-                .find_log_value::<LogValue>(statistic_id, date_to_check)?;
-            let mut goal = self
+                .find_log_value(statistic_id, date_to_check)?;
+            let log_value: Option<LogValue> = log_value_json
+                .map(|v| serde_json::from_value(v))
+                .transpose()?;
+
+            let goal_json = self
                 .statistic_repository
-                .find_goal::<GoalType>(statistic_id, date_to_check)?;
+                .find_goal(statistic_id, date_to_check)?;
+            let mut goal: Option<GoalType> =
+                goal_json.map(|v| serde_json::from_value(v)).transpose()?;
 
             if goal.is_none() && date_to_check >= default_goal_valid_since {
                 goal = default_goal.clone();

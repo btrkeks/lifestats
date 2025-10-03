@@ -41,7 +41,7 @@ where
         // 2. Fetch the current value as JSON
         let current_value_json = self
             .statistic_repository
-            .find_log_value_json(command.statistic_id, command.date)?;
+            .find_log_value(command.statistic_id, command.date)?;
 
         // 3. TELL, DON'T ASK: Ask the domain object to calculate its new state from primitives
         let (new_value_json, changed) = statistic.calculate_new_log_value_from_primitives(
@@ -52,7 +52,7 @@ where
 
         // 4. If changed, save the new JSON state and publish an event
         if changed {
-            self.statistic_repository.save_log_value_json(
+            self.statistic_repository.save_log_value(
                 command.statistic_id,
                 command.date,
                 new_value_json,

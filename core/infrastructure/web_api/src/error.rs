@@ -8,7 +8,7 @@ use serde_json::json;
 /// Centralized API error handling
 #[derive(Debug)]
 pub enum ApiError {
-    NotFound(String),
+    // NotFound(String),
     ValidationError(String),
     InternalServerError(anyhow::Error),
 }
@@ -16,7 +16,7 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
-            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
+            // ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             ApiError::ValidationError(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::InternalServerError(err) => {
                 tracing::error!("Internal server error: {:?}", err);

@@ -13,72 +13,34 @@ pub trait StatisticRepository {
     fn save_metadata(&self, statistic: &AnyStatistic) -> Result<()>;
 
     // --- Log Value Operations ---
-    fn find_log_value<V>(&self, id: StatisticId, date: NaiveDate) -> Result<Option<V>>
-    where
-        V: serde::de::DeserializeOwned + 'static;
-    fn find_log_values_in_range<V>(
-        &self,
-        id: StatisticId,
-        range: DateRange,
-    ) -> Result<Vec<DatedValue<V>>>
-    where
-        V: serde::de::DeserializeOwned + 'static;
-    fn save_log_value<V>(&self, id: StatisticId, date: NaiveDate, value: V) -> Result<()>
-    where
-        V: serde::Serialize + 'static;
-
-    // --- Goal Operations ---
-    fn find_goal<G>(&self, id: StatisticId, date: NaiveDate) -> Result<Option<G>>
-    where
-        G: serde::de::DeserializeOwned + 'static;
-    fn find_goals_in_range<G>(
-        &self,
-        id: StatisticId,
-        range: DateRange,
-    ) -> Result<Vec<DatedValue<G>>>
-    where
-        G: serde::de::DeserializeOwned + 'static;
-    fn save_goal<G>(&self, id: StatisticId, date: NaiveDate, goal: Option<G>) -> Result<()>
-    where
-        G: serde::Serialize + 'static;
-    fn find_default_goal<G>(&self, id: StatisticId) -> Result<Option<G>>
-    where
-        G: serde::de::DeserializeOwned + 'static;
-    fn save_default_goal<G>(&self, id: StatisticId, goal: G) -> Result<()>
-    where
-        G: serde::Serialize + 'static;
-    fn delete_default_goal(&self, id: StatisticId) -> Result<()>;
-
-    // --- JSON-based Operations (Polymorphic Interface) ---
-    fn find_log_value_json(
-        &self,
-        id: StatisticId,
-        date: NaiveDate,
-    ) -> Result<Option<serde_json::Value>>;
-    fn save_log_value_json(
+    fn find_log_value(&self, id: StatisticId, date: NaiveDate)
+        -> Result<Option<serde_json::Value>>;
+    fn save_log_value(
         &self,
         id: StatisticId,
         date: NaiveDate,
         value: serde_json::Value,
     ) -> Result<()>;
-    fn find_log_values_in_range_json(
+    fn find_log_values_in_range(
         &self,
         id: StatisticId,
         range: DateRange,
     ) -> Result<Vec<DatedValue<serde_json::Value>>>;
-    fn find_goal_json(&self, id: StatisticId, date: NaiveDate)
-        -> Result<Option<serde_json::Value>>;
-    fn save_goal_json(
+
+    // --- Goal Operations ---
+    fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>>;
+    fn save_goal(
         &self,
         id: StatisticId,
         date: NaiveDate,
         goal: Option<serde_json::Value>,
     ) -> Result<()>;
-    fn find_goals_in_range_json(
+    fn find_goals_in_range(
         &self,
         id: StatisticId,
         range: DateRange,
     ) -> Result<Vec<DatedValue<serde_json::Value>>>;
-    fn find_default_goal_json(&self, id: StatisticId) -> Result<Option<serde_json::Value>>;
-    fn save_default_goal_json(&self, id: StatisticId, goal: serde_json::Value) -> Result<()>;
+    fn find_default_goal(&self, id: StatisticId) -> Result<Option<serde_json::Value>>;
+    fn save_default_goal(&self, id: StatisticId, goal: serde_json::Value) -> Result<()>;
+    fn delete_default_goal(&self, id: StatisticId) -> Result<()>;
 }

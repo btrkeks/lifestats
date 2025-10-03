@@ -44,11 +44,8 @@ where
         let goal_json = statistic.create_goal_from_primitives(&command.goal_data)?;
 
         // 3. Save the resulting JSON via the repository
-        self.statistic_repository.save_goal_json(
-            command.statistic_id,
-            command.date,
-            Some(goal_json),
-        )?;
+        self.statistic_repository
+            .save_goal(command.statistic_id, command.date, Some(goal_json))?;
 
         self.event_publisher
             .publish_event_async(Event::GoalUpdated(command.statistic_id));
@@ -71,7 +68,7 @@ where
         // 3. Save the updated metadata and default goal
         self.statistic_repository.save_metadata(&statistic)?;
         self.statistic_repository
-            .save_default_goal_json(command.statistic_id, goal_json)?;
+            .save_default_goal(command.statistic_id, goal_json)?;
 
         self.event_publisher
             .publish_event_async(Event::GoalUpdated(command.statistic_id));
@@ -82,7 +79,7 @@ where
     /// Delete a goal for a specific date (generic for all types)
     pub fn delete_goal(&self, command: DeleteGoalCommand) -> Result<()> {
         self.statistic_repository
-            .save_goal_json(command.statistic_id, command.date, None)?;
+            .save_goal(command.statistic_id, command.date, None)?;
 
         self.event_publisher
             .publish_event_async(Event::GoalUpdated(command.statistic_id));

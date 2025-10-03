@@ -89,10 +89,19 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(())
     }
 
-    fn find_log_value<V>(&self, id: StatisticId, date: NaiveDate) -> Result<Option<V>>
-    where
-        V: serde::de::DeserializeOwned,
-    {
+    fn delete_default_goal(&self, id: StatisticId) -> Result<()> {
+        let mut conn = self.connection()?;
+        diesel::delete(default_goals::table.find(id.0 as i32))
+            .execute(&mut conn)
+            .context("failed to delete default goal")?;
+        Ok(())
+    }
+
+    fn find_log_value(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+    ) -> Result<Option<serde_json::Value>> {
         let mut conn = self.connection()?;
         let row = logging_data::table
             .filter(logging_data::statistic_id.eq(id.0 as i32))
@@ -101,36 +110,16 @@ impl StatisticRepository for SqliteStatisticRepository {
             .optional()
             .context("failed to fetch log value")?;
 
-        row.map(|raw| raw.into_dated_value::<V>().map(|dated| dated.value))
+        row.map(|raw| serde_json::from_str(&raw.value).context("failed to parse log value JSON"))
             .transpose()
     }
 
-    fn find_log_values_in_range<V>(
+    fn save_log_value(
         &self,
         id: StatisticId,
-        range: DateRange,
-    ) -> Result<Vec<DatedValue<V>>>
-    where
-        V: serde::de::DeserializeOwned,
-    {
-        let mut conn = self.connection()?;
-        let rows = logging_data::table
-            .filter(logging_data::statistic_id.eq(id.0 as i32))
-            .filter(logging_data::date.ge(range.start().to_string()))
-            .filter(logging_data::date.le(range.end().to_string()))
-            .order(logging_data::date.asc())
-            .load::<LoggingDataRaw>(&mut conn)
-            .context("failed to fetch logging data range")?;
-
-        rows.into_iter()
-            .map(|raw| raw.into_dated_value::<V>())
-            .collect()
-    }
-
-    fn save_log_value<V>(&self, id: StatisticId, date: NaiveDate, value: V) -> Result<()>
-    where
-        V: serde::Serialize,
-    {
+        date: NaiveDate,
+        value: serde_json::Value,
+    ) -> Result<()> {
         let mut conn = self.connection()?;
         let serialized = serde_json::to_string(&value).with_context(|| {
             format!(
@@ -156,171 +145,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(())
     }
 
-    fn find_goal<G>(&self, id: StatisticId, date: NaiveDate) -> Result<Option<G>>
-    where
-        G: serde::de::DeserializeOwned,
-    {
-        let mut conn = self.connection()?;
-        let row = goals::table
-            .filter(goals::statistic_id.eq(id.0 as i32))
-            .filter(goals::date.eq(date.to_string()))
-            .first::<GoalDataRaw>(&mut conn)
-            .optional()
-            .context("failed to fetch goal")?;
-
-        match row {
-            Some(raw) => raw.into_optional_goal::<G>(),
-            None => Ok(None),
-        }
-    }
-
-    fn find_goals_in_range<G>(
-        &self,
-        id: StatisticId,
-        range: DateRange,
-    ) -> Result<Vec<DatedValue<G>>>
-    where
-        G: serde::de::DeserializeOwned,
-    {
-        let mut conn = self.connection()?;
-        let rows = goals::table
-            .filter(goals::statistic_id.eq(id.0 as i32))
-            .filter(goals::date.ge(range.start().to_string()))
-            .filter(goals::date.le(range.end().to_string()))
-            .order(goals::date.asc())
-            .load::<GoalDataRaw>(&mut conn)
-            .context("failed to fetch goals range")?;
-
-        let mut result = Vec::with_capacity(rows.len());
-        for row in rows {
-            let dated = row.into_dated_goal::<G>()?;
-            if let Some(goal) = dated.value {
-                result.push(DatedValue::new(dated.date, goal));
-            }
-        }
-
-        Ok(result)
-    }
-
-    fn save_goal<G>(&self, id: StatisticId, date: NaiveDate, goal: Option<G>) -> Result<()>
-    where
-        G: serde::Serialize,
-    {
-        let mut conn = self.connection()?;
-
-        if let Some(goal) = goal {
-            let record = GoalDataRaw::from_goal(id, date, Some(goal))?;
-            diesel::insert_into(goals::table)
-                .values(&record)
-                .on_conflict((goals::statistic_id, goals::date))
-                .do_update()
-                .set(&record)
-                .execute(&mut conn)
-                .context("failed to upsert goal")?;
-        } else {
-            diesel::delete(
-                goals::table
-                    .filter(goals::statistic_id.eq(id.0 as i32))
-                    .filter(goals::date.eq(date.to_string())),
-            )
-            .execute(&mut conn)
-            .context("failed to delete goal")?;
-        }
-
-        Ok(())
-    }
-
-    fn find_default_goal<G>(&self, id: StatisticId) -> Result<Option<G>>
-    where
-        G: serde::de::DeserializeOwned,
-    {
-        let mut conn = self.connection()?;
-        let row = queries::fetch_default_goal(&mut conn, id)?;
-        row.map(|raw| raw.into_goal::<G>()).transpose()
-    }
-
-    fn save_default_goal<G>(&self, id: StatisticId, goal: G) -> Result<()>
-    where
-        G: serde::Serialize,
-    {
-        let mut conn = self.connection()?;
-        let record = DefaultGoalRaw::from_goal(id, goal, default_goal_start_fallback())?;
-
-        let target_value = record.target_value.clone();
-        let extra_data1 = record.extra_data1.clone();
-
-        diesel::insert_into(default_goals::table)
-            .values(&record)
-            .on_conflict(default_goals::statistic_id)
-            .do_update()
-            .set((
-                default_goals::target_value.eq(target_value),
-                default_goals::extra_data1.eq(extra_data1),
-            ))
-            .execute(&mut conn)
-            .context("failed to upsert default goal")?;
-
-        Ok(())
-    }
-
-    fn delete_default_goal(&self, id: StatisticId) -> Result<()> {
-        let mut conn = self.connection()?;
-        diesel::delete(default_goals::table.find(id.0 as i32))
-            .execute(&mut conn)
-            .context("failed to delete default goal")?;
-        Ok(())
-    }
-
-    // --- JSON-based Operations (Polymorphic Interface) ---
-    fn find_log_value_json(
-        &self,
-        id: StatisticId,
-        date: NaiveDate,
-    ) -> Result<Option<serde_json::Value>> {
-        let mut conn = self.connection()?;
-        let row = logging_data::table
-            .filter(logging_data::statistic_id.eq(id.0 as i32))
-            .filter(logging_data::date.eq(date.to_string()))
-            .first::<LoggingDataRaw>(&mut conn)
-            .optional()
-            .context("failed to fetch log value as JSON")?;
-
-        row.map(|raw| serde_json::from_str(&raw.value).context("failed to parse log value JSON"))
-            .transpose()
-    }
-
-    fn save_log_value_json(
-        &self,
-        id: StatisticId,
-        date: NaiveDate,
-        value: serde_json::Value,
-    ) -> Result<()> {
-        let mut conn = self.connection()?;
-        let serialized = serde_json::to_string(&value).with_context(|| {
-            format!(
-                "failed to serialize JSON log value for statistic {} on {}",
-                id.0, date
-            )
-        })?;
-
-        let record = LoggingDataRaw {
-            statistic_id: id.0 as i32,
-            date: date.to_string(),
-            value: serialized,
-        };
-
-        diesel::insert_into(logging_data::table)
-            .values(&record)
-            .on_conflict((logging_data::statistic_id, logging_data::date))
-            .do_update()
-            .set(&record)
-            .execute(&mut conn)
-            .context("failed to upsert JSON log value")?;
-
-        Ok(())
-    }
-
-    fn find_log_values_in_range_json(
+    fn find_log_values_in_range(
         &self,
         id: StatisticId,
         range: DateRange,
@@ -332,7 +157,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             .filter(logging_data::date.le(range.end().to_string()))
             .order(logging_data::date.asc())
             .load::<LoggingDataRaw>(&mut conn)
-            .context("failed to fetch JSON logging data range")?;
+            .context("failed to fetch logging data range")?;
 
         rows.into_iter()
             .map(|raw| {
@@ -347,18 +172,14 @@ impl StatisticRepository for SqliteStatisticRepository {
             .collect()
     }
 
-    fn find_goal_json(
-        &self,
-        id: StatisticId,
-        date: NaiveDate,
-    ) -> Result<Option<serde_json::Value>> {
+    fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>> {
         let mut conn = self.connection()?;
         let row = goals::table
             .filter(goals::statistic_id.eq(id.0 as i32))
             .filter(goals::date.eq(date.to_string()))
             .first::<GoalDataRaw>(&mut conn)
             .optional()
-            .context("failed to fetch goal as JSON")?;
+            .context("failed to fetch goal")?;
 
         match row {
             Some(raw) => {
@@ -377,7 +198,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         }
     }
 
-    fn save_goal_json(
+    fn save_goal(
         &self,
         id: StatisticId,
         date: NaiveDate,
@@ -414,7 +235,7 @@ impl StatisticRepository for SqliteStatisticRepository {
                 .do_update()
                 .set(&record)
                 .execute(&mut conn)
-                .context("failed to upsert JSON goal")?;
+                .context("failed to upsert goal")?;
         } else {
             diesel::delete(
                 goals::table
@@ -428,7 +249,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(())
     }
 
-    fn find_goals_in_range_json(
+    fn find_goals_in_range(
         &self,
         id: StatisticId,
         range: DateRange,
@@ -440,7 +261,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             .filter(goals::date.le(range.end().to_string()))
             .order(goals::date.asc())
             .load::<GoalDataRaw>(&mut conn)
-            .context("failed to fetch JSON goals range")?;
+            .context("failed to fetch goals range")?;
 
         let mut result = Vec::new();
         for row in rows {
@@ -460,7 +281,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(result)
     }
 
-    fn find_default_goal_json(&self, id: StatisticId) -> Result<Option<serde_json::Value>> {
+    fn find_default_goal(&self, id: StatisticId) -> Result<Option<serde_json::Value>> {
         let mut conn = self.connection()?;
         let row = queries::fetch_default_goal(&mut conn, id)?;
 
@@ -480,7 +301,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         }
     }
 
-    fn save_default_goal_json(&self, id: StatisticId, goal: serde_json::Value) -> Result<()> {
+    fn save_default_goal(&self, id: StatisticId, goal: serde_json::Value) -> Result<()> {
         let mut conn = self.connection()?;
 
         let (target_value, extra_data1) = if let serde_json::Value::Object(map) = &goal {
@@ -519,25 +340,15 @@ impl StatisticRepository for SqliteStatisticRepository {
     }
 }
 
-fn default_goal_start_fallback() -> NaiveDate {
-    NaiveDate::from_ymd_opt(1970, 1, 1).expect("valid fallback date")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::pool::MIGRATIONS;
-    use chrono::{NaiveDate, NaiveTime};
+    use chrono::NaiveDate;
     use diesel_migrations::MigrationHarness;
-    use lifestats_domain::shared::date_range::DateRange;
-    use lifestats_domain::shared::percentage::Percentage;
-    use lifestats_domain::shared::time_frame_list::{TimeFrame, TimeFrameList};
     use lifestats_domain::statistic::types::logable_statistics::habit::HabitStatistic;
     use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_domain::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
-    use lifestats_domain::statistic::value_objects::goals::amount_goal::AmountGoal;
-    use lifestats_domain::statistic::value_objects::goals::habit_goal::HabitGoal;
-    use lifestats_domain::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
     use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
     // ==================== Test Helper ====================
@@ -566,7 +377,7 @@ mod tests {
         AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             metadata,
             None,
-            default_goal_start_fallback(),
+            NaiveDate::from_ymd_opt(1970, 1, 1).expect("valid fallback date"),
         ))
     }
 
@@ -579,7 +390,7 @@ mod tests {
         AnyStatistic::Habit(HabitStatistic::new(
             metadata,
             None,
-            default_goal_start_fallback(),
+            NaiveDate::from_ymd_opt(1970, 1, 1).expect("valid fallback date"),
         ))
     }
 
@@ -592,7 +403,7 @@ mod tests {
         AnyStatistic::TimeSpans(TimeSpansStatistic::new(
             metadata,
             None,
-            default_goal_start_fallback(),
+            NaiveDate::from_ymd_opt(1970, 1, 1).expect("valid fallback date"),
         ))
     }
 
@@ -628,250 +439,28 @@ mod tests {
         }
     }
 
-    // ==================== Typed Data Tests ====================
-
-    mod typed_data_tests {
-        use super::*;
-
-        // --- Log Value Roundtrip Tests ---
-
-        #[test]
-        fn log_value_roundtrip_i64() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-            repo.save_log_value(StatisticId(1), date, 42_i64)?;
-
-            let value: Option<i64> = repo.find_log_value(StatisticId(1), date)?;
-            assert_eq!(value, Some(42));
-            Ok(())
-        }
-
-        #[test]
-        fn log_value_roundtrip_bool() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&habit_stat(2))?;
-
-            let date = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
-            repo.save_log_value(StatisticId(2), date, true)?;
-
-            let value: Option<bool> = repo.find_log_value(StatisticId(2), date)?;
-            assert_eq!(value, Some(true));
-            Ok(())
-        }
-
-        #[test]
-        fn log_value_roundtrip_time_frame_list() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&time_spans_stat(3))?;
-
-            let date = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-            let mut time_frames = TimeFrameList::default();
-            time_frames.append_frame(TimeFrame::new(
-                NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
-                NaiveTime::from_hms_opt(10, 0, 0).unwrap(),
-            )?)?;
-            time_frames.append_frame(TimeFrame::new(
-                NaiveTime::from_hms_opt(14, 0, 0).unwrap(),
-                NaiveTime::from_hms_opt(16, 0, 0).unwrap(),
-            )?)?;
-
-            repo.save_log_value(StatisticId(3), date, time_frames.clone())?;
-
-            let value: Option<TimeFrameList> = repo.find_log_value(StatisticId(3), date)?;
-            assert!(value.is_some());
-            assert_eq!(value.unwrap(), time_frames);
-            Ok(())
-        }
-
-        // --- Goal Roundtrip Tests ---
-
-        #[test]
-        fn goal_roundtrip_amount_goal_i64() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let date = NaiveDate::from_ymd_opt(2024, 2, 2).unwrap();
-            let goal = AmountGoal::new(10_i64, true);
-            repo.save_goal(StatisticId(1), date, Some(goal.clone()))?;
-
-            let fetched: Option<AmountGoal<i64>> = repo.find_goal(StatisticId(1), date)?;
-            assert!(fetched.is_some());
-            Ok(())
-        }
-
-        #[test]
-        fn goal_roundtrip_habit_goal() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&habit_stat(2))?;
-
-            let date = NaiveDate::from_ymd_opt(2024, 2, 3).unwrap();
-            let goal = HabitGoal::new(true);
-            repo.save_goal(StatisticId(2), date, Some(goal.clone()))?;
-
-            let fetched: Option<HabitGoal> = repo.find_goal(StatisticId(2), date)?;
-            assert!(fetched.is_some());
-            Ok(())
-        }
-
-        #[test]
-        fn goal_roundtrip_time_spans_goal() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&time_spans_stat(3))?;
-
-            let date = NaiveDate::from_ymd_opt(2024, 2, 4).unwrap();
-            let mut target_frames = TimeFrameList::default();
-            target_frames.append_frame(TimeFrame::new(
-                NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
-                NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
-            )?)?;
-            let goal = TimeSpansGoal::new(target_frames, Percentage::new(80));
-            repo.save_goal(StatisticId(3), date, Some(goal.clone()))?;
-
-            let fetched: Option<TimeSpansGoal> = repo.find_goal(StatisticId(3), date)?;
-            assert!(fetched.is_some());
-            Ok(())
-        }
-
-        #[test]
-        fn goal_deletion_via_none() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let date = NaiveDate::from_ymd_opt(2024, 2, 2).unwrap();
-            let goal = AmountGoal::new(10_i64, true);
-            repo.save_goal(StatisticId(1), date, Some(goal.clone()))?;
-
-            // Delete the goal by saving None
-            repo.save_goal::<AmountGoal<i64>>(StatisticId(1), date, None)?;
-            let fetched_after: Option<AmountGoal<i64>> = repo.find_goal(StatisticId(1), date)?;
-            assert!(fetched_after.is_none());
-            Ok(())
-        }
-
-        // --- Range Query Tests ---
-
-        #[test]
-        fn find_log_values_in_range_correct_items() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-            let date2 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
-            let date3 = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-            let date4 = NaiveDate::from_ymd_opt(2024, 1, 5).unwrap();
-
-            repo.save_log_value(StatisticId(1), date1, 10_i64)?;
-            repo.save_log_value(StatisticId(1), date2, 20_i64)?;
-            repo.save_log_value(StatisticId(1), date3, 30_i64)?;
-            repo.save_log_value(StatisticId(1), date4, 40_i64)?;
-
-            let range = DateRange::new(date2, date3)?;
-            let values: Vec<DatedValue<i64>> =
-                repo.find_log_values_in_range(StatisticId(1), range)?;
-
-            assert_eq!(values.len(), 2);
-            assert_eq!(values[0].value, 20);
-            assert_eq!(values[1].value, 30);
-            Ok(())
-        }
-
-        #[test]
-        fn find_log_values_in_range_empty_when_no_data() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-            let date2 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
-
-            let range = DateRange::new(date1, date2)?;
-            let values: Vec<DatedValue<i64>> =
-                repo.find_log_values_in_range(StatisticId(1), range)?;
-
-            assert_eq!(values.len(), 0);
-            Ok(())
-        }
-
-        #[test]
-        fn find_goals_in_range_correct_items() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-            let date2 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
-            let date3 = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-            let date4 = NaiveDate::from_ymd_opt(2024, 1, 5).unwrap();
-
-            repo.save_goal(StatisticId(1), date1, Some(AmountGoal::new(10_i64, true)))?;
-            repo.save_goal(StatisticId(1), date2, Some(AmountGoal::new(20_i64, true)))?;
-            repo.save_goal(StatisticId(1), date3, Some(AmountGoal::new(30_i64, true)))?;
-            repo.save_goal(StatisticId(1), date4, Some(AmountGoal::new(40_i64, true)))?;
-
-            let range = DateRange::new(date2, date3)?;
-            let goals: Vec<DatedValue<AmountGoal<i64>>> =
-                repo.find_goals_in_range(StatisticId(1), range)?;
-
-            assert_eq!(goals.len(), 2);
-            Ok(())
-        }
-
-        #[test]
-        fn find_goals_in_range_empty_when_no_data() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-            let date2 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
-
-            let range = DateRange::new(date1, date2)?;
-            let goals: Vec<DatedValue<AmountGoal<i64>>> =
-                repo.find_goals_in_range(StatisticId(1), range)?;
-
-            assert_eq!(goals.len(), 0);
-            Ok(())
-        }
-
-        #[test]
-        fn default_goal_roundtrip() -> Result<()> {
-            let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
-
-            let goal = AmountGoal::new(5_i64, true);
-            repo.save_default_goal(StatisticId(1), goal.clone())?;
-
-            let fetched: Option<AmountGoal<i64>> = repo.find_default_goal(StatisticId(1))?;
-            assert!(fetched.is_some());
-
-            repo.delete_default_goal(StatisticId(1))?;
-            let fetched_after: Option<AmountGoal<i64>> = repo.find_default_goal(StatisticId(1))?;
-            assert!(fetched_after.is_none());
-            Ok(())
-        }
-    }
-
     // ==================== JSON Interface Tests ====================
 
     mod json_interface_tests {
         use super::*;
 
         #[test]
-        fn save_and_find_log_value_json() -> Result<()> {
+        fn save_and_find_log_value() -> Result<()> {
             let repo = setup_repository();
             repo.save_metadata(&integer_stat(1))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
             let value = serde_json::json!(123);
 
-            repo.save_log_value_json(StatisticId(1), date, value.clone())?;
+            repo.save_log_value(StatisticId(1), date, value.clone())?;
 
-            let fetched = repo.find_log_value_json(StatisticId(1), date)?;
+            let fetched = repo.find_log_value(StatisticId(1), date)?;
             assert_eq!(fetched, Some(value));
             Ok(())
         }
 
         #[test]
-        fn save_and_find_goal_json() -> Result<()> {
+        fn save_and_find_goal() -> Result<()> {
             let repo = setup_repository();
             repo.save_metadata(&integer_stat(1))?;
 
@@ -881,9 +470,9 @@ mod tests {
                 "extra_data1": "some_data"
             });
 
-            repo.save_goal_json(StatisticId(1), date, Some(goal.clone()))?;
+            repo.save_goal(StatisticId(1), date, Some(goal.clone()))?;
 
-            let fetched = repo.find_goal_json(StatisticId(1), date)?;
+            let fetched = repo.find_goal(StatisticId(1), date)?;
             assert!(fetched.is_some());
             let fetched_value = fetched.unwrap();
             assert_eq!(fetched_value["target"], 100);
@@ -892,7 +481,7 @@ mod tests {
         }
 
         #[test]
-        fn save_and_find_default_goal_json() -> Result<()> {
+        fn save_and_find_default_goal() -> Result<()> {
             let repo = setup_repository();
             repo.save_metadata(&integer_stat(1))?;
 
@@ -901,9 +490,9 @@ mod tests {
                 "extra_data1": "default_data"
             });
 
-            repo.save_default_goal_json(StatisticId(1), goal.clone())?;
+            repo.save_default_goal(StatisticId(1), goal.clone())?;
 
-            let fetched = repo.find_default_goal_json(StatisticId(1))?;
+            let fetched = repo.find_default_goal(StatisticId(1))?;
             assert!(fetched.is_some());
             let fetched_value = fetched.unwrap();
             assert_eq!(fetched_value["target"], 50);
@@ -931,7 +520,7 @@ mod tests {
             repo.save_metadata(&integer_stat(1))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 4, 1).unwrap();
-            let value: Option<i64> = repo.find_log_value(StatisticId(1), date)?;
+            let value = repo.find_log_value(StatisticId(1), date)?;
 
             assert!(value.is_none());
             Ok(())
@@ -943,7 +532,7 @@ mod tests {
             repo.save_metadata(&integer_stat(1))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 4, 2).unwrap();
-            let goal: Option<AmountGoal<i64>> = repo.find_goal(StatisticId(1), date)?;
+            let goal = repo.find_goal(StatisticId(1), date)?;
 
             assert!(goal.is_none());
             Ok(())
@@ -954,7 +543,7 @@ mod tests {
             let repo = setup_repository();
             repo.save_metadata(&integer_stat(1))?;
 
-            let goal: Option<AmountGoal<i64>> = repo.find_default_goal(StatisticId(1))?;
+            let goal = repo.find_default_goal(StatisticId(1))?;
 
             assert!(goal.is_none());
             Ok(())
@@ -965,12 +554,12 @@ mod tests {
             let repo = setup_repository();
             repo.save_metadata(&integer_stat(1))?;
 
-            let goal = AmountGoal::new(5_i64, true);
-            repo.save_default_goal(StatisticId(1), goal.clone())?;
+            let goal = serde_json::json!({"target": 5});
+            repo.save_default_goal(StatisticId(1), goal)?;
 
             repo.delete_default_goal(StatisticId(1))?;
 
-            let fetched: Option<AmountGoal<i64>> = repo.find_default_goal(StatisticId(1))?;
+            let fetched = repo.find_default_goal(StatisticId(1))?;
             assert!(fetched.is_none());
             Ok(())
         }
@@ -983,14 +572,14 @@ mod tests {
             let date = NaiveDate::from_ymd_opt(2024, 4, 3).unwrap();
 
             // Save initial value
-            repo.save_log_value(StatisticId(1), date, 10_i64)?;
+            repo.save_log_value(StatisticId(1), date, serde_json::json!(10))?;
 
             // Save different value for the same date
-            repo.save_log_value(StatisticId(1), date, 20_i64)?;
+            repo.save_log_value(StatisticId(1), date, serde_json::json!(20))?;
 
             // Fetch and verify it was updated
-            let value: Option<i64> = repo.find_log_value(StatisticId(1), date)?;
-            assert_eq!(value, Some(20));
+            let value = repo.find_log_value(StatisticId(1), date)?;
+            assert_eq!(value, Some(serde_json::json!(20)));
             Ok(())
         }
 
@@ -1002,16 +591,23 @@ mod tests {
             let date = NaiveDate::from_ymd_opt(2024, 4, 4).unwrap();
 
             // Save initial goal
-            repo.save_goal(StatisticId(1), date, Some(AmountGoal::new(10_i64, true)))?;
+            repo.save_goal(
+                StatisticId(1),
+                date,
+                Some(serde_json::json!({"target": 10})),
+            )?;
 
             // Save different goal for the same date
-            repo.save_goal(StatisticId(1), date, Some(AmountGoal::new(20_i64, false)))?;
+            repo.save_goal(
+                StatisticId(1),
+                date,
+                Some(serde_json::json!({"target": 20})),
+            )?;
 
             // Fetch and verify it was updated
-            let goal: Option<AmountGoal<i64>> = repo.find_goal(StatisticId(1), date)?;
+            let goal = repo.find_goal(StatisticId(1), date)?;
             assert!(goal.is_some());
-            // Note: We can't directly compare the goal values without exposing getters,
-            // but the fact that it doesn't error and returns Some proves the upsert worked
+            assert_eq!(goal.unwrap()["target"], 20);
             Ok(())
         }
     }
