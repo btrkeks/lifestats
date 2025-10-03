@@ -542,6 +542,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "events"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "mockall",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "transfer_objects",
+]
+
+[[package]]
 name = "exr"
 version = "1.73.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1255,6 +1268,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "events",
  "lifestats-domain",
  "log",
  "mockall",
@@ -2725,6 +2739,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "transfer_objects"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "image",
+ "serde",
 ]
 
 [[package]]
