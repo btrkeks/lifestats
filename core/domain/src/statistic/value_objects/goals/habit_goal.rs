@@ -7,6 +7,12 @@ pub struct HabitGoal {
     target: bool,
 }
 
+impl HabitGoal {
+    pub fn new(target: bool) -> Self {
+        Self { target }
+    }
+}
+
 impl Goal for HabitGoal {
     type LogValue = bool;
 

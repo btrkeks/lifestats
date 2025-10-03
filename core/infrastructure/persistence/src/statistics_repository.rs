@@ -300,6 +300,253 @@ impl StatisticRepository for SqliteStatisticRepository {
             .context("failed to delete default goal")?;
         Ok(())
     }
+
+    // --- JSON-based Operations (Polymorphic Interface) ---
+    fn find_log_value_json(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+    ) -> Result<Option<serde_json::Value>> {
+        let mut conn = self.connection()?;
+        let row = logging_data::table
+            .filter(logging_data::statistic_id.eq(id.0 as i32))
+            .filter(logging_data::date.eq(date.to_string()))
+            .first::<LoggingDataRaw>(&mut conn)
+            .optional()
+            .context("failed to fetch log value as JSON")?;
+
+        row.map(|raw| serde_json::from_str(&raw.value).context("failed to parse log value JSON"))
+            .transpose()
+    }
+
+    fn save_log_value_json(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+        value: serde_json::Value,
+    ) -> Result<()> {
+        let mut conn = self.connection()?;
+        let serialized = serde_json::to_string(&value).with_context(|| {
+            format!(
+                "failed to serialize JSON log value for statistic {} on {}",
+                id.0, date
+            )
+        })?;
+
+        let record = LoggingDataRaw {
+            statistic_id: id.0 as i32,
+            date: date.to_string(),
+            value: serialized,
+        };
+
+        diesel::insert_into(logging_data::table)
+            .values(&record)
+            .on_conflict((logging_data::statistic_id, logging_data::date))
+            .do_update()
+            .set(&record)
+            .execute(&mut conn)
+            .context("failed to upsert JSON log value")?;
+
+        Ok(())
+    }
+
+    fn find_log_values_in_range_json(
+        &self,
+        id: StatisticId,
+        range: DateRange,
+    ) -> Result<Vec<DatedValue<serde_json::Value>>> {
+        let mut conn = self.connection()?;
+        let rows = logging_data::table
+            .filter(logging_data::statistic_id.eq(id.0 as i32))
+            .filter(logging_data::date.ge(range.start().to_string()))
+            .filter(logging_data::date.le(range.end().to_string()))
+            .order(logging_data::date.asc())
+            .load::<LoggingDataRaw>(&mut conn)
+            .context("failed to fetch JSON logging data range")?;
+
+        rows.into_iter()
+            .map(|raw| {
+                let date = raw
+                    .date
+                    .parse::<NaiveDate>()
+                    .with_context(|| format!("failed to parse date: {}", raw.date))?;
+                let value =
+                    serde_json::from_str(&raw.value).context("failed to parse log value JSON")?;
+                Ok(DatedValue::new(date, value))
+            })
+            .collect()
+    }
+
+    fn find_goal_json(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+    ) -> Result<Option<serde_json::Value>> {
+        let mut conn = self.connection()?;
+        let row = goals::table
+            .filter(goals::statistic_id.eq(id.0 as i32))
+            .filter(goals::date.eq(date.to_string()))
+            .first::<GoalDataRaw>(&mut conn)
+            .optional()
+            .context("failed to fetch goal as JSON")?;
+
+        match row {
+            Some(raw) => {
+                if let Some(target_value) = raw.target_value {
+                    let mut map = serde_json::Map::new();
+                    map.insert("target".to_string(), serde_json::from_str(&target_value)?);
+                    if let Some(extra) = raw.extra_data1 {
+                        map.insert("extra_data1".to_string(), serde_json::Value::String(extra));
+                    }
+                    Ok(Some(serde_json::Value::Object(map)))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn save_goal_json(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+        goal: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let mut conn = self.connection()?;
+
+        if let Some(goal_value) = goal {
+            let (target_value, extra_data1) = if let serde_json::Value::Object(map) = &goal_value {
+                let target = map
+                    .get("target")
+                    .ok_or_else(|| anyhow::anyhow!("goal JSON missing 'target' field"))?;
+                let target_str = serde_json::to_string(target)?;
+                let extra = map
+                    .get("extra_data1")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                (target_str, extra)
+            } else {
+                // If it's not an object, serialize the whole thing as target
+                (serde_json::to_string(&goal_value)?, None)
+            };
+
+            let record = GoalDataRaw {
+                statistic_id: id.0 as i32,
+                date: date.to_string(),
+                target_value: Some(target_value),
+                extra_data1,
+            };
+
+            diesel::insert_into(goals::table)
+                .values(&record)
+                .on_conflict((goals::statistic_id, goals::date))
+                .do_update()
+                .set(&record)
+                .execute(&mut conn)
+                .context("failed to upsert JSON goal")?;
+        } else {
+            diesel::delete(
+                goals::table
+                    .filter(goals::statistic_id.eq(id.0 as i32))
+                    .filter(goals::date.eq(date.to_string())),
+            )
+            .execute(&mut conn)
+            .context("failed to delete goal")?;
+        }
+
+        Ok(())
+    }
+
+    fn find_goals_in_range_json(
+        &self,
+        id: StatisticId,
+        range: DateRange,
+    ) -> Result<Vec<DatedValue<serde_json::Value>>> {
+        let mut conn = self.connection()?;
+        let rows = goals::table
+            .filter(goals::statistic_id.eq(id.0 as i32))
+            .filter(goals::date.ge(range.start().to_string()))
+            .filter(goals::date.le(range.end().to_string()))
+            .order(goals::date.asc())
+            .load::<GoalDataRaw>(&mut conn)
+            .context("failed to fetch JSON goals range")?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            if let Some(target_value) = row.target_value {
+                let date = row
+                    .date
+                    .parse::<NaiveDate>()
+                    .with_context(|| format!("failed to parse date: {}", row.date))?;
+                let mut map = serde_json::Map::new();
+                map.insert("target".to_string(), serde_json::from_str(&target_value)?);
+                if let Some(extra) = row.extra_data1 {
+                    map.insert("extra_data1".to_string(), serde_json::Value::String(extra));
+                }
+                result.push(DatedValue::new(date, serde_json::Value::Object(map)));
+            }
+        }
+        Ok(result)
+    }
+
+    fn find_default_goal_json(&self, id: StatisticId) -> Result<Option<serde_json::Value>> {
+        let mut conn = self.connection()?;
+        let row = Self::fetch_default_goal(&mut conn, id)?;
+
+        match row {
+            Some(raw) => {
+                let mut map = serde_json::Map::new();
+                map.insert(
+                    "target".to_string(),
+                    serde_json::from_str(&raw.target_value)?,
+                );
+                if let Some(extra) = raw.extra_data1 {
+                    map.insert("extra_data1".to_string(), serde_json::Value::String(extra));
+                }
+                Ok(Some(serde_json::Value::Object(map)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn save_default_goal_json(&self, id: StatisticId, goal: serde_json::Value) -> Result<()> {
+        let mut conn = self.connection()?;
+
+        let (target_value, extra_data1) = if let serde_json::Value::Object(map) = &goal {
+            let target = map
+                .get("target")
+                .ok_or_else(|| anyhow::anyhow!("goal JSON missing 'target' field"))?;
+            let target_str = serde_json::to_string(target)?;
+            let extra = map
+                .get("extra_data1")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            (target_str, extra)
+        } else {
+            // If it's not an object, serialize the whole thing as target
+            (serde_json::to_string(&goal)?, None)
+        };
+
+        let record = DefaultGoalRaw {
+            statistic_id: id.0 as i32,
+            target_value,
+            extra_data1,
+        };
+
+        diesel::insert_into(default_goals::table)
+            .values(&record)
+            .on_conflict(default_goals::statistic_id)
+            .do_update()
+            .set((
+                default_goals::target_value.eq(&record.target_value),
+                default_goals::extra_data1.eq(&record.extra_data1),
+            ))
+            .execute(&mut conn)
+            .context("failed to upsert JSON default goal")?;
+
+        Ok(())
+    }
 }
 
 fn default_goal_start_fallback() -> NaiveDate {

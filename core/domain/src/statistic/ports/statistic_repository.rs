@@ -48,4 +48,37 @@ pub trait StatisticRepository {
     where
         G: serde::Serialize + 'static;
     fn delete_default_goal(&self, id: StatisticId) -> Result<()>;
+
+    // --- JSON-based Operations (Polymorphic Interface) ---
+    fn find_log_value_json(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+    ) -> Result<Option<serde_json::Value>>;
+    fn save_log_value_json(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+        value: serde_json::Value,
+    ) -> Result<()>;
+    fn find_log_values_in_range_json(
+        &self,
+        id: StatisticId,
+        range: DateRange,
+    ) -> Result<Vec<DatedValue<serde_json::Value>>>;
+    fn find_goal_json(&self, id: StatisticId, date: NaiveDate)
+        -> Result<Option<serde_json::Value>>;
+    fn save_goal_json(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+        goal: Option<serde_json::Value>,
+    ) -> Result<()>;
+    fn find_goals_in_range_json(
+        &self,
+        id: StatisticId,
+        range: DateRange,
+    ) -> Result<Vec<DatedValue<serde_json::Value>>>;
+    fn find_default_goal_json(&self, id: StatisticId) -> Result<Option<serde_json::Value>>;
+    fn save_default_goal_json(&self, id: StatisticId, goal: serde_json::Value) -> Result<()>;
 }

@@ -2,6 +2,7 @@ use crate::shared::seconds::Seconds;
 use crate::shared::time_frame_list::TimeFrameList;
 use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
+use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
 use crate::statistic::types::derived_statistics::time_difference::TimeDifferenceStatistic;
 use crate::statistic::types::logable_statistics::habit::HabitStatistic;
@@ -16,6 +17,7 @@ use crate::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::{NaiveDate, NaiveDateTime};
 use std::any::{type_name, Any};
+use std::collections::HashMap;
 
 fn downcast_option<'a, T: 'static>(
     metadata: &StatisticMetadata,
@@ -261,6 +263,360 @@ impl AnyStatistic {
             Err(crate::statistic::error::StatisticError::InvalidOperation(
                 "Not a TimeDifference statistic".into(),
             ))
+        }
+    }
+
+    //===========================================================================
+    // POLYMORPHIC METHODS (Tell, Don't Ask)
+    //===========================================================================
+
+    /// Calculate new log value from primitives (JSON + strings)
+    ///
+    /// This method allows the application layer to work with type-erased data,
+    /// moving all type-specific logic into the domain.
+    pub fn calculate_new_log_value_from_primitives(
+        &self,
+        current_value_json: Option<serde_json::Value>,
+        new_value_str: &str,
+        update_policy_str: Option<&str>,
+    ) -> Result<(serde_json::Value, bool)> {
+        match self {
+            AnyStatistic::Habit(s) => {
+                let current: Option<bool> = current_value_json
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!(
+                            "Failed to deserialize current value: {}",
+                            e
+                        ))
+                    })?;
+                let (new_value, changed) =
+                    s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
+                let json = serde_json::to_value(new_value).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                })?;
+                Ok((json, changed))
+            }
+            AnyStatistic::IntegerAmount(s) => {
+                let current: Option<i64> = current_value_json
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!(
+                            "Failed to deserialize current value: {}",
+                            e
+                        ))
+                    })?;
+                let (new_value, changed) =
+                    s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
+                let json = serde_json::to_value(new_value).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                })?;
+                Ok((json, changed))
+            }
+            AnyStatistic::PointInTime(s) => {
+                let current: Option<NaiveDateTime> = current_value_json
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!(
+                            "Failed to deserialize current value: {}",
+                            e
+                        ))
+                    })?;
+                let (new_value, changed) =
+                    s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
+                let json = serde_json::to_value(new_value).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                })?;
+                Ok((json, changed))
+            }
+            AnyStatistic::TimeSpans(s) => {
+                let current: Option<TimeFrameList> = current_value_json
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!(
+                            "Failed to deserialize current value: {}",
+                            e
+                        ))
+                    })?;
+                let (new_value, changed) =
+                    s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
+                let json = serde_json::to_value(new_value).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                })?;
+                Ok((json, changed))
+            }
+            AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => Err(
+                StatisticError::InvalidOperation("Cannot log values to derived statistics".into()),
+            ),
+        }
+    }
+
+    /// Create a goal from primitive data (HashMap of strings)
+    ///
+    /// The specific structure depends on the statistic type.
+    /// - TimeSpans: "target" (JSON TimeFrameList), "efficiency" (u8 percentage)
+    /// - IntegerAmount: "target" (i64), "is_at_least" (bool)
+    /// - Habit: "occurred" (bool)
+    /// - PointInTime: "deadline" (NaiveTime)
+    pub fn create_goal_from_primitives(
+        &self,
+        data: &HashMap<String, String>,
+    ) -> Result<serde_json::Value> {
+        match self {
+            AnyStatistic::TimeSpans(_) => {
+                let target_str = data
+                    .get("target")
+                    .ok_or_else(|| StatisticError::InvalidValue("Missing 'target' field".into()))?;
+                let target: TimeFrameList = serde_json::from_str(target_str)
+                    .map_err(|e| StatisticError::InvalidValue(format!("Invalid target: {}", e)))?;
+
+                let efficiency = data
+                    .get("efficiency")
+                    .map(|s| s.parse::<u8>())
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid efficiency: {}", e))
+                    })?
+                    .unwrap_or(100);
+
+                if efficiency > 100 {
+                    return Err(StatisticError::InvalidValue(
+                        "Efficiency must be 0-100".into(),
+                    ));
+                }
+
+                let goal = TimeSpansGoal::new(
+                    target,
+                    crate::shared::percentage::Percentage::new(efficiency),
+                );
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::IntegerAmount(_) => {
+                let target_str = data
+                    .get("target")
+                    .ok_or_else(|| StatisticError::InvalidValue("Missing 'target' field".into()))?;
+                let target: i64 = target_str
+                    .parse()
+                    .map_err(|e| StatisticError::InvalidValue(format!("Invalid target: {}", e)))?;
+
+                let is_at_least = data
+                    .get("is_at_least")
+                    .map(|s| s.parse::<bool>())
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid is_at_least: {}", e))
+                    })?
+                    .unwrap_or(true);
+
+                let goal = AmountGoal::new(target, is_at_least);
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::Habit(_) => {
+                let occurred_str = data.get("occurred").ok_or_else(|| {
+                    StatisticError::InvalidValue("Missing 'occurred' field".into())
+                })?;
+                let occurred: bool = occurred_str.parse().map_err(|e| {
+                    StatisticError::InvalidValue(format!("Invalid occurred value: {}", e))
+                })?;
+
+                let goal = HabitGoal::new(occurred);
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::PointInTime(_) => {
+                let deadline_str = data.get("deadline").ok_or_else(|| {
+                    StatisticError::InvalidValue("Missing 'deadline' field".into())
+                })?;
+                let deadline_time = chrono::NaiveTime::parse_from_str(deadline_str, "%H:%M:%S")
+                    .or_else(|_| chrono::NaiveTime::parse_from_str(deadline_str, "%H:%M"))
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid deadline: {}", e))
+                    })?;
+
+                // Combine with today's date to create a NaiveDateTime
+                let deadline = chrono::Local::now().date_naive().and_time(deadline_time);
+
+                let goal = FinishedInTimeGoal::new(deadline);
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
+                let target_str = data
+                    .get("target")
+                    .ok_or_else(|| StatisticError::InvalidValue("Missing 'target' field".into()))?;
+                let target_secs: i64 = target_str
+                    .parse()
+                    .map_err(|e| StatisticError::InvalidValue(format!("Invalid target: {}", e)))?;
+
+                let is_at_least = data
+                    .get("is_at_least")
+                    .map(|s| s.parse::<bool>())
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid is_at_least: {}", e))
+                    })?
+                    .unwrap_or(true);
+
+                let goal = AmountGoal::new(Seconds::from_i64(target_secs), is_at_least);
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+        }
+    }
+
+    /// Set a new default goal from primitive data
+    ///
+    /// This combines goal creation with updating the internal state.
+    pub fn set_default_goal_from_primitives(
+        &mut self,
+        data: &HashMap<String, String>,
+        start_date: NaiveDate,
+    ) -> Result<serde_json::Value> {
+        match self {
+            AnyStatistic::TimeSpans(s) => {
+                let target_str = data
+                    .get("target")
+                    .ok_or_else(|| StatisticError::InvalidValue("Missing 'target' field".into()))?;
+                let target: TimeFrameList = serde_json::from_str(target_str)
+                    .map_err(|e| StatisticError::InvalidValue(format!("Invalid target: {}", e)))?;
+
+                let efficiency = data
+                    .get("efficiency")
+                    .map(|s| s.parse::<u8>())
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid efficiency: {}", e))
+                    })?
+                    .unwrap_or(100);
+
+                if efficiency > 100 {
+                    return Err(StatisticError::InvalidValue(
+                        "Efficiency must be 0-100".into(),
+                    ));
+                }
+
+                let goal = TimeSpansGoal::new(
+                    target,
+                    crate::shared::percentage::Percentage::new(efficiency),
+                );
+                s.set_new_default_goal(goal.clone(), start_date)?;
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::IntegerAmount(s) => {
+                let target_str = data
+                    .get("target")
+                    .ok_or_else(|| StatisticError::InvalidValue("Missing 'target' field".into()))?;
+                let target: i64 = target_str
+                    .parse()
+                    .map_err(|e| StatisticError::InvalidValue(format!("Invalid target: {}", e)))?;
+
+                let is_at_least = data
+                    .get("is_at_least")
+                    .map(|s| s.parse::<bool>())
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid is_at_least: {}", e))
+                    })?
+                    .unwrap_or(true);
+
+                let goal = AmountGoal::new(target, is_at_least);
+                s.set_new_default_goal(goal.clone(), start_date)?;
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::Habit(s) => {
+                let occurred_str = data.get("occurred").ok_or_else(|| {
+                    StatisticError::InvalidValue("Missing 'occurred' field".into())
+                })?;
+                let occurred: bool = occurred_str.parse().map_err(|e| {
+                    StatisticError::InvalidValue(format!("Invalid occurred value: {}", e))
+                })?;
+
+                let goal = HabitGoal::new(occurred);
+                s.set_new_default_goal(goal.clone(), start_date)?;
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::PointInTime(s) => {
+                let deadline_str = data.get("deadline").ok_or_else(|| {
+                    StatisticError::InvalidValue("Missing 'deadline' field".into())
+                })?;
+                let deadline_time = chrono::NaiveTime::parse_from_str(deadline_str, "%H:%M:%S")
+                    .or_else(|_| chrono::NaiveTime::parse_from_str(deadline_str, "%H:%M"))
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid deadline: {}", e))
+                    })?;
+
+                // Combine with today's date to create a NaiveDateTime
+                let deadline = chrono::Local::now().date_naive().and_time(deadline_time);
+
+                let goal = FinishedInTimeGoal::new(deadline);
+                s.set_new_default_goal(goal.clone(), start_date)?;
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::Summing(s) => {
+                let target_str = data
+                    .get("target")
+                    .ok_or_else(|| StatisticError::InvalidValue("Missing 'target' field".into()))?;
+                let target_secs: i64 = target_str
+                    .parse()
+                    .map_err(|e| StatisticError::InvalidValue(format!("Invalid target: {}", e)))?;
+
+                let is_at_least = data
+                    .get("is_at_least")
+                    .map(|s| s.parse::<bool>())
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid is_at_least: {}", e))
+                    })?
+                    .unwrap_or(true);
+
+                let goal = AmountGoal::new(Seconds::from_i64(target_secs), is_at_least);
+                s.set_new_default_goal(goal.clone(), start_date)?;
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
+            AnyStatistic::TimeDifference(s) => {
+                let target_str = data
+                    .get("target")
+                    .ok_or_else(|| StatisticError::InvalidValue("Missing 'target' field".into()))?;
+                let target_secs: i64 = target_str
+                    .parse()
+                    .map_err(|e| StatisticError::InvalidValue(format!("Invalid target: {}", e)))?;
+
+                let is_at_least = data
+                    .get("is_at_least")
+                    .map(|s| s.parse::<bool>())
+                    .transpose()
+                    .map_err(|e| {
+                        StatisticError::InvalidValue(format!("Invalid is_at_least: {}", e))
+                    })?
+                    .unwrap_or(true);
+
+                let goal = AmountGoal::new(Seconds::from_i64(target_secs), is_at_least);
+                s.set_new_default_goal(goal.clone(), start_date)?;
+                Ok(serde_json::to_value(goal).map_err(|e| {
+                    StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
+                })?)
+            }
         }
     }
 }
