@@ -3,643 +3,281 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Design Principles](#design-principles)
-3. [System Architecture](#system-architecture)
-4. [Folder Structure](#folder-structure)
-5. [Component Interactions](#component-interactions)
-6. [Adding New Components](#adding-new-components)
-7. [Data Flow](#data-flow)
-8. [Testing Strategy](#testing-strategy)
+2. [Design Principles: Ports & Adapters](#design-principles-ports--adapters)
+3. [Architectural Layers & Crates](#architectural-layers--crates)
+4. [The Domain Model](#the-domain-model)
+5. [Component Interaction Example](#component-interaction-example)
+6. [Adding a New Logger](#adding-a-new-logger)
+7. [Testing Strategy](#testing-strategy)
 
 ---
 
 ## Overview
 
-This is a personal life statistics tracking system built in Rust following **onion (clean) architecture principles**. The system allows logging various life statistics (time slept, studied, piano practice, etc.) and visualizing them through plots.
-
-**Key Features:**
-
-- Multiple logging methods (CLI, stopwatch, MIDI, heartbeat, web interface)
-- Support for 5 statistic types: Habit, Integer Amount, Point In Time, Time Amount, Time Spans
-- Goal tracking and progress visualization
-- Real-time plot generation
-- Cross-language support (Rust, Python, Lua)
+LifeStats is a personal observability platform built in Rust. It follows a strict **Ports & Adapters (Hexagonal) Architecture** to ensure a clean separation between core business logic and external technologies like databases, user interfaces, and third-party integrations.
 
 **Design Philosophy:**
 
-- Domain logic is isolated and independent
-- Dependencies point inward (outer layers depend on inner layers, never the reverse)
-- Type safety where possible, with clear boundaries for external integrations
-- Single source of truth for statistics data
+- The core domain logic is the most valuable asset and must be protected from external changes.
+- Dependencies always point inward toward the domain.
+- The core is completely unaware of how it is being used or where its data is stored.
+- Boundaries between the core and the outside world are defined by explicit contracts (Rust traits), known as "Ports".
 
 ---
 
-## Design Principles
+## Design Principles: Ports & Adapters
 
-### 1. Onion Architecture
-
-The system follows strict onion/clean architecture with clearly defined layers:
+We visualize the system as a hexagon. The code inside the hexagon represents our application's core, while everything outside is an "adapter" that interacts with the core through well-defined "ports".
 
 ```
-┌─────────────────────────────────────────────┐
-│         Application Layer (Loggers)         │  ← CLI, MIDI, Stopwatch, Web UI
-├─────────────────────────────────────────────┤
-│        Interface Adapters (Web API)         │  ← HTTP endpoints, transfer objects
-├─────────────────────────────────────────────┤
-│    Application Services (Use Cases)         │  ← Business logic orchestration
-├─────────────────────────────────────────────┤
-│    Domain Layer (Core Business Logic)       │  ← Statistics, goals, value objects
-├─────────────────────────────────────────────┤
-│    Infrastructure (Persistence, Events)     │  ← Database, event publishing
-└─────────────────────────────────────────────┘
-```
-
-### 2. Dependency Rule
-
-**All dependencies point inward.** The domain layer has zero external dependencies. Application services depend on domain. Infrastructure implements domain contracts (repositories).
-
-### 3. Single Responsibility
-
-Each logger application has one job: capture a specific type of activity and log it. Core business rules live in the domain layer, not scattered across loggers.
-
-### 4. Contracts via Traits
-
-Boundaries between layers are defined by Rust traits (Repository patterns, etc.). This enables testing with mocks and keeps layers decoupled.
-
----
-
-## System Architecture
-
-### High-Level Component Diagram
-
-```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ Stopwatch    │  │ MIDI Logger  │  │ CLI Logger   │
-│ Logger       │  │              │  │              │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       └─────────────────┼─────────────────┘
-                         │
-                         ▼
-              ┌──────────────────────┐
-              │   Application        │
-              │   Services           │◄──────────┐
-              │  (logging.rs, etc)   │           │
-              └──────────┬───────────┘           │
-                         │                       │
-                         ▼                       │
-              ┌──────────────────────┐           │
-              │   Domain Model       │           │
-              │  (Statistics, Goals) │           │
-              └──────────┬───────────┘           │
-                         │                       │
-                         ▼                       │
-              ┌──────────────────────┐           │
-              │   Repositories       │           │
-              │   (Traits)           │           │
-              └──────────┬───────────┘           │
-                         │                       │
-              ┌──────────▼───────────┐           │
-              │   Infrastructure     │           │
-              │  (SQLite/Postgres)   │───────────┘
-              └──────────────────────┘
-                         │
-                         ▼
-              ┌──────────────────────┐
-              │   Event Publisher    │
-              │   (D-Bus/Unix Socket)│
-              └──────────────────────┘
-                         │
-                         ▼
-              ┌──────────────────────┐
-              │   Wallpaper UI       │
-              └──────────────────────┘
-```
-
-### External Integrations
-
-```
-┌─────────────┐     HTTP      ┌──────────────┐
-│  Browser    │◄─────────────►│   Web UI     │
-│  Extension  │               │ (Rocket/Axum)│
-└─────────────┘               └──────┬───────┘
+                          DRIVING ADAPTERS (Users of the core)
+                 ┌──────────────────┐      ┌──────────────────┐
+                 │     CLI Tool     │      │    Web Server    │
+                 └────────┬─────────┘      └────────┬─────────┘
+                          │                         │
+                          │   calls Application     │
+                          │        Services         │
+                          ▼                         ▼
+           ╔══════════════════════════════════════════════════╗
+           ║                                                  ║
+           ║    APPLICATION CORE (THE "HEXAGON")              ║
+           ║                                                  ║
+           ║   ┌──────────────────────────────────────────┐   ║
+           ║   │         Application Services             │   ║
+           ║   │  (Use Cases: LoggingService, etc.)       │   ║
+           ║   └─────────────────────┬────────────────────┘   ║
+           ║                         │ orchestrates           ║
+           ║                         ▼                        ║
+           ║   ┌──────────────────────────────────────────┐   ║
+           ║   │             Domain Model                 │   ║
+           ║   │ (Entities, Value Objects, Business Rules)│   ║
+           ║   └─────────────────────┬────────────────────┘   ║
+           ║                         │ uses                  .─.
+           ║                         ▼                       `·´ PORTS (Traits)
+           ║   ┌──────────────────────────────────────────┐   ║  e.g., `StatisticRepository`
+           ║   │                  Ports                   │   ║
+           ║   │            (Trait Definitions)           │   ║
+           ║   └──────────────────────────────────────────┘   ║
+           ║                                                  ║
+           ╚══════════════════════════════════════════════════╝
                                      │
-┌─────────────┐     HTTP            │
-│  Anki       │◄────────────────────┤
-│  Addon      │                     │
-│  (Python)   │                     ▼
-└─────────────┘          ┌──────────────────┐
-                         │   Web API        │
-                         │   (web_api crate)│
-                         └──────────────────┘
+                                     │ implements Ports
+                                     │
+                                     ▼
+                 ┌───────────────────┴────────────────────┐
+                 │          DRIVEN ADAPTERS               │
+                 │   (Implementations used by the core)   │
+                 │                                        │
+       ┌─────────┴───────────┐                  ┌─────────┴─────────┐
+       │ persistence-sqlite  │                  │   plot-renderer   │
+       │ (implements         │                  │ (implements       │
+       │ StatisticRepository)│                  │ PlotRenderer port)│
+       └─────────────────────┘                  └───────────────────┘
 ```
 
 ---
 
-## Folder Structure
+## Architectural Layers & Crates
 
-### Core Domain (`core/core/domain/model/`)
+Our architecture is enforced by the Rust crate structure.
 
-**Purpose:** Pure business logic with zero dependencies.
+### `core/lifestats-domain`
 
-```
-model/
-├── statistic/
-│   ├── entities/           # Statistic types (Habit, IntegerAmount, etc.)
-│   ├── value_objects/      # MyTime, TimeFrame, Percentage, etc.
-│   ├── repositories/       # Repository trait definitions
-│   └── goals/             # Goal definitions and scoring
-├── plot/                  # Plot generation logic
-└── value_objects/         # Shared value objects
-```
+- **Description:** The absolute center of the hexagon. Contains all core business logic, entities, value objects, and the definitions of the Ports (traits).
+- **Key Contents:** `SourceStatistic`, `DerivedStatistic`, `Goal` types, `StatisticRepository` trait.
+- **Rule:** Has **zero** dependencies on other crates in the workspace. It is pure, portable Rust.
 
-**Key files:**
+### `core/lifestats-application`
 
-- `statistic/entities/logable_statistics/*.rs` - The 5 statistic types
-- `statistic/repositories/statistic_repository.rs` - Repository contract
-- `statistic/value_objects/goals/*.rs` - Goal definitions
+- **Description:** The use case layer. It orchestrates the domain objects to execute specific user actions.
+- **Key Contents:** `LoggingService`, `GoalManagementService`, `StatisticQueryService`.
+- **Rule:** Depends only on `lifestats-domain`. Contains no business logic; it only coordinates.
 
-**Rule:** This layer imports NOTHING from outer layers. Only standard library and internal domain types.
+### `core/adapters/*`
 
-### Application Services (`core/application/service/`)
+- **Description:** Concrete implementations of the Ports defined in the domain. These are the "Driven Adapters".
+- **Crates:**
+  - `adapters/persistence-sqlite`: Implements the `StatisticRepository` trait using `diesel` and SQLite.
+  - `adapters/plot-renderer`: (Future) Implements a `PlotRenderer` trait using the `plotters` library.
+- **Rule:** Adapters depend on `lifestats-application` and `lifestats-domain`, but the core **never** depends on an adapter.
 
-**Purpose:** Orchestrate use cases by coordinating domain objects and repositories.
+### `interfaces/*`
 
-```
-service/
-├── logging.rs           # Core logging use cases
-├── goal_management.rs   # Goal CRUD operations
-├── statistics.rs        # Statistics queries
-├── plot.rs             # Plot generation coordination
-├── app_context.rs      # Dependency injection container
-└── repositories/       # Repository trait re-exports
-```
-
-**Key functions:**
-
-```rust
-pub fn log_statistic(
-    app_context: &AppContext,
-    statistic_id: StatisticId,
-    date: NaiveDate,
-    value: &str,
-    update_policy: Option<&str>,
-) -> Result<()>
-```
-
-**Rule:** Services coordinate domain objects but contain no business logic themselves.
-
-### Infrastructure Layer
-
-#### Persistence (`core/infrastructure/persistence/`)
-
-**Purpose:** Implement repository traits with actual database access.
-
-```
-persistence/
-├── repositories/              # Repository implementations
-│   ├── postgres_log_repository.rs
-│   └── postgres_goal_repository.rs
-├── sqlite_database/          # SQLite schema and queries
-├── migrations/               # Diesel migrations
-└── pool.rs                  # Database connection pooling
-```
-
-**Rule:** Implements domain repository traits. Domain never imports from here.
-
-#### Web API (`core/infrastructure/web_api/`)
-
-**Purpose:** HTTP interface for external clients (non-Rust applications).
-
-```
-web_api/
-├── client.rs    # HTTP client for consumers
-├── goal.rs      # Goal-related endpoints
-└── types.rs     # Request/response DTOs
-```
-
-**Endpoints provided:**
-
-- `POST /api/log` - Log a statistic value
-- `GET /api/statistics/{id}` - Get statistic data
-- `POST /api/goals` - Create/update goals
-- `GET /api/goals` - List goals
-
-### Logger Applications (`logger_applications/`)
-
-**Purpose:** Independent applications that log specific activities.
-
-Each logger is a separate binary that imports the application services:
-
-```
-logger_applications/
-├── stopwatch_logger/    # Manual time tracking with UI
-├── midi_logger/         # Log piano practice via MIDI
-├── cli_logger/          # Command-line logging interface
-├── heart_beat_logger/   # Periodic background logging
-├── mpv_logger/          # Video watching (Lua script)
-└── third_party/
-    └── fitbit/          # Sync Fitbit data
-```
-
-**Pattern:** Each logger:
-
-1. Captures activity-specific data
-2. Transforms it to domain format
-3. Calls application service functions
-4. Handles its own UI/interaction logic
-
-### Transfer Objects (`transfer_objects/`)
-
-**Purpose:** Shared data structures for cross-crate communication.
-
-```
-transfer_objects/
-├── statistic_id.rs    # Shared identifier type
-├── raw_goal.rs        # Goal transfer format
-└── plot_image.rs      # Plot image data
-```
-
-**Usage:** Imported by both domain and external clients to avoid circular dependencies.
-
-### UI Components (`ui/`)
-
-**Purpose:** User-facing visualization and web interface.
-
-```
-ui/
-├── wallpaper/        # Desktop wallpaper plot rendering
-├── web_ui/           # Web-based logging interface (Rocket)
-└── event_sender/     # Event publishing utility
-```
-
-### Events (`events/`)
-
-**Purpose:** Event publishing system for real-time updates.
-
-Currently uses D-Bus/Unix sockets to notify wallpaper of data changes.
+- **Description:** User-facing applications. These are the "Driving Adapters" that initiate actions.
+- **Crates:** `cli`, `web-server`, `stopwatch-logger`, `midi-logger`, etc.
+- **Rule:** These are binaries that wire the system together. They instantiate the application services and inject the concrete adapter implementations (e.g., `persistence-sqlite`).
 
 ---
 
-## Component Interactions
+## The Domain Model
 
-### Example: Logging a Statistic from CLI
+To ensure type safety and clarity, our domain model makes a crucial distinction between two kinds of statistics.
+
+### `SourceStatistic`
+
+- **Description:** A statistic that is a primary source of data. Its values are logged directly.
+- **Examples:** `TimeSpans`, `IntegerAmount`, `Habit`, `PointInTime`.
+- **Key Trait:** Implements the `Logable` trait, providing pure methods like `calculate_new_log_value`.
+
+### `DerivedStatistic`
+
+- **Description:** A computed view over one or more `SourceStatistic`s. You cannot log data to it directly.
+- **Examples:** `SummingStatistic` (sums durations from multiple `TimeSpans` stats), `TimeDifference` (calculates the difference between two `PointInTime` stats).
+- **Key Trait:** Implements the `Computable` trait, providing a pure `compute_value` method that takes the necessary source data as an argument.
+
+This separation prevents logical errors at compile-time (e.g., trying to log a value to a `SummingStatistic`) and makes the application layer's job simpler and safer.
+
+---
+
+## Component Interaction Example
+
+This shows the new, orchestrated flow for logging a value from the CLI. Notice how the domain entity (`statistic`) never saves itself.
 
 ```rust
-// 1. User runs CLI logger
-$ cli_logger --statistic sleep --date 2025-10-02 --value "8h"
+// 1. User runs the CLI interface
+$ lifestats-cli log --id study_time --date 2025-10-02 --value "45m"
 
-// 2. CLI Logger (Application Layer)
+// 2. `interfaces/cli/src/main.rs` (Driving Adapter)
 fn main() {
-    let app_context = build_app_context(); // DI container
+    // A. Instantiate concrete adapters
+    let pool = create_db_pool();
+    let stats_repo = Arc::new(SqliteStatisticRepository::new(pool));
+    let event_pub = Arc::new(DbusEventPublisher::new());
 
-    // 3. Call application service
-    logging::log_statistic(
-        &app_context,
-        StatisticId::from("sleep"),
-        NaiveDate::from_ymd(2025, 10, 2),
-        "8h",
-        None,
-    )?;
+    // B. Instantiate the Application Service, injecting dependencies
+    let logging_service = LoggingService::new(stats_repo, event_pub);
+
+    // C. Create and dispatch the command
+    let command = LogValueCommand { /* ... from args ... */ };
+    logging_service.handle_log_value(command)?;
 }
 
-// 4. Application Service (logging.rs)
-pub fn log_statistic(...) -> Result<()> {
-    // Get statistic entity from repository
-    let statistic = app_context.statistic_repository.get_by_id(statistic_id)?;
+// 3. `application/src/use_cases/logging_service.rs` (Application Service)
+pub fn handle_log_value(&self, command: LogValueCommand) -> Result<()> {
+    // A. Load the necessary data from persistence
+    let statistic = self.stats_repo.find_metadata_by_id(command.id)?;
+    let current_value = self.stats_repo.find_log_value(command.id, command.date)?;
 
-    // 5. Domain logic validates and stores
-    statistic.log_from_string(date, value, update_policy)?;
+    // B. Call the PURE domain logic to get the new state
+    //    The domain knows nothing about the database.
+    let (new_value, changed) = statistic.calculate_new_log_value(
+        current_value,
+        command.value,
+        command.policy
+    )?;
 
-    // 6. Publish event for UI updates
-    app_context.event_publisher.publish_event_async(Event::ValueUpdated(statistic_id));
+    // C. Save the new state back to persistence
+    if changed {
+        self.stats_repo.save_log_value(command.id, command.date, new_value)?;
+        self.event_pub.publish(ValueUpdatedEvent { ... });
+    }
 
     Ok(())
 }
-
-// 7. Infrastructure persists to database
-// 8. Wallpaper receives event and redraws plots
 ```
-
-### Example: Non-Rust Client (Anki Addon)
-
-```python
-# AnkiLogger/statistic_logging.py
-import requests
-
-def log_study_time(minutes):
-    response = requests.post(
-        "http://localhost:8000/api/log",
-        json={
-            "statistic_id": "anki_study",
-            "date": "2025-10-02",
-            "value": f"{minutes}m"
-        }
-    )
-    return response.json()
-```
-
-The web API translates this to application service calls internally.
 
 ---
 
-## Adding New Components
+## Adding a New Logger
 
-### How to Add a New Logger Application
-
-**Goal:** Create a new logger in 30 minutes without touching core domain.
+**Goal:** Create a new logger application without touching any `core` crates.
 
 #### Step 1: Create the Binary Crate
 
 ```bash
-cd logger_applications
+cd interfaces
 cargo new my_logger
 ```
 
 #### Step 2: Add Dependencies
 
 ```toml
-# logger_applications/my_logger/Cargo.toml
+# interfaces/my_logger/Cargo.toml
 [dependencies]
-application_service = { path = "../../core/application/service" }
-transfer_objects = { path = "../../transfer_objects" }
-chrono = "0.4"
-anyhow = "1.0"
+lifestats-application = { path = "../../core/lifestats-application" }
+lifestats-domain = { path = "../../core/lifestats-domain" }
+# IMPORTANT: Add the concrete adapter you need
+persistence-sqlite = { path = "../../core/adapters/persistence-sqlite" }
+# ... other dependencies like `chrono`, `anyhow` ...
 ```
 
-#### Step 3: Build AppContext
+#### Step 3: Implement `main.rs`
 
 ```rust
-// src/main.rs
-use application_service::app_context::AppContext;
+// interfaces/my_logger/src/main.rs
+use lifestats_application::use_cases::{LoggingService, LogValueCommand};
+use persistence_sqlite::SqliteStatisticRepository; // The concrete implementation
+// ... other imports
 
 fn main() -> anyhow::Result<()> {
-    // Connect to database and build dependencies
-    let app_context = AppContext::build_from_config("config.json")?;
+    // 1. Wire the application together
+    let pool = create_db_pool_from_env();
+    let repo = Arc::new(SqliteStatisticRepository::new(pool));
+    let publisher = Arc::new(NoOpEventPublisher::new()); // Or a real one
+    let logging_service = LoggingService::new(repo, publisher);
 
-    // Your logger logic here
-    log_my_activity(&app_context)?;
+    // 2. Your logger's specific logic
+    let my_data = capture_activity_data()?; // e.g., read from a sensor
 
-    Ok(())
-}
-```
+    // 3. Create a command object
+    let command = LogValueCommand {
+        statistic_id: /* ... */,
+        date: /* ... */,
+        value: my_data.to_string(),
+        policy: Some("sum".to_string()),
+    };
 
-#### Step 4: Log Statistics
-
-```rust
-use application_service::logging;
-use chrono::Local;
-use transfer_objects::StatisticId;
-
-fn log_my_activity(ctx: &AppContext) -> anyhow::Result<()> {
-    let today = Local::now().date_naive();
-
-    // Example: Log that user completed a habit
-    logging::log_statistic(
-        ctx,
-        StatisticId::from("my_habit"),
-        today,
-        "true",  // Boolean value for habits
-        None,
-    )?;
-
-    // Example: Log time spent
-    logging::log_statistic(
-        ctx,
-        StatisticId::from("my_activity_time"),
-        today,
-        "2h30m",  // Duration format
-        Some("add"),  // Update policy: add to existing
-    )?;
+    // 4. Execute the use case
+    logging_service.handle_log_value(command)?;
 
     Ok(())
 }
-```
-
-#### Step 5: Value Formatting Reference
-
-Refer to `application_service/logging.rs` documentation:
-
-```rust
-/// Value Formatting Guidelines:
-/// - Times: "HH:MM:SS" or "HH:MM" (e.g., "12:30:00", "12:30")
-/// - Durations: number + unit (s/m/h) (e.g., "5m", "2h", "30s")
-/// - Booleans: "true" or "false"
-/// - Integers: any valid i64 (e.g., "42", "1000")
-/// - Time frames: "HH:MM-HH:MM" (e.g., "09:00-10:30")
-```
-
-**That's it!** Your logger is now integrated into the system.
-
-### How to Add a Non-Rust Client
-
-Use the HTTP API at `http://localhost:8000`:
-
-```javascript
-// Example: Browser extension
-fetch("http://localhost:8000/api/log", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    statistic_id: "web_browsing",
-    date: "2025-10-02",
-    value: "3h15m",
-  }),
-});
-```
-
-See `core/infrastructure/web_api/README.md` for full API documentation.
-
----
-
-## Data Flow
-
-### Write Path (Logging)
-
-```
-Logger App → AppContext → log_statistic()
-    → Repository.get_by_id()
-    → Statistic.log_from_string() [domain validation]
-    → Repository.save() [persistence]
-    → EventPublisher.publish() [notification]
-    → Wallpaper updates
-```
-
-### Read Path (Visualization)
-
-```
-Wallpaper → AppContext → get_statistics()
-    → Repository.get_logs()
-    → Plot.generate() [domain plotting logic]
-    → Image written to disk
-    → Desktop wallpaper updated
-```
-
-### Goal Management
-
-```
-Web UI → goal_management::set_goal()
-    → Goal entity created/updated
-    → Repository.save_goal()
-    → Statistics queries recalculate scores
 ```
 
 ---
 
 ## Testing Strategy
 
-### Unit Tests (Domain Layer)
+### Unit Tests (`lifestats-domain`)
 
-Test pure business logic without any infrastructure:
+Test pure business logic with zero mocking of external dependencies.
 
 ```rust
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn test_habit_logging() {
-        let habit = HabitStatistic::new(/* ... */);
-        habit.log_value(date, true).unwrap();
-        assert_eq!(habit.get_value(date), Some(true));
+    #[test]fn test_log_value_calculation() {
+        let statistic = IntegerAmountStatistic::new(/* metadata only */);
+        let (new_value, changed) = statistic.calculate_new_log_value(
+            Some(10), 5, AmountUpdatePolicy::Sum
+        ).unwrap();
+        assert!(changed);
+        assert_eq!(new_value, 15);
     }
 }
 ```
 
-### Integration Tests (Application Services)
+### Integration Tests (`lifestats-application`)
 
-Use mock repositories from `testing_utilities`:
+Test application services by injecting mock implementations of the repository ports.
 
 ```rust
-use application_service::testing::MockAppContextBuilder;
+use lifestats_domain::statistic::ports::MockStatisticRepository;
 
 #[test]
-fn test_log_statistic_end_to_end() {
-    let ctx = MockAppContextBuilder::new()
-        .with_mock_statistic_repository()
-        .build();
+fn test_log_value_use_case() {
+    let mut mock_repo = MockStatisticRepository::new();
 
-    let result = logging::log_statistic(&ctx, id, date, "5h", None);
+    // Setup expectations on the mock
+    mock_repo.expect_find_metadata_by_id().returning(...);
+    mock_repo.expect_find_log_value().returning(|| Ok(Some(10)));
+    mock_repo.expect_save_log_value()
+        .with(.., .., 15) // Assert it saves the correct value
+        .returning(|| Ok(()));
+
+    let service = LoggingService::new(Arc::new(mock_repo), ...);
+    let command = LogValueCommand { value: 5, policy: "sum", .. };
+
+    let result = service.handle_log_value(command);
     assert!(result.is_ok());
 }
 ```
-
-### Contract Tests (Web API)
-
-Test that HTTP endpoints correctly map to application services.
-
----
-
-## Common Patterns
-
-### Pattern 1: Value Objects
-
-Prefer value objects over primitives:
-
-```rust
-// ❌ Bad
-fn calculate_score(minutes: i64) -> f64 { ... }
-
-// ✅ Good
-fn calculate_score(duration: MyDuration) -> Percentage { ... }
-```
-
-### Pattern 2: Repository Pattern
-
-Never access database directly from domain:
-
-```rust
-// ❌ Bad (domain depends on infrastructure)
-impl Statistic {
-    fn save(&self) {
-        diesel::insert_into(table).execute(/* ... */);
-    }
-}
-
-// ✅ Good (domain defines contract, infrastructure implements)
-trait StatisticRepository {
-    fn save(&self, statistic: &Statistic) -> Result<()>;
-}
-```
-
-### Pattern 3: Error Handling
-
-Use `anyhow` for application errors, custom types for domain errors:
-
-```rust
-// Domain layer
-pub enum StatisticError {
-    InvalidValue(String),
-    DateOutOfRange,
-}
-
-// Application layer
-pub fn log_statistic(...) -> anyhow::Result<()> {
-    statistic.log_value(...).context("Failed to log statistic")?;
-    Ok(())
-}
-```
-
----
-
-## Future Considerations
-
-### Planned Enhancements
-
-- [ ] Remove wallpaper dependency (replace with web-based dashboards)
-- [ ] Remote deployment support (run core service on home server)
-- [ ] Mobile app integration via HTTP API
-- [ ] Backup and sync across devices
-
-### Non-Goals
-
-- We will NOT split into microservices (unnecessary complexity)
-- We will NOT add real-time streaming (current event system is sufficient)
-- We will NOT support multi-user scenarios (personal tool)
-
----
-
-## Getting Started (For Contributors)
-
-1. **Clone and build:**
-
-   ```bash
-   git clone <repo>
-   cargo build --release
-   ```
-
-2. **Run database migrations:**
-
-   ```bash
-   cd core/infrastructure/persistence
-   diesel migration run
-   ```
-
-3. **Start the web UI:**
-
-   ```bash
-   cd ui/web_ui
-   cargo run
-   ```
-
-4. **Try a logger:**
-
-   ```bash
-   cd logger_applications/cli_logger
-   cargo run -- --help
-   ```
-
-5. **Read the docs:**
-   - `statistics.md` - Statistic types reference
-   - `README.md` - Project overview
-   - This file - Architecture details
-
----
-
-## Questions?
-
-- **"Where do I add a new statistic type?"** → `core/domain/model/src/statistic/entities/logable_statistics/`
-- **"How do I add a new logger?"** → See [Adding New Components](#adding-new-components)
-- **"Where's the database schema?"** → `infrastructure/persistence/migrations/`
-- **"How do goals work?"** → `core/domain/model/src/statistic/value_objects/goals/`
-- **"Can I use this from Python/JavaScript?"** → Yes! Use the HTTP API at `localhost:8000`
