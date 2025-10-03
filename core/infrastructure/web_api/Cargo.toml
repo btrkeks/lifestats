@@ -7,10 +7,32 @@ edition = "2021"
 lifestats-application = { path = "../../application" }
 lifestats-domain = { path = "../../domain" }
 
+# The concrete persistence implementation needed at the composition root
+lifestats-persistence = { path = "../persistence" }
+events = { path = "../../../events/event_impl/" }
+
+# Web Framework
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5.0", features = ["trace", "cors"] }
+
+# Serialization & Deserialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Validation
+validator = { version = "0.19", features = ["derive"] }
+
+# Error Handling & Logging
+anyhow = "1.0"
+log = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Configuration
+dotenvy = "0.15"
+
+# Date/Time
 chrono = { workspace = true }
-anyhow = { workspace = true }
-serde = { workspace = true }
 
 [dev-dependencies]
-# For integration tests
-lifestats-persistence = { path = "../persistence" }
