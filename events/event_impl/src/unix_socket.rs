@@ -84,7 +84,7 @@ fn attempt_publish(socket_path: &Path, event: Event) -> Result<()> {
     let mut stream = UnixStream::connect(socket_path)?;
     stream.set_write_timeout(Some(Duration::from_millis(100)))?;
 
-    let json = serde_json::to_string(&event).map_err(|e| std::io::Error::other(e))?;
+    let json = serde_json::to_string(&event).map_err(std::io::Error::other)?;
 
     writeln!(stream, "{}", json)?;
     Ok(())

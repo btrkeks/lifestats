@@ -10,8 +10,7 @@ use chrono::NaiveDate;
 #[derive(Clone)]
 pub struct SummingStatistic {
     metadata: StatisticMetadata,
-
-    statistics: Vec<TimeSpansStatistic>,
+    _statistics: Vec<TimeSpansStatistic>,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
@@ -49,13 +48,13 @@ impl IntegerStatistic for SummingStatistic {
 impl SummingStatistic {
     pub fn new(
         metadata: StatisticMetadata,
-        statistics: Vec<TimeSpansStatistic>,
+        _statistics: Vec<TimeSpansStatistic>,
         default_goal: Option<<Self as Statistic>::GoalType>,
         default_goal_start: NaiveDate,
     ) -> Self {
         Self {
             metadata,
-            statistics,
+            _statistics,
             default_goal,
             default_goal_start,
         }

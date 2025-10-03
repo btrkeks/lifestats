@@ -10,8 +10,8 @@ use chrono::NaiveDate;
 pub struct TimeDifferenceStatistic {
     metadata: StatisticMetadata,
 
-    statistic0: PointInTimeStatistic,
-    statistic1: PointInTimeStatistic,
+    _statistic0: PointInTimeStatistic,
+    _statistic1: PointInTimeStatistic,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
@@ -49,15 +49,15 @@ impl IntegerStatistic for TimeDifferenceStatistic {
 impl TimeDifferenceStatistic {
     pub fn new(
         metadata: StatisticMetadata,
-        statistic0: PointInTimeStatistic,
-        statistic1: PointInTimeStatistic,
+        _statistic0: PointInTimeStatistic,
+        _statistic1: PointInTimeStatistic,
         default_goal: Option<<Self as Statistic>::GoalType>,
         default_goal_start: NaiveDate,
     ) -> Self {
         Self {
             metadata,
-            statistic0,
-            statistic1,
+            _statistic0,
+            _statistic1,
             default_goal,
             default_goal_start,
         }

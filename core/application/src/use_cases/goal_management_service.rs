@@ -188,10 +188,10 @@ fn ensure_time_spans_statistic(statistic: &AnyStatistic, id: StatisticId) -> Res
     }
 }
 
-fn as_time_spans_mut<'a>(
-    statistic: &'a mut AnyStatistic,
+fn as_time_spans_mut(
+    statistic: &mut AnyStatistic,
     id: StatisticId,
-) -> Result<&'a mut TimeSpansStatistic> {
+) -> Result<&mut TimeSpansStatistic> {
     match statistic {
         AnyStatistic::TimeSpans(inner) => Ok(inner),
         _ => bail!("Statistic {} is not a time spans statistic", id),
