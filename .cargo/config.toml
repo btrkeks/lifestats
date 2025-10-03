@@ -1,0 +1,13 @@
+[build]
+target-dir = "/tmp/cargo-target-shared"         # or a repo-local path
+rustc-wrapper = "sccache"                        # if you have it
+incremental = true
+
+[profile.dev]
+codegen-units = 256
+debug = 1
+incremental = true
+
+[profile.release]
+codegen-units = 256
+lto = "thin"

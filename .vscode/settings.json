@@ -1,0 +1,43 @@
+{
+  // --- Rust Analyzer ---
+  "rust-analyzer.cargo.allFeatures": false,
+  "rust-analyzer.cargo.noDefaultFeatures": false,
+  "rust-analyzer.checkOnSave": true,
+  "rust-analyzer.checkOnSave.command": "clippy",         // quick signal
+  "rust-analyzer.check.allTargets": false,               // skip benches/examples on save
+  "rust-analyzer.procMacro.enable": true,                // set false if perf is an issue
+  "rust-analyzer.diagnostics.experimental.enable": false,
+  "rust-analyzer.inlayHints.enable": true,
+  "rust-analyzer.inlayHints.maxLength": 30,
+  "rust-analyzer.files.excludeDirs": [
+    "target", "**/target", "**/node_modules", ".git", ".cache", "dist"
+  ],
+  // Link non-standard cargo projects (e.g., generated, xtask) explicitly if needed:
+  // "rust-analyzer.linkedProjects": ["xtask/Cargo.toml", "tools/gen/Cargo.toml"],
+
+  // --- Performance / watcher ---
+  "files.watcherExclude": {
+    "**/target/**": true,
+    "**/node_modules/**": true,
+    "**/.git/**": true
+  },
+  "search.exclude": {
+    "**/target": true,
+    "**/node_modules": true,
+    "**/.git": true
+  },
+
+  // --- Testing UX ---
+  "rust-analyzer.runnables.extraArgs": ["--nocapture"],
+  "testExplorer.codeLens": true,
+
+  // --- Formatting ---
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true
+  },
+
+  // --- Multi-root niceties ---
+  "workbench.editor.enablePreview": false,
+  "explorer.compactFolders": false
+}

@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug current bin",
+      "cargo": { "args": ["build", "--bin", "${workspaceFolderBasename}"] },
+      "program": "${workspaceFolder}/target/debug/${workspaceFolderBasename}",
+      "cwd": "${workspaceFolder}",
+      "args": []
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug test at cursor",
+      "cargo": { "args": ["test", "--no-run", "--package", "${workspaceFolderBasename}"] },
+      "program": "${cargo:program}",
+      "args": ["--", "${rust.testLens.testNameAtCursor}"],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
