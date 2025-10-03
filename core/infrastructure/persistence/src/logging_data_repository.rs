@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
+use lifestats_domain::shared::dated_value::DatedValue;
 use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::shared::logging_data::DateValue;
 use lifestats_domain::statistic::ports::logging_data_repository::LoggingDataRepositoryTrait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -36,7 +36,7 @@ where
         id: StatisticId,
         start_date: NaiveDate,
         end_date: NaiveDate,
-    ) -> Result<Vec<DateValue<Self::StoredType>>> {
+    ) -> Result<Vec<DatedValue<Self::StoredType>>> {
         let mut conn = self.pool.get()?;
 
         let data = logging_data::table

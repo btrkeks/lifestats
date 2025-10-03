@@ -1,10 +1,11 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use lifestats_domain::plot::any_plot::AnyPlot;
-use lifestats_domain::shared::goal::Goal;
+use lifestats_domain::shared::dated_value::DatedValue;
 use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::shared::logging_data::{DateValue, StatisticData};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 #[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]
 #[diesel(table_name = crate::sqlite_database::schema::logging_data)]
@@ -15,24 +16,25 @@ pub struct LoggingDataRaw {
 }
 
 impl LoggingDataRaw {
-    pub fn into_value_logging_data<T>(self) -> DateValue<T>
+    pub fn into_dated_value<T>(self) -> Result<DatedValue<T>>
     where
-        T: serde::de::DeserializeOwned,
+        T: DeserializeOwned,
     {
-        // TODO: Remove unwrap
-        // println!("Parsing: {}", self.value);
-        DateValue::new(
-            NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").unwrap(),
-            serde_json::from_str(&self.value)
-                .map_err(|_| {
-                    anyhow::anyhow!(
-                        "Failed to parse value {} for statistic_id: {}",
-                        self.value,
-                        self.statistic_id
-                    )
-                })
-                .unwrap(),
-        )
+        let date = NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").with_context(|| {
+            format!(
+                "Failed to parse log date '{}' for statistic_id {}",
+                self.date, self.statistic_id
+            )
+        })?;
+
+        let value = serde_json::from_str(&self.value).with_context(|| {
+            format!(
+                "Failed to parse log value '{}' for statistic_id {} on {}",
+                self.value, self.statistic_id, date
+            )
+        })?;
+
+        Ok(DatedValue::new(date, value))
     }
 }
 
@@ -48,61 +50,59 @@ pub struct GoalDataRaw {
 }
 
 impl GoalDataRaw {
-    pub fn from_goal_logging_data<T, G: Goal<T>>(data: StatisticData<G>) -> Result<Self>
+    pub fn from_goal<G>(statistic_id: StatisticId, date: NaiveDate, goal: Option<G>) -> Result<Self>
     where
-        T: serde::Serialize,
+        G: Serialize,
     {
-        // When data.value is None, we still want to create a GoalDataRaw
-        // with explicit NULL values to indicate an intentionally unset goal
-        let (target_value, extra_data1) = if let Some(value) = data.value {
-            (
-                Some(serde_json::to_string(&value.get_value())?),
-                value.get_extra_data_1(),
-            )
-        } else {
-            (None, None)
+        let serialized_goal = match goal {
+            Some(goal) => Some(serde_json::to_string(&goal).with_context(|| {
+                format!(
+                    "Failed to serialize goal for statistic_id {} on {}",
+                    statistic_id.0, date
+                )
+            })?),
+            None => None,
         };
 
         Ok(Self {
-            statistic_id: data.statistic_id.0 as i32,
-            date: data.date.to_string(),
-            target_value,
-            extra_data1,
+            statistic_id: statistic_id.0 as i32,
+            date: date.to_string(),
+            target_value: serialized_goal,
+            extra_data1: None,
         })
     }
 
-    pub fn into_goal_date_value<T, G: Goal<T>>(self) -> DateValue<Option<G>>
+    pub fn into_optional_goal<G>(self) -> Result<Option<G>>
     where
-        T: serde::de::DeserializeOwned,
+        G: DeserializeOwned,
     {
-        // TODO: Remove unwraps
-
-        let goal = if let Some(value) = self.target_value {
-            let mut goal = G::new_with_target(
-                serde_json::from_str(&value)
-                    .map_err(|_| {
-                        anyhow::anyhow!(
-                            "Failed to parse goal target value {} for statistic_id: {}",
-                            value,
-                            self.statistic_id
-                        )
-                    })
-                    .unwrap(),
-            );
-
-            if let Some(extra_data_1) = self.extra_data1 {
-                goal = goal.set_extra_data_1(&extra_data_1).unwrap();
+        match self.target_value {
+            Some(value) => {
+                let goal = serde_json::from_str(&value).with_context(|| {
+                    format!(
+                        "Failed to parse goal '{}' for statistic_id {} on {}",
+                        value, self.statistic_id, self.date
+                    )
+                })?;
+                Ok(Some(goal))
             }
+            None => Ok(None),
+        }
+    }
 
-            Some(goal)
-        } else {
-            None
-        };
+    pub fn into_dated_goal<G>(self) -> Result<DatedValue<Option<G>>>
+    where
+        G: DeserializeOwned,
+    {
+        let date = NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").with_context(|| {
+            format!(
+                "Failed to parse goal date '{}' for statistic_id {}",
+                self.date, self.statistic_id
+            )
+        })?;
 
-        DateValue::new(
-            NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").unwrap(),
-            goal,
-        )
+        let goal = self.into_optional_goal::<G>()?;
+        Ok(DatedValue::new(date, goal))
     }
 }
 
@@ -115,47 +115,48 @@ pub struct DefaultGoalRaw {
 }
 
 impl DefaultGoalRaw {
-    pub fn into_goal<T, G: Goal<T>>(self) -> Result<G>
+    pub fn into_goal<G>(self) -> Result<G>
     where
-        T: serde::de::DeserializeOwned,
+        G: DeserializeOwned,
     {
-        let target = serde_json::from_str(&self.target_value).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to parse default goal target value {} for statistic_id {}: '{}'",
-                self.target_value,
-                self.statistic_id,
-                e
+        serde_json::from_str(&self.target_value).with_context(|| {
+            format!(
+                "Failed to parse default goal '{}' for statistic_id {}",
+                self.target_value, self.statistic_id
+            )
+        })
+    }
+
+    pub fn start_date(&self) -> Result<Option<NaiveDate>> {
+        self.extra_data1
+            .as_deref()
+            .map(|raw| {
+                NaiveDate::parse_from_str(raw, "%Y-%m-%d").with_context(|| {
+                    format!(
+                        "Failed to parse default goal start date '{}' for statistic_id {}",
+                        raw, self.statistic_id
+                    )
+                })
+            })
+            .transpose()
+    }
+
+    pub fn from_goal<G>(statistic_id: StatisticId, goal: G, start_date: NaiveDate) -> Result<Self>
+    where
+        G: Serialize,
+    {
+        let target_value = serde_json::to_string(&goal).with_context(|| {
+            format!(
+                "Failed to serialize default goal for statistic_id {}",
+                statistic_id.0
             )
         })?;
 
-        let mut goal = G::new_with_target(target);
-
-        if let Some(extra_data_1) = self.extra_data1 {
-            goal = goal.set_extra_data_1(&extra_data_1).map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to set default goal extra_data_1 '{}' for statistic_id {}: '{}'",
-                    extra_data_1,
-                    self.statistic_id,
-                    e
-                )
-            })?;
-        }
-
-        Ok(goal)
-    }
-
-    pub fn from_goal<T, G: Goal<T>>(statistic_id: StatisticId, goal: G) -> Self
-    where
-        T: serde::Serialize,
-    {
-        let target_value = serde_json::to_string(&goal.get_value()).unwrap();
-        let extra_data1 = goal.get_extra_data_1();
-
-        Self {
+        Ok(Self {
             statistic_id: statistic_id.0 as i32,
             target_value,
-            extra_data1,
-        }
+            extra_data1: Some(start_date.to_string()),
+        })
     }
 }
 

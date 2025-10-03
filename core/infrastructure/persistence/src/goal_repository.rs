@@ -15,7 +15,7 @@ use crate::sqlite_database::schema::goals;
 use diesel::r2d2::{ConnectionManager, Pool};
 use serde::de::DeserializeOwned;
 
-pub struct GoalRepositoryTemplate<T, G: Goal<T>>
+pub struct GoalRepositoryTemplate<T, G: Goal<LogValue = T>>
 where
     T: Send + Sync,
     G: Send + Sync,
@@ -24,7 +24,7 @@ where
     _phantom: PhantomData<(T, G)>,
 }
 
-impl<T, G: Goal<T>> GoalRepositoryTemplate<T, G>
+impl<T, G: Goal<LogValue = T>> GoalRepositoryTemplate<T, G>
 where
     T: Send + Sync,
     G: Send + Sync,
@@ -37,7 +37,7 @@ where
     }
 }
 
-impl<T, G: Goal<T>> GoalRepositoryTrait for GoalRepositoryTemplate<T, G>
+impl<T, G: Goal<LogValue = T>> GoalRepositoryTrait for GoalRepositoryTemplate<T, G>
 where
     T: Send + Sync + DeserializeOwned + Serialize,
     G: Send + Sync,
@@ -50,7 +50,7 @@ where
         id: StatisticId,
         start_date: NaiveDate,
         end_date: NaiveDate,
-    ) -> Result<Vec<DateValue<Option<Self::GoalType>>>> {
+    ) -> Result<Vec<DatedValue<Option<Self::GoalType>>>> {
         let mut conn = self
             .pool
             .get()
@@ -186,9 +186,9 @@ mod tests {
     use diesel_migrations::MigrationHarness;
     use lifestats_domain::shared::seconds::MyDuration;
     use lifestats_domain::shared::time_frame_list::{TimeFrame, TimeFrameList};
-    use lifestats_domain::statistic::statistic_types::integer_amount::IntegerAmountGoal;
-    use lifestats_domain::statistic::statistic_types::time_amount::TimeAmountGoal;
-    use lifestats_domain::statistic::statistic_types::time_spans::TimeSpansGoal;
+    use lifestats_domain::statistic::types::integer_amount::IntegerAmountGoal;
+    use lifestats_domain::statistic::types::time_amount::TimeAmountGoal;
+    use lifestats_domain::statistic::types::time_spans::TimeSpansGoal;
 
     fn create_test_pool() -> Arc<Pool<ConnectionManager<SqliteConnection>>> {
         let manager = ConnectionManager::<SqliteConnection>::new(":memory:");
