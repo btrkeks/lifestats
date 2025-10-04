@@ -1,3 +1,4 @@
+use crate::plot::axis::YAxis;
 use crate::plot::specification::PlotType;
 use crate::shared::date_range::DateRange;
 use chrono::NaiveDate;
@@ -25,6 +26,7 @@ pub struct PlotData {
     pub points: Vec<DataPoint>,
     pub date_range: DateRange,
     pub plot_type: PlotType,
+    pub y_axis: YAxis,
 }
 
 impl PlotData {
@@ -33,12 +35,14 @@ impl PlotData {
         points: Vec<DataPoint>,
         date_range: DateRange,
         plot_type: PlotType,
+        y_axis: YAxis,
     ) -> Self {
         Self {
             title,
             points,
             date_range,
             plot_type,
+            y_axis,
         }
     }
 }

@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
-use chrono::{NaiveTime, Timelike};
+use chrono::Timelike;
 use image::{ImageBuffer, Rgb};
+use lifestats_domain::plot::axis::YAxis;
 use lifestats_domain::plot::data::PlotData;
 use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
 use lifestats_domain::plot::specification::PlotType;
@@ -27,15 +28,22 @@ impl PlottersRenderer {
 
         root.fill(&WHITE)?;
 
+        // Extract y-axis range from PlotData (provided by domain logic)
+        let (y_min, y_max) = match &data.y_axis {
+            YAxis::Integer { min, max } => (*min as f64, *max as f64),
+            YAxis::Time { .. } => {
+                return Err(anyhow!(
+                    "BarChart plot requires Integer axis, but got Time axis"
+                ))
+            }
+        };
+
         let mut chart = ChartBuilder::on(&root)
             .caption(&data.title, ("sans-serif", 30))
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(50)
-            .build_cartesian_2d(
-                data.date_range.start()..data.date_range.end(),
-                0.0..100.0, // TODO: Calculate proper Y range from data
-            )?;
+            .build_cartesian_2d(data.date_range.start()..data.date_range.end(), y_min..y_max)?;
 
         chart.configure_mesh().draw()?;
 
@@ -72,15 +80,22 @@ impl PlottersRenderer {
 
         root.fill(&WHITE)?;
 
+        // Extract y-axis range from PlotData (provided by domain logic)
+        let (y_min, y_max) = match &data.y_axis {
+            YAxis::Integer { min, max } => (*min as f64, *max as f64),
+            YAxis::Time { .. } => {
+                return Err(anyhow!(
+                    "LineChart plot requires Integer axis, but got Time axis"
+                ))
+            }
+        };
+
         let mut chart = ChartBuilder::on(&root)
             .caption(&data.title, ("sans-serif", 30))
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(50)
-            .build_cartesian_2d(
-                data.date_range.start()..data.date_range.end(),
-                0.0..100.0, // TODO: Calculate proper Y range from data
-            )?;
+            .build_cartesian_2d(data.date_range.start()..data.date_range.end(), y_min..y_max)?;
 
         chart.configure_mesh().draw()?;
 
@@ -120,15 +135,22 @@ impl PlottersRenderer {
 
         root.fill(&WHITE)?;
 
+        // Extract y-axis range from PlotData (provided by domain logic)
+        let (y_min, y_max) = match &data.y_axis {
+            YAxis::Integer { min, max } => (*min as f64, *max as f64),
+            YAxis::Time { .. } => {
+                return Err(anyhow!(
+                    "Scatter plot requires Integer axis, but got Time axis"
+                ))
+            }
+        };
+
         let mut chart = ChartBuilder::on(&root)
             .caption(&data.title, ("sans-serif", 30))
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(50)
-            .build_cartesian_2d(
-                data.date_range.start()..data.date_range.end(),
-                0.0..100.0, // TODO: Calculate proper Y range from data
-            )?;
+            .build_cartesian_2d(data.date_range.start()..data.date_range.end(), y_min..y_max)?;
 
         chart.configure_mesh().draw()?;
 
@@ -165,13 +187,22 @@ impl PlottersRenderer {
 
         root.fill(&BACKGROUND_COLOR)?;
 
-        // Calculate y-axis bounds from the data
-        let (y_min, y_max) = calculate_y_axis_bounds_for_time_frames(data)?;
-        let (y_axis_min, y_axis_max) = add_y_padding(
-            y_min.num_seconds_from_midnight() as i64,
-            y_max.num_seconds_from_midnight() as i64,
-            Y_MARGIN_PERCENT,
-        );
+        // Extract y-axis bounds from PlotData (provided by domain logic)
+        let (y_axis_min, y_axis_max) = match &data.y_axis {
+            YAxis::Time { min, max } => {
+                let (min_seconds, max_seconds) = add_y_padding(
+                    min.num_seconds_from_midnight() as i64,
+                    max.num_seconds_from_midnight() as i64,
+                    Y_MARGIN_PERCENT,
+                );
+                (min_seconds, max_seconds)
+            }
+            YAxis::Integer { .. } => {
+                return Err(anyhow!(
+                    "TimeFrames plot requires Time axis, but got Integer axis"
+                ))
+            }
+        };
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
@@ -299,54 +330,6 @@ impl PlottersRenderer {
     }
 }
 
-/// Helper function to calculate y-axis bounds from TimeFrameList data
-fn calculate_y_axis_bounds_for_time_frames(data: &PlotData) -> Result<(NaiveTime, NaiveTime)> {
-    const DEFAULT_MIN: NaiveTime = match NaiveTime::from_num_seconds_from_midnight_opt(0, 0) {
-        Some(t) => t,
-        None => panic!("Invalid default min time"),
-    };
-    const DEFAULT_MAX: NaiveTime = match NaiveTime::from_num_seconds_from_midnight_opt(1000, 0) {
-        Some(t) => t,
-        None => panic!("Invalid default max time"),
-    };
-
-    let mut lower_values = Vec::new();
-    let mut upper_values = Vec::new();
-
-    // Collect from values
-    for point in &data.points {
-        if let Ok(time_frame_list) = serde_json::from_value::<TimeFrameList>(point.value.clone()) {
-            if let Some(start) = time_frame_list.start_time() {
-                lower_values.push(start);
-            }
-            if let Some(end) = time_frame_list.end_time() {
-                upper_values.push(end);
-            }
-        }
-    }
-
-    // Collect from goals
-    for point in &data.points {
-        if let Some(goal_value) = &point.goal {
-            if let Ok(goal_time_frames) =
-                serde_json::from_value::<TimeFrameList>(goal_value.clone())
-            {
-                if let Some(start) = goal_time_frames.start_time() {
-                    lower_values.push(start);
-                }
-                if let Some(end) = goal_time_frames.end_time() {
-                    upper_values.push(end);
-                }
-            }
-        }
-    }
-
-    let y_min = lower_values.into_iter().min().unwrap_or(DEFAULT_MIN);
-    let y_max = upper_values.into_iter().max().unwrap_or(DEFAULT_MAX);
-
-    Ok((y_min, y_max))
-}
-
 impl Default for PlottersRenderer {
     fn default() -> Self {
         Self::new()
@@ -396,11 +379,13 @@ mod tests {
             ),
         ];
 
+        let y_axis = YAxis::Integer { min: 0, max: 30 };
         let plot_data = PlotData::new(
             "Test Plot".to_string(),
             points,
             date_range,
             PlotType::LineChart,
+            y_axis,
         );
 
         let config = RenderConfig::default();
@@ -444,11 +429,17 @@ mod tests {
             ),
         ];
 
+        use chrono::NaiveTime;
+        let y_axis = YAxis::Time {
+            min: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+            max: NaiveTime::from_hms_opt(18, 0, 0).unwrap(),
+        };
         let plot_data = PlotData::new(
             "Time Frames Test Plot".to_string(),
             points,
             date_range,
             PlotType::TimeFrames,
+            y_axis,
         );
 
         let config = RenderConfig::default();

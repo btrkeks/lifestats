@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use lifestats_domain::plot::axis::YAxis;
 use lifestats_domain::plot::data::{DataPoint, PlotData};
 use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
 use lifestats_domain::plot::repository::PlotRepository;
@@ -73,12 +74,16 @@ where
             })
             .collect();
 
-        // 5. Return the assembled PlotData
+        // 5. Calculate the Y-axis configuration using domain logic
+        let y_axis = YAxis::from_data_points(&points, plot_spec.plot_type)?;
+
+        // 6. Return the assembled PlotData
         Ok(PlotData::new(
             plot_spec.title.clone(),
             points,
             date_range,
             plot_spec.plot_type,
+            y_axis,
         ))
     }
 

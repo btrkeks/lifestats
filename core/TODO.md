@@ -1,52 +1,65 @@
-# `TODO.md`: Implement TimeFrames Plot Rendering
+# `TODO.md`: Implement Dynamic and Robust Plot Rendering
 
-This document outlines the tasks required to implement the rendering logic for the `TimeFrames` plot type within the new plotting architecture. We will adapt the existing logic from the `archive` directory.
+This plan addresses two critical bugs: the hardcoded Y-axis and empty `TimeFrames` plots. We will implement a robust, domain-driven solution that pushes data interpretation logic into the correct architectural layers.
 
-## Guiding Principles
+## Phase 1: Enhance the Domain Model (`lifestats-domain`)
 
-- **Domain Purity:** The `lifestats-domain` crate must remain completely free of any `plotters`-specific code or types.
-- **Adapter Responsibility:** All rendering logic, including coordinate calculations, color conversions, and drawing, belongs in the `plotting` adapter crate.
-- **Data Flow:** The `PlottingService` provides the renderer with pure `PlotData`. The renderer's job is to translate this data into a visual representation.
+We will enrich our domain's plot data structures to be type-safe and renderer-agnostic, eliminating the need for the renderer to interpret generic JSON.
 
-## Phase 1: Implement `TimeFrames` Rendering in the `plotting` Adapter
+- **1.1. Create `DrawableData` Enum:**
+  - In `lifestats-domain/src/plot/data.rs`, define a new public enum:
+    ```rust
+    pub enum DrawableData {
+        Integer(i64),
+        TimeFrames(lifestats_domain::shared::time_frame_list::TimeFrameList),
+    }
+    ```
+  - This enum represents data that has been processed and is ready for visualization.
 
-The primary task is to create a new rendering function within the `PlottersRenderer` and wire it up.
+- **1.2. Update `DataPoint` Struct:**
+  - In `lifestats-domain/src/plot/data.rs`, modify the `DataPoint` struct.
+  - Replace `value: Value` with `value: DrawableData`.
+  - Add a `color` field: `pub color: [u8; 3]`. This will store an RGB tuple.
+  - The `goal` field can remain `Option<Value>` as it's used for reference, not direct drawing.
 
-- **1.1: Create a new rendering function in `plotters_renderer.rs`:**
-  - In `core/infrastructure/plotting/src/plotters_renderer.rs`, create a new private function: `fn render_time_frames(&self, data: &PlotData, config: &RenderConfig) -> Result<Vec<u8>>`.
-  - This function will contain the `plotters`-specific logic for drawing a time frames chart.
+- **1.3. Create `YAxis` Enum (As Previously Designed):**
+  - Create `lifestats-domain/src/plot/axis.rs` with the `YAxis` enum: `Integer { min: i64, max: i64 }` and `Time { min: chrono::NaiveTime, max: chrono::NaiveTime }`.
+  - Implement the `YAxis::from_data_points` factory function. **Crucially, this function will now `match` on the `DrawableData` enum inside each `DataPoint`**, which is much safer and cleaner than parsing JSON.
+  - Add `pub y_axis: YAxis` to the `PlotData` struct.
 
-- **1.2: Adapt the archived rendering logic:**
-  - Copy the logic from `archive/domain/infrastructure/plotting/src/backends/plotters/time_frames_plot.rs`.
-  - **Refactor the function to work with the new `PlotData` struct:**
-    - The function will receive `&PlotData` instead of a long list of individual arguments (`title`, `data`, `x_min`, etc.). All necessary information is now on `data`.
-    - The `data.points` vector contains `serde_json::Value`. You will need to deserialize the `value` field of each `DataPoint` into a `TimeFrameList` (e.g., `serde_json::from_value::<TimeFrameList>(point.value.clone())?`).
-    - The `archive` code has a helper, `calculate_y_axis_bounds`, that determines the min/max `NaiveTime`. Adapt this to work with the `Vec<DataPoint>` from `PlotData`.
-    - All helper functions from `archive/.../plotters/common.rs` (like `get_bar`, `get_horizontal_line`, `get_border`) should be moved into a new `core/infrastructure/plotting/src/common.rs` module if they haven't been already, and used here.
+## Phase 2: Implement Business Logic in the Application Layer (`lifestats-application`)
 
-- **1.3: Handle `PlotType` in the `render` method:**
-  - In the main `render` method of the `PlottersRenderer` implementation, update the `match` statement to call your new `render_time_frames` function when `data.plot_type` is `PlotType::TimeFrames`.
-  - Remove the temporary `Err(anyhow!(...))` placeholder for this plot type.
+The `PlottingService` will now be responsible for interpreting raw data, calculating colors, and preparing the type-safe `PlotData` object.
 
-- **1.4: Add a Unit Test for the Renderer:**
-  - In `plotters_renderer.rs`, add a new test function, `test_render_time_frames_plot`.
-  - Inside the test:
-    1.  Create a sample `PlotData` instance with `plot_type: PlotType::TimeFrames`.
-    2.  Populate `data.points` with `DataPoint`s where the `value` field is a `serde_json::Value` representation of a `TimeFrameList`.
-    3.  Instantiate `PlottersRenderer` and call its `render` method with the test data.
-    4.  Assert that the result is `Ok` and that the returned `Vec<u8>` is a valid PNG (e.g., by checking the first few bytes for the PNG signature: `&[0x89, 0x50, 0x4E, 0x47]`).
+- **2.1. Create a Color Mapping Helper:**
+  - In a new module within `lifestats-application`, create a helper function `fn percentage_to_color(percentage: Percentage) -> [u8; 3]` that maps goal achievement percentages to RGB color tuples (e.g., >=100% is green, <90% is red).
 
-## Phase 2: Verify End-to-End Integration
+- **2.2. Heavily Refactor `PlottingService::get_plot_data`:**
+  - This method has a new, critical responsibility.
+  - **Logic:**
+    1.  Load `plot_spec`, `log_values`, and `goals` as before.
+    2.  Load the `AnyStatistic` metadata using the `statistic_repository.find_metadata_by_id`. This is essential for accessing domain logic.
+    3.  Iterate through the `log_values` to create the `points: Vec<DataPoint>`. For each log entry:
+        a. **Convert `serde_json::Value` to `DrawableData`:** Use a `match plot_spec.plot_type` to safely deserialize the JSON `value` into the correct `DrawableData` variant (e.g., `DrawableData::Integer` or `DrawableData::TimeFrames`). If deserialization fails, return an `Err`. **This eliminates the silent failure.**
+        b. **Calculate Color:** Use the loaded `AnyStatistic`, the `log_value`, and the corresponding `goal` to call the domain's goal achievement logic (e.g., `any_stat.get_percentage_achieved(...)`).
+        c. Pass the resulting percentage to your new `percentage_to_color` helper.
+        d. Instantiate `DataPoint` with the type-safe `DrawableData` and the calculated `color`.
+    4.  After building the `points` vector, call `YAxis::from_data_points(&points, plot_spec.plot_type)?` to get the axis configuration.
+    5.  Construct and return the final, fully-prepared `PlotData` object.
 
-Once the rendering component is complete, ensure it can be correctly invoked through the application.
+## Phase 3: Simplify the Infrastructure Adapter (`plotting`)
 
-- **2.1: Create a `PlotSpecification` for a `TimeFrames` plot:**
-  - This can be done via a database seed, a temporary test, or by creating a new `PlotSpecification` in an existing end-to-end test.
-  - Ensure the `plot_type` is set to `PlotType::TimeFrames`.
-  - Ensure the `statistic_id` points to a statistic that logs `TimeFrameList` data (e.g., "Study Time").
+The renderer's role is now much simpler: it receives fully processed data and just needs to draw it.
 
-- **2.2: Test the Web API Endpoint:**
-  - Run the `web-api`.
-  - Make a `GET` request to the `/plots/{id}/image` endpoint, where `{id}` is the ID of the `TimeFrames` plot specification you created.
-  - Verify that the server returns a `200 OK` status and a `Content-Type: image/png` header.
-  - Save the response body to a file (e.g., `output.png`) and confirm that it is a valid, rendered image of the time frames plot.
+- **3.1. Refactor `render_time_frames`:**
+  - In `plotting/src/plotters_renderer.rs`, find the `render_time_frames` function.
+  - **Remove all `serde_json::from_value` calls.** The `point.value` is now a `DrawableData` enum.
+  - Use a `match` on `point.value` to get the `TimeFrameList`. If it's not the `TimeFrames` variant, this indicates a logic error upstream, and you should return an `Err`.
+  - Use the `point.color` field to color the bars instead of a hardcoded color like `BLUE`.
+  - Use the pre-calculated `data.y_axis` for the chart's Y-range.
+
+- **3.2. Refactor `render_bar_chart`, `render_line_chart`, `render_scatter`:**
+  - Apply the same pattern:
+    1.  Remove hardcoded axis ranges and use `data.y_axis`.
+    2.  Remove any data parsing. `match` on `point.value` to get the `i64` from `DrawableData::Integer`.
+    3.  Use `point.color` to set the color for bars, circles, etc.

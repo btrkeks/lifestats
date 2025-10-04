@@ -43,8 +43,8 @@ where
         .start_date
         .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
         .unwrap_or_else(|| {
-            // Default to last 30 days
-            chrono::Local::now().date_naive() - chrono::Duration::days(30)
+            // Default to last 14 days
+            chrono::Local::now().date_naive() - chrono::Duration::days(14)
         });
 
     let end = params
