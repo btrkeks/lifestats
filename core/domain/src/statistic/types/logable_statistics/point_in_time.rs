@@ -4,7 +4,7 @@ use crate::statistic::value_objects::goals::finished_in_time_goal::FinishedInTim
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use crate::statistic::value_objects::update_policies::fixed_value::FixedValueUpdatePolicy;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveTime};
 
 /// A statistic that represents a point in time
 ///
@@ -23,7 +23,7 @@ pub struct PointInTimeStatistic {
 }
 
 impl Statistic for PointInTimeStatistic {
-    type LogValueType = NaiveDateTime;
+    type LogValueType = NaiveTime;
     type GoalType = FinishedInTimeGoal;
 
     fn get_metadata(&self) -> &StatisticMetadata {
@@ -72,10 +72,10 @@ impl PointInTimeStatistic {
 
     pub fn calculate_new_log_value(
         &self,
-        current_value: Option<NaiveDateTime>,
-        new_value: NaiveDateTime,
+        current_value: Option<NaiveTime>,
+        new_value: NaiveTime,
         update_policy: FixedValueUpdatePolicy,
-    ) -> (NaiveDateTime, bool) {
+    ) -> (NaiveTime, bool) {
         <Self as LogableStatistic>::calculate_new_log_value(
             self,
             current_value,

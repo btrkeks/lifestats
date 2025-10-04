@@ -15,7 +15,7 @@ use crate::statistic::value_objects::goals::goal_trait::Goal;
 use crate::statistic::value_objects::goals::habit_goal::HabitGoal;
 use crate::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveTime};
 use std::any::{type_name, Any};
 use std::collections::HashMap;
 
@@ -157,7 +157,7 @@ impl AnyStatistic {
                 evaluate_streak_for_day_inner::<i64, AmountGoal<i64>>(metadata, log_value, goal)
             }
             AnyStatistic::PointInTime(_) => evaluate_streak_for_day_inner::<
-                NaiveDateTime,
+                NaiveTime,
                 FinishedInTimeGoal,
             >(metadata, log_value, goal),
             AnyStatistic::TimeSpans(_) => evaluate_streak_for_day_inner::<
@@ -316,7 +316,7 @@ impl AnyStatistic {
                 Ok((json, changed))
             }
             AnyStatistic::PointInTime(s) => {
-                let current: Option<NaiveDateTime> = current_value_json
+                let current: Option<NaiveTime> = current_value_json
                     .map(serde_json::from_value)
                     .transpose()
                     .map_err(|e| {
@@ -442,10 +442,7 @@ impl AnyStatistic {
                         StatisticError::InvalidValue(format!("Invalid deadline: {}", e))
                     })?;
 
-                // Combine with today's date to create a NaiveDateTime
-                let deadline = chrono::Local::now().date_naive().and_time(deadline_time);
-
-                let goal = FinishedInTimeGoal::new(deadline);
+                let goal = FinishedInTimeGoal::new(deadline_time);
                 Ok(serde_json::to_value(goal).map_err(|e| {
                     StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
                 })?)
@@ -562,10 +559,7 @@ impl AnyStatistic {
                         StatisticError::InvalidValue(format!("Invalid deadline: {}", e))
                     })?;
 
-                // Combine with today's date to create a NaiveDateTime
-                let deadline = chrono::Local::now().date_naive().and_time(deadline_time);
-
-                let goal = FinishedInTimeGoal::new(deadline);
+                let goal = FinishedInTimeGoal::new(deadline_time);
                 s.set_new_default_goal(goal.clone(), start_date)?;
                 Ok(serde_json::to_value(goal).map_err(|e| {
                     StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
@@ -955,34 +949,32 @@ mod tests {
     fn test_log_value_point_in_time() {
         let stat = point_in_time_stat();
 
-        // Test case 1: Setting a timestamp with no existing value
-        let timestamp = "2024-01-15T09:30:00";
+        // Test case 1: Setting a time with no existing value
+        let time = "09:30:00";
         let (_new_value, changed) = stat
-            .calculate_new_log_value_from_primitives(None, timestamp, None)
+            .calculate_new_log_value_from_primitives(None, time, None)
             .unwrap();
         assert!(changed);
 
-        // Test case 2: Explicitly overwriting existing timestamp with different value
-        let current_value = serde_json::to_value("2024-01-15T08:00:00").unwrap();
+        // Test case 2: Explicitly overwriting existing time with different value
+        let current_value =
+            serde_json::to_value(NaiveTime::from_hms_opt(8, 0, 0).unwrap()).unwrap();
         let (_new_value, changed) = stat
-            .calculate_new_log_value_from_primitives(
-                Some(current_value),
-                timestamp,
-                Some("overwrite"),
-            )
+            .calculate_new_log_value_from_primitives(Some(current_value), time, Some("overwrite"))
             .unwrap();
         assert!(changed);
 
         // Test case 3: Using default (ignore) policy with existing value
-        let current_value = serde_json::to_value("2024-01-15T08:00:00").unwrap();
+        let current_value =
+            serde_json::to_value(NaiveTime::from_hms_opt(8, 0, 0).unwrap()).unwrap();
         let (new_value, changed) = stat
-            .calculate_new_log_value_from_primitives(Some(current_value.clone()), timestamp, None)
+            .calculate_new_log_value_from_primitives(Some(current_value.clone()), time, None)
             .unwrap();
         assert!(!changed); // Default is ignore, so existing value is kept
         assert_eq!(new_value, current_value);
 
-        // Test case 4: Invalid timestamp format
-        let result = stat.calculate_new_log_value_from_primitives(None, "not-a-timestamp", None);
+        // Test case 4: Invalid time format
+        let result = stat.calculate_new_log_value_from_primitives(None, "not-a-time", None);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),

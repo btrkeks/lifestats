@@ -43,9 +43,7 @@ pub struct GoalDataRaw {
     pub statistic_id: i32,
     pub date: String,
     #[diesel(treat_none_as_null = true)]
-    pub target_value: Option<String>,
-    #[diesel(treat_none_as_null = true)]
-    pub extra_data1: Option<String>,
+    pub goal: Option<String>,
 }
 
 impl GoalDataRaw {
@@ -66,8 +64,7 @@ impl GoalDataRaw {
         Ok(Self {
             statistic_id: statistic_id.0 as i32,
             date: date.to_string(),
-            target_value: serialized_goal,
-            extra_data1: None,
+            goal: serialized_goal,
         })
     }
 
@@ -75,7 +72,7 @@ impl GoalDataRaw {
     where
         G: DeserializeOwned,
     {
-        match self.target_value {
+        match self.goal {
             Some(value) => {
                 let goal = serde_json::from_str(&value).with_context(|| {
                     format!(

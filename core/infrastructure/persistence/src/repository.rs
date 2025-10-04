@@ -174,18 +174,14 @@ impl StatisticRepository for SqliteStatisticRepository {
             .context("failed to fetch goal")?;
 
         match row {
-            Some(raw) => {
-                if let Some(target_value) = raw.target_value {
-                    let mut map = serde_json::Map::new();
-                    map.insert("target".to_string(), serde_json::from_str(&target_value)?);
-                    if let Some(extra) = raw.extra_data1 {
-                        map.insert("extra_data1".to_string(), serde_json::Value::String(extra));
-                    }
-                    Ok(Some(serde_json::Value::Object(map)))
-                } else {
-                    Ok(None)
+            Some(raw) => match raw.goal {
+                Some(goal_str) => {
+                    let goal = serde_json::from_str(&goal_str)
+                        .with_context(|| format!("failed to parse goal JSON: {}", goal_str))?;
+                    Ok(Some(goal))
                 }
-            }
+                None => Ok(None),
+            },
             None => Ok(None),
         }
     }
@@ -199,26 +195,13 @@ impl StatisticRepository for SqliteStatisticRepository {
         let mut conn = self.connection()?;
 
         if let Some(goal_value) = goal {
-            let (target_value, extra_data1) = if let serde_json::Value::Object(map) = &goal_value {
-                let target = map
-                    .get("target")
-                    .ok_or_else(|| anyhow::anyhow!("goal JSON missing 'target' field"))?;
-                let target_str = serde_json::to_string(target)?;
-                let extra = map
-                    .get("extra_data1")
-                    .and_then(|v| v.as_str())
-                    .map(String::from);
-                (target_str, extra)
-            } else {
-                // If it's not an object, serialize the whole thing as target
-                (serde_json::to_string(&goal_value)?, None)
-            };
+            let goal_str =
+                serde_json::to_string(&goal_value).context("failed to serialize goal to JSON")?;
 
             let record = GoalDataRaw {
                 statistic_id: id.0 as i32,
                 date: date.to_string(),
-                target_value: Some(target_value),
-                extra_data1,
+                goal: Some(goal_str),
             };
 
             diesel::insert_into(goals::table)
@@ -257,17 +240,14 @@ impl StatisticRepository for SqliteStatisticRepository {
 
         let mut result = Vec::new();
         for row in rows {
-            if let Some(target_value) = row.target_value {
+            if let Some(goal_str) = row.goal {
                 let date = row
                     .date
                     .parse::<NaiveDate>()
                     .with_context(|| format!("failed to parse date: {}", row.date))?;
-                let mut map = serde_json::Map::new();
-                map.insert("target".to_string(), serde_json::from_str(&target_value)?);
-                if let Some(extra) = row.extra_data1 {
-                    map.insert("extra_data1".to_string(), serde_json::Value::String(extra));
-                }
-                result.push(DatedValue::new(date, serde_json::Value::Object(map)));
+                let goal = serde_json::from_str(&goal_str)
+                    .with_context(|| format!("failed to parse goal JSON: {}", goal_str))?;
+                result.push(DatedValue::new(date, goal));
             }
         }
         Ok(result)

@@ -48,6 +48,13 @@ async fn main() -> Result<()> {
     // Create database connection pool
     let pool = get_database_pool();
 
+    // Log which database we're using
+    if let Ok(database_url) = std::env::var("DATABASE_URL") {
+        tracing::info!("Using database: {}", database_url);
+    } else {
+        tracing::warn!("DATABASE_URL not set");
+    }
+
     // Instantiate concrete adapters
     let repo = Arc::new(SqliteStatisticRepository::new(pool));
     let publisher = Arc::new(NoOpEventPublisher);

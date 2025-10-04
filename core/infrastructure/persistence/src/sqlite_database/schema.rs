@@ -11,8 +11,7 @@ diesel::table! {
     goals (statistic_id, date) {
         statistic_id -> Integer,
         date -> Text,
-        target_value -> Nullable<Text>,
-        extra_data1 -> Nullable<Text>,
+        goal -> Nullable<Text>,
     }
 }
 

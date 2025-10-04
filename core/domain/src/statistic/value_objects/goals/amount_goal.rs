@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AmountGoal<T: Default + Clone + Into<i64> + Copy> {
     target_amount: T,
-    is_good: bool,
+    is_at_least: bool,
 }
 
 impl<T: Default + Into<i64> + Copy> AmountGoal<T> {
     pub fn new(target_amount: T, is_good: bool) -> Self {
         Self {
             target_amount,
-            is_good,
+            is_at_least: is_good,
         }
     }
 
@@ -21,7 +21,7 @@ impl<T: Default + Into<i64> + Copy> AmountGoal<T> {
     }
 
     pub fn is_at_least(&self) -> bool {
-        self.is_good
+        self.is_at_least
     }
 }
 
@@ -38,7 +38,7 @@ where
         let target_u64: i64 = self.target_amount.into();
         let value_u64: i64 = (*value).into();
 
-        let perc = if self.is_good {
+        let perc = if self.is_at_least {
             if target_u64 == 0 {
                 100
             } else {
