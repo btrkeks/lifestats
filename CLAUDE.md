@@ -72,7 +72,9 @@ client/                  # HTTP client (in progress)
 ## Domain Model: Two Kinds of Statistics
 
 ### SourceStatistic (Logable)
+
 Statistics that accept logged values directly:
+
 - `TimeSpans` - tracks time ranges
 - `IntegerAmount` - numeric counts
 - `Habit` - boolean occurrences
@@ -81,7 +83,9 @@ Statistics that accept logged values directly:
 Each implements the `Logable` trait with pure methods like `calculate_new_log_value`.
 
 ### DerivedStatistic (Computable)
+
 Computed views over source statistics. **You cannot log to these directly.**
+
 - `SummingStatistic` - aggregates multiple TimeSpans
 - `TimeDifference` - computes delta between PointInTime stats
 
@@ -118,6 +122,7 @@ The `refactor` branch is bringing the architecture up to production quality. The
 ## Testing Strategy
 
 ### Unit Tests (`core/domain`)
+
 Test pure business logic with zero I/O or mocking:
 
 ```rust
@@ -132,11 +137,24 @@ fn test_calculate_new_log_value() {
 ```
 
 ### Integration Tests (`core/application`)
+
 Test use cases with mock repository implementations (use `mockall` if available or manual test doubles).
+
+### Database Compatibility Tests
+
+The project includes backward compatibility tests to ensure new code can read data from older database schemas. This is critical for migrations and schema evolution.
+
+**Running the test:**
+
+```bash
+# Using just
+just test-db-compat
+```
 
 ## Adding New Functionality
 
 ### Adding a New Logger/Interface
+
 1. Create a new crate in `interfaces/` (if it existed, though current workspace has `client/` instead)
 2. Add dependencies on `lifestats-application` and `lifestats-domain`
 3. Add concrete adapter dependencies (e.g., `persistence`)
@@ -149,6 +167,7 @@ Test use cases with mock repository implementations (use `mockall` if available 
 See `docs/ARCHITECTURE.md` lines 185-235 for detailed example.
 
 ### Adding a New Statistic Type
+
 1. Add type to `core/domain/src/statistic/types/logable_statistics/` or `derived_statistics/`
 2. Implement `Logable` or `Computable` trait
 3. Update `AnyStatistic` enum if needed

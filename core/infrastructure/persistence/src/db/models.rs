@@ -109,38 +109,5 @@ impl GoalDataRaw {
 #[diesel(table_name = crate::db::schema::default_goals)]
 pub struct DefaultGoalRaw {
     pub statistic_id: i32,
-    pub target_value: String,
-    pub extra_data1: Option<String>,
-}
-
-impl DefaultGoalRaw {
-    pub fn into_goal<G>(self) -> Result<G>
-    where
-        G: DeserializeOwned,
-    {
-        serde_json::from_str(&self.target_value).with_context(|| {
-            format!(
-                "Failed to parse default goal '{}' for statistic_id {}",
-                self.target_value, self.statistic_id
-            )
-        })
-    }
-
-    pub fn from_goal<G>(statistic_id: StatisticId, goal: G, start_date: NaiveDate) -> Result<Self>
-    where
-        G: Serialize,
-    {
-        let target_value = serde_json::to_string(&goal).with_context(|| {
-            format!(
-                "Failed to serialize default goal for statistic_id {}",
-                statistic_id.0
-            )
-        })?;
-
-        Ok(Self {
-            statistic_id: statistic_id.0 as i32,
-            target_value,
-            extra_data1: Some(start_date.to_string()),
-        })
-    }
+    pub goal: String, // The single JSON blob
 }

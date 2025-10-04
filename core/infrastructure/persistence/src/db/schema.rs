@@ -3,8 +3,7 @@
 diesel::table! {
     default_goals (statistic_id) {
         statistic_id -> Integer,
-        target_value -> Text,
-        extra_data1 -> Nullable<Text>,
+        goal -> Text,
     }
 }
 

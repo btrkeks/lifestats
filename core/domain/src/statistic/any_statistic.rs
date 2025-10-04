@@ -414,7 +414,7 @@ impl AnyStatistic {
                     })?
                     .unwrap_or(true);
 
-                let goal = AmountGoal::new(target, is_at_least);
+                let goal: AmountGoal<i64> = AmountGoal::new(target, is_at_least);
                 Ok(serde_json::to_value(goal).map_err(|e| {
                     StatisticError::InvalidValue(format!("Failed to serialize goal: {}", e))
                 })?)

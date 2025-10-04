@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use diesel::backend::Backend;
 use diesel::deserialize::FromSql;
@@ -142,19 +142,22 @@ impl StatisticDto {
 }
 
 fn parse_default_goal<G>(
-    default_goal: Option<DefaultGoalRaw>,
-    // This parameter is no longer the primary source, but a fallback.
-    fallback_start: NaiveDate,
+    default_goal_raw: Option<DefaultGoalRaw>,
+    start_date: NaiveDate,
 ) -> Result<(Option<G>, NaiveDate)>
 where
     G: serde::de::DeserializeOwned,
 {
-    if let Some(raw) = default_goal {
-        // The old, buggy `raw.start_date()` call is GONE.
-        let goal = raw.into_goal::<G>()?;
-        Ok((Some(goal), fallback_start)) // Just pass the date through.
+    if let Some(raw) = default_goal_raw {
+        let goal = serde_json::from_str(&raw.goal).with_context(|| {
+            format!(
+                "Failed to parse default goal '{}' for statistic_id {}",
+                raw.goal, raw.statistic_id
+            )
+        })?;
+        Ok((Some(goal), start_date))
     } else {
-        Ok((None, fallback_start))
+        Ok((None, start_date))
     }
 }
 

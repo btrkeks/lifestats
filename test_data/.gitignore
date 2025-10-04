@@ -1,0 +1,6 @@
+# Prevent database snapshots from being committed to version control
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal

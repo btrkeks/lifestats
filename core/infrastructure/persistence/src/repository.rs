@@ -279,15 +279,13 @@ impl StatisticRepository for SqliteStatisticRepository {
 
         match row {
             Some(raw) => {
-                let mut map = serde_json::Map::new();
-                map.insert(
-                    "target".to_string(),
-                    serde_json::from_str(&raw.target_value)?,
-                );
-                if let Some(extra) = raw.extra_data1 {
-                    map.insert("extra_data1".to_string(), serde_json::Value::String(extra));
-                }
-                Ok(Some(serde_json::Value::Object(map)))
+                let goal = serde_json::from_str(&raw.goal).with_context(|| {
+                    format!(
+                        "Failed to parse default goal '{}' for statistic_id {}",
+                        raw.goal, raw.statistic_id
+                    )
+                })?;
+                Ok(Some(goal))
             }
             None => Ok(None),
         }
@@ -295,38 +293,20 @@ impl StatisticRepository for SqliteStatisticRepository {
 
     fn save_default_goal(&self, id: StatisticId, goal: serde_json::Value) -> Result<()> {
         let mut conn = self.connection()?;
-
-        let (target_value, extra_data1) = if let serde_json::Value::Object(map) = &goal {
-            let target = map
-                .get("target")
-                .ok_or_else(|| anyhow::anyhow!("goal JSON missing 'target' field"))?;
-            let target_str = serde_json::to_string(target)?;
-            let extra = map
-                .get("extra_data1")
-                .and_then(|v| v.as_str())
-                .map(String::from);
-            (target_str, extra)
-        } else {
-            // If it's not an object, serialize the whole thing as target
-            (serde_json::to_string(&goal)?, None)
-        };
+        let serialized_goal = serde_json::to_string(&goal)?;
 
         let record = DefaultGoalRaw {
             statistic_id: id.0 as i32,
-            target_value,
-            extra_data1,
+            goal: serialized_goal,
         };
 
         diesel::insert_into(default_goals::table)
             .values(&record)
             .on_conflict(default_goals::statistic_id)
             .do_update()
-            .set((
-                default_goals::target_value.eq(&record.target_value),
-                default_goals::extra_data1.eq(&record.extra_data1),
-            ))
+            .set(default_goals::goal.eq(&record.goal))
             .execute(&mut conn)
-            .context("failed to upsert JSON default goal")?;
+            .context("failed to upsert default goal")?;
 
         Ok(())
     }
