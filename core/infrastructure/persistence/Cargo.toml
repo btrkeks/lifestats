@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 testing = []
+db-compat-test = []
 
 [dependencies]
 # Internal: Domain only (implements its repository traits)

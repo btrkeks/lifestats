@@ -28,7 +28,10 @@
   },
 
   // --- Testing UX ---
-  "rust-analyzer.runnables.extraArgs": ["--nocapture"],
+  "rust-analyzer.runnables.extraEnv": {
+    "COMPAT_DB_URL": "/home/daniel/.config/lifestats/test-data/lifestats-compat-test.sqlite"
+  },
+  "rust-analyzer.cargo.features": ["db-compat-test"],
   "testExplorer.codeLens": true,
 
   // --- Formatting ---
