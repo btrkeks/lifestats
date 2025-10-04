@@ -1,0 +1,19 @@
+[package]
+name = "plotting"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Internal dependencies
+lifestats-domain = { path = "../../domain" }
+
+# External dependencies
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+
+# Plotting and rendering libraries
+plotters = "0.3"
+image = "0.25"
+ab_glyph = "0.2"
+imageproc = "0.25"

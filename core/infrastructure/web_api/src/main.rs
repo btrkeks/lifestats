@@ -9,10 +9,12 @@ use anyhow::Result;
 use events::event_port::{Event, EventPublisher};
 use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, logging_service::LoggingService,
-    statistic_query_service::StatisticQueryService,
+    plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
 };
 use lifestats_persistence::pool::get_database_pool;
 use lifestats_persistence::repository::SqliteStatisticRepository;
+use lifestats_persistence::SqlitePlotRepository;
+use plotting::PlottersRenderer;
 use state::AppState;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
@@ -56,7 +58,9 @@ async fn main() -> Result<()> {
     }
 
     // Instantiate concrete adapters
-    let repo = Arc::new(SqliteStatisticRepository::new(pool));
+    let repo = Arc::new(SqliteStatisticRepository::new(Arc::clone(&pool)));
+    let plot_repo = Arc::new(SqlitePlotRepository::new(Arc::clone(&pool)));
+    let renderer = Arc::new(PlottersRenderer::new());
     let publisher = Arc::new(NoOpEventPublisher);
 
     // Instantiate application services
@@ -69,9 +73,19 @@ async fn main() -> Result<()> {
         Arc::clone(&publisher),
     ));
     let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&repo)));
+    let plotting_service = Arc::new(PlottingService::new(
+        Arc::clone(&repo),
+        Arc::clone(&plot_repo),
+        Arc::clone(&renderer),
+    ));
 
     // Create shared application state
-    let app_state = AppState::new(logging_service, goal_service, query_service);
+    let app_state = AppState::new(
+        logging_service,
+        goal_service,
+        query_service,
+        plotting_service,
+    );
 
     // Build the router with all routes
     let app = routes::create_router(app_state)

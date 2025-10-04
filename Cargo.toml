@@ -5,6 +5,7 @@ members = [
     "core/domain",
     "core/application",
     "core/infrastructure/persistence",
+    "core/infrastructure/plotting",
     "core/infrastructure/web_api",
     "client"
 ]

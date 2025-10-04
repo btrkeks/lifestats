@@ -1,163 +1,52 @@
-# TODO: Refactor for Polymorphic Application Services
+# `TODO.md`: Implement TimeFrames Plot Rendering
 
-**Objective:** Decouple the application services from concrete domain types (`TimeSpansGoal`, `TimeFrameList`, etc.). This will make the services truly polymorphic, allowing them to orchestrate any type of statistic without modification. This is a foundational step to improve maintainability and adhere to the Open/Closed Principle.
+This document outlines the tasks required to implement the rendering logic for the `TimeFrames` plot type within the new plotting architecture. We will adapt the existing logic from the `archive` directory.
 
-**Guiding Principle:** Dependencies must always point inward. The `application` layer should depend on the `domain` layer's abstractions, not its concrete implementations. Adapters will be responsible for converting their specific data formats into primitive types that the application services can handle.
+## Guiding Principles
 
----
+- **Domain Purity:** The `lifestats-domain` crate must remain completely free of any `plotters`-specific code or types.
+- **Adapter Responsibility:** All rendering logic, including coordinate calculations, color conversions, and drawing, belongs in the `plotting` adapter crate.
+- **Data Flow:** The `PlottingService` provides the renderer with pure `PlotData`. The renderer's job is to translate this data into a visual representation.
 
-## Phase 1: Redefine the Repository Port for Polymorphism
+## Phase 1: Implement `TimeFrames` Rendering in the `plotting` Adapter
 
-Our current `StatisticRepository` port is too generic (`find_log_value<V>`), which forces the application layer to know concrete types. We will refactor it to handle serialized data (`String` or `serde_json::Value`), moving the responsibility of type-safety into the domain and the persistence adapter.
+The primary task is to create a new rendering function within the `PlottersRenderer` and wire it up.
 
-- **1. Modify Port Definition (`lifestats-domain/src/statistic/ports/statistic_repository.rs`):**
-  - **Action:** Replace the generic methods for logs and goals with methods that operate on `serde_json::Value`.
-  - **Rationale:** This change makes the repository's contract explicit: it is a mechanism for storing and retrieving type-erased JSON data. The application layer no longer needs to know the specific `LogValueType` or `GoalType`.
+- **1.1: Create a new rendering function in `plotters_renderer.rs`:**
+  - In `core/infrastructure/plotting/src/plotters_renderer.rs`, create a new private function: `fn render_time_frames(&self, data: &PlotData, config: &RenderConfig) -> Result<Vec<u8>>`.
+  - This function will contain the `plotters`-specific logic for drawing a time frames chart.
 
-  ```rust
-  // BEFORE:
-  // fn find_log_value<V>(&self, ...) -> Result<Option<V>> where V: serde::de::DeserializeOwned + 'static;
-  // fn save_log_value<V>(&self, ..., value: V) -> Result<()> where V: serde::Serialize + 'static;
-  // (and similar for goals)
+- **1.2: Adapt the archived rendering logic:**
+  - Copy the logic from `archive/domain/infrastructure/plotting/src/backends/plotters/time_frames_plot.rs`.
+  - **Refactor the function to work with the new `PlotData` struct:**
+    - The function will receive `&PlotData` instead of a long list of individual arguments (`title`, `data`, `x_min`, etc.). All necessary information is now on `data`.
+    - The `data.points` vector contains `serde_json::Value`. You will need to deserialize the `value` field of each `DataPoint` into a `TimeFrameList` (e.g., `serde_json::from_value::<TimeFrameList>(point.value.clone())?`).
+    - The `archive` code has a helper, `calculate_y_axis_bounds`, that determines the min/max `NaiveTime`. Adapt this to work with the `Vec<DataPoint>` from `PlotData`.
+    - All helper functions from `archive/.../plotters/common.rs` (like `get_bar`, `get_horizontal_line`, `get_border`) should be moved into a new `core/infrastructure/plotting/src/common.rs` module if they haven't been already, and used here.
 
-  // AFTER:
-  fn find_log_value_json(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>>;
-  fn save_log_value_json(&self, id: StatisticId, date: NaiveDate, value: serde_json::Value) -> Result<()>;
-  fn find_goal_json(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>>;
-  fn save_goal_json(&self, id: StatisticId, date: NaiveDate, goal: Option<serde_json::Value>) -> Result<()>;
-  fn find_default_goal_json(&self, id: StatisticId) -> Result<Option<serde_json::Value>>;
-  fn save_default_goal_json(&self, id: StatisticId, goal: serde_json::Value) -> Result<()>;
-  // Note: The `*_in_range` methods should also be updated to return `Vec<DatedValue<serde_json::Value>>`.
-  ```
+- **1.3: Handle `PlotType` in the `render` method:**
+  - In the main `render` method of the `PlottersRenderer` implementation, update the `match` statement to call your new `render_time_frames` function when `data.plot_type` is `PlotType::TimeFrames`.
+  - Remove the temporary `Err(anyhow!(...))` placeholder for this plot type.
 
-- **2. Update Adapter Implementation (`lifestats-persistence/src/statistics_repository.rs`):**
-  - **Action:** Implement the new `*_json` methods. The internal logic will remain similar but will now work directly with serialized strings from the database, converting them to `serde_json::Value`.
-  - **Rationale:** The persistence adapter's job is to translate between the database format (serialized strings) and the port's required format (`serde_json::Value`).
+- **1.4: Add a Unit Test for the Renderer:**
+  - In `plotters_renderer.rs`, add a new test function, `test_render_time_frames_plot`.
+  - Inside the test:
+    1.  Create a sample `PlotData` instance with `plot_type: PlotType::TimeFrames`.
+    2.  Populate `data.points` with `DataPoint`s where the `value` field is a `serde_json::Value` representation of a `TimeFrameList`.
+    3.  Instantiate `PlottersRenderer` and call its `render` method with the test data.
+    4.  Assert that the result is `Ok` and that the returned `Vec<u8>` is a valid PNG (e.g., by checking the first few bytes for the PNG signature: `&[0x89, 0x50, 0x4E, 0x47]`).
 
-  ```rust
-  // Example for `find_log_value_json`:
-  // 1. Fetch the `LoggingDataRaw` from the database.
-  // 2. If a row is found, parse its `value: String` into a `serde_json::Value`.
-  //    - `serde_json::from_str(&raw.value)?`
-  // 3. Return `Ok(Some(json_value))` or `Ok(None)`.
+## Phase 2: Verify End-to-End Integration
 
-  // Example for `save_log_value_json`:
-  // 1. Serialize the incoming `serde_json::Value` to a `String`.
-  //    - `serde_json::to_string(&value)?`
-  // 2. Create a `LoggingDataRaw` instance with the string.
-  // 3. Perform the Diesel upsert operation.
-  ```
+Once the rendering component is complete, ensure it can be correctly invoked through the application.
 
-## Phase 2: Empower the Domain with Polymorphic Logic
+- **2.1: Create a `PlotSpecification` for a `TimeFrames` plot:**
+  - This can be done via a database seed, a temporary test, or by creating a new `PlotSpecification` in an existing end-to-end test.
+  - Ensure the `plot_type` is set to `PlotType::TimeFrames`.
+  - Ensure the `statistic_id` points to a statistic that logs `TimeFrameList` data (e.g., "Study Time").
 
-Now, we will add methods to `AnyStatistic` that allow the application layer to "tell" it to perform an action using primitive types, without needing to "ask" for its concrete type.
-
-- **1. Create Polymorphic Logging Method (`lifestats-domain/src/statistic/any_statistic.rs`):**
-  - **Action:** Add a new method `calculate_new_log_value_from_primitives` to `AnyStatistic`. This method will take string slices for the value and policy, perform the necessary downcasting and parsing _inside_ the domain, and return a `serde_json::Value` representing the new state.
-  - **Rationale:** This is the core of the refactor. It moves the responsibility of parsing and type-specific logic from the application layer into the domain, where it belongs. The application layer can now treat every statistic identically.
-
-  ```rust
-  // In `impl AnyStatistic`
-  pub fn calculate_new_log_value_from_primitives(
-      &self,
-      current_value_json: Option<serde_json::Value>,
-      new_value_str: &str,
-      update_policy_str: Option<&str>,
-  ) -> Result<(serde_json::Value, bool)> { // Result is from `anyhow` or your domain error
-      // Use the `dispatch_statistic!` macro to call a helper on the inner statistic.
-      // The helper will:
-      // 1. Deserialize `current_value_json` into its specific `LogValueType`.
-      // 2. Call the existing `calculate_new_log_value_from_str` method.
-      // 3. Serialize the resulting new `LogValueType` back to `serde_json::Value`.
-      // 4. Return `(new_value_json, changed)`.
-  }
-  ```
-
-- **2. Create Polymorphic Goal Management Methods (`lifestats-domain/src/statistic/any_statistic.rs`):**
-  - **Action:** Add `create_goal_from_primitives` and `set_default_goal_from_primitives` methods to `AnyStatistic`. These will accept a `HashMap<String, String>` or similar structure containing the raw goal data.
-  - **Rationale:** Similar to logging, this moves goal creation logic into the domain. The application service no longer needs to know how to construct a `TimeSpansGoal` vs. an `AmountGoal`.
-
-  ```rust
-  // In `impl AnyStatistic`
-  pub fn create_goal_from_primitives(
-      &self,
-      data: &std::collections::HashMap<String, String>,
-  ) -> Result<serde_json::Value> {
-      // Dispatch to an inner helper that knows how to parse the HashMap
-      // for its specific goal type (e.g., "target" and "efficiency" for TimeSpansGoal).
-      // It should construct the concrete goal object and serialize it to JSON.
-  }
-
-  pub fn set_default_goal_from_primitives(
-      &mut self,
-      data: &std::collections::HashMap<String, String>,
-      start_date: NaiveDate,
-  ) -> Result<serde_json::Value> {
-      // Similar to above, but also updates the internal `default_goal` field.
-  }
-  ```
-
-## Phase 3: Refactor the Application Services
-
-With the port and domain updated, we can now simplify the application services to use the new polymorphic interfaces.
-
-- **1. Refactor `LoggingService` (`lifestats-application/src/use_cases/logging_service.rs`):**
-  - **Action:** Replace `log_timeframe_list` with a single, generic method, e.g., `log_value`. This new method will orchestrate the flow using the new polymorphic methods.
-  - **Rationale:** This achieves our primary goal. The `LoggingService` becomes a simple orchestrator, completely unaware of whether it's logging a `TimeFrameList`, an `i64`, or a `bool`.
-
-  ```rust
-  // BEFORE (in LoggingService):
-  // - Checks if statistic is `as_time_spans`.
-  // - Fetches `Option<TimeFrameList>`.
-  // - Calls `calculate_new_log_value` with strong types.
-  // - Saves `TimeFrameList`.
-
-  // AFTER (in a new generic `log_value` method):
-  pub fn log_value(&self, command: LogValueCommand) -> Result<()> {
-      // 1. Fetch the domain entity
-      let statistic = self.statistic_repository.find_metadata_by_id(command.statistic_id)?;
-
-      // 2. Fetch the current value as JSON
-      let current_value_json = self.statistic_repository.find_log_value_json(command.statistic_id, command.date)?;
-
-      // 3. TELL, DON'T ASK: Ask the domain object to calculate its new state from primitives.
-      let (new_value_json, changed) = statistic.calculate_new_log_value_from_primitives(
-          current_value_json,
-          &command.value_str,
-          command.update_policy_str.as_deref(),
-      )?;
-
-      // 4. If changed, save the new JSON state and publish an event.
-      if changed {
-          self.statistic_repository.save_log_value_json(command.statistic_id, command.date, new_value_json)?;
-          self.event_publisher.publish_event_async(Event::ValueUpdated(command.statistic_id));
-      }
-
-      Ok(())
-  }
-  ```
-
-- **2. Refactor `GoalManagementService` (`lifestats-application/src/use_cases/goal_management_service.rs`):**
-  - **Action:** Rewrite the `set_goal_for_date` and `set_default_goal` methods to be generic. They will no longer contain any logic specific to `TimeSpansGoal`.
-  - **Rationale:** This service will now support setting goals for _any_ statistic type without modification, fulfilling the Open/Closed Principle.
-
-  ```rust
-  // Example for `set_goal_for_date`:
-  pub fn set_goal_for_date(&self, command: SetGoalCommand) -> Result<()> {
-      // 1. Fetch the statistic metadata.
-      let statistic = self.statistic_repository.find_metadata_by_id(command.statistic_id)?;
-
-      // 2. Tell the domain object to create a goal from the raw data.
-      let goal_json = statistic.create_goal_from_primitives(&command.goal_data)?;
-
-      // 3. Save the resulting JSON via the repository.
-      self.statistic_repository.save_goal_json(command.statistic_id, command.date, Some(goal_json))?;
-
-      self.event_publisher.publish_event_async(Event::GoalUpdated(command.statistic_id));
-      Ok(())
-  }
-  ```
-
-- **3. Update Driving Adapters:**
-  - **Action:** All driving adapters (CLI, API client, etc.) must be updated to call the new, generic application service methods. The `web_api` client, for example, should send structured JSON rather than formatted strings.
-  - **Rationale:** This completes the end-to-end flow, ensuring the entire system uses the new, robust architecture.
+- **2.2: Test the Web API Endpoint:**
+  - Run the `web-api`.
+  - Make a `GET` request to the `/plots/{id}/image` endpoint, where `{id}` is the ID of the `TimeFrames` plot specification you created.
+  - Verify that the server returns a `200 OK` status and a `Content-Type: image/png` header.
+  - Save the response body to a file (e.g., `output.png`) and confirm that it is a valid, rendered image of the time frames plot.

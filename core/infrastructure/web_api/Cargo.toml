@@ -9,6 +9,7 @@ lifestats-domain = { path = "../../domain" }
 
 # The concrete persistence implementation needed at the composition root
 lifestats-persistence = { path = "../persistence", features = ["testing"] }
+plotting = { path = "../plotting" }
 events = { path = "../../../events/event_impl/" }
 
 # Web Framework
@@ -44,6 +45,9 @@ reqwest = { version = "0.12", features = ["json"] }
 
 # For async testing
 tokio-test = "0.4"
+
+# For mocking
+mockall = "0.13.1"
 
 # Enable testing feature to access mocks
 lifestats-domain = { path = "../../domain", features = ["testing"] }

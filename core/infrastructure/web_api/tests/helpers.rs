@@ -3,14 +3,19 @@ use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
 use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, logging_service::LoggingService,
-    statistic_query_service::StatisticQueryService,
+    plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
 };
-use lifestats_domain::shared::ids::StatisticId;
+use lifestats_domain::plot::data::PlotData;
+use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
+use lifestats_domain::plot::repository::PlotRepository;
+use lifestats_domain::plot::specification::PlotSpecification;
+use lifestats_domain::shared::ids::{PlotId, StatisticId};
 use lifestats_domain::statistic::any_statistic::AnyStatistic;
 use lifestats_domain::statistic::ports::statistic_repository::MockStatisticRepository;
 use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_web_api::state::AppState;
+use mockall::mock;
 use std::sync::Arc;
 
 /// Simple no-op event publisher for testing
@@ -27,12 +32,43 @@ impl EventPublisher for NoOpEventPublisher {
     }
 }
 
+// Mock plot repository and renderer for tests
+mock! {
+    pub PlotRepo {}
+
+    impl Clone for PlotRepo {
+        fn clone(&self) -> Self;
+    }
+
+    impl PlotRepository for PlotRepo {
+        fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>>;
+        fn find_all(&self) -> Result<Vec<PlotSpecification>>;
+        fn find_by_statistic_id(&self, statistic_id: StatisticId) -> Result<Vec<PlotSpecification>>;
+        fn save(&self, plot_spec: &PlotSpecification) -> Result<()>;
+        fn delete(&self, id: PlotId) -> Result<()>;
+    }
+}
+
+mock! {
+    pub PlotRend {}
+
+    impl Clone for PlotRend {
+        fn clone(&self) -> Self;
+    }
+
+    impl PlotRenderer for PlotRend {
+        fn render(&self, data: &PlotData, config: &RenderConfig) -> Result<Vec<u8>>;
+    }
+}
+
 /// Create an AppState with a mock repository for testing
 #[allow(dead_code)]
 pub fn mock_app_state(
     mock_repo: Arc<MockStatisticRepository>,
-) -> AppState<MockStatisticRepository, NoOpEventPublisher> {
+) -> AppState<MockStatisticRepository, MockPlotRepo, MockPlotRend, NoOpEventPublisher> {
     let publisher = Arc::new(NoOpEventPublisher);
+    let plot_repo = Arc::new(MockPlotRepo::new());
+    let renderer = Arc::new(MockPlotRend::new());
 
     let logging_service = Arc::new(LoggingService::new(
         Arc::clone(&mock_repo),
@@ -43,8 +79,18 @@ pub fn mock_app_state(
         Arc::clone(&publisher),
     ));
     let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&mock_repo)));
+    let plotting_service = Arc::new(PlottingService::new(
+        Arc::clone(&mock_repo),
+        plot_repo,
+        renderer,
+    ));
 
-    AppState::new(logging_service, goal_service, query_service)
+    AppState::new(
+        logging_service,
+        goal_service,
+        query_service,
+        plotting_service,
+    )
 }
 
 /// Factory function to create a mock IntegerAmount statistic

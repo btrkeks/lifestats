@@ -66,6 +66,9 @@ where
             .map(|stat| stat.get_metadata().clone())
     }
 
+    // -------------------------------------------------------
+    // TODO: Those don't quite belong here
+
     pub fn get_streak(&self, statistic_id: StatisticId) -> Result<u32> {
         let statistic = self
             .statistic_repository

@@ -7,7 +7,7 @@ use diesel::SqliteConnection;
 use diesel_migrations::MigrationHarness;
 use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, logging_service::LoggingService,
-    statistic_query_service::StatisticQueryService,
+    plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
 };
 use lifestats_domain::shared::ids::StatisticId;
 use lifestats_domain::statistic::any_statistic::AnyStatistic;
@@ -16,8 +16,10 @@ use lifestats_domain::statistic::types::logable_statistics::integer_amount::Inte
 use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_persistence::pool::MIGRATIONS;
 use lifestats_persistence::repository::SqliteStatisticRepository;
+use lifestats_persistence::SqlitePlotRepository;
 use lifestats_web_api::routes::create_router;
 use lifestats_web_api::state::AppState;
+use plotting::PlottersRenderer;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
@@ -69,6 +71,9 @@ async fn test_log_and_get_e2e() -> Result<()> {
     // ========================================================================
 
     let publisher = Arc::new(NoOpEventPublisher);
+    let plot_repo = Arc::new(SqlitePlotRepository::new(Arc::new(pool.clone())));
+    let renderer = Arc::new(PlottersRenderer::new());
+
     let logging_service = Arc::new(LoggingService::new(
         Arc::clone(&repo),
         Arc::clone(&publisher),
@@ -78,8 +83,14 @@ async fn test_log_and_get_e2e() -> Result<()> {
         Arc::clone(&publisher),
     ));
     let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&repo)));
+    let plotting_service = Arc::new(PlottingService::new(Arc::clone(&repo), plot_repo, renderer));
 
-    let app_state = AppState::new(logging_service, goal_service, query_service);
+    let app_state = AppState::new(
+        logging_service,
+        goal_service,
+        query_service,
+        plotting_service,
+    );
 
     // ========================================================================
     // 4. START SERVER: Spawn axum server on a random free port

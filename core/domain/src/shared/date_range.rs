@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 
 /// Represents the closed interval [start, end]
 /// Ensures the invariant start <= end
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct DateRange {
     start: NaiveDate,
     end: NaiveDate,
