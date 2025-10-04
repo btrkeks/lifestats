@@ -46,3 +46,44 @@ impl From<validator::ValidationErrors> for ApiError {
         ApiError::ValidationError(errors.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    #[tokio::test]
+    async fn test_validation_error_response() {
+        let error = ApiError::ValidationError("Invalid input".to_string());
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body_str.contains("Invalid input"));
+        assert!(body_str.contains("error"));
+    }
+
+    #[tokio::test]
+    async fn test_internal_server_error_response() {
+        let error = ApiError::InternalServerError(anyhow::anyhow!("Database connection failed"));
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body_str.contains("Internal server error"));
+        assert!(body_str.contains("error"));
+        // Should NOT leak internal error details
+        assert!(!body_str.contains("Database connection failed"));
+    }
+}

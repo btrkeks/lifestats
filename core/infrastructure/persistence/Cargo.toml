@@ -3,6 +3,9 @@ name = "lifestats-persistence"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+testing = []
+
 [dependencies]
 # Internal: Domain only (implements its repository traits)
 lifestats-domain = { path = "../../domain" }

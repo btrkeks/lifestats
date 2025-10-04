@@ -5,7 +5,7 @@ use crate::statistic::any_statistic::AnyStatistic;
 use anyhow::Result;
 use chrono::NaiveDate;
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 pub trait StatisticRepository {
     // --- Metadata Operations ---
     fn find_metadata_by_id(&self, id: StatisticId) -> Result<AnyStatistic>;

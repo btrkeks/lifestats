@@ -8,7 +8,7 @@ lifestats-application = { path = "../../application" }
 lifestats-domain = { path = "../../domain" }
 
 # The concrete persistence implementation needed at the composition root
-lifestats-persistence = { path = "../persistence" }
+lifestats-persistence = { path = "../persistence", features = ["testing"] }
 events = { path = "../../../events/event_impl/" }
 
 # Web Framework
@@ -36,3 +36,18 @@ dotenvy = "0.15"
 chrono = { workspace = true }
 
 [dev-dependencies]
+# For making in-memory requests to the axum router
+axum-test = "16"
+
+# For HTTP client in E2E tests
+reqwest = { version = "0.12", features = ["json"] }
+
+# For async testing
+tokio-test = "0.4"
+
+# Enable testing feature to access mocks
+lifestats-domain = { path = "../../domain", features = ["testing"] }
+
+# Database tooling for E2E tests
+diesel = { version = "2.0", features = ["sqlite", "chrono", "r2d2"] }
+diesel_migrations = "2.1.0"
