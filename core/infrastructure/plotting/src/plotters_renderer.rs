@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use chrono::Timelike;
 use image::{ImageBuffer, Rgb};
 use lifestats_domain::plot::axis::YAxis;
-use lifestats_domain::plot::data::PlotData;
+use lifestats_domain::plot::data::{DrawableData, PlotData};
 use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
 use lifestats_domain::plot::specification::PlotType;
 use lifestats_domain::shared::time_frame_list::TimeFrameList;
@@ -47,18 +47,17 @@ impl PlottersRenderer {
 
         chart.configure_mesh().draw()?;
 
-        // Draw bars
-        let bar_data: Vec<_> = data
-            .points
-            .iter()
-            .filter_map(|point| point.value.as_f64().map(|v| (point.date, v)))
-            .collect();
-
-        chart.draw_series(
-            bar_data.iter().map(|(date, value)| {
-                Rectangle::new([(*date, 0.0), (*date, *value)], BLUE.filled())
-            }),
-        )?;
+        // Draw bars using DrawableData and pre-calculated colors
+        for point in &data.points {
+            if let DrawableData::Integer(value) = &point.value {
+                let [r, g, b] = point.color;
+                let color = RGBColor(r, g, b);
+                chart.draw_series([Rectangle::new(
+                    [(point.date, 0.0), (point.date, *value as f64)],
+                    color.filled(),
+                )])?;
+            }
+        }
 
         drop(chart);
         drop(root);
@@ -99,21 +98,29 @@ impl PlottersRenderer {
 
         chart.configure_mesh().draw()?;
 
-        // Draw line
+        // Extract line data using DrawableData
         let line_data: Vec<_> = data
             .points
             .iter()
-            .filter_map(|point| point.value.as_f64().map(|v| (point.date, v)))
+            .filter_map(|point| {
+                if let DrawableData::Integer(v) = &point.value {
+                    Some((point.date, *v as f64))
+                } else {
+                    None
+                }
+            })
             .collect();
 
         chart.draw_series(LineSeries::new(line_data.clone(), &BLUE))?;
 
-        // Draw points
-        chart.draw_series(
-            line_data
-                .iter()
-                .map(|(date, value)| Circle::new((*date, *value), 3, BLUE.filled())),
-        )?;
+        // Draw points with pre-calculated colors
+        for point in &data.points {
+            if let DrawableData::Integer(value) = &point.value {
+                let [r, g, b] = point.color;
+                let color = RGBColor(r, g, b);
+                chart.draw_series([Circle::new((point.date, *value as f64), 3, color.filled())])?;
+            }
+        }
 
         drop(chart);
         drop(root);
@@ -154,18 +161,14 @@ impl PlottersRenderer {
 
         chart.configure_mesh().draw()?;
 
-        // Draw scatter points
-        let scatter_data: Vec<_> = data
-            .points
-            .iter()
-            .filter_map(|point| point.value.as_f64().map(|v| (point.date, v)))
-            .collect();
-
-        chart.draw_series(
-            scatter_data
-                .iter()
-                .map(|(date, value)| Circle::new((*date, *value), 5, BLUE.filled())),
-        )?;
+        // Draw scatter points with DrawableData and pre-calculated colors
+        for point in &data.points {
+            if let DrawableData::Integer(value) = &point.value {
+                let [r, g, b] = point.color;
+                let color = RGBColor(r, g, b);
+                chart.draw_series([Circle::new((point.date, *value as f64), 5, color.filled())])?;
+            }
+        }
 
         drop(chart);
         drop(root);
@@ -235,19 +238,22 @@ impl PlottersRenderer {
 
         // Draw bars for each data point's time frames
         for point in &data.points {
-            if let Ok(time_frame_list) =
-                serde_json::from_value::<TimeFrameList>(point.value.clone())
-            {
+            // Use pattern matching on DrawableData - type-safe!
+            if let DrawableData::TimeFrames(time_frame_list) = &point.value {
                 for time_frame in time_frame_list.iter() {
                     let start_seconds = time_frame.get_start().num_seconds_from_midnight() as i64;
                     let end_seconds = time_frame.get_end().num_seconds_from_midnight() as i64;
+
+                    // Use pre-calculated color from the data point
+                    let [r, g, b] = point.color;
+                    let color = RGBColor(r, g, b);
 
                     chart.draw_series([get_bar(
                         point.date,
                         start_seconds,
                         end_seconds,
                         2,
-                        &BLUE.to_rgba(),
+                        &color.to_rgba(),
                     )])?;
                 }
             }
@@ -357,7 +363,6 @@ mod tests {
     use chrono::NaiveDate;
     use lifestats_domain::plot::data::{DataPoint, PlotData};
     use lifestats_domain::shared::date_range::DateRange;
-    use serde_json::Value;
 
     #[test]
     fn test_render_line_chart() {
@@ -369,12 +374,14 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                Value::from(10.0),
+                DrawableData::Integer(10),
+                [0, 255, 0],
                 None,
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-                Value::from(20.0),
+                DrawableData::Integer(20),
+                [0, 255, 0],
                 None,
             ),
         ];
@@ -406,11 +413,12 @@ mod tests {
         let end = NaiveDate::from_ymd_opt(2025, 1, 3).unwrap();
         let date_range = DateRange::new(start, end).unwrap();
 
-        // Create TimeFrameList data as JSON
-        let time_frame_list_json = serde_json::json!([
+        // Create TimeFrameList data
+        let time_frame_list = serde_json::from_value::<TimeFrameList>(serde_json::json!([
             {"start": "09:00:00", "end": "12:00:00"},
             {"start": "14:00:00", "end": "17:00:00"}
-        ]);
+        ]))
+        .unwrap();
 
         let goal_json = serde_json::json!([
             {"start": "08:00:00", "end": "18:00:00"}
@@ -419,12 +427,14 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                time_frame_list_json.clone(),
+                DrawableData::TimeFrames(time_frame_list.clone()),
+                [0, 255, 0],
                 Some(goal_json.clone()),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
-                time_frame_list_json.clone(),
+                DrawableData::TimeFrames(time_frame_list.clone()),
+                [0, 255, 0],
                 Some(goal_json),
             ),
         ];

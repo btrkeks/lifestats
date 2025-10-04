@@ -1,6 +1,5 @@
-use crate::plot::data::DataPoint;
+use crate::plot::data::{DataPoint, DrawableData};
 use crate::plot::specification::PlotType;
-use crate::shared::time_frame_list::TimeFrameList;
 use chrono::NaiveTime;
 
 /// Represents a configured Y-axis with type and range
@@ -32,12 +31,12 @@ impl YAxis {
 
         // Collect all numeric values from both value and goal fields
         for point in points {
-            if let Some(val) = point.value.as_i64() {
-                values.push(val);
-            } else if let Some(val) = point.value.as_f64() {
-                values.push(val as i64);
+            // Use pattern matching on DrawableData enum - type-safe!
+            if let DrawableData::Integer(val) = &point.value {
+                values.push(*val);
             }
 
+            // Goal is still JSON for reference purposes
             if let Some(goal) = &point.goal {
                 if let Some(val) = goal.as_i64() {
                     values.push(val);
@@ -70,9 +69,8 @@ impl YAxis {
 
         // Collect all start and end times from TimeFrameLists
         for point in points {
-            if let Ok(time_frame_list) =
-                serde_json::from_value::<TimeFrameList>(point.value.clone())
-            {
+            // Use pattern matching on DrawableData enum - type-safe!
+            if let DrawableData::TimeFrames(time_frame_list) = &point.value {
                 if let Some(start) = time_frame_list.start_time() {
                     all_times.push(start);
                 }
@@ -81,8 +79,12 @@ impl YAxis {
                 }
             }
 
+            // Goal is still JSON for reference purposes
             if let Some(goal) = &point.goal {
-                if let Ok(time_frame_list) = serde_json::from_value::<TimeFrameList>(goal.clone()) {
+                if let Ok(time_frame_list) = serde_json::from_value::<
+                    crate::shared::time_frame_list::TimeFrameList,
+                >(goal.clone())
+                {
                     if let Some(start) = time_frame_list.start_time() {
                         all_times.push(start);
                     }
@@ -119,17 +121,20 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                json!(10),
+                DrawableData::Integer(10),
+                [0, 255, 0],
                 Some(json!(20)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
-                json!(30),
+                DrawableData::Integer(30),
+                [0, 255, 0],
                 Some(json!(40)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
-                json!(50),
+                DrawableData::Integer(50),
+                [0, 255, 0],
                 None,
             ),
         ];
@@ -155,14 +160,18 @@ mod tests {
 
     #[test]
     fn test_time_axis_with_time_frames() {
-        let time_frame_json = json!([
+        use crate::shared::time_frame_list::TimeFrameList;
+
+        let time_frame_list = serde_json::from_value::<TimeFrameList>(json!([
             {"start": "09:00:00", "end": "12:00:00"},
             {"start": "14:00:00", "end": "18:00:00"}
-        ]);
+        ]))
+        .unwrap();
 
         let points = vec![DataPoint::new(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            time_frame_json,
+            DrawableData::TimeFrames(time_frame_list),
+            [0, 255, 0],
             None,
         )];
 
@@ -195,7 +204,8 @@ mod tests {
     fn test_circular_progress_default_range() {
         let points = vec![DataPoint::new(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            json!(75),
+            DrawableData::Integer(75),
+            [0, 255, 0],
             Some(json!(100)),
         )];
 
@@ -206,15 +216,18 @@ mod tests {
 
     #[test]
     fn test_integer_axis_with_floats() {
+        // Note: DrawableData uses i64, so we store the truncated values
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                json!(10.5),
+                DrawableData::Integer(10),
+                [0, 255, 0],
                 None,
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
-                json!(20.7),
+                DrawableData::Integer(20),
+                [0, 255, 0],
                 None,
             ),
         ];
@@ -234,7 +247,8 @@ mod tests {
     fn test_integer_axis_single_value() {
         let points = vec![DataPoint::new(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            json!(42),
+            DrawableData::Integer(42),
+            [0, 255, 0],
             None,
         )];
 

@@ -1,20 +1,35 @@
 use crate::plot::axis::YAxis;
 use crate::plot::specification::PlotType;
 use crate::shared::date_range::DateRange;
+use crate::shared::time_frame_list::TimeFrameList;
 use chrono::NaiveDate;
 use serde_json::Value;
+
+/// Represents data that has been processed and is ready for visualization
+/// This enum eliminates the need for renderers to parse generic JSON
+#[derive(Debug, Clone, PartialEq)]
+pub enum DrawableData {
+    Integer(i64),
+    TimeFrames(TimeFrameList),
+}
 
 /// Represents a single data point in a plot
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataPoint {
     pub date: NaiveDate,
-    pub value: Value,
+    pub value: DrawableData,
+    pub color: [u8; 3],
     pub goal: Option<Value>,
 }
 
 impl DataPoint {
-    pub fn new(date: NaiveDate, value: Value, goal: Option<Value>) -> Self {
-        Self { date, value, goal }
+    pub fn new(date: NaiveDate, value: DrawableData, color: [u8; 3], goal: Option<Value>) -> Self {
+        Self {
+            date,
+            value,
+            color,
+            goal,
+        }
     }
 }
 

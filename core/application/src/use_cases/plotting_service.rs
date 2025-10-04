@@ -9,6 +9,8 @@ use lifestats_domain::shared::date_range::DateRange;
 use lifestats_domain::shared::ids::PlotId;
 use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
 
+use crate::helpers::{evaluate_goal_achievement, json_to_drawable_data, percentage_to_color};
+
 /// Application service for plotting operations
 /// Orchestrates domain objects and repositories to fulfill plotting use cases
 #[derive(Clone)]
@@ -49,7 +51,12 @@ where
         // 2. Extract the statistic ID
         let statistic_id = plot_spec.statistic_id;
 
-        // 3. Load log values and goals for the date range
+        // 3. Load statistic metadata for goal achievement logic
+        let statistic = self
+            .statistic_repository
+            .find_metadata_by_id(statistic_id)?;
+
+        // 4. Load log values and goals for the date range
         let log_values = self
             .statistic_repository
             .find_log_values_in_range(statistic_id, date_range)?;
@@ -58,26 +65,42 @@ where
             .statistic_repository
             .find_goals_in_range(statistic_id, date_range)?;
 
-        // 4. Assemble into PlotData
-        // Create a map of dates to goal values for efficient lookup
+        // 5. Create a map of dates to goal values for efficient lookup
         let goal_map: std::collections::HashMap<_, _> = goals
             .into_iter()
             .map(|g| (g.date, g.value.clone()))
             .collect();
 
-        // Convert log values to data points
-        let points: Vec<DataPoint> = log_values
+        // 6. Convert log values to data points with DrawableData and colors
+        let points: Result<Vec<DataPoint>> = log_values
             .into_iter()
             .map(|log| {
-                let goal = goal_map.get(&log.date).cloned();
-                DataPoint::new(log.date, log.value.clone(), goal)
+                // Convert JSON value to DrawableData (type-safe!)
+                let drawable_value = json_to_drawable_data(&log.value, plot_spec.plot_type)?;
+
+                // Get the goal for this date
+                let goal = goal_map.get(&log.date);
+
+                // Evaluate goal achievement and calculate color
+                let percentage = evaluate_goal_achievement(&statistic, &log.value, goal)?;
+                let color = percentage_to_color(percentage);
+
+                // Create the data point with all processed data
+                Ok(DataPoint::new(
+                    log.date,
+                    drawable_value,
+                    color,
+                    goal.cloned(),
+                ))
             })
             .collect();
 
-        // 5. Calculate the Y-axis configuration using domain logic
+        let points = points?;
+
+        // 7. Calculate the Y-axis configuration using domain logic
         let y_axis = YAxis::from_data_points(&points, plot_spec.plot_type)?;
 
-        // 6. Return the assembled PlotData
+        // 8. Return the assembled PlotData
         Ok(PlotData::new(
             plot_spec.title.clone(),
             points,
@@ -152,6 +175,10 @@ mod tests {
 
     #[test]
     fn test_get_plot_data_success() {
+        use lifestats_domain::statistic::any_statistic::AnyStatistic;
+        use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+        use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+
         // Setup mocks
         let mut stat_repo = MockStatRepo::new();
         let mut plot_repo = MockPlotRepo::new();
@@ -175,7 +202,19 @@ mod tests {
             .withf(move |id| *id == plot_id)
             .returning(move |_| Ok(Some(plot_spec.clone())));
 
+        // Create a test statistic
+        let test_stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            StatisticMetadata::new(stat_id, "Test Category".into(), "Test Stat".into()),
+            None,
+            start,
+        ));
+
         // Configure statistic repository mock
+        stat_repo
+            .expect_find_metadata_by_id()
+            .withf(move |id| *id == stat_id)
+            .returning(move |_| Ok(test_stat.clone()));
+
         stat_repo
             .expect_find_log_values_in_range()
             .withf(move |id, _range| *id == stat_id)
