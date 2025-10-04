@@ -126,20 +126,6 @@ impl DefaultGoalRaw {
         })
     }
 
-    pub fn start_date(&self) -> Result<Option<NaiveDate>> {
-        self.extra_data1
-            .as_deref()
-            .map(|raw| {
-                NaiveDate::parse_from_str(raw, "%Y-%m-%d").with_context(|| {
-                    format!(
-                        "Failed to parse default goal start date '{}' for statistic_id {}",
-                        raw, self.statistic_id
-                    )
-                })
-            })
-            .transpose()
-    }
-
     pub fn from_goal<G>(statistic_id: StatisticId, goal: G, start_date: NaiveDate) -> Result<Self>
     where
         G: Serialize,

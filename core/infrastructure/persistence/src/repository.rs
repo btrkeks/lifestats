@@ -78,14 +78,6 @@ impl StatisticRepository for SqliteStatisticRepository {
             .execute(&mut conn)
             .context("failed to upsert statistic metadata")?;
 
-        if statistic.get_default_goal().is_some() {
-            let start_date = statistic.get_default_goal_valid_since().to_string();
-            diesel::update(default_goals::table.filter(default_goals::statistic_id.eq(dto.id)))
-                .set(default_goals::extra_data1.eq(Some(start_date)))
-                .execute(&mut conn)
-                .context("failed to update default goal start date")?;
-        }
-
         Ok(())
     }
 

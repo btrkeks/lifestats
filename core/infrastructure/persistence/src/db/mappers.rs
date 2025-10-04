@@ -70,6 +70,7 @@ pub struct StatisticDto {
     pub name: String,
     pub category: String,
     pub statistic_type: StatisticTypeDto,
+    pub default_goal_valid_since: String,
 }
 
 impl StatisticDto {
@@ -95,6 +96,8 @@ impl StatisticDto {
             name: metadata.name().to_string(),
             category: metadata.category().to_string(),
             statistic_type,
+            // Add this line to serialize the date to a string for the DB
+            default_goal_valid_since: statistic.get_default_goal_valid_since().to_string(),
         })
     }
 
@@ -105,34 +108,33 @@ impl StatisticDto {
             self.name.into_boxed_str(),
         );
 
-        let fallback_start = default_goal_start_fallback();
+        // Parse the date from our new, reliable column.
+        let start_date = NaiveDate::parse_from_str(&self.default_goal_valid_since, "%Y-%m-%d")
+            .unwrap_or_else(|_| default_goal_start_fallback());
 
         match self.statistic_type {
             StatisticTypeDto::Habit => {
-                let (goal, start) = parse_default_goal::<HabitGoal>(default_goal, fallback_start)?;
+                let (goal, _) = parse_default_goal::<HabitGoal>(default_goal, start_date)?;
                 Ok(AnyStatistic::Habit(HabitStatistic::new(
-                    metadata, goal, start,
+                    metadata, goal, start_date,
                 )))
             }
             StatisticTypeDto::IntegerAmount => {
-                let (goal, start) =
-                    parse_default_goal::<AmountGoal<i64>>(default_goal, fallback_start)?;
+                let (goal, _) = parse_default_goal::<AmountGoal<i64>>(default_goal, start_date)?;
                 Ok(AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
-                    metadata, goal, start,
+                    metadata, goal, start_date,
                 )))
             }
             StatisticTypeDto::PointInTime => {
-                let (goal, start) =
-                    parse_default_goal::<FinishedInTimeGoal>(default_goal, fallback_start)?;
+                let (goal, _) = parse_default_goal::<FinishedInTimeGoal>(default_goal, start_date)?;
                 Ok(AnyStatistic::PointInTime(PointInTimeStatistic::new(
-                    metadata, goal, start,
+                    metadata, goal, start_date,
                 )))
             }
             StatisticTypeDto::TimeSpans => {
-                let (goal, start) =
-                    parse_default_goal::<TimeSpansGoal>(default_goal, fallback_start)?;
+                let (goal, _) = parse_default_goal::<TimeSpansGoal>(default_goal, start_date)?;
                 Ok(AnyStatistic::TimeSpans(TimeSpansStatistic::new(
-                    metadata, goal, start,
+                    metadata, goal, start_date,
                 )))
             }
         }
@@ -141,15 +143,16 @@ impl StatisticDto {
 
 fn parse_default_goal<G>(
     default_goal: Option<DefaultGoalRaw>,
+    // This parameter is no longer the primary source, but a fallback.
     fallback_start: NaiveDate,
 ) -> Result<(Option<G>, NaiveDate)>
 where
     G: serde::de::DeserializeOwned,
 {
     if let Some(raw) = default_goal {
-        let start_date = raw.start_date()?.unwrap_or(fallback_start);
+        // The old, buggy `raw.start_date()` call is GONE.
         let goal = raw.into_goal::<G>()?;
-        Ok((Some(goal), start_date))
+        Ok((Some(goal), fallback_start)) // Just pass the date through.
     } else {
         Ok((None, fallback_start))
     }

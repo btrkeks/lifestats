@@ -42,6 +42,7 @@ diesel::table! {
         name -> Text,
         category -> Text,
         statistic_type -> Text,
+        default_goal_valid_since -> Text,
     }
 }
 
