@@ -27,6 +27,7 @@ class Configuration:
 
     def __init__(self) -> None:
         self._config: DeckStatisticMapping = {}
+        self._api_base_url: str = "http://localhost:3000"
         self._load_config()
 
     def _load_config(self) -> None:
@@ -34,10 +35,11 @@ class Configuration:
         config = mw.addonManager.getConfig(ADDON_NAME)
         if config is None:
             # Create default config if none exists
-            config = {"time_frame": {}}
+            config = {"api_base_url": "http://localhost:3000", "time_frame": {}}
             self._save_config(config)
 
         self._config = config.get("time_frame", {})
+        self._api_base_url = config.get("api_base_url", "http://localhost:3000")
 
     @staticmethod
     def _save_config(config: dict) -> None:
@@ -86,6 +88,14 @@ class Configuration:
             A dictionary of deck names to statistic IDs
         """
         return dict(self._config)
+
+    def get_api_base_url(self) -> str:
+        """Get the configured API base URL.
+
+        Returns:
+            The configured API base URL (defaults to http://localhost:3000)
+        """
+        return self._api_base_url
 
 
 # Global configuration instance
