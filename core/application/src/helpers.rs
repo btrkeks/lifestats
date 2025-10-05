@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use lifestats_domain::plot::data::DrawableData;
+use lifestats_domain::plot::specification::PlotType;
 use lifestats_domain::shared::percentage::Percentage;
 use lifestats_domain::shared::time_frame_list::TimeFrameList;
 use lifestats_domain::statistic::any_statistic::AnyStatistic;
@@ -33,16 +34,32 @@ pub fn percentage_to_color(percentage: Option<Percentage>) -> [u8; 3] {
     }
 }
 
-/// Converts a JSON value to DrawableData based on the statistic's capabilities.
-pub fn json_to_drawable_data(statistic: &AnyStatistic, value: &Value) -> Result<DrawableData> {
-    if let Ok(int_value) = statistic.value_as_i64_from_json(value) {
-        return Ok(DrawableData::Integer(int_value));
+/// Converts a JSON value to DrawableData based on the statistic's capabilities and plot type.
+pub fn json_to_drawable_data(
+    statistic: &AnyStatistic,
+    value: &Value,
+    plot_type: PlotType,
+) -> Result<DrawableData> {
+    match plot_type {
+        PlotType::TimeFrames => {
+            let time_frame_list = serde_json::from_value::<TimeFrameList>(value.clone())
+                .map_err(|e| anyhow!("Expected TimeFrameList for TimeFrames plot: {}", e))?;
+            Ok(DrawableData::TimeFrames(time_frame_list))
+        }
+        PlotType::BarChart
+        | PlotType::LineChart
+        | PlotType::Scatter
+        | PlotType::CircularProgress => {
+            let int_value = statistic.value_as_i64_from_json(value).map_err(|_| {
+                anyhow!(
+                    "Statistic '{}' cannot be represented as an integer for a {:?} plot.",
+                    statistic.get_metadata().name(),
+                    plot_type
+                )
+            })?;
+            Ok(DrawableData::Integer(int_value))
+        }
     }
-
-    Err(anyhow!(
-        "Value could not be converted to a drawable format for statistic '{}'",
-        statistic.get_metadata().name()
-    ))
 }
 
 /// Evaluates goal achievement for a given statistic and returns a percentage

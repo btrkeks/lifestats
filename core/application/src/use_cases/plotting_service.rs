@@ -139,6 +139,7 @@ mod tests {
     use lifestats_domain::statistic::types::logable_statistics::{
         integer_amount::IntegerAmountStatistic, time_spans::TimeSpansStatistic,
     };
+    use lifestats_domain::statistic::value_objects::goals::amount_goal::AmountGoal;
     use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use serde_json::{json, Value};
 
@@ -353,5 +354,85 @@ mod tests {
                 val
             );
         }
+    }
+
+    #[test]
+    fn test_get_plot_data_uses_default_goal_when_no_daily_goal_is_present() {
+        // ARRANGE
+        let mut stat_repo = MockStatRepo::new();
+        let mut plot_repo = MockPlotRepo::new();
+        let renderer = MockRenderer::new(); // Not used, but needed for construction
+
+        let plot_id = PlotId::from(1);
+        let stat_id = StatisticId::from(42);
+        let test_date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
+        let date_range = DateRange::new(test_date, test_date).unwrap();
+
+        // 1. Configure PlotRepository to return a simple plot spec
+        let plot_spec = PlotSpecification::new(
+            plot_id,
+            "Test Plot With Default Goal".to_string(),
+            stat_id,
+            PlotType::LineChart,
+        );
+        plot_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(plot_spec.clone())));
+
+        // 2. Configure StatisticRepository to return a statistic WITH a default goal
+        let default_goal = AmountGoal::new(100, true);
+        let test_stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            StatisticMetadata::new(stat_id, "Testing".into(), "Test Stat".into()),
+            Some(default_goal.clone()),
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(), // Goal is valid from this date
+        ));
+        stat_repo
+            .expect_find_metadata_by_id()
+            .returning(move |_| Ok(test_stat.clone()));
+
+        // 3. Return a log value for the date
+        stat_repo
+            .expect_find_log_values_in_range()
+            .returning(move |_, _| {
+                Ok(vec![DatedValue::new(
+                    test_date,
+                    json!(75), // A value below the goal
+                )])
+            });
+
+        // 4. CRITICAL: Return NO daily goals. This is the bug condition.
+        stat_repo
+            .expect_find_goals_in_range()
+            .returning(|_, _| Ok(vec![]));
+
+        let service =
+            PlottingService::new(Arc::new(stat_repo), Arc::new(plot_repo), Arc::new(renderer));
+
+        // ACT
+        let result = service.get_plot_data(plot_id, date_range);
+
+        // ASSERT
+        assert!(result.is_ok(), "get_plot_data should not fail");
+        let plot_data = result.unwrap();
+        assert_eq!(plot_data.points.len(), 1, "Should have one data point");
+
+        let point = &plot_data.points[0];
+
+        // This assertion will FAIL with the current code, as `point.goal` will be `None`.
+        // It will PASS after applying the fix.
+        let expected_goal_json = serde_json::to_value(default_goal).unwrap();
+        assert_eq!(
+            point.goal,
+            Some(expected_goal_json),
+            "The data point's goal should be the statistic's default goal"
+        );
+
+        // This assertion also verifies the logic by checking the resulting color.
+        // 75 is < 100, so the color should be red. With the bug, the color would be gray [128, 128, 128].
+        assert_eq!(
+            point.color,
+            [255, 0, 0],
+            "Color should be red because the value (75) is below the default goal (100)"
+        );
     }
 }
