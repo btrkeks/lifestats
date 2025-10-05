@@ -5,6 +5,12 @@
     { "label": "cargo:clippy (pkg)", "type": "cargo", "command": "clippy", "args": ["--workspace", "--all-targets", "-q"], "problemMatcher": "$rustc" },
     { "label": "cargo:test (pkg)", "type": "cargo", "command": "test", "args": ["--package", "${workspaceFolderBasename}", "--", "--nocapture"], "problemMatcher": "$rustc" },
     { "label": "cargo:fmt", "type": "cargo", "command": "fmt", "args": ["--all"] },
+    {
+      "label": "Rust: coverage (llvm-cov)",
+      "type": "shell",
+      "command": "cargo llvm-cov --lcov --output-path lcov.info",
+      "problemMatcher": []
+    },
     { "label": "cargo:doc", "type": "cargo", "command": "doc", "args": ["--workspace", "--no-deps", "--open=false"] }
   ]
 }
