@@ -6,9 +6,12 @@ from aqt import mw
 from aqt.utils import tooltip
 from anki.decks import DeckId
 
-from .anki_utils import get_current_deck_id
+from .logger_config import get_logger
+from .anki_utils import get_current_deck_id, get_deck_name
 from .config import get_statistic_id_for_deck
 from .statistic_logging import log_time_until_now
+
+logger = get_logger(__name__)
 
 
 class TimerManager:
@@ -72,8 +75,15 @@ class AnkiLogger:
         self.last_flush = current_time
         self.deck_id = get_current_deck_id()
 
+        deck_name = get_deck_name(self.deck_id)
         statistic_id = get_statistic_id_for_deck(self.deck_id)
-        tooltip(f"Start logging for statistic id {statistic_id}", period=3000)
+
+        logger.info(f"=== STARTING LOGGING SESSION ===")
+        logger.info(f"Deck ID: {self.deck_id}")
+        logger.info(f"Deck Name: '{deck_name}'")
+        logger.info(f"Mapped Statistic ID: {statistic_id}")
+
+        tooltip(f"Start logging deck '{deck_name}' (stat ID: {statistic_id})", period=3000)
 
         self._schedule_next_timeout()
 
@@ -96,9 +106,18 @@ class AnkiLogger:
     def ping(self):
         if not self.is_running:
             current_deck_id = get_current_deck_id()
-            if get_statistic_id_for_deck(current_deck_id) is not None:
+            deck_name = get_deck_name(current_deck_id)
+            statistic_id = get_statistic_id_for_deck(current_deck_id)
+
+            logger.debug(f"ping() called while not running: deck_id={current_deck_id}, deck_name='{deck_name}', statistic_id={statistic_id}")
+
+            if statistic_id is not None:
+                logger.info(f"Found statistic mapping for deck '{deck_name}', starting logging session")
                 self.start_running()
+            else:
+                logger.info(f"No statistic mapping found for deck '{deck_name}', skipping logging")
         else:
+            logger.debug(f"ping() called while running, updating last_ping time")
             self.last_ping = datetime.now()
             self._schedule_next_timeout()
 

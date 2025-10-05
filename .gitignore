@@ -14,14 +14,4 @@ __pycache__/
 *.pyo
 
 # AnkiLogger bundled dependencies (install via requirements.txt)
-logger_applications/AnkiLogger/requests/
-logger_applications/AnkiLogger/requests-*.dist-info/
-logger_applications/AnkiLogger/urllib3/
-logger_applications/AnkiLogger/urllib3-*.dist-info/
-logger_applications/AnkiLogger/certifi/
-logger_applications/AnkiLogger/certifi-*.dist-info/
-logger_applications/AnkiLogger/charset_normalizer/
-logger_applications/AnkiLogger/charset_normalizer-*.dist-info/
-logger_applications/AnkiLogger/idna/
-logger_applications/AnkiLogger/idna-*.dist-info/
-logger_applications/AnkiLogger/bin/
+logger_applications/AnkiLogger/vendor/
