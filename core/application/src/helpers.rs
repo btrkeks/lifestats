@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use lifestats_domain::plot::data::DrawableData;
+use lifestats_domain::plot::data::{DrawableData, DrawableGoal};
 use lifestats_domain::plot::specification::PlotType;
 use lifestats_domain::shared::percentage::Percentage;
 use lifestats_domain::shared::time_frame_list::TimeFrameList;
@@ -16,7 +16,7 @@ use serde_json::Value;
 /// Color scheme:
 /// - >= 100%: Green [0, 255, 0]
 /// - 90-99%: Yellow [255, 255, 0]
-/// - < 90%: Red [255, 0, 0]
+/// - < 90%: Red [245, 169, 142]
 /// - No goal: Gray [128, 128, 128]
 pub fn percentage_to_color(percentage: Option<Percentage>) -> [u8; 3] {
     match percentage {
@@ -27,7 +27,7 @@ pub fn percentage_to_color(percentage: Option<Percentage>) -> [u8; 3] {
             } else if value >= 90 {
                 [255, 255, 0] // Yellow - close to goal
             } else {
-                [255, 0, 0] // Red - below goal
+                [245, 169, 142] // Red - below goal
             }
         }
         None => [128, 128, 128], // Gray - no goal set
@@ -58,6 +58,40 @@ pub fn json_to_drawable_data(
                 )
             })?;
             Ok(DrawableData::Integer(int_value))
+        }
+    }
+}
+
+/// Converts a JSON goal value to DrawableGoal based on the statistic type
+/// This function unwraps complex goal objects (like TimeSpansGoal) into simple drawable types
+pub fn json_to_drawable_goal(statistic: &AnyStatistic, goal: &Value) -> Result<DrawableGoal> {
+    match statistic {
+        AnyStatistic::TimeSpans(_) => {
+            // Parse the full TimeSpansGoal object, then extract the target TimeFrameList
+            let time_spans_goal = serde_json::from_value::<TimeSpansGoal>(goal.clone())
+                .map_err(|e| anyhow!("Failed to parse TimeSpansGoal: {}", e))?;
+            Ok(DrawableGoal::TimeFrames(time_spans_goal.target().clone()))
+        }
+        AnyStatistic::Habit(_) => {
+            let habit_goal = serde_json::from_value::<HabitGoal>(goal.clone())
+                .map_err(|e| anyhow!("Failed to parse HabitGoal: {}", e))?;
+            Ok(DrawableGoal::Integer(habit_goal.occurred() as i64))
+        }
+        AnyStatistic::IntegerAmount(_) => {
+            let amount_goal = serde_json::from_value::<AmountGoal<i64>>(goal.clone())
+                .map_err(|e| anyhow!("Failed to parse AmountGoal: {}", e))?;
+            Ok(DrawableGoal::Integer(amount_goal.target_amount()))
+        }
+        AnyStatistic::PointInTime(_) => {
+            // PointInTime goals are not typically displayed on plots, but we can convert them
+            // For now, return an error as these are not supported
+            Err(anyhow!(
+                "PointInTime goals are not yet supported for drawable goals"
+            ))
+        }
+        AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
+            // Derived statistics typically don't have goals
+            Err(anyhow!("Derived statistics do not support goals"))
         }
     }
 }
@@ -142,8 +176,17 @@ mod tests {
 
     #[test]
     fn test_percentage_to_color_below() {
-        assert_eq!(percentage_to_color(Some(Percentage::new(0))), [255, 0, 0]);
-        assert_eq!(percentage_to_color(Some(Percentage::new(50))), [255, 0, 0]);
-        assert_eq!(percentage_to_color(Some(Percentage::new(89))), [255, 0, 0]);
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(0))),
+            [245, 169, 142]
+        );
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(50))),
+            [245, 169, 142]
+        );
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(89))),
+            [245, 169, 142]
+        );
     }
 }

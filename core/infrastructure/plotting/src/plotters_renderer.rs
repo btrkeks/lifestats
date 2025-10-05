@@ -2,11 +2,9 @@ use anyhow::{anyhow, Result};
 use chrono::Timelike;
 use image::{ImageBuffer, Rgb};
 use lifestats_domain::plot::axis::YAxis;
-use lifestats_domain::plot::data::{DrawableData, PlotData};
+use lifestats_domain::plot::data::{DrawableData, DrawableGoal, PlotData};
 use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
 use lifestats_domain::plot::specification::PlotType;
-use lifestats_domain::shared::time_frame_list::TimeFrameList;
-use log::warn;
 use plotters::prelude::*;
 
 use crate::common::{
@@ -40,7 +38,7 @@ impl PlottersRenderer {
         };
 
         let mut chart = ChartBuilder::on(&root)
-            .caption(&data.title, ("sans-serif", 30))
+            .caption(&data.title, ("IPAMincho", 30))
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(50)
@@ -62,16 +60,14 @@ impl PlottersRenderer {
 
         // Draw goal lines
         for point in &data.points {
-            if let Some(goal_value) = &point.goal {
-                if let Some(goal_number) = goal_value.as_i64() {
-                    chart.draw_series([PathElement::new(
-                        [
-                            (point.date, goal_number as f64),
-                            (point.date + chrono::Duration::days(1), goal_number as f64),
-                        ],
-                        GOAL_LINE_COLOR.stroke_width(2),
-                    )])?;
-                }
+            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
+                chart.draw_series([PathElement::new(
+                    [
+                        (point.date, *goal_number as f64),
+                        (point.date + chrono::Duration::days(1), *goal_number as f64),
+                    ],
+                    GOAL_LINE_COLOR.stroke_width(2),
+                )])?;
             }
         }
 
@@ -106,7 +102,7 @@ impl PlottersRenderer {
         };
 
         let mut chart = ChartBuilder::on(&root)
-            .caption(&data.title, ("sans-serif", 30))
+            .caption(&data.title, ("IPAMincho", 30))
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(50)
@@ -140,16 +136,14 @@ impl PlottersRenderer {
 
         // Draw goal lines
         for point in &data.points {
-            if let Some(goal_value) = &point.goal {
-                if let Some(goal_number) = goal_value.as_i64() {
-                    chart.draw_series([PathElement::new(
-                        [
-                            (point.date, goal_number as f64),
-                            (point.date + chrono::Duration::days(1), goal_number as f64),
-                        ],
-                        GOAL_LINE_COLOR.stroke_width(2),
-                    )])?;
-                }
+            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
+                chart.draw_series([PathElement::new(
+                    [
+                        (point.date, *goal_number as f64),
+                        (point.date + chrono::Duration::days(1), *goal_number as f64),
+                    ],
+                    GOAL_LINE_COLOR.stroke_width(2),
+                )])?;
             }
         }
 
@@ -184,7 +178,7 @@ impl PlottersRenderer {
         };
 
         let mut chart = ChartBuilder::on(&root)
-            .caption(&data.title, ("sans-serif", 30))
+            .caption(&data.title, ("IPAMincho", 30))
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(50)
@@ -203,16 +197,14 @@ impl PlottersRenderer {
 
         // Draw goal lines
         for point in &data.points {
-            if let Some(goal_value) = &point.goal {
-                if let Some(goal_number) = goal_value.as_i64() {
-                    chart.draw_series([PathElement::new(
-                        [
-                            (point.date, goal_number as f64),
-                            (point.date + chrono::Duration::days(1), goal_number as f64),
-                        ],
-                        GOAL_LINE_COLOR.stroke_width(2),
-                    )])?;
-                }
+            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
+                chart.draw_series([PathElement::new(
+                    [
+                        (point.date, *goal_number as f64),
+                        (point.date + chrono::Duration::days(1), *goal_number as f64),
+                    ],
+                    GOAL_LINE_COLOR.stroke_width(2),
+                )])?;
             }
         }
 
@@ -257,7 +249,7 @@ impl PlottersRenderer {
             .x_label_area_size(25)
             .y_label_area_size(52)
             .margin_right(7)
-            .caption(&data.title, ("sans-serif", 20).into_font().color(&WHITE))
+            .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
                 (data.date_range.start()..data.date_range.end()).into_segmented(),
                 (y_axis_min..y_axis_max).with_key_points(calculate_seconds_ticks(
@@ -279,7 +271,7 @@ impl PlottersRenderer {
             })
             .y_label_formatter(&seconds_to_time_formatter)
             .axis_style(WHITE)
-            .label_style(("sans-serif", 15, &WHITE))
+            .label_style(("IPAMincho", 15, &WHITE))
             .draw()?;
 
         // Draw bars for each data point's time frames
@@ -307,63 +299,48 @@ impl PlottersRenderer {
 
         // Draw goal lines and shading
         for point in &data.points {
-            if let Some(goal_value) = &point.goal {
-                match serde_json::from_value::<TimeFrameList>(goal_value.clone()) {
-                    Ok(goal_time_frames) => {
-                        if goal_time_frames.is_empty() {
-                            continue;
-                        }
-
-                        let mut last_end_time = 0;
-
-                        for frame in goal_time_frames.iter() {
-                            let current_start_time =
-                                frame.get_start().num_seconds_from_midnight() as i64;
-                            let current_end_time =
-                                frame.get_end().num_seconds_from_midnight() as i64;
-
-                            // Shade the area between the last end time and the current start time
-                            chart.draw_series([get_bar(
-                                point.date,
-                                last_end_time,
-                                current_start_time,
-                                0,
-                                &SHADING_COLOR,
-                            )])?;
-
-                            // Draw the goal lines
-                            chart.draw_series([
-                                get_horizontal_line(
-                                    point.date,
-                                    current_start_time,
-                                    GOAL_LINE_COLOR.mix(0.7),
-                                ),
-                                get_horizontal_line(
-                                    point.date,
-                                    current_end_time,
-                                    GOAL_LINE_COLOR.mix(0.7),
-                                ),
-                            ])?;
-
-                            last_end_time = current_end_time;
-                        }
-
-                        // Shade the area between the last end time and the y-axis max
-                        chart.draw_series([get_bar(
-                            point.date,
-                            last_end_time,
-                            y_axis_max,
-                            0,
-                            &SHADING_COLOR,
-                        )])?;
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to parse goal value as TimeFrameList for date {}: {}. Goal value: {}",
-                            point.date, e, goal_value
-                        );
-                    }
+            // Use pattern matching on DrawableGoal - no more JSON parsing!
+            if let Some(DrawableGoal::TimeFrames(goal_time_frames)) = &point.goal {
+                if goal_time_frames.is_empty() {
+                    continue;
                 }
+
+                let mut last_end_time = 0;
+
+                for frame in goal_time_frames.iter() {
+                    let current_start_time = frame.get_start().num_seconds_from_midnight() as i64;
+                    let current_end_time = frame.get_end().num_seconds_from_midnight() as i64;
+
+                    // Shade the area between the last end time and the current start time
+                    chart.draw_series([get_bar(
+                        point.date,
+                        last_end_time,
+                        current_start_time,
+                        0,
+                        &SHADING_COLOR,
+                    )])?;
+
+                    // Draw the goal lines
+                    chart.draw_series([
+                        get_horizontal_line(
+                            point.date,
+                            current_start_time,
+                            GOAL_LINE_COLOR.mix(0.7),
+                        ),
+                        get_horizontal_line(point.date, current_end_time, GOAL_LINE_COLOR.mix(0.7)),
+                    ])?;
+
+                    last_end_time = current_end_time;
+                }
+
+                // Shade the area between the last end time and the y-axis max
+                chart.draw_series([get_bar(
+                    point.date,
+                    last_end_time,
+                    y_axis_max,
+                    0,
+                    &SHADING_COLOR,
+                )])?;
             }
         }
 
@@ -461,6 +438,8 @@ mod tests {
 
     #[test]
     fn test_render_time_frames_plot() {
+        use lifestats_domain::shared::time_frame_list::TimeFrameList;
+
         let renderer = PlottersRenderer::new();
         let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
         let end = NaiveDate::from_ymd_opt(2025, 1, 3).unwrap();
@@ -473,22 +452,23 @@ mod tests {
         ]))
         .unwrap();
 
-        let goal_json = serde_json::json!([
+        let goal_time_frames = serde_json::from_value::<TimeFrameList>(serde_json::json!([
             {"start": "08:00:00", "end": "18:00:00"}
-        ]);
+        ]))
+        .unwrap();
 
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                 DrawableData::TimeFrames(time_frame_list.clone()),
                 [0, 255, 0],
-                Some(goal_json.clone()),
+                Some(DrawableGoal::TimeFrames(goal_time_frames.clone())),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
                 DrawableData::TimeFrames(time_frame_list.clone()),
                 [0, 255, 0],
-                Some(goal_json),
+                Some(DrawableGoal::TimeFrames(goal_time_frames)),
             ),
         ];
 

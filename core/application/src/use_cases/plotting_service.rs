@@ -9,7 +9,9 @@ use lifestats_domain::shared::date_range::DateRange;
 use lifestats_domain::shared::ids::PlotId;
 use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
 
-use crate::helpers::{evaluate_goal_achievement, json_to_drawable_data, percentage_to_color};
+use crate::helpers::{
+    evaluate_goal_achievement, json_to_drawable_data, json_to_drawable_goal, percentage_to_color,
+};
 
 /// Application service for plotting operations
 /// Orchestrates domain objects and repositories to fulfill plotting use cases
@@ -107,12 +109,17 @@ where
                 let percentage = evaluate_goal_achievement(&statistic, &log.value, goal_for_day)?;
                 let color = percentage_to_color(percentage);
 
+                // Convert goal to DrawableGoal if present
+                let drawable_goal = goal_for_day
+                    .map(|g| json_to_drawable_goal(&statistic, g))
+                    .transpose()?;
+
                 // Create the data point with all processed data
                 Ok(DataPoint::new(
                     log.date,
                     drawable_value,
                     color,
-                    goal_for_day.cloned(),
+                    drawable_goal,
                 ))
             })
             .collect();
@@ -441,10 +448,11 @@ mod tests {
 
         // This assertion will FAIL with the current code, as `point.goal` will be `None`.
         // It will PASS after applying the fix.
-        let expected_goal_json = serde_json::to_value(default_goal).unwrap();
+        use lifestats_domain::plot::data::DrawableGoal;
+        let expected_goal = DrawableGoal::Integer(default_goal.target_amount());
         assert_eq!(
             point.goal,
-            Some(expected_goal_json),
+            Some(expected_goal),
             "The data point's goal should be the statistic's default goal"
         );
 
@@ -452,7 +460,7 @@ mod tests {
         // 75 is < 100, so the color should be red. With the bug, the color would be gray [128, 128, 128].
         assert_eq!(
             point.color,
-            [255, 0, 0],
+            [245, 169, 142],
             "Color should be red because the value (75) is below the default goal (100)"
         );
     }

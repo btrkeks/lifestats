@@ -3,12 +3,19 @@ use crate::plot::specification::PlotType;
 use crate::shared::date_range::DateRange;
 use crate::shared::time_frame_list::TimeFrameList;
 use chrono::NaiveDate;
-use serde_json::Value;
 
 /// Represents data that has been processed and is ready for visualization
 /// This enum eliminates the need for renderers to parse generic JSON
 #[derive(Debug, Clone, PartialEq)]
 pub enum DrawableData {
+    Integer(i64),
+    TimeFrames(TimeFrameList),
+}
+
+/// Represents a goal that has been processed and is ready for visualization
+/// This enum eliminates the need for renderers to parse complex goal JSON
+#[derive(Debug, Clone, PartialEq)]
+pub enum DrawableGoal {
     Integer(i64),
     TimeFrames(TimeFrameList),
 }
@@ -19,11 +26,16 @@ pub struct DataPoint {
     pub date: NaiveDate,
     pub value: DrawableData,
     pub color: [u8; 3],
-    pub goal: Option<Value>,
+    pub goal: Option<DrawableGoal>,
 }
 
 impl DataPoint {
-    pub fn new(date: NaiveDate, value: DrawableData, color: [u8; 3], goal: Option<Value>) -> Self {
+    pub fn new(
+        date: NaiveDate,
+        value: DrawableData,
+        color: [u8; 3],
+        goal: Option<DrawableGoal>,
+    ) -> Self {
         Self {
             date,
             value,

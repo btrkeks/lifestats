@@ -1,4 +1,4 @@
-use crate::plot::data::{DataPoint, DrawableData};
+use crate::plot::data::{DataPoint, DrawableData, DrawableGoal};
 use crate::plot::specification::PlotType;
 use chrono::NaiveTime;
 
@@ -36,13 +36,9 @@ impl YAxis {
                 values.push(*val);
             }
 
-            // Goal is still JSON for reference purposes
-            if let Some(goal) = &point.goal {
-                if let Some(val) = goal.as_i64() {
-                    values.push(val);
-                } else if let Some(val) = goal.as_f64() {
-                    values.push(val as i64);
-                }
+            // Use pattern matching on DrawableGoal enum - type-safe!
+            if let Some(DrawableGoal::Integer(val)) = &point.goal {
+                values.push(*val);
             }
         }
 
@@ -79,18 +75,13 @@ impl YAxis {
                 }
             }
 
-            // Goal is still JSON for reference purposes
-            if let Some(goal) = &point.goal {
-                if let Ok(time_frame_list) = serde_json::from_value::<
-                    crate::shared::time_frame_list::TimeFrameList,
-                >(goal.clone())
-                {
-                    if let Some(start) = time_frame_list.start_time() {
-                        all_times.push(start);
-                    }
-                    if let Some(end) = time_frame_list.end_time() {
-                        all_times.push(end);
-                    }
+            // Use pattern matching on DrawableGoal enum - type-safe!
+            if let Some(DrawableGoal::TimeFrames(time_frame_list)) = &point.goal {
+                if let Some(start) = time_frame_list.start_time() {
+                    all_times.push(start);
+                }
+                if let Some(end) = time_frame_list.end_time() {
+                    all_times.push(end);
                 }
             }
         }
@@ -118,18 +109,20 @@ mod tests {
 
     #[test]
     fn test_integer_axis_with_values() {
+        use super::DrawableGoal;
+
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
                 DrawableData::Integer(10),
                 [0, 255, 0],
-                Some(json!(20)),
+                Some(DrawableGoal::Integer(20)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
                 DrawableData::Integer(30),
                 [0, 255, 0],
-                Some(json!(40)),
+                Some(DrawableGoal::Integer(40)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
@@ -202,11 +195,13 @@ mod tests {
 
     #[test]
     fn test_circular_progress_default_range() {
+        use super::DrawableGoal;
+
         let points = vec![DataPoint::new(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
             DrawableData::Integer(75),
             [0, 255, 0],
-            Some(json!(100)),
+            Some(DrawableGoal::Integer(100)),
         )];
 
         let axis = YAxis::from_data_points(&points, PlotType::CircularProgress).unwrap();
