@@ -12,12 +12,9 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-log = "0.4.22"
 strum = "0.27"
 strum_macros = "0.27"
 thiserror = "2.0.3"
+
+[dev-dependencies]
 mockall = "0.13.1"
-itertools = "0.14.0"
-imageproc = "0.25.0"
-ab_glyph = "0.2"
-image = "0.25.5"

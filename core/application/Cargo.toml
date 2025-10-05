@@ -12,10 +12,9 @@ events = { path = "../../events/event_impl/" }
 # External
 chrono = { workspace = true }
 anyhow = { workspace = true }
-log = "0.4.22"
-mockall = "0.13.1"
-serde = { version = "1.0.216", features = ["derive"] }
-serde_json = "1.0.133"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
+mockall = "0.13.1"
 lifestats-domain = { path = "../domain", features = ["testing"] }
