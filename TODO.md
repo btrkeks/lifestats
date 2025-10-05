@@ -1,117 +1,106 @@
-# TODO: Refactor AnkiLogger to use the Web API
+# ✅ COMPLETED: Fix Time Frame Logging and Improve Error Robustness
 
 ## 🎯 High-Level Goal
 
-The primary goal of this refactor is to decouple the `AnkiLogger` from the `log_statistic` CLI tool and transition it to a proper client of the `lifestats-web-api`. This aligns with our architectural vision of a "Unified logging transport" where all loggers act as independent, API-driven services.
+A bug was discovered where logging time frames via the generic `/log/:date` endpoint fails with a misleading `500 Internal Server Error`. The root cause is a loss of type safety when passing a formatted string to domain logic that expects a structured object for certain update policies.
 
-**Current Architecture (Brittle):**
-`AnkiLogger (Python) --[subprocess]--> log_statistic (CLI) --[direct DB write]--> SQLite`
+**Status:** ✅ COMPLETED
 
-**Target Architecture (Decoupled & Robust):**
-`AnkiLogger (Python) --[HTTP POST]--> Web API --[LoggingService]--> Domain --> SQLite`
+We fixed this by:
 
-This change centralizes all logging business logic within the Rust application core, ensuring consistency and enabling features like event publishing for all log sources.
+1.  ✅ Creating a dedicated, type-safe API endpoint for logging time frames.
+2.  ✅ Improving our error handling to correctly classify client errors (`400`) vs. server errors (`500`).
 
 ---
 
-## ✅ Action Plan
+## ✅ Implementation Summary
 
-### 1. Dependency Management
+### Part 1: Type-Safe `log_time_frame` Endpoint ✅
 
-The Anki add-on needs the ability to make HTTP requests. We will use the standard `requests` library.
-
-- **1. Package the `requests` library with the add-on.**
-  - Anki add-ons bundle their dependencies. In the `AnkiLogger` directory, install the library directly into the folder.
-  - Run the command: `pip install -t . requests`
-  - Ensure the new `requests` and `urllib3` (etc.) directories are included when packaging the add-on.
-
-### 2. Configuration
-
-To avoid hardcoding the API endpoint, we will make it configurable.
-
-- **1. Add `api_base_url` to the configuration.**
-  - In `config.json`, add a new top-level key for the API URL.
-
-  ```json
-  {
-    "api_base_url": "http://localhost:3000",
-    "time_frame": {
-      "Japanese": 4
+- **1. Define the DTO (`lifestats-web-api`).**
+  - In `core/infrastructure/web_api/src/dto/statistic.rs`, create a new request DTO:
+    ```rust
+    #[derive(Debug, Deserialize, Validate)]
+    pub struct LogTimeFrameRequest {
+        #[validate(regex(path = "::time_regex()", message = "must be in HH:MM or HH:MM:SS format"))]
+        pub start_time: String,
+        #[validate(regex(path = "::time_regex()", message = "must be in HH:MM or HH:MM:SS format"))]
+        pub end_time: String,
+        pub update_policy: Option<String>,
     }
-  }
-  ```
-
-- **2. Update `config.py` to load and expose the new setting.**
-  - Modify the `Configuration` class to load `api_base_url`.
-  - Provide a method to access it, e.g., `get_api_base_url() -> str`.
-  - Ensure it handles the case where the key might be missing in older configs by providing a sensible default (`"http://localhost:3000"`).
-
-### 3. Create the API Client (The Adapter)
-
-We will create a dedicated module to encapsulate all knowledge of the web API. This follows the **Adapter** pattern, separating the "how" of communication from the "what" of our application logic.
-
-- **1. Create a new file: `api_client.py`.**
-  - This module's sole responsibility is to handle HTTP communication with the `lifestats-web-api`.
-
-- **2. Implement an asynchronous logging function.**
-  - Define a function `log_statistic_value_async(statistic_id: int, date: date, value: str, update_policy: str | None)`.
-  - This function should:
-    - Import the global `application_config` and get the `api_base_url`.
-    - Construct the full URL: `{base_url}/statistics/{statistic_id}/log/{date_str}`.
-    - Build the JSON payload. Note that `update_policy` should be omitted from the JSON if it is `None`.
-    ```python
-    payload = {"value": value}
-    if update_policy:
-        payload["update_policy"] = update_policy
+    // Add a helper for the regex to keep it clean
+    fn time_regex() -> &'static std::sync::OnceLock<regex::Regex> { ... }
     ```
 
-    - Use `ThreadPoolExecutor` (already present in `statistic_logging.py`) to execute a `requests.post()` call in a separate thread, keeping the Anki UI responsive.
-    - Add logging for both success and error cases (e.g., connection errors, non-2xx status codes).
+- **2. Define the Application Service Command (`lifestats-application`).**
+  - In `core/application/src/use_cases/logging_service.rs`, create a new command struct:
 
-### 4. Refactor Logging Logic to Use the API Client
+    ```rust
+    use chrono::NaiveTime;
+    use lifestats_domain::statistic::types::logable_statistics::time_spans::TimeFrameListUpdatePolicy; // Or similar path
 
-Now, we'll replace the old `subprocess` calls with our new, clean API client.
+    pub struct LogTimeFrameCommand {
+        pub statistic_id: StatisticId,
+        pub date: NaiveDate,
+        pub start_time: NaiveTime,
+        pub end_time: NaiveTime,
+        pub update_policy: Option<TimeFrameListUpdatePolicy>,
+    }
+    ```
 
-- **1. Update `statistic_logging.py` to use the new `api_client`.**
-  - Import the `log_statistic_value_async` function from `api_client.py`.
-  - **Completely remove** the `execute_shell_command_async` function. Its responsibility is now fully handled by the `api_client`.
+- **3. Implement the Application Service Method (`lifestats-application`).**
+  - In `LoggingService`, add a new public method: `pub fn log_time_frame(&self, command: LogTimeFrameCommand) -> Result<()>`.
+  - This method's logic will:
+    - Fetch the `AnyStatistic` from the repository.
+    - Verify it is an `AnyStatistic::TimeSpans`. If not, return an error.
+    - Create a `TimeFrame` from `command.start_time` and `command.end_time`.
+    - Call the type-safe `log_value` method on the inner `TimeSpansStatistic`, passing the `TimeFrame` and `update_policy`.
+    - Publish the `ValueUpdated` event.
 
-- **2. Rewrite `log_time_until_now`.**
-  - Its signature remains the same, but the implementation will change.
-  - Instead of building a shell command, it will now call `api_client.log_statistic_value_async`.
-  - **Value formatting:** The value must be formatted as a string `HH:MM:SS-HH:MM:SS`.
-  - **Update Policy:** The `update_policy` will be the string `"updateendvalue"`.
+- **4. Create the API Route and Handler (`lifestats-web-api`).**
+  - In `routes/mod.rs` and `routes/statistics.rs`, add a new route: `POST /statistics/:id/log_time_frame/:date`.
+  - The new handler function will:
+    - Accept the `LogTimeFrameRequest` DTO and validate it.
+    - Parse `start_time` and `end_time` strings into `NaiveTime`. Return a `400 BadRequest` on parsing failure.
+    - Parse the `update_policy` string into the domain's `TimeFrameListUpdatePolicy` enum.
+    - Create the `LogTimeFrameCommand` and call `logging_service.log_time_frame()`.
+    - Return a `204 No Content` on success.
 
-  ```python
-  # statistic_logging.py
+- **5. Update Python Client (`AnkiLogger`).**
+  - In `api_client.py`, create a new function `log_time_frame_async(...)`.
+  - This function will POST to the new `/log_time_frame/` endpoint with the structured JSON payload: `{"start_time": ..., "end_time": ..., "update_policy": ...}`.
+  - In `statistic_logging.py`, update `log_time_until_now` to call the new `log_time_frame_async` function.
 
-  from datetime import datetime
-  from . import api_client # NEW import
+### Part 2: Improved Systemic Error Handling ✅
 
-  def log_time_until_now(statistic_id: int, start: datetime):
-      end = datetime.now()
-      date = end.date() # Log for the current date
-      value_str = f'{start.strftime("%H:%M:%S")}-{end.strftime("%H:%M:%S")}'
+- **1. Create a `DomainError` Enum (`lifestats-domain`).**
+  - Create a new public error enum in the domain crate. This makes business rule violations explicit.
+    ```rust
+    #[derive(Debug, thiserror::Error)]
+    pub enum DomainError {
+        #[error("Validation failed: {0}")]
+        ValidationError(String),
+        #[error("Could not parse value: {0}")]
+        ParsingError(String),
+        // ... other specific domain errors
+    }
+    ```
 
-      api_client.log_statistic_value_async(
-          statistic_id=statistic_id,
-          date=date,
-          value=value_str,
-          update_policy="updateendvalue"
-      )
-  ```
+- **2. Refactor Domain Logic to Return `DomainError` (`lifestats-domain`).**
+  - Change the signature of methods like `calculate_new_log_value_from_primitives` to return `Result<..., DomainError>`.
+  - Instead of returning a generic `anyhow::anyhow!("Could not parse...")`, return `Err(DomainError::ParsingError(...))`.
 
-- **3. Rewrite `log_current_time`.**
-  - This function will also be updated to call the new `api_client`. The `update_policy` for this call should be `None`.
-
-### 5. Verification & Cleanup
-
-- **1. Verify the entire flow.**
-  - Start the `lifestats-web-api` server locally.
-  - Start Anki with the modified add-on.
-  - Perform a study session that is configured to be logged.
-  - **Observe:** Watch the `lifestats-web-api` console logs. You should see incoming `POST` requests to `/statistics/{id}/log/{date}`.
-  - **Confirm:** Check the SQLite database to ensure the time spans were correctly logged and updated.
-
-- **2. Update user documentation (if any).**
-  - The add-on no longer requires the `log_statistic` binary to be in the system's `PATH`. This simplifies setup and should be communicated.
+- **3. Map `DomainError` to `ApiError` (`lifestats-web-api`).**
+  - In `web_api/src/error.rs`, implement `From<DomainError>` for `ApiError`.
+    ```rust
+    impl From<lifestats_domain::DomainError> for ApiError {
+        fn from(err: lifestats_domain::DomainError) -> Self {
+            match err {
+                // This is the key change: map domain validation/parsing errors to a 400.
+                lifestats_domain::DomainError::ValidationError(msg) |
+                lifestats_domain::DomainError::ParsingError(msg) => ApiError::BadRequest(msg),
+            }
+        }
+    }
+    ```
+  - This will require adding `lifestats-domain` as a dependency to the web API crate and enabling a feature flag if needed. The application service will need to bubble up the `DomainError`. This ensures that any time the domain rejects a value, the API correctly responds with `400 Bad Request`.

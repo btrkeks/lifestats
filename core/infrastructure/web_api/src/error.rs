@@ -54,6 +54,48 @@ impl From<validator::ValidationErrors> for ApiError {
     }
 }
 
+impl From<lifestats_domain::statistic::error::DomainError> for ApiError {
+    fn from(err: lifestats_domain::statistic::error::DomainError) -> Self {
+        use lifestats_domain::statistic::error::DomainError;
+
+        match err {
+            // Map domain validation and parsing errors to 400 Bad Request
+            DomainError::ValidationError(msg) => ApiError::BadRequest(msg),
+            DomainError::ParsingError(msg) => ApiError::BadRequest(msg),
+            DomainError::UpdatePolicyError(msg) => ApiError::BadRequest(msg),
+            DomainError::InvalidOperation(msg) => ApiError::BadRequest(msg),
+            DomainError::TimeFrame(e) => ApiError::BadRequest(e.to_string()),
+            DomainError::GoalNotFound(date) => {
+                ApiError::BadRequest(format!("Goal not found for date {}", date))
+            }
+        }
+    }
+}
+
+impl From<lifestats_domain::statistic::error::StatisticError> for ApiError {
+    fn from(err: lifestats_domain::statistic::error::StatisticError) -> Self {
+        use lifestats_domain::statistic::error::StatisticError;
+
+        match err {
+            // Map domain errors to appropriate API errors
+            StatisticError::Domain(domain_err) => domain_err.into(),
+
+            // Map other errors
+            StatisticError::InvalidValue(msg) => ApiError::BadRequest(msg),
+            StatisticError::InvalidOperation(msg) => ApiError::BadRequest(msg),
+            StatisticError::UpdatePolicy(msg) => ApiError::BadRequest(msg),
+            StatisticError::TimeFrame(e) => ApiError::BadRequest(e.to_string()),
+            StatisticError::GoalNotFound(date) => {
+                ApiError::BadRequest(format!("Goal not found for date {}", date))
+            }
+
+            // Infrastructure errors should be 500
+            StatisticError::Repository(msg) => ApiError::InternalError(msg),
+            StatisticError::General(err) => ApiError::InternalServerError(err),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

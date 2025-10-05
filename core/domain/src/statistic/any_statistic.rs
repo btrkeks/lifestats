@@ -334,13 +334,15 @@ impl AnyStatistic {
         new_value_str: &str,
         update_policy_str: Option<&str>,
     ) -> Result<(serde_json::Value, bool)> {
+        use crate::statistic::error::DomainError;
+
         match self {
             AnyStatistic::Habit(s) => {
                 let current: Option<bool> = current_value_json
                     .map(serde_json::from_value)
                     .transpose()
                     .map_err(|e| {
-                        StatisticError::InvalidValue(format!(
+                        DomainError::ParsingError(format!(
                             "Failed to deserialize current value: {}",
                             e
                         ))
@@ -348,7 +350,7 @@ impl AnyStatistic {
                 let (new_value, changed) =
                     s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
                 let json = serde_json::to_value(new_value).map_err(|e| {
-                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                    DomainError::ParsingError(format!("Failed to serialize result: {}", e))
                 })?;
                 Ok((json, changed))
             }
@@ -357,7 +359,7 @@ impl AnyStatistic {
                     .map(serde_json::from_value)
                     .transpose()
                     .map_err(|e| {
-                        StatisticError::InvalidValue(format!(
+                        DomainError::ParsingError(format!(
                             "Failed to deserialize current value: {}",
                             e
                         ))
@@ -365,7 +367,7 @@ impl AnyStatistic {
                 let (new_value, changed) =
                     s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
                 let json = serde_json::to_value(new_value).map_err(|e| {
-                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                    DomainError::ParsingError(format!("Failed to serialize result: {}", e))
                 })?;
                 Ok((json, changed))
             }
@@ -374,7 +376,7 @@ impl AnyStatistic {
                     .map(serde_json::from_value)
                     .transpose()
                     .map_err(|e| {
-                        StatisticError::InvalidValue(format!(
+                        DomainError::ParsingError(format!(
                             "Failed to deserialize current value: {}",
                             e
                         ))
@@ -382,7 +384,7 @@ impl AnyStatistic {
                 let (new_value, changed) =
                     s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
                 let json = serde_json::to_value(new_value).map_err(|e| {
-                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                    DomainError::ParsingError(format!("Failed to serialize result: {}", e))
                 })?;
                 Ok((json, changed))
             }
@@ -391,7 +393,7 @@ impl AnyStatistic {
                     .map(serde_json::from_value)
                     .transpose()
                     .map_err(|e| {
-                        StatisticError::InvalidValue(format!(
+                        DomainError::ParsingError(format!(
                             "Failed to deserialize current value: {}",
                             e
                         ))
@@ -399,12 +401,13 @@ impl AnyStatistic {
                 let (new_value, changed) =
                     s.calculate_new_log_value_from_str(current, new_value_str, update_policy_str)?;
                 let json = serde_json::to_value(new_value).map_err(|e| {
-                    StatisticError::InvalidValue(format!("Failed to serialize result: {}", e))
+                    DomainError::ParsingError(format!("Failed to serialize result: {}", e))
                 })?;
                 Ok((json, changed))
             }
             AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => Err(
-                StatisticError::InvalidOperation("Cannot log values to derived statistics".into()),
+                DomainError::InvalidOperation("Cannot log values to derived statistics".into())
+                    .into(),
             ),
         }
     }
@@ -909,7 +912,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            StatisticError::InvalidValue(_)
+            StatisticError::Domain(crate::statistic::error::DomainError::ParsingError(_))
         ));
 
         // Test case 6: Invalid update policy
@@ -918,7 +921,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            StatisticError::UpdatePolicy(_)
+            StatisticError::Domain(crate::statistic::error::DomainError::UpdatePolicyError(_))
         ));
     }
 
@@ -952,7 +955,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            StatisticError::UpdatePolicy(_)
+            StatisticError::Domain(crate::statistic::error::DomainError::UpdatePolicyError(_))
         ));
     }
 
@@ -995,7 +998,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            StatisticError::InvalidValue(_)
+            StatisticError::Domain(crate::statistic::error::DomainError::ParsingError(_))
         ));
     }
 
@@ -1032,7 +1035,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            StatisticError::InvalidValue(_)
+            StatisticError::Domain(crate::statistic::error::DomainError::ParsingError(_))
         ));
     }
 
@@ -1043,7 +1046,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            StatisticError::InvalidOperation(_)
+            StatisticError::Domain(crate::statistic::error::DomainError::InvalidOperation(_))
         ));
 
         let time_diff_stat = time_difference_stat();
@@ -1051,7 +1054,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            StatisticError::InvalidOperation(_)
+            StatisticError::Domain(crate::statistic::error::DomainError::InvalidOperation(_))
         ));
     }
 

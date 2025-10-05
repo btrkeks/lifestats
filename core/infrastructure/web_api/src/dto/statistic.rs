@@ -10,6 +10,25 @@ pub struct LogValueRequest {
     pub update_policy: Option<String>,
 }
 
+/// Request DTO for logging a time frame to a TimeSpans statistic
+#[derive(Debug, Deserialize, Validate)]
+pub struct LogTimeFrameRequest {
+    #[validate(custom(function = "validate_time_format"))]
+    pub start_time: String,
+    #[validate(custom(function = "validate_time_format"))]
+    pub end_time: String,
+    pub update_policy: Option<String>,
+}
+
+fn validate_time_format(time_str: &str) -> Result<(), validator::ValidationError> {
+    let time_regex = regex::Regex::new(r"^\d{2}:\d{2}(:\d{2})?$").unwrap();
+    if time_regex.is_match(time_str) {
+        Ok(())
+    } else {
+        Err(validator::ValidationError::new("time_format"))
+    }
+}
+
 /// Response DTO representing a statistic's metadata
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatisticMetadataResponse {

@@ -1,4 +1,4 @@
-use crate::statistic::error::{Result, StatisticError};
+use crate::statistic::error::{DomainError, DomainResult, Result};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
 use std::str::FromStr;
@@ -16,19 +16,19 @@ where
         update_policy: Self::UpdatePolicyType,
     ) -> (Self::LogValueType, bool);
 
-    fn parse_log_value(&self, value_str: &str) -> Result<Self::LogValueType> {
+    fn parse_log_value(&self, value_str: &str) -> DomainResult<Self::LogValueType> {
         value_str
             .parse::<Self::LogValueType>()
-            .map_err(|_| StatisticError::InvalidValue(format!("Could not parse: {}", value_str)))
+            .map_err(|_| DomainError::ParsingError(format!("Could not parse: {}", value_str)))
     }
 
     fn parse_update_policy(
         &self,
         update_policy_str: Option<&str>,
-    ) -> Result<Self::UpdatePolicyType> {
+    ) -> DomainResult<Self::UpdatePolicyType> {
         match update_policy_str {
             Some(up_str) => up_str.parse::<Self::UpdatePolicyType>().map_err(|_| {
-                StatisticError::UpdatePolicy(format!("Invalid update policy: {}", up_str))
+                DomainError::UpdatePolicyError(format!("Invalid update policy: {}", up_str))
             }),
             None => Ok(Self::UpdatePolicyType::default()),
         }

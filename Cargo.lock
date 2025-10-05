@@ -1590,6 +1590,7 @@ dependencies = [
  "log",
  "mockall",
  "plotting",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

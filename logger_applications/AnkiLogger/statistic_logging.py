@@ -31,11 +31,13 @@ def log_time_until_now(statistic_id: int, start: datetime):
     """
     end = datetime.now()
     date = end.date()
-    value_str = f'{start.strftime("%H:%M:%S")}-{end.strftime("%H:%M:%S")}'
+    start_time_str = start.strftime("%H:%M:%S")
+    end_time_str = end.strftime("%H:%M:%S")
 
-    api_client.log_statistic_value_async(
+    api_client.log_time_frame_async(
         statistic_id=statistic_id,
         date=date,
-        value=value_str,
+        start_time=start_time_str,
+        end_time=end_time_str,
         update_policy="updateendvalue"
     )

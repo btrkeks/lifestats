@@ -20,6 +20,10 @@ where
     Router::new()
         .route("/statistics", get(statistics::get_all_statistics))
         .route("/statistics/:id/log/:date", post(statistics::log_value))
+        .route(
+            "/statistics/:id/log_time_frame/:date",
+            post(statistics::log_time_frame),
+        )
         .route("/plots/:id/image", get(plots::get_plot_image))
         .with_state(app_state)
 }
