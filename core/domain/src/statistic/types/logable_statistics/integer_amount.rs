@@ -1,4 +1,5 @@
 use crate::statistic::traits::base_statistic::Statistic;
+use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
@@ -53,6 +54,12 @@ impl LogableStatistic for IntegerAmountStatistic {
         update_policy: Self::UpdatePolicyType,
     ) -> (Self::LogValueType, bool) {
         update_policy.apply(current_value, new_value)
+    }
+}
+
+impl IntegerStatistic for IntegerAmountStatistic {
+    fn value_as_i64(&self, value: &Self::LogValueType) -> i64 {
+        *value
     }
 }
 

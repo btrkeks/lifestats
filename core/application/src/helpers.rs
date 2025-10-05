@@ -1,7 +1,5 @@
 use anyhow::{anyhow, Result};
-use chrono::NaiveTime;
 use lifestats_domain::plot::data::DrawableData;
-use lifestats_domain::plot::specification::PlotType;
 use lifestats_domain::shared::percentage::Percentage;
 use lifestats_domain::shared::time_frame_list::TimeFrameList;
 use lifestats_domain::statistic::any_statistic::AnyStatistic;
@@ -35,34 +33,16 @@ pub fn percentage_to_color(percentage: Option<Percentage>) -> [u8; 3] {
     }
 }
 
-/// Converts a JSON value to DrawableData based on the plot type
-/// This eliminates the silent failure of JSON parsing in the renderer
-pub fn json_to_drawable_data(value: &Value, plot_type: PlotType) -> Result<DrawableData> {
-    match plot_type {
-        PlotType::BarChart
-        | PlotType::LineChart
-        | PlotType::Scatter
-        | PlotType::CircularProgress => {
-            // These plot types expect integer values
-            if let Some(i) = value.as_i64() {
-                Ok(DrawableData::Integer(i))
-            } else if let Some(f) = value.as_f64() {
-                Ok(DrawableData::Integer(f as i64))
-            } else {
-                Err(anyhow!(
-                    "Expected integer value for {:?}, got: {:?}",
-                    plot_type,
-                    value
-                ))
-            }
-        }
-        PlotType::TimeFrames => {
-            // TimeFrames expects a TimeFrameList
-            let time_frame_list = serde_json::from_value::<TimeFrameList>(value.clone())
-                .map_err(|e| anyhow!("Failed to parse TimeFrameList: {}", e))?;
-            Ok(DrawableData::TimeFrames(time_frame_list))
-        }
+/// Converts a JSON value to DrawableData based on the statistic's capabilities.
+pub fn json_to_drawable_data(statistic: &AnyStatistic, value: &Value) -> Result<DrawableData> {
+    if let Ok(int_value) = statistic.value_as_i64_from_json(value) {
+        return Ok(DrawableData::Integer(int_value));
     }
+
+    Err(anyhow!(
+        "Value could not be converted to a drawable format for statistic '{}'",
+        statistic.get_metadata().name()
+    ))
 }
 
 /// Evaluates goal achievement for a given statistic and returns a percentage
@@ -95,7 +75,7 @@ pub fn evaluate_goal_achievement(
             Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
         }
         AnyStatistic::PointInTime(_) => {
-            let value = serde_json::from_value::<NaiveTime>(log_value.clone())
+            let value = serde_json::from_value::<chrono::NaiveTime>(log_value.clone())
                 .map_err(|e| anyhow!("Failed to parse NaiveTime: {}", e))?;
             let goal_obj = serde_json::from_value::<FinishedInTimeGoal>(goal.clone())
                 .map_err(|e| anyhow!("Failed to parse FinishedInTimeGoal: {}", e))?;

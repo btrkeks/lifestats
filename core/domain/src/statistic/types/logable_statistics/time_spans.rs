@@ -1,5 +1,6 @@
 use crate::shared::time_frame_list::TimeFrameList;
 use crate::statistic::traits::base_statistic::Statistic;
+use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
@@ -84,5 +85,11 @@ impl TimeSpansStatistic {
             new_value,
             update_policy,
         )
+    }
+}
+
+impl IntegerStatistic for TimeSpansStatistic {
+    fn value_as_i64(&self, value: &Self::LogValueType) -> i64 {
+        value.get_total_duration().num_seconds()
     }
 }

@@ -1,4 +1,5 @@
 use crate::statistic::traits::base_statistic::Statistic;
+use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::habit_goal::HabitGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
@@ -82,5 +83,15 @@ impl HabitStatistic {
             new_value,
             update_policy,
         )
+    }
+}
+
+impl IntegerStatistic for HabitStatistic {
+    fn value_as_i64(&self, value: &Self::LogValueType) -> i64 {
+        if *value {
+            1
+        } else {
+            0
+        }
     }
 }

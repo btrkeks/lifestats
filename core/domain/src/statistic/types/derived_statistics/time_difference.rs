@@ -41,8 +41,8 @@ impl Statistic for TimeDifferenceStatistic {
 }
 
 impl IntegerStatistic for TimeDifferenceStatistic {
-    fn value_into_i64(&self, value: Self::LogValueType) -> i64 {
-        value.into()
+    fn value_as_i64(&self, value: &Self::LogValueType) -> i64 {
+        (*value).into()
     }
 }
 

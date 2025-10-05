@@ -1,7 +1,9 @@
 use crate::statistic::traits::base_statistic::Statistic;
 
+/// Trait for statistics that can express their log values as a plain integer.
 pub trait IntegerStatistic: Statistic {
-    fn value_into_i64(&self, value: Self::LogValueType) -> i64;
+    /// Converts the native log value type into a generic `i64` representation.
+    fn value_as_i64(&self, value: &Self::LogValueType) -> i64;
 
     // TODO: This method needs to be redesigned to properly handle goals
     // fn get_integer_goals_closed_range(
@@ -12,7 +14,7 @@ pub trait IntegerStatistic: Statistic {
     //     self.get_goals_closed_range(start, end)
     //         .into_iter()
     //         .map(|date_value| {
-    //             DatedValue::new(date_value.date, self.value_into_i64(date_value.value))
+    //             DatedValue::new(date_value.date, self.value_as_i64(&date_value.value))
     //         })
     //         .collect()
     // }

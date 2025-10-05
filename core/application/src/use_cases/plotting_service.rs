@@ -76,7 +76,8 @@ where
             .into_iter()
             .map(|log| {
                 // Convert JSON value to DrawableData (type-safe!)
-                let drawable_value = json_to_drawable_data(&log.value, plot_spec.plot_type)?;
+                let drawable_value =
+                    json_to_drawable_data(&statistic, &log.value, plot_spec.plot_type)?;
 
                 // Get the goal for this date
                 let goal = goal_map.get(&log.date);
@@ -129,10 +130,17 @@ where
 mod tests {
     use super::*;
     use chrono::NaiveDate;
+    use lifestats_domain::plot::data::DrawableData;
     use lifestats_domain::plot::specification::{PlotSpecification, PlotType};
     use lifestats_domain::shared::dated_value::DatedValue;
     use lifestats_domain::shared::ids::StatisticId;
-    use serde_json::Value;
+    use lifestats_domain::shared::time_frame_list::TimeFrameList;
+    use lifestats_domain::statistic::any_statistic::AnyStatistic;
+    use lifestats_domain::statistic::types::logable_statistics::{
+        integer_amount::IntegerAmountStatistic, time_spans::TimeSpansStatistic,
+    };
+    use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use serde_json::{json, Value};
 
     // We'll use mockall to create mock implementations
     use mockall::mock;
@@ -175,10 +183,6 @@ mod tests {
 
     #[test]
     fn test_get_plot_data_success() {
-        use lifestats_domain::statistic::any_statistic::AnyStatistic;
-        use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
-        use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
-
         // Setup mocks
         let mut stat_repo = MockStatRepo::new();
         let mut plot_repo = MockPlotRepo::new();
@@ -259,5 +263,95 @@ mod tests {
             PlottingService::new(Arc::new(stat_repo), Arc::new(plot_repo), Arc::new(renderer));
         let result = service.get_plot_data(plot_id, date_range);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_plot_data_for_time_frames_plot_produces_correct_drawable_data() {
+        // ARRANGE
+        let mut stat_repo = MockStatRepo::new();
+        let mut plot_repo = MockPlotRepo::new();
+        let renderer = MockRenderer::new(); // Not used, but needed for construction
+
+        let plot_id = PlotId::from(7);
+        let stat_id = StatisticId::from(10);
+        let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        let date_range = DateRange::new(start, end).unwrap();
+
+        // 1. Configure PlotRepository to return a TimeFrames plot spec
+        let plot_spec = PlotSpecification::new(
+            plot_id,
+            "Study Time Plot".to_string(),
+            stat_id,
+            PlotType::TimeFrames,
+        );
+        plot_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(plot_spec.clone())));
+
+        // 2. Configure StatisticRepository to return a TimeSpansStatistic...
+        let test_stat = AnyStatistic::TimeSpans(TimeSpansStatistic::new(
+            StatisticMetadata::new(stat_id, "Productivity".into(), "Study Time".into()),
+            None,
+            start,
+        ));
+        stat_repo
+            .expect_find_metadata_by_id()
+            .returning(move |_| Ok(test_stat.clone()));
+
+        // 3. ...and a logged value for it.
+        let time_frame_list_json = json!([
+            {"start": "09:00:00", "end": "10:00:00"}
+        ]);
+        let expected_time_frames: TimeFrameList =
+            serde_json::from_value(time_frame_list_json.clone()).unwrap();
+        stat_repo
+            .expect_find_log_values_in_range()
+            .returning(move |_, _| {
+                Ok(vec![DatedValue::new(
+                    NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                    time_frame_list_json.clone(),
+                )])
+            });
+
+        // This mock will not be hit, but is required by the function signature
+        stat_repo
+            .expect_find_goals_in_range()
+            .returning(|_, _| Ok(vec![]));
+
+        let service =
+            PlottingService::new(Arc::new(stat_repo), Arc::new(plot_repo), Arc::new(renderer));
+
+        // ACT
+        let result = service.get_plot_data(plot_id, date_range);
+        assert!(result.is_ok());
+        let plot_data = result.unwrap();
+
+        // ASSERT
+        assert!(
+            !plot_data.points.is_empty(),
+            "Should have produced data points"
+        );
+
+        let first_point = &plot_data.points[0];
+
+        // This is the key assertion that will fail before the fix.
+        // We expect TimeFrames data, but the buggy logic will produce Integer data.
+        assert!(
+            matches!(first_point.value, DrawableData::TimeFrames(_)),
+            "For a TimeFrames plot, DrawableData should be TimeFrames, but it was {:?} instead.",
+            first_point.value
+        );
+
+        if let DrawableData::TimeFrames(ref frames) = first_point.value {
+            assert_eq!(frames, &expected_time_frames);
+        }
+
+        if let DrawableData::Integer(val) = first_point.value {
+            panic!(
+                "Incorrectly converted TimeFrameList to Integer({}). This is the root cause of the panic.",
+                val
+            );
+        }
     }
 }

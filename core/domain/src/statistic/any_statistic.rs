@@ -2,6 +2,7 @@ use crate::shared::seconds::Seconds;
 use crate::shared::time_frame_list::TimeFrameList;
 use crate::statistic::error::{Result, StatisticError};
 use crate::statistic::traits::base_statistic::Statistic;
+use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
 use crate::statistic::types::derived_statistics::time_difference::TimeDifferenceStatistic;
@@ -108,6 +109,59 @@ impl AnyStatistic {
     /// Get metadata from the inner statistic
     pub fn get_metadata(&self) -> &StatisticMetadata {
         dispatch_statistic!(self, get_metadata,)
+    }
+
+    /// Attempts to convert a statistic's log value (encoded as JSON) into an integer.
+    pub fn value_as_i64_from_json(&self, value_json: &serde_json::Value) -> Result<i64> {
+        use serde::de::DeserializeOwned;
+
+        fn deserialize<T: DeserializeOwned>(
+            value_json: &serde_json::Value,
+            metadata: &StatisticMetadata,
+            expected: &str,
+        ) -> Result<T> {
+            serde_json::from_value(value_json.clone()).map_err(|e| {
+                StatisticError::InvalidValue(format!(
+                    "Statistic {} ({}) expected {expected} log value but received incompatible JSON: {}",
+                    metadata.id(),
+                    metadata.name(),
+                    e
+                ))
+            })
+        }
+
+        match self {
+            AnyStatistic::Habit(s) => {
+                let metadata = s.get_metadata();
+                let value: bool = deserialize(value_json, metadata, "boolean")?;
+                Ok(s.value_as_i64(&value))
+            }
+            AnyStatistic::IntegerAmount(s) => {
+                let metadata = s.get_metadata();
+                let value: i64 = deserialize(value_json, metadata, "integer")?;
+                Ok(s.value_as_i64(&value))
+            }
+            AnyStatistic::PointInTime(s) => {
+                let metadata = s.get_metadata();
+                let value: NaiveTime = deserialize(value_json, metadata, "time")?;
+                Ok(s.value_as_i64(&value))
+            }
+            AnyStatistic::TimeSpans(s) => {
+                let metadata = s.get_metadata();
+                let value: TimeFrameList = deserialize(value_json, metadata, "time frame list")?;
+                Ok(s.value_as_i64(&value))
+            }
+            AnyStatistic::Summing(s) => {
+                let metadata = s.get_metadata();
+                let value: Seconds = deserialize(value_json, metadata, "seconds duration")?;
+                Ok(s.value_as_i64(&value))
+            }
+            AnyStatistic::TimeDifference(s) => {
+                let metadata = s.get_metadata();
+                let value: Seconds = deserialize(value_json, metadata, "seconds duration")?;
+                Ok(s.value_as_i64(&value))
+            }
+        }
     }
 
     /// Get the statistic ID

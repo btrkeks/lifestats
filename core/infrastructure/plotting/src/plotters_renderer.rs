@@ -59,6 +59,21 @@ impl PlottersRenderer {
             }
         }
 
+        // Draw goal lines
+        for point in &data.points {
+            if let Some(goal_value) = &point.goal {
+                if let Some(goal_number) = goal_value.as_i64() {
+                    chart.draw_series([PathElement::new(
+                        [
+                            (point.date, goal_number as f64),
+                            (point.date + chrono::Duration::days(1), goal_number as f64),
+                        ],
+                        GOAL_LINE_COLOR.stroke_width(2),
+                    )])?;
+                }
+            }
+        }
+
         drop(chart);
         drop(root);
 
@@ -122,6 +137,21 @@ impl PlottersRenderer {
             }
         }
 
+        // Draw goal lines
+        for point in &data.points {
+            if let Some(goal_value) = &point.goal {
+                if let Some(goal_number) = goal_value.as_i64() {
+                    chart.draw_series([PathElement::new(
+                        [
+                            (point.date, goal_number as f64),
+                            (point.date + chrono::Duration::days(1), goal_number as f64),
+                        ],
+                        GOAL_LINE_COLOR.stroke_width(2),
+                    )])?;
+                }
+            }
+        }
+
         drop(chart);
         drop(root);
 
@@ -167,6 +197,21 @@ impl PlottersRenderer {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
                 chart.draw_series([Circle::new((point.date, *value as f64), 5, color.filled())])?;
+            }
+        }
+
+        // Draw goal lines
+        for point in &data.points {
+            if let Some(goal_value) = &point.goal {
+                if let Some(goal_number) = goal_value.as_i64() {
+                    chart.draw_series([PathElement::new(
+                        [
+                            (point.date, goal_number as f64),
+                            (point.date + chrono::Duration::days(1), goal_number as f64),
+                        ],
+                        GOAL_LINE_COLOR.stroke_width(2),
+                    )])?;
+                }
             }
         }
 

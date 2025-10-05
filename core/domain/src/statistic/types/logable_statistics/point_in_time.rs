@@ -1,10 +1,11 @@
 use crate::statistic::traits::base_statistic::Statistic;
+use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::traits::logable_statistic::LogableStatistic;
 use crate::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use crate::statistic::value_objects::update_policies::fixed_value::FixedValueUpdatePolicy;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveTime, Timelike};
 
 /// A statistic that represents a point in time
 ///
@@ -82,5 +83,11 @@ impl PointInTimeStatistic {
             new_value,
             update_policy,
         )
+    }
+}
+
+impl IntegerStatistic for PointInTimeStatistic {
+    fn value_as_i64(&self, value: &Self::LogValueType) -> i64 {
+        value.num_seconds_from_midnight() as i64
     }
 }
