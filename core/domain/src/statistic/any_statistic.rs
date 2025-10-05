@@ -63,7 +63,7 @@ where
 }
 
 /// Type-erased wrapper for goals from any statistic type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum AnyGoal {
     Habit(HabitGoal),
     IntegerAmount(AmountGoal<i64>),

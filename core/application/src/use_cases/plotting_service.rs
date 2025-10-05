@@ -56,22 +56,37 @@ where
             .statistic_repository
             .find_metadata_by_id(statistic_id)?;
 
-        // 4. Load log values and goals for the date range
+        // 4. Load log values and per-day goals for the date range
         let log_values = self
             .statistic_repository
             .find_log_values_in_range(statistic_id, date_range)?;
 
-        let goals = self
+        let daily_goals = self
             .statistic_repository
             .find_goals_in_range(statistic_id, date_range)?;
 
         // 5. Create a map of dates to goal values for efficient lookup
-        let goal_map: std::collections::HashMap<_, _> = goals
+        let daily_goal_map: std::collections::HashMap<_, _> = daily_goals
             .into_iter()
             .map(|g| (g.date, g.value.clone()))
             .collect();
 
-        // 6. Convert log values to data points with DrawableData and colors
+        // 6. Get the default goal and the date it's valid from
+        let default_goal_valid_since = statistic.get_default_goal_valid_since();
+        let default_goal_json = statistic.get_default_goal().and_then(|any_goal| {
+            // The renderer expects a JSON Value, so we must serialize the typed goal
+            // We match on the AnyGoal and serialize the inner type to avoid enum wrapper
+            use lifestats_domain::statistic::any_statistic::AnyGoal;
+            match any_goal {
+                AnyGoal::Habit(g) => serde_json::to_value(g).ok(),
+                AnyGoal::IntegerAmount(g) => serde_json::to_value(g).ok(),
+                AnyGoal::FinishedInTime(g) => serde_json::to_value(g).ok(),
+                AnyGoal::TimeSpans(g) => serde_json::to_value(g).ok(),
+                AnyGoal::SecondsAmount(g) => serde_json::to_value(g).ok(),
+            }
+        });
+
+        // 7. Convert log values to data points with DrawableData and colors
         let points: Result<Vec<DataPoint>> = log_values
             .into_iter()
             .map(|log| {
@@ -79,11 +94,17 @@ where
                 let drawable_value =
                     json_to_drawable_data(&statistic, &log.value, plot_spec.plot_type)?;
 
-                // Get the goal for this date
-                let goal = goal_map.get(&log.date);
+                // Determine the correct goal for this date: daily override or default
+                let goal_for_day = daily_goal_map.get(&log.date).or_else(|| {
+                    if log.date >= default_goal_valid_since {
+                        default_goal_json.as_ref()
+                    } else {
+                        None
+                    }
+                });
 
                 // Evaluate goal achievement and calculate color
-                let percentage = evaluate_goal_achievement(&statistic, &log.value, goal)?;
+                let percentage = evaluate_goal_achievement(&statistic, &log.value, goal_for_day)?;
                 let color = percentage_to_color(percentage);
 
                 // Create the data point with all processed data
@@ -91,17 +112,17 @@ where
                     log.date,
                     drawable_value,
                     color,
-                    goal.cloned(),
+                    goal_for_day.cloned(),
                 ))
             })
             .collect();
 
         let points = points?;
 
-        // 7. Calculate the Y-axis configuration using domain logic
+        // 8. Calculate the Y-axis configuration using domain logic
         let y_axis = YAxis::from_data_points(&points, plot_spec.plot_type)?;
 
-        // 8. Return the assembled PlotData
+        // 9. Return the assembled PlotData
         Ok(PlotData::new(
             plot_spec.title.clone(),
             points,
