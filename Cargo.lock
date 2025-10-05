@@ -2125,6 +2125,7 @@ dependencies = [
  "image 0.25.5",
  "imageproc",
  "lifestats-domain",
+ "log",
  "plotters",
  "serde_json",
 ]

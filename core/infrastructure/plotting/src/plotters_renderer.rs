@@ -6,6 +6,7 @@ use lifestats_domain::plot::data::{DrawableData, PlotData};
 use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
 use lifestats_domain::plot::specification::PlotType;
 use lifestats_domain::shared::time_frame_list::TimeFrameList;
+use log::warn;
 use plotters::prelude::*;
 
 use crate::common::{
@@ -307,54 +308,61 @@ impl PlottersRenderer {
         // Draw goal lines and shading
         for point in &data.points {
             if let Some(goal_value) = &point.goal {
-                if let Ok(goal_time_frames) =
-                    serde_json::from_value::<TimeFrameList>(goal_value.clone())
-                {
-                    if goal_time_frames.is_empty() {
-                        continue;
-                    }
+                match serde_json::from_value::<TimeFrameList>(goal_value.clone()) {
+                    Ok(goal_time_frames) => {
+                        if goal_time_frames.is_empty() {
+                            continue;
+                        }
 
-                    let mut last_end_time = 0;
+                        let mut last_end_time = 0;
 
-                    for frame in goal_time_frames.iter() {
-                        let current_start_time =
-                            frame.get_start().num_seconds_from_midnight() as i64;
-                        let current_end_time = frame.get_end().num_seconds_from_midnight() as i64;
+                        for frame in goal_time_frames.iter() {
+                            let current_start_time =
+                                frame.get_start().num_seconds_from_midnight() as i64;
+                            let current_end_time =
+                                frame.get_end().num_seconds_from_midnight() as i64;
 
-                        // Shade the area between the last end time and the current start time
+                            // Shade the area between the last end time and the current start time
+                            chart.draw_series([get_bar(
+                                point.date,
+                                last_end_time,
+                                current_start_time,
+                                0,
+                                &SHADING_COLOR,
+                            )])?;
+
+                            // Draw the goal lines
+                            chart.draw_series([
+                                get_horizontal_line(
+                                    point.date,
+                                    current_start_time,
+                                    GOAL_LINE_COLOR.mix(0.7),
+                                ),
+                                get_horizontal_line(
+                                    point.date,
+                                    current_end_time,
+                                    GOAL_LINE_COLOR.mix(0.7),
+                                ),
+                            ])?;
+
+                            last_end_time = current_end_time;
+                        }
+
+                        // Shade the area between the last end time and the y-axis max
                         chart.draw_series([get_bar(
                             point.date,
                             last_end_time,
-                            current_start_time,
+                            y_axis_max,
                             0,
                             &SHADING_COLOR,
                         )])?;
-
-                        // Draw the goal lines
-                        chart.draw_series([
-                            get_horizontal_line(
-                                point.date,
-                                current_start_time,
-                                GOAL_LINE_COLOR.mix(0.7),
-                            ),
-                            get_horizontal_line(
-                                point.date,
-                                current_end_time,
-                                GOAL_LINE_COLOR.mix(0.7),
-                            ),
-                        ])?;
-
-                        last_end_time = current_end_time;
                     }
-
-                    // Shade the area between the last end time and the y-axis max
-                    chart.draw_series([get_bar(
-                        point.date,
-                        last_end_time,
-                        y_axis_max,
-                        0,
-                        &SHADING_COLOR,
-                    )])?;
+                    Err(e) => {
+                        warn!(
+                            "Failed to parse goal value as TimeFrameList for date {}: {}. Goal value: {}",
+                            point.date, e, goal_value
+                        );
+                    }
                 }
             }
         }
