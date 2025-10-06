@@ -1,0 +1,214 @@
+/* Write your global styles here, in SCSS syntax. Variables and mixins from the src/variables.scss file are available here without importing */
+/* Write your global styles here, in PostCSS syntax */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-color: rgba(0, 0, 0, 0.87);
+  --background-color: #eceff1;
+}
+
+@layer base {
+  body {
+    color: var(--font-color);
+    background-color: var(--background-color);
+  }
+}
+
+@layer utilities {
+  .writing-horizontal-tb {
+    writing-mode: horizontal-tb;
+  }
+
+  .tap-highlight-transparent {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@font-face {
+  font-family: 'BIZ UDMincho';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/biz-udmincho-v1-400.woff2') format('woff2'),
+    url('$lib/assets/fonts/biz-udmincho-v1-400.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BIZ UDMincho';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/biz-udmincho-v1-700.woff2') format('woff2'),
+    url('$lib/assets/fonts/biz-udmincho-v1-700.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BIZ UDGothic';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/biz-udgothic-v1-400.woff2') format('woff2'),
+    url('$lib/assets/fonts/biz-udgothic-v1-400.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BIZ UDGothic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/biz-udgothic-v1-700.woff2') format('woff2'),
+    url('$lib/assets/fonts/biz-udgothic-v1-700.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Genei Koburi Mincho v5';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/genei-koburi-mincho-v5-regular.woff2') format('woff2'),
+    url('$lib/assets/fonts/genei-koburi-mincho-v5-regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Klee One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/klee-one-v7-regular.woff2') format('woff2'),
+    url('$lib/assets/fonts/klee-one-v7-regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Klee One';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/klee-one-v7-600.woff2') format('woff2'),
+    url('$lib/assets/fonts/klee-one-v7-600.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Klee One SemiBold';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/klee-one-v7-600.woff2') format('woff2'),
+    url('$lib/assets/fonts/klee-one-v7-600.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/noto-sans-v42-regular.woff2') format('woff2'),
+    url('$lib/assets/fonts/noto-sans-v42-regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/noto-sans-v42-500.woff2') format('woff2'),
+    url('$lib/assets/fonts/noto-sans-v42-500.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/noto-sans-v42-700.woff2') format('woff2'),
+    url('$lib/assets/fonts/noto-sans-v42-700.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Serif JP';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/noto-serif-v21-regular.woff2') format('woff2'),
+    url('$lib/assets/fonts/noto-serif-v21-regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Serif JP';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/noto-serif-v21-500.woff2') format('woff2'),
+    url('$lib/assets/fonts/noto-serif-v21-500.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Serif JP';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/noto-serif-v21-700.woff2') format('woff2'),
+    url('$lib/assets/fonts/noto-serif-v21-700.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Shippori Mincho';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/shippori-mincho-v15-regular.woff2') format('woff2'),
+    url('$lib/assets/fonts/shippori-mincho-v15-regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Shippori Mincho';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/shippori-mincho-v15-500.woff2') format('woff2'),
+    url('$lib/assets/fonts/shippori-mincho-v15-500.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Shippori Mincho';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local(''),
+    url('$lib/assets/fonts/shippori-mincho-v15-700.woff2') format('woff2'),
+    url('$lib/assets/fonts/shippori-mincho-v15-700.woff') format('woff');
+}

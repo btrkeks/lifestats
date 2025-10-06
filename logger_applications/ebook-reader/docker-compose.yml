@@ -1,0 +1,8 @@
+services:
+  ebook-reader:
+    build:
+      context: ./
+      dockerfile: ./apps/web/Dockerfile
+    ports:
+      - 5001:80
+    restart: always
