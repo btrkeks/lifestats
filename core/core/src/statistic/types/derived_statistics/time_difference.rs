@@ -1,7 +1,7 @@
+use crate::shared::ids::StatisticId;
 use crate::shared::seconds::Seconds;
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::integer_statistic::IntegerStatistic;
-use crate::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;
 use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::NaiveDate;
@@ -9,9 +9,10 @@ use chrono::NaiveDate;
 #[derive(Clone)]
 pub struct TimeDifferenceStatistic {
     metadata: StatisticMetadata,
-
-    _statistic0: PointInTimeStatistic,
-    _statistic1: PointInTimeStatistic,
+    /// ID of the first source statistic (PointInTime)
+    source_statistic_id_0: StatisticId,
+    /// ID of the second source statistic (PointInTime)
+    source_statistic_id_1: StatisticId,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
@@ -49,17 +50,22 @@ impl IntegerStatistic for TimeDifferenceStatistic {
 impl TimeDifferenceStatistic {
     pub fn new(
         metadata: StatisticMetadata,
-        _statistic0: PointInTimeStatistic,
-        _statistic1: PointInTimeStatistic,
+        source_statistic_id_0: StatisticId,
+        source_statistic_id_1: StatisticId,
         default_goal: Option<<Self as Statistic>::GoalType>,
         default_goal_start: NaiveDate,
     ) -> Self {
         Self {
             metadata,
-            _statistic0,
-            _statistic1,
+            source_statistic_id_0,
+            source_statistic_id_1,
             default_goal,
             default_goal_start,
         }
+    }
+
+    /// Get the source statistic IDs
+    pub fn source_ids(&self) -> (StatisticId, StatisticId) {
+        (self.source_statistic_id_0, self.source_statistic_id_1)
     }
 }

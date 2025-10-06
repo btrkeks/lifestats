@@ -426,16 +426,11 @@ mod tests {
         use lifestats_core::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
         let metadata = create_test_metadata(4, "test_summing");
 
-        // Create source statistics for the summing statistic
-        let source1 = TimeSpansStatistic::new(create_test_metadata(10, "source1"), None, test_date);
-        let source2 = TimeSpansStatistic::new(create_test_metadata(11, "source2"), None, test_date);
+        // Source statistic IDs for the summing statistic
+        let source_ids = vec![StatisticId(10), StatisticId(11)];
 
-        let stat = AnyStatistic::Summing(Box::new(SummingStatistic::new(
-            metadata,
-            vec![source1, source2],
-            None,
-            test_date,
-        )));
+        let stat =
+            AnyStatistic::Summing(SummingStatistic::new(metadata, source_ids, None, test_date));
 
         repo.expect_find_metadata_by_id()
             .times(1)

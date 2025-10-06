@@ -1,7 +1,7 @@
+use crate::shared::ids::StatisticId;
 use crate::shared::seconds::Seconds;
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::integer_statistic::IntegerStatistic;
-use crate::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
 use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::NaiveDate;
@@ -10,7 +10,8 @@ use chrono::NaiveDate;
 #[derive(Clone)]
 pub struct SummingStatistic {
     metadata: StatisticMetadata,
-    _statistics: Vec<TimeSpansStatistic>,
+    /// IDs of source TimeSpans statistics to sum
+    source_statistic_ids: Vec<StatisticId>,
     /// The current default goal
     default_goal: Option<<Self as Statistic>::GoalType>,
     /// The date from which the current default goal became active (including)
@@ -48,15 +49,20 @@ impl IntegerStatistic for SummingStatistic {
 impl SummingStatistic {
     pub fn new(
         metadata: StatisticMetadata,
-        _statistics: Vec<TimeSpansStatistic>,
+        source_statistic_ids: Vec<StatisticId>,
         default_goal: Option<<Self as Statistic>::GoalType>,
         default_goal_start: NaiveDate,
     ) -> Self {
         Self {
             metadata,
-            _statistics,
+            source_statistic_ids,
             default_goal,
             default_goal_start,
         }
+    }
+
+    /// Get the source statistic IDs
+    pub fn source_ids(&self) -> &[StatisticId] {
+        &self.source_statistic_ids
     }
 }

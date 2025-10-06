@@ -84,8 +84,8 @@ pub enum AnyStatistic {
     IntegerAmount(IntegerAmountStatistic),
     PointInTime(PointInTimeStatistic),
     TimeSpans(TimeSpansStatistic),
-    Summing(Box<SummingStatistic>),
-    TimeDifference(Box<TimeDifferenceStatistic>),
+    Summing(SummingStatistic),
+    TimeDifference(TimeDifferenceStatistic),
 }
 
 /// Macro to dispatch method calls to the inner statistic variant
@@ -342,11 +342,11 @@ impl AnyStatistic {
     }
 
     pub fn from_summing(stat: SummingStatistic) -> Self {
-        AnyStatistic::Summing(Box::new(stat))
+        AnyStatistic::Summing(stat)
     }
 
     pub fn from_time_difference(stat: TimeDifferenceStatistic) -> Self {
-        AnyStatistic::TimeDifference(Box::new(stat))
+        AnyStatistic::TimeDifference(stat)
     }
 }
 
@@ -382,14 +382,14 @@ impl AnyStatistic {
 
     pub fn into_summing(self) -> Option<SummingStatistic> {
         match self {
-            AnyStatistic::Summing(s) => Some(*s),
+            AnyStatistic::Summing(s) => Some(s),
             _ => None,
         }
     }
 
     pub fn into_time_difference(self) -> Option<TimeDifferenceStatistic> {
         match self {
-            AnyStatistic::TimeDifference(s) => Some(*s),
+            AnyStatistic::TimeDifference(s) => Some(s),
             _ => None,
         }
     }
@@ -424,14 +424,14 @@ impl AnyStatistic {
 
     pub fn as_summing(&self) -> Option<&SummingStatistic> {
         match self {
-            AnyStatistic::Summing(s) => Some(s.as_ref()),
+            AnyStatistic::Summing(s) => Some(s),
             _ => None,
         }
     }
 
     pub fn as_time_difference(&self) -> Option<&TimeDifferenceStatistic> {
         match self {
-            AnyStatistic::TimeDifference(s) => Some(s.as_ref()),
+            AnyStatistic::TimeDifference(s) => Some(s),
             _ => None,
         }
     }
