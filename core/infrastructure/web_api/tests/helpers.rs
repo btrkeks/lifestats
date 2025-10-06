@@ -110,11 +110,7 @@ pub fn mock_app_state(
 /// Factory function to create a mock IntegerAmount statistic
 #[allow(dead_code)]
 pub fn mock_integer_statistic(id: u32, name: &str, category: &str) -> AnyStatistic {
-    let metadata = StatisticMetadata::new(
-        StatisticId(id),
-        category.to_string().into_boxed_str(),
-        name.to_string().into_boxed_str(),
-    );
+    let metadata = StatisticMetadata::new(StatisticId(id), category.to_string(), name.to_string());
     AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
         metadata,
         None,

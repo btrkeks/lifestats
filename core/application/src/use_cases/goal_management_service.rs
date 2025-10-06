@@ -206,7 +206,7 @@ where
         };
 
         // 5. Save everything
-        self.statistic_repository.save_metadata(&statistic)?;
+        self.statistic_repository.update_metadata(statistic)?;
         self.statistic_repository
             .save_default_goal(command.statistic_id, goal_json)?;
         self.event_publisher
@@ -447,8 +447,10 @@ mod tests {
             .times(1)
             .return_once(move |_| Ok(stat));
 
-        // Both save_metadata and save_default_goal should be called
-        repo.expect_save_metadata().times(1).return_once(|_| Ok(()));
+        // Both update_metadata and save_default_goal should be called
+        repo.expect_update_metadata()
+            .times(1)
+            .return_once(|_| Ok(()));
 
         repo.expect_save_default_goal()
             .times(1)
@@ -492,7 +494,9 @@ mod tests {
             .times(1)
             .return_once(move |_| Ok(stat));
 
-        repo.expect_save_metadata().times(1).return_once(|_| Ok(()));
+        repo.expect_update_metadata()
+            .times(1)
+            .return_once(|_| Ok(()));
 
         repo.expect_save_default_goal()
             .times(1)
@@ -535,7 +539,9 @@ mod tests {
             .times(1)
             .return_once(move |_| Ok(stat));
 
-        repo.expect_save_metadata().times(1).return_once(|_| Ok(()));
+        repo.expect_update_metadata()
+            .times(1)
+            .return_once(|_| Ok(()));
 
         repo.expect_save_default_goal()
             .times(1)

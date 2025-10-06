@@ -61,11 +61,14 @@ impl IntegrationService {
             // Statistics already exist - extract IDs and return
             let mut result = HashMap::new();
             for stat in existing_stats {
-                // Extract the key from the statistic's name or tags
-                // For now, we'll use a simple heuristic: the last part of the name
-                // This works for "[Anki] Time Spent (deck)" -> "time_spent"
-                let key = derive_key_from_stat(&stat);
-                result.insert(key, stat.get_metadata().id());
+                if let Some(key) = stat.get_metadata().tags().get("stat_key") {
+                    result.insert(key.clone(), stat.get_metadata().id());
+                } else {
+                    log::warn!(
+                        "Integration statistic {} missing stat_key tag; skipping idempotency mapping",
+                        stat.get_metadata().id().0
+                    );
+                }
             }
             return Ok(result);
         }
@@ -77,41 +80,28 @@ impl IntegrationService {
             .ok_or_else(|| ApplicationError::InvalidInput(format!("Unknown source: {}", source)))?;
 
         let provisioned_stats = factory.provision(&context)?;
+        let statistics: Vec<_> = provisioned_stats
+            .into_iter()
+            .map(|provisioned| provisioned.statistic)
+            .collect();
+
+        let persisted = self
+            .repository
+            .create_many_metadata(statistics)
+            .map_err(ApplicationError::Repository)?;
 
         let mut result = HashMap::new();
-        for provisioned in provisioned_stats {
-            self.repository
-                .save_metadata(&provisioned.statistic)
-                .map_err(ApplicationError::Repository)?;
-
-            result.insert(
-                provisioned.key.clone(),
-                provisioned.statistic.get_metadata().id(),
-            );
+        for statistic in persisted {
+            if let Some(key) = statistic.get_metadata().tags().get("stat_key") {
+                result.insert(key.clone(), statistic.get_metadata().id());
+            } else {
+                log::warn!(
+                    "Integration statistic {} missing stat_key tag; skipping idempotency mapping",
+                    statistic.get_metadata().id().0
+                );
+            }
         }
 
         Ok(result)
-    }
-}
-
-/// Helper function to derive a logical key from a statistic's name.
-/// This is a simple heuristic and could be improved.
-fn derive_key_from_stat(stat: &lifestats_core::statistic::any_statistic::AnyStatistic) -> String {
-    let name = stat.get_metadata().name();
-
-    // Simple heuristic: convert name to lowercase snake_case
-    // "[Anki] Time Spent (deck)" -> "time_spent"
-    // "[Anki] Disruptions (deck)" -> "disruptions"
-    // "[Anki] Backlog (deck)" -> "backlog"
-
-    if name.contains("Time Spent") || name.contains("Study Time") {
-        "time_spent".to_string()
-    } else if name.contains("Disruptions") {
-        "disruptions".to_string()
-    } else if name.contains("Backlog") {
-        "backlog".to_string()
-    } else {
-        // Fallback: use the name as-is (converted to snake_case)
-        name.to_lowercase().replace(' ', "_")
     }
 }

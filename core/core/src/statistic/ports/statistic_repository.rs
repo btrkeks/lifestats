@@ -11,7 +11,12 @@ pub trait StatisticRepository {
     // --- Metadata Operations ---
     fn find_metadata_by_id(&self, id: StatisticId) -> Result<AnyStatistic, RepositoryError>;
     fn find_all_metadata(&self) -> Result<Vec<AnyStatistic>, RepositoryError>;
-    fn save_metadata(&self, statistic: &AnyStatistic) -> Result<(), RepositoryError>;
+    fn create_metadata(&self, statistic: AnyStatistic) -> Result<AnyStatistic, RepositoryError>;
+    fn update_metadata(&self, statistic: AnyStatistic) -> Result<(), RepositoryError>;
+    fn create_many_metadata(
+        &self,
+        statistics: Vec<AnyStatistic>,
+    ) -> Result<Vec<AnyStatistic>, RepositoryError>;
     fn find_by_tags(
         &self,
         tags: &HashMap<String, String>,

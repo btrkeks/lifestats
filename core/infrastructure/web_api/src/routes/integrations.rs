@@ -1,18 +1,16 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use events::event_port::EventPublisher;
-use lifestats_application::error::ApplicationError;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
 use plot_domain::plot::repository::PlotRepository;
 
-use crate::state::AppState;
+use crate::{error::ApiError, state::AppState};
 
 /// Request body for provisioning an integration bundle
 #[derive(Debug, Deserialize)]
@@ -39,7 +37,7 @@ pub async fn provision_integration<R, P, Rend, E>(
     State(state): State<AppState<R, P, Rend, E>>,
     Path(source): Path<String>,
     Json(request): Json<ProvisionBundleRequest>,
-) -> Result<Json<ProvisionBundleResponse>, (StatusCode, String)>
+) -> Result<Json<ProvisionBundleResponse>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
     P: PlotRepository + Send + Sync + 'static,
@@ -49,17 +47,7 @@ where
     // Call the integration service to provision the bundle
     let result = state
         .integration_service
-        .provision_bundle(&source, request.context)
-        .map_err(|e| match e {
-            ApplicationError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg),
-            ApplicationError::Domain(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApplicationError::Repository(err) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-            }
-            ApplicationError::Infrastructure(err) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-            }
-        })?;
+        .provision_bundle(&source, request.context)?;
 
     // Convert StatisticId to u32 for JSON response
     let statistic_ids: HashMap<String, u32> =

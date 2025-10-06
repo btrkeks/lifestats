@@ -5,14 +5,14 @@ use std::collections::HashMap;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct StatisticMetadata {
     id: StatisticId,
-    category: Box<str>,
-    name: Box<str>,
+    category: String,
+    name: String,
     #[serde(default)]
     tags: HashMap<String, String>,
 }
 
 impl StatisticMetadata {
-    pub fn new(id: StatisticId, category: Box<str>, name: Box<str>) -> Self {
+    pub fn new(id: StatisticId, category: String, name: String) -> Self {
         Self {
             id,
             category,

@@ -53,11 +53,10 @@ async fn test_log_and_get_e2e() -> Result<()> {
     // 2. SEED: Insert a known statistic
     // ========================================================================
 
-    let test_statistic_id = 1u32;
     let metadata = StatisticMetadata::new(
-        StatisticId(test_statistic_id),
-        "Fitness".to_string().into_boxed_str(),
-        "Push Ups".to_string().into_boxed_str(),
+        StatisticId(0),
+        "Fitness".to_string(),
+        "Push Ups".to_string(),
     );
     let test_stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
         metadata,
@@ -67,7 +66,8 @@ async fn test_log_and_get_e2e() -> Result<()> {
 
     // Save the statistic to the database
     let repo = Arc::new(SqliteStatisticRepository::new(Arc::new(pool.clone())));
-    repo.save_metadata(&test_stat)?;
+    let persisted_stat = repo.create_metadata(test_stat)?;
+    let statistic_id = persisted_stat.get_metadata().id();
 
     // ========================================================================
     // 3. BUILD: Create real AppState with real services
@@ -127,7 +127,7 @@ async fn test_log_and_get_e2e() -> Result<()> {
     let url = format!(
         "http://127.0.0.1:{}/statistics/{}/log/2024-10-10",
         addr.port(),
-        test_statistic_id
+        statistic_id.0
     );
 
     let payload = serde_json::json!({
@@ -156,7 +156,7 @@ async fn test_log_and_get_e2e() -> Result<()> {
             logging_data::date,
             logging_data::value,
         ))
-        .filter(logging_data::statistic_id.eq(test_statistic_id as i32))
+        .filter(logging_data::statistic_id.eq(statistic_id.0 as i32))
         .filter(logging_data::date.eq("2024-10-10"))
         .load(&mut conn)?;
 

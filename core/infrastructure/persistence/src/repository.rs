@@ -3,8 +3,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use chrono::NaiveDate;
+use diesel::connection::Connection;
+use diesel::dsl::sql;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
+use diesel::sql_types::{BigInt, Text};
 use diesel::SqliteConnection;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::dated_value::DatedValue;
@@ -13,7 +16,7 @@ use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 
-use crate::db::mappers::StatisticDto;
+use crate::db::mappers::{InsertStatisticDto, StatisticDto};
 use crate::db::models::{DefaultGoalRaw, GoalDataRaw, LoggingDataRaw};
 use crate::db::queries;
 use crate::db::schema::{default_goals, goals, logging_data, statistics};
@@ -44,6 +47,17 @@ impl SqliteStatisticRepository {
             .get()
             .context("failed to get SQLite connection from pool")
             .map_err(RepositoryError::OperationFailed)
+    }
+
+    fn load_statistic_anyhow(
+        conn: &mut SqliteConnection,
+        id: StatisticId,
+    ) -> anyhow::Result<AnyStatistic> {
+        let dto = statistics::table
+            .find(id.0 as i32)
+            .first::<StatisticDto>(conn)?;
+        let default_goal = queries::fetch_default_goal(conn, id)?;
+        Ok(dto.into_any_statistic(default_goal)?)
     }
 }
 
@@ -85,46 +99,103 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(result)
     }
 
-    fn save_metadata(&self, statistic: &AnyStatistic) -> Result<(), RepositoryError> {
+    fn create_metadata(&self, statistic: AnyStatistic) -> Result<AnyStatistic, RepositoryError> {
         let mut conn = self.connection()?;
-        let dto = StatisticDto::from_any_statistic(statistic)
+
+        conn.transaction::<_, anyhow::Error, _>(move |conn| {
+            let insert_dto = InsertStatisticDto::from_any_statistic(&statistic)?;
+
+            diesel::insert_into(statistics::table)
+                .values(&insert_dto)
+                .execute(conn)?;
+
+            let new_id: i64 =
+                diesel::select(sql::<BigInt>("last_insert_rowid()")).get_result(conn)?;
+            let statistic_id = StatisticId(new_id as u32);
+            SqliteStatisticRepository::load_statistic_anyhow(conn, statistic_id)
+        })
+        .map_err(RepositoryError::OperationFailed)
+    }
+
+    fn update_metadata(&self, statistic: AnyStatistic) -> Result<(), RepositoryError> {
+        let mut conn = self.connection()?;
+        let dto = StatisticDto::from_any_statistic(&statistic)
             .map_err(|e| RepositoryError::OperationFailed(e))?;
 
-        diesel::insert_into(statistics::table)
-            .values(&dto)
-            .on_conflict(statistics::id)
-            .do_update()
-            .set(&dto)
+        let StatisticDto {
+            id,
+            name,
+            category,
+            statistic_type,
+            default_goal_valid_since,
+            tags,
+        } = dto;
+
+        diesel::update(statistics::table.find(id))
+            .set((
+                statistics::name.eq(name),
+                statistics::category.eq(category),
+                statistics::statistic_type.eq(statistic_type),
+                statistics::default_goal_valid_since.eq(default_goal_valid_since),
+                statistics::tags.eq(tags),
+            ))
             .execute(&mut conn)
             .map_err(diesel_to_repository_error)?;
 
         Ok(())
     }
 
+    fn create_many_metadata(
+        &self,
+        statistics_to_create: Vec<AnyStatistic>,
+    ) -> Result<Vec<AnyStatistic>, RepositoryError> {
+        let mut conn = self.connection()?;
+
+        conn.transaction::<_, anyhow::Error, _>(move |conn| {
+            let mut persisted = Vec::with_capacity(statistics_to_create.len());
+            for statistic in statistics_to_create {
+                let insert_dto = InsertStatisticDto::from_any_statistic(&statistic)?;
+
+                diesel::insert_into(statistics::table)
+                    .values(&insert_dto)
+                    .execute(conn)?;
+
+                let new_id: i64 =
+                    diesel::select(sql::<BigInt>("last_insert_rowid()")).get_result(conn)?;
+                let statistic_id = StatisticId(new_id as u32);
+                let stored = SqliteStatisticRepository::load_statistic_anyhow(conn, statistic_id)?;
+                persisted.push(stored);
+            }
+
+            Ok(persisted)
+        })
+        .map_err(RepositoryError::OperationFailed)
+    }
+
+    /// Filters statistics that contain all provided tag key/value pairs by leveraging
+    /// SQLite's `json_each` table-valued function to iterate over the JSON tag map.
     fn find_by_tags(
         &self,
         tags: &HashMap<String, String>,
     ) -> Result<Vec<AnyStatistic>, RepositoryError> {
         let mut conn = self.connection()?;
 
-        // Build a raw SQL query to filter by tags using JSON functions
-        // We need to check that ALL tags match (AND logic)
-        let mut sql_conditions = String::new();
-        for (key, value) in tags {
-            sql_conditions.push_str(&format!(
-                " AND json_extract(tags, '$.{}') = '{}'",
-                key.replace('\'', "''"), // Escape single quotes
-                value.replace('\'', "''")
-            ));
-        }
+        let filter_json =
+            serde_json::to_string(tags).map_err(|e| RepositoryError::OperationFailed(e.into()))?;
 
-        // Build the final query
-        let final_sql = format!(
-            "SELECT id, name, category, statistic_type, default_goal_valid_since, tags FROM statistics WHERE 1=1{}",
-            sql_conditions
-        );
+        let query = diesel::sql_query(
+            "SELECT id, name, category, statistic_type, default_goal_valid_since, tags \
+             FROM statistics \
+             WHERE NOT EXISTS ( \
+                 SELECT 1 \
+                 FROM json_each(?) AS filter \
+                 WHERE json_extract(statistics.tags, '$.' || filter.key) IS NULL \
+                   OR json_extract(statistics.tags, '$.' || filter.key) <> filter.value \
+             )",
+        )
+        .bind::<Text, _>(filter_json);
 
-        let dtos: Vec<StatisticDto> = diesel::sql_query(final_sql)
+        let dtos: Vec<StatisticDto> = query
             .load::<StatisticDto>(&mut conn)
             .map_err(diesel_to_repository_error)?;
 
@@ -412,8 +483,8 @@ mod tests {
     fn integer_stat(id: u32) -> AnyStatistic {
         let metadata = StatisticMetadata::new(
             StatisticId(id),
-            "Fitness".to_string().into_boxed_str(),
-            "Push Ups".to_string().into_boxed_str(),
+            "Fitness".to_string(),
+            "Push Ups".to_string(),
         );
         AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             metadata,
@@ -425,8 +496,8 @@ mod tests {
     fn habit_stat(id: u32) -> AnyStatistic {
         let metadata = StatisticMetadata::new(
             StatisticId(id),
-            "Health".to_string().into_boxed_str(),
-            "Brushed Teeth".to_string().into_boxed_str(),
+            "Health".to_string(),
+            "Brushed Teeth".to_string(),
         );
         AnyStatistic::Habit(HabitStatistic::new(
             metadata,
@@ -438,10 +509,35 @@ mod tests {
     fn time_spans_stat(id: u32) -> AnyStatistic {
         let metadata = StatisticMetadata::new(
             StatisticId(id),
-            "Productivity".to_string().into_boxed_str(),
-            "Study Time".to_string().into_boxed_str(),
+            "Productivity".to_string(),
+            "Study Time".to_string(),
         );
         AnyStatistic::TimeSpans(TimeSpansStatistic::new(
+            metadata,
+            None,
+            NaiveDate::from_ymd_opt(1970, 1, 1).expect("valid fallback date"),
+        ))
+    }
+
+    fn persist_stat(
+        repo: &SqliteStatisticRepository,
+        statistic: AnyStatistic,
+    ) -> Result<StatisticId> {
+        Ok(repo.create_metadata(statistic)?.get_metadata().id())
+    }
+
+    fn integer_stat_with_tags(tags: &[(&str, &str)]) -> AnyStatistic {
+        let mut metadata = StatisticMetadata::new(
+            StatisticId(0),
+            "Fitness".to_string(),
+            "Push Ups".to_string(),
+        );
+
+        for (key, value) in tags {
+            metadata = metadata.with_tag((*key).to_string(), (*value).to_string());
+        }
+
+        AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             metadata,
             None,
             NaiveDate::from_ymd_opt(1970, 1, 1).expect("valid fallback date"),
@@ -456,11 +552,8 @@ mod tests {
         #[test]
         fn save_and_fetch_metadata() -> Result<()> {
             let repo = setup_repository();
-            let stat = integer_stat(1);
-
-            repo.save_metadata(&stat)?;
-
-            let fetched = repo.find_metadata_by_id(StatisticId(1))?;
+            let created = repo.create_metadata(integer_stat(0))?;
+            let fetched = repo.find_metadata_by_id(created.get_metadata().id())?;
             assert!(matches!(fetched, AnyStatistic::IntegerAmount(_)));
             assert_eq!(fetched.get_metadata().name(), "Push Ups");
             Ok(())
@@ -470,9 +563,9 @@ mod tests {
         fn fetch_all_metadata() -> Result<()> {
             let repo = setup_repository();
 
-            repo.save_metadata(&integer_stat(1))?;
-            repo.save_metadata(&habit_stat(2))?;
-            repo.save_metadata(&time_spans_stat(3))?;
+            repo.create_metadata(integer_stat(0))?;
+            repo.create_metadata(habit_stat(0))?;
+            repo.create_metadata(time_spans_stat(0))?;
 
             let all = repo.find_all_metadata()?;
             assert_eq!(all.len(), 3);
@@ -488,14 +581,14 @@ mod tests {
         #[test]
         fn save_and_find_log_value() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
             let value = serde_json::json!(123);
 
-            repo.save_log_value(StatisticId(1), date, value.clone())?;
+            repo.save_log_value(statistic_id, date, value.clone())?;
 
-            let fetched = repo.find_log_value(StatisticId(1), date)?;
+            let fetched = repo.find_log_value(statistic_id, date)?;
             assert_eq!(fetched, Some(value));
             Ok(())
         }
@@ -503,7 +596,7 @@ mod tests {
         #[test]
         fn save_and_find_goal() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 3, 2).unwrap();
             let goal = serde_json::json!({
@@ -511,9 +604,9 @@ mod tests {
                 "extra_data1": "some_data"
             });
 
-            repo.save_goal(StatisticId(1), date, Some(goal.clone()))?;
+            repo.save_goal(statistic_id, date, Some(goal.clone()))?;
 
-            let fetched = repo.find_goal(StatisticId(1), date)?;
+            let fetched = repo.find_goal(statistic_id, date)?;
             assert!(fetched.is_some());
             let fetched_value = fetched.unwrap();
             assert_eq!(fetched_value["target"], 100);
@@ -524,20 +617,85 @@ mod tests {
         #[test]
         fn save_and_find_default_goal() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let goal = serde_json::json!({
                 "target": 50,
                 "extra_data1": "default_data"
             });
 
-            repo.save_default_goal(StatisticId(1), goal.clone())?;
+            repo.save_default_goal(statistic_id, goal.clone())?;
 
-            let fetched = repo.find_default_goal(StatisticId(1))?;
+            let fetched = repo.find_default_goal(statistic_id)?;
             assert!(fetched.is_some());
             let fetched_value = fetched.unwrap();
             assert_eq!(fetched_value["target"], 50);
             assert_eq!(fetched_value["extra_data1"], "default_data");
+            Ok(())
+        }
+    }
+
+    // ==================== Tag Filtering Tests ====================
+
+    mod tag_filter_tests {
+        use super::*;
+        use std::collections::HashMap;
+
+        #[test]
+        fn find_by_tags_returns_matching_statistics() -> Result<()> {
+            let repo = setup_repository();
+
+            persist_stat(
+                &repo,
+                integer_stat_with_tags(&[
+                    ("source", "anki"),
+                    ("deck", "spanish"),
+                    ("stat_key", "time_spent"),
+                ]),
+            )?;
+
+            persist_stat(
+                &repo,
+                integer_stat_with_tags(&[
+                    ("source", "anki"),
+                    ("deck", "french"),
+                    ("stat_key", "time_spent"),
+                ]),
+            )?;
+
+            let mut filter = HashMap::new();
+            filter.insert("source".to_string(), "anki".to_string());
+            filter.insert("deck".to_string(), "spanish".to_string());
+
+            let results = repo.find_by_tags(&filter)?;
+            assert_eq!(results.len(), 1);
+            let result_metadata = results[0].get_metadata();
+            assert_eq!(
+                result_metadata
+                    .tags()
+                    .get("deck")
+                    .map(|value| value.as_str()),
+                Some("spanish")
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn find_by_tags_returns_empty_when_any_tag_differs() -> Result<()> {
+            let repo = setup_repository();
+
+            persist_stat(
+                &repo,
+                integer_stat_with_tags(&[("source", "anki"), ("stat_key", "time_spent")]),
+            )?;
+
+            let mut filter = HashMap::new();
+            filter.insert("source".to_string(), "anki".to_string());
+            filter.insert("deck".to_string(), "spanish".to_string());
+
+            let results = repo.find_by_tags(&filter)?;
+            assert!(results.is_empty());
             Ok(())
         }
     }
@@ -558,10 +716,10 @@ mod tests {
         #[test]
         fn find_log_value_not_found_returns_none() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 4, 1).unwrap();
-            let value = repo.find_log_value(StatisticId(1), date)?;
+            let value = repo.find_log_value(statistic_id, date)?;
 
             assert!(value.is_none());
             Ok(())
@@ -570,10 +728,10 @@ mod tests {
         #[test]
         fn find_goal_not_found_returns_none() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 4, 2).unwrap();
-            let goal = repo.find_goal(StatisticId(1), date)?;
+            let goal = repo.find_goal(statistic_id, date)?;
 
             assert!(goal.is_none());
             Ok(())
@@ -582,9 +740,9 @@ mod tests {
         #[test]
         fn find_default_goal_not_found_returns_none() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
-            let goal = repo.find_default_goal(StatisticId(1))?;
+            let goal = repo.find_default_goal(statistic_id)?;
 
             assert!(goal.is_none());
             Ok(())
@@ -593,14 +751,14 @@ mod tests {
         #[test]
         fn delete_default_goal_that_exists() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let goal = serde_json::json!({"target": 5});
-            repo.save_default_goal(StatisticId(1), goal)?;
+            repo.save_default_goal(statistic_id, goal)?;
 
-            repo.delete_default_goal(StatisticId(1))?;
+            repo.delete_default_goal(statistic_id)?;
 
-            let fetched = repo.find_default_goal(StatisticId(1))?;
+            let fetched = repo.find_default_goal(statistic_id)?;
             assert!(fetched.is_none());
             Ok(())
         }
@@ -608,18 +766,18 @@ mod tests {
         #[test]
         fn upsert_log_value_updates_existing() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 4, 3).unwrap();
 
             // Save initial value
-            repo.save_log_value(StatisticId(1), date, serde_json::json!(10))?;
+            repo.save_log_value(statistic_id, date, serde_json::json!(10))?;
 
             // Save different value for the same date
-            repo.save_log_value(StatisticId(1), date, serde_json::json!(20))?;
+            repo.save_log_value(statistic_id, date, serde_json::json!(20))?;
 
             // Fetch and verify it was updated
-            let value = repo.find_log_value(StatisticId(1), date)?;
+            let value = repo.find_log_value(statistic_id, date)?;
             assert_eq!(value, Some(serde_json::json!(20)));
             Ok(())
         }
@@ -627,26 +785,18 @@ mod tests {
         #[test]
         fn upsert_goal_updates_existing() -> Result<()> {
             let repo = setup_repository();
-            repo.save_metadata(&integer_stat(1))?;
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
 
             let date = NaiveDate::from_ymd_opt(2024, 4, 4).unwrap();
 
             // Save initial goal
-            repo.save_goal(
-                StatisticId(1),
-                date,
-                Some(serde_json::json!({"target": 10})),
-            )?;
+            repo.save_goal(statistic_id, date, Some(serde_json::json!({"target": 10})))?;
 
             // Save different goal for the same date
-            repo.save_goal(
-                StatisticId(1),
-                date,
-                Some(serde_json::json!({"target": 20})),
-            )?;
+            repo.save_goal(statistic_id, date, Some(serde_json::json!({"target": 20})))?;
 
             // Fetch and verify it was updated
-            let goal = repo.find_goal(StatisticId(1), date)?;
+            let goal = repo.find_goal(statistic_id, date)?;
             assert!(goal.is_some());
             assert_eq!(goal.unwrap()["target"], 20);
             Ok(())

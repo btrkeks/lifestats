@@ -163,8 +163,8 @@ mod tests {
                     Ok(AnyStatistic::PointInTime(PointInTimeStatistic::new(
                         StatisticMetadata::new(
                             StatisticId(20),
-                            "健康".to_string().into_boxed_str(),
-                            "就寝時間".to_string().into_boxed_str(),
+                            "健康".to_string(),
+                            "就寝時間".to_string(),
                         ),
                         mock_logging_repo.clone(),
                         mock_goal_repo.clone(),
@@ -179,8 +179,8 @@ mod tests {
                     Ok(AnyStatistic::TimeSpans(TimeSpansStatistic::new(
                         StatisticMetadata::new(
                             StatisticId(6),
-                            "仕事".to_string().into_boxed_str(),
-                            "集中した時間".to_string().into_boxed_str(),
+                            "仕事".to_string(),
+                            "集中した時間".to_string(),
                         ),
                         mock_logging_repo.clone(),
                         mock_goal_repo.clone(),

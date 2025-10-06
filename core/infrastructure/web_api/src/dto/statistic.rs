@@ -61,8 +61,8 @@ mod tests {
         // Create a test statistic
         let metadata = StatisticMetadata::new(
             StatisticId(42),
-            "Fitness".to_string().into_boxed_str(),
-            "Push Ups".to_string().into_boxed_str(),
+            "Fitness".to_string(),
+            "Push Ups".to_string(),
         );
         let statistic = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             metadata,

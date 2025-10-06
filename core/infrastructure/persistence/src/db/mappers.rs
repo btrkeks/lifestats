@@ -118,11 +118,8 @@ impl StatisticDto {
             serde_json::from_str(&self.tags).context("failed to deserialize tags from JSON")?;
 
         // Create metadata and add tags
-        let mut metadata = StatisticMetadata::new(
-            StatisticId(self.id as u32),
-            self.category.into_boxed_str(),
-            self.name.into_boxed_str(),
-        );
+        let mut metadata =
+            StatisticMetadata::new(StatisticId(self.id as u32), self.category, self.name);
 
         // Apply all tags using the builder pattern
         for (key, value) in tags {
@@ -159,6 +156,34 @@ impl StatisticDto {
                 )))
             }
         }
+    }
+}
+
+#[derive(Debug, Insertable, AsChangeset)]
+#[diesel(table_name = crate::db::schema::statistics)]
+pub struct InsertStatisticDto {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub name: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub category: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub statistic_type: StatisticTypeDto,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub default_goal_valid_since: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub tags: String,
+}
+
+impl InsertStatisticDto {
+    pub fn from_any_statistic(statistic: &AnyStatistic) -> Result<Self> {
+        let dto = StatisticDto::from_any_statistic(statistic)?;
+        Ok(Self {
+            name: dto.name,
+            category: dto.category,
+            statistic_type: dto.statistic_type,
+            default_goal_valid_since: dto.default_goal_valid_since,
+            tags: dto.tags,
+        })
     }
 }
 

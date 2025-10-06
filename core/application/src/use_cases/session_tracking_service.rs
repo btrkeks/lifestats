@@ -93,7 +93,7 @@ enum TimeoutAction {
     Noop,
 }
 
-struct TotalDurationManager {
+pub struct TotalDurationManager {
     seconds: AtomicU64,
 }
 

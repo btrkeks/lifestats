@@ -37,11 +37,12 @@ impl BundleFactory for AnkiBundleFactory {
         // Create Time Spent statistic
         let time_spent_metadata = StatisticMetadata::new(
             temp_id,
-            "Anki".to_string().into_boxed_str(),
-            format!("[Anki] Study Time ({})", deck_name).into_boxed_str(),
+            "Anki".to_string(),
+            format!("[Anki] Study Time ({})", deck_name),
         )
         .with_tag("source".to_string(), "anki".to_string())
-        .with_tag("deck_name".to_string(), deck_name.clone());
+        .with_tag("deck_name".to_string(), deck_name.clone())
+        .with_tag("stat_key".to_string(), "time_spent".to_string());
 
         let time_spent = AnyStatistic::TimeSpans(TimeSpansStatistic::new(
             time_spent_metadata,
@@ -52,11 +53,12 @@ impl BundleFactory for AnkiBundleFactory {
         // Create Disruptions statistic
         let disruptions_metadata = StatisticMetadata::new(
             temp_id,
-            "Anki".to_string().into_boxed_str(),
-            format!("[Anki] Disruptions ({})", deck_name).into_boxed_str(),
+            "Anki".to_string(),
+            format!("[Anki] Disruptions ({})", deck_name),
         )
         .with_tag("source".to_string(), "anki".to_string())
-        .with_tag("deck_name".to_string(), deck_name.clone());
+        .with_tag("deck_name".to_string(), deck_name.clone())
+        .with_tag("stat_key".to_string(), "disruptions".to_string());
 
         let disruptions = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             disruptions_metadata,
@@ -67,11 +69,12 @@ impl BundleFactory for AnkiBundleFactory {
         // Create Backlog statistic
         let backlog_metadata = StatisticMetadata::new(
             temp_id,
-            "Anki".to_string().into_boxed_str(),
-            format!("[Anki] Backlog ({})", deck_name).into_boxed_str(),
+            "Anki".to_string(),
+            format!("[Anki] Backlog ({})", deck_name),
         )
         .with_tag("source".to_string(), "anki".to_string())
-        .with_tag("deck_name".to_string(), deck_name.clone());
+        .with_tag("deck_name".to_string(), deck_name.clone())
+        .with_tag("stat_key".to_string(), "backlog".to_string());
 
         let backlog = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             backlog_metadata,
