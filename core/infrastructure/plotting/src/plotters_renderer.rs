@@ -30,7 +30,7 @@ impl PlottersRenderer {
         // Extract y-axis range from PlotData and add padding (matching old behavior)
         let y_axis_max = match &data.y_axis {
             YAxis::Integer { min: _, max } => {
-                let (_, padded_max) = add_y_padding(0, *max as i64, Y_MARGIN_PERCENT);
+                let (_, padded_max) = add_y_padding(0, *max, Y_MARGIN_PERCENT);
                 padded_max
             }
             YAxis::Time { .. } => {
@@ -69,7 +69,7 @@ impl PlottersRenderer {
             if let DrawableData::Integer(value) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
-                chart.draw_series([get_bar(point.date, 0, *value as i64, 2, &color.to_rgba())])?;
+                chart.draw_series([get_bar(point.date, 0, *value, 2, &color.to_rgba())])?;
             }
         }
 
@@ -78,7 +78,7 @@ impl PlottersRenderer {
             if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
                 chart.draw_series([get_horizontal_line(
                     point.date,
-                    *goal_number as i64,
+                    *goal_number,
                     GOAL_LINE_COLOR,
                 )])?;
             }
@@ -114,9 +114,7 @@ impl PlottersRenderer {
 
         // Extract y-axis range from PlotData and add padding
         let (y_axis_min, y_axis_max) = match &data.y_axis {
-            YAxis::Integer { min, max } => {
-                add_y_padding(*min as i64, *max as i64, Y_MARGIN_PERCENT)
-            }
+            YAxis::Integer { min, max } => add_y_padding(*min, *max, Y_MARGIN_PERCENT),
             YAxis::Time { .. } => {
                 return Err(anyhow!(
                     "LineChart plot requires Integer axis, but got Time axis"
@@ -154,7 +152,7 @@ impl PlottersRenderer {
             .iter()
             .filter_map(|point| {
                 if let DrawableData::Integer(v) = &point.value {
-                    Some((SegmentValue::CenterOf(point.date), *v as i64))
+                    Some((SegmentValue::CenterOf(point.date), *v))
                 } else {
                     None
                 }
@@ -171,7 +169,7 @@ impl PlottersRenderer {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
                 chart.draw_series([Circle::new(
-                    (SegmentValue::CenterOf(point.date), *value as i64),
+                    (SegmentValue::CenterOf(point.date), *value),
                     5,
                     color.filled(),
                 )])?;
@@ -183,7 +181,7 @@ impl PlottersRenderer {
             if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
                 chart.draw_series([get_horizontal_line(
                     point.date,
-                    *goal_number as i64,
+                    *goal_number,
                     GOAL_LINE_COLOR,
                 )])?;
             }
@@ -219,9 +217,7 @@ impl PlottersRenderer {
 
         // Extract y-axis range from PlotData and add padding
         let (y_axis_min, y_axis_max) = match &data.y_axis {
-            YAxis::Integer { min, max } => {
-                add_y_padding(*min as i64, *max as i64, Y_MARGIN_PERCENT)
-            }
+            YAxis::Integer { min, max } => add_y_padding(*min, *max, Y_MARGIN_PERCENT),
             YAxis::Time { .. } => {
                 return Err(anyhow!(
                     "Scatter plot requires Integer axis, but got Time axis"
@@ -258,11 +254,7 @@ impl PlottersRenderer {
             if let DrawableData::Integer(value) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
-                chart.draw_series([get_horizontal_line(
-                    point.date,
-                    *value as i64,
-                    color.to_rgba(),
-                )])?;
+                chart.draw_series([get_horizontal_line(point.date, *value, color.to_rgba())])?;
             }
         }
 
@@ -271,7 +263,7 @@ impl PlottersRenderer {
             if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
                 chart.draw_series([get_horizontal_line(
                     point.date,
-                    *goal_number as i64,
+                    *goal_number,
                     GOAL_LINE_COLOR,
                 )])?;
             }

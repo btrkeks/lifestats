@@ -97,6 +97,12 @@ pub struct TotalDurationManager {
     seconds: AtomicU64,
 }
 
+impl Default for TotalDurationManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TotalDurationManager {
     pub fn new() -> Self {
         Self {
@@ -522,7 +528,7 @@ impl<R: StatisticRepository + Send + Sync, TP: TimeProvider> Heart<R, TP> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
+
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -542,11 +548,11 @@ mod tests {
 
         fn advance(&self, duration: Duration) {
             let mut time = self.current_time.lock().unwrap();
-            *time = *time + chrono::Duration::from_std(duration).unwrap();
+            *time += chrono::Duration::from_std(duration).unwrap();
             drop(time);
 
             let mut instant = self.current_instant.lock().unwrap();
-            *instant = *instant + duration;
+            *instant += duration;
         }
     }
 

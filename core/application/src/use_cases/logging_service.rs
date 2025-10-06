@@ -430,12 +430,12 @@ mod tests {
         let source1 = TimeSpansStatistic::new(create_test_metadata(10, "source1"), None, test_date);
         let source2 = TimeSpansStatistic::new(create_test_metadata(11, "source2"), None, test_date);
 
-        let stat = AnyStatistic::Summing(SummingStatistic::new(
+        let stat = AnyStatistic::Summing(Box::new(SummingStatistic::new(
             metadata,
             vec![source1, source2],
             None,
             test_date,
-        ));
+        )));
 
         repo.expect_find_metadata_by_id()
             .times(1)

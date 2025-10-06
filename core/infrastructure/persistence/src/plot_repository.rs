@@ -54,7 +54,7 @@ impl PlotRepository for SqlitePlotRepository {
         match result {
             Some(raw) => Ok(Some(
                 raw.into_plot_spec()
-                    .map_err(|e| RepositoryError::OperationFailed(e))?,
+                    .map_err(RepositoryError::OperationFailed)?,
             )),
             None => Ok(None),
         }
@@ -70,7 +70,7 @@ impl PlotRepository for SqlitePlotRepository {
         raws.into_iter()
             .map(|raw| {
                 raw.into_plot_spec()
-                    .map_err(|e| RepositoryError::OperationFailed(e))
+                    .map_err(RepositoryError::OperationFailed)
             })
             .collect()
     }
@@ -89,7 +89,7 @@ impl PlotRepository for SqlitePlotRepository {
         raws.into_iter()
             .map(|raw| {
                 raw.into_plot_spec()
-                    .map_err(|e| RepositoryError::OperationFailed(e))
+                    .map_err(RepositoryError::OperationFailed)
             })
             .collect()
     }

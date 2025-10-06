@@ -57,7 +57,7 @@ impl SqliteStatisticRepository {
             .find(id.0 as i32)
             .first::<StatisticDto>(conn)?;
         let default_goal = queries::fetch_default_goal(conn, id)?;
-        Ok(dto.into_any_statistic(default_goal)?)
+        dto.into_any_statistic(default_goal)
     }
 }
 
@@ -70,10 +70,10 @@ impl StatisticRepository for SqliteStatisticRepository {
             .first::<StatisticDto>(&mut conn)
             .map_err(diesel_to_repository_error)?;
 
-        let default_goal = queries::fetch_default_goal(&mut conn, id)
-            .map_err(|e| RepositoryError::OperationFailed(e))?;
+        let default_goal =
+            queries::fetch_default_goal(&mut conn, id).map_err(RepositoryError::OperationFailed)?;
         dto.into_any_statistic(default_goal)
-            .map_err(|e| RepositoryError::OperationFailed(e))
+            .map_err(RepositoryError::OperationFailed)
     }
 
     fn find_all_metadata(&self) -> Result<Vec<AnyStatistic>, RepositoryError> {
@@ -85,14 +85,14 @@ impl StatisticRepository for SqliteStatisticRepository {
 
         let ids: Vec<i32> = dtos.iter().map(|dto| dto.id).collect();
         let default_goal_map = queries::fetch_default_goals(&mut conn, &ids)
-            .map_err(|e| RepositoryError::OperationFailed(e))?;
+            .map_err(RepositoryError::OperationFailed)?;
 
         let mut result = Vec::with_capacity(dtos.len());
         for dto in dtos {
             let default_goal = default_goal_map.get(&dto.id).cloned();
             result.push(
                 dto.into_any_statistic(default_goal)
-                    .map_err(|e| RepositoryError::OperationFailed(e))?,
+                    .map_err(RepositoryError::OperationFailed)?,
             );
         }
 
@@ -120,7 +120,7 @@ impl StatisticRepository for SqliteStatisticRepository {
     fn update_metadata(&self, statistic: AnyStatistic) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
         let dto = StatisticDto::from_any_statistic(&statistic)
-            .map_err(|e| RepositoryError::OperationFailed(e))?;
+            .map_err(RepositoryError::OperationFailed)?;
 
         let StatisticDto {
             id,
@@ -202,7 +202,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         // Fetch default goals for all found statistics
         let ids: Vec<i32> = dtos.iter().map(|dto| dto.id).collect();
         let default_goal_map = queries::fetch_default_goals(&mut conn, &ids)
-            .map_err(|e| RepositoryError::OperationFailed(e))?;
+            .map_err(RepositoryError::OperationFailed)?;
 
         // Convert DTOs to domain objects
         let mut result = Vec::with_capacity(dtos.len());
@@ -210,7 +210,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             let default_goal = default_goal_map.get(&dto.id).cloned();
             result.push(
                 dto.into_any_statistic(default_goal)
-                    .map_err(|e| RepositoryError::OperationFailed(e))?,
+                    .map_err(RepositoryError::OperationFailed)?,
             );
         }
 
@@ -408,8 +408,8 @@ impl StatisticRepository for SqliteStatisticRepository {
         id: StatisticId,
     ) -> Result<Option<serde_json::Value>, RepositoryError> {
         let mut conn = self.connection()?;
-        let row = queries::fetch_default_goal(&mut conn, id)
-            .map_err(|e| RepositoryError::OperationFailed(e))?;
+        let row =
+            queries::fetch_default_goal(&mut conn, id).map_err(RepositoryError::OperationFailed)?;
 
         match row {
             Some(raw) => {
