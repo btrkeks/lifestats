@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "short_name": "Web Tracker",
+  "version": "2.1.4",
+  "description": "__MSG_extDescription__",
+  "options_page": "src/dashboard.html",
+  "default_locale": "en",
+  "icons": {
+    "16": "16x16.png",
+    "32": "32x32.png",
+    "48": "48x48.png",
+    "128": "128x128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/content_scripts/NudgeInjector.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "idle",
+    "unlimitedStorage",
+    "alarms",
+    "notifications",
+    "offscreen"
+  ],
+    "host_permissions": [
+      "http://localhost:8000/"
+  ],
+  "offline_enabled": true,
+  "background": {
+    "service_worker": "src/background.ts"
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "Web Activity Time Tracker"
+  },
+  "web_accessible_resources": [{
+    "resources": ["assets/pomodoro-sounds/*.mp3"],
+    "matches": ["<all_urls>"]
+  }]
+}
