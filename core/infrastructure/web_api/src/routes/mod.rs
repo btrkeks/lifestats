@@ -4,6 +4,7 @@ pub mod statistics;
 
 use axum::{routing::get, routing::post, Router};
 use events::event_port::EventPublisher;
+use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
 use plot_domain::plot::repository::PlotRepository;
@@ -11,12 +12,13 @@ use plot_domain::plot::repository::PlotRepository;
 use crate::state::AppState;
 
 /// Create and configure the application router with all routes
-pub fn create_router<R, P, Rend, E>(app_state: AppState<R, P, Rend, E>) -> Router
+pub fn create_router<R, P, Rend, E, I>(app_state: AppState<R, P, Rend, E, I>) -> Router
 where
     R: StatisticRepository + Send + Sync + 'static,
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     Router::new()
         .route("/statistics", get(statistics::get_all_statistics))

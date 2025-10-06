@@ -5,6 +5,7 @@ use axum::{
 };
 use chrono::NaiveDate;
 use events::event_port::EventPublisher;
+use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_application::use_cases::logging_service::LogValueCommand;
 use lifestats_core::{
     shared::ids::StatisticId, statistic::ports::statistic_repository::StatisticRepository,
@@ -19,14 +20,15 @@ use crate::{
 };
 
 /// GET /statistics - Get all statistics metadata
-pub async fn get_all_statistics<R, P, Rend, E>(
-    State(app_state): State<AppState<R, P, Rend, E>>,
+pub async fn get_all_statistics<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
 ) -> Result<Json<Vec<StatisticMetadataResponse>>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     let statistics = app_state.query_service.get_all_statistics()?;
     let response: Vec<StatisticMetadataResponse> =
@@ -35,8 +37,8 @@ where
 }
 
 /// POST /statistics/:id/log/:date - Log a value for a statistic on a specific date
-pub async fn log_value<R, P, Rend, E>(
-    State(app_state): State<AppState<R, P, Rend, E>>,
+pub async fn log_value<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
     Json(payload): Json<LogValueRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -45,6 +47,7 @@ where
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     // Validate the request payload
     payload.validate()?;
@@ -65,8 +68,8 @@ where
 }
 
 /// POST /statistics/:id/log_time_frame/:date - Log a time frame for a TimeSpans statistic
-pub async fn log_time_frame<R, P, Rend, E>(
-    State(app_state): State<AppState<R, P, Rend, E>>,
+pub async fn log_time_frame<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
     Json(payload): Json<LogTimeFrameRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -75,6 +78,7 @@ where
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     use chrono::NaiveTime;
     use lifestats_application::use_cases::logging_service::LogTimeFrameCommand;

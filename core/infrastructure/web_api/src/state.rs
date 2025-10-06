@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use events::event_port::EventPublisher;
 use lifestats_application::use_cases::{
-    goal_management_service::GoalManagementService, integration::IntegrationService,
+    goal_management_service::GoalManagementService, integration::IntegrationServiceTrait,
     logging_service::LoggingService, plotting_service::PlottingService,
     statistic_query_service::StatisticQueryService,
 };
@@ -11,26 +11,28 @@ use plot_domain::plot::renderer::PlotRenderer;
 use plot_domain::plot::repository::PlotRepository;
 
 /// Shared application state injected into every request handler
-pub struct AppState<R, P, Rend, E>
+pub struct AppState<R, P, Rend, E, I>
 where
     R: StatisticRepository + Send + Sync + 'static,
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     pub logging_service: Arc<LoggingService<R, E>>,
     pub goal_service: Arc<GoalManagementService<R, E>>,
     pub query_service: Arc<StatisticQueryService<R>>,
     pub plotting_service: Arc<PlottingService<R, P, Rend>>,
-    pub integration_service: Arc<IntegrationService>,
+    pub integration_service: Arc<I>,
 }
 
-impl<R, P, Rend, E> Clone for AppState<R, P, Rend, E>
+impl<R, P, Rend, E, I> Clone for AppState<R, P, Rend, E, I>
 where
     R: StatisticRepository + Send + Sync + 'static,
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -43,19 +45,20 @@ where
     }
 }
 
-impl<R, P, Rend, E> AppState<R, P, Rend, E>
+impl<R, P, Rend, E, I> AppState<R, P, Rend, E, I>
 where
     R: StatisticRepository + Send + Sync + 'static,
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     pub fn new(
         logging_service: Arc<LoggingService<R, E>>,
         goal_service: Arc<GoalManagementService<R, E>>,
         query_service: Arc<StatisticQueryService<R>>,
         plotting_service: Arc<PlottingService<R, P, Rend>>,
-        integration_service: Arc<IntegrationService>,
+        integration_service: Arc<I>,
     ) -> Self {
         Self {
             logging_service,

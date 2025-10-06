@@ -71,7 +71,13 @@ mock! {
 #[allow(dead_code)]
 pub fn mock_app_state(
     mock_repo: Arc<MockStatisticRepository>,
-) -> AppState<MockStatisticRepository, MockPlotRepo, MockPlotRend, NoOpEventPublisher> {
+) -> AppState<
+    MockStatisticRepository,
+    MockPlotRepo,
+    MockPlotRend,
+    NoOpEventPublisher,
+    IntegrationService,
+> {
     let publisher = Arc::new(NoOpEventPublisher);
     let plot_repo = Arc::new(MockPlotRepo::new());
     let renderer = Arc::new(MockPlotRend::new());

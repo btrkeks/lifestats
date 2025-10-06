@@ -4,6 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use chrono::NaiveDate;
+use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::ids::PlotId;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
@@ -25,8 +26,8 @@ pub struct PlotImageQuery {
 
 /// GET /plots/:id/image
 /// Returns a rendered plot image as PNG
-pub async fn get_plot_image<R, P, Rend, E>(
-    State(state): State<AppState<R, P, Rend, E>>,
+pub async fn get_plot_image<R, P, Rend, E, I>(
+    State(state): State<AppState<R, P, Rend, E, I>>,
     Path(id): Path<u32>,
     Query(params): Query<PlotImageQuery>,
 ) -> Result<impl IntoResponse, ApiError>
@@ -35,6 +36,7 @@ where
     P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
 {
     let plot_id = PlotId(id);
 

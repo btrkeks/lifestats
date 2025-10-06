@@ -6,6 +6,27 @@ use crate::error::{ApplicationError, ApplicationResult};
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 
+#[cfg(test)]
+use mockall::automock;
+
+/// Trait defining the contract for integration service implementations.
+///
+/// This trait allows for dependency injection and testability.
+#[cfg_attr(test, automock)]
+pub trait IntegrationServiceTrait: Send + Sync {
+    /// Provisions a bundle of statistics for the given source and context.
+    ///
+    /// This method is idempotent: calling it multiple times with the same
+    /// source and context will return the same statistic IDs.
+    ///
+    /// Returns a map from logical key (e.g., "time_spent") to StatisticId.
+    fn provision_bundle(
+        &self,
+        source: &str,
+        context: HashMap<String, String>,
+    ) -> ApplicationResult<HashMap<String, StatisticId>>;
+}
+
 /// Service for provisioning integration bundles in an idempotent manner.
 ///
 /// This service ensures that multiple calls with the same source and context
@@ -32,14 +53,16 @@ impl IntegrationService {
             factories: factories_map,
         }
     }
+}
 
+impl IntegrationServiceTrait for IntegrationService {
     /// Provisions a bundle of statistics for the given source and context.
     ///
     /// This method is idempotent: calling it multiple times with the same
     /// source and context will return the same statistic IDs.
     ///
     /// Returns a map from logical key (e.g., "time_spent") to StatisticId.
-    pub fn provision_bundle(
+    fn provision_bundle(
         &self,
         source: &str,
         context: HashMap<String, String>,

@@ -25,11 +25,14 @@ impl PlottersRenderer {
         let root = BitMapBackend::with_buffer(&mut buffer, (config.width, config.height))
             .into_drawing_area();
 
-        root.fill(&WHITE)?;
+        root.fill(&BACKGROUND_COLOR)?;
 
-        // Extract y-axis range from PlotData (provided by domain logic)
-        let (y_min, y_max) = match &data.y_axis {
-            YAxis::Integer { min, max } => (*min as f64, *max as f64),
+        // Extract y-axis range from PlotData and add padding (matching old behavior)
+        let y_axis_max = match &data.y_axis {
+            YAxis::Integer { min: _, max } => {
+                let (_, padded_max) = add_y_padding(0, *max as i64, Y_MARGIN_PERCENT);
+                padded_max
+            }
             YAxis::Time { .. } => {
                 return Err(anyhow!(
                     "BarChart plot requires Integer axis, but got Time axis"
@@ -38,38 +41,56 @@ impl PlottersRenderer {
         };
 
         let mut chart = ChartBuilder::on(&root)
-            .caption(&data.title, ("IPAMincho", 30))
-            .margin(10)
-            .x_label_area_size(40)
-            .y_label_area_size(50)
-            .build_cartesian_2d(data.date_range.start()..data.date_range.end(), y_min..y_max)?;
+            .x_label_area_size(25)
+            .y_label_area_size(52)
+            .margin_right(7)
+            .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
+            .build_cartesian_2d(
+                (data.date_range.start()..data.date_range.end()).into_segmented(),
+                0..y_axis_max,
+            )?;
 
-        chart.configure_mesh().draw()?;
+        chart
+            .configure_mesh()
+            .disable_x_mesh()
+            .x_labels((data.date_range.end() - data.date_range.start()).num_days() as usize + 1)
+            .bold_line_style(WHITE.mix(0.2))
+            .x_label_formatter(&|seg| match seg {
+                SegmentValue::Exact(d) => d.format("%d.%m").to_string(),
+                SegmentValue::CenterOf(d) => d.format("%d.").to_string(),
+                SegmentValue::Last => "".to_string(),
+            })
+            .axis_style(WHITE)
+            .label_style(("IPAMincho", 20, &WHITE))
+            .draw()?;
 
-        // Draw bars using DrawableData and pre-calculated colors
+        // Draw bars using DrawableData and pre-calculated colors with helper function
         for point in &data.points {
             if let DrawableData::Integer(value) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
-                chart.draw_series([Rectangle::new(
-                    [(point.date, 0.0), (point.date, *value as f64)],
-                    color.filled(),
+                chart.draw_series([get_bar(point.date, 0, *value as i64, 2, &color.to_rgba())])?;
+            }
+        }
+
+        // Draw goal lines using helper function
+        for point in &data.points {
+            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
+                chart.draw_series([get_horizontal_line(
+                    point.date,
+                    *goal_number as i64,
+                    GOAL_LINE_COLOR,
                 )])?;
             }
         }
 
-        // Draw goal lines
-        for point in &data.points {
-            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
-                chart.draw_series([PathElement::new(
-                    [
-                        (point.date, *goal_number as f64),
-                        (point.date + chrono::Duration::days(1), *goal_number as f64),
-                    ],
-                    GOAL_LINE_COLOR.stroke_width(2),
-                )])?;
-            }
-        }
+        // Draw border
+        chart.draw_series([get_border(
+            &WHITE,
+            data.date_range.start(),
+            data.date_range.end(),
+            y_axis_max,
+        )])?;
 
         drop(chart);
         drop(root);
@@ -89,11 +110,13 @@ impl PlottersRenderer {
         let root = BitMapBackend::with_buffer(&mut buffer, (config.width, config.height))
             .into_drawing_area();
 
-        root.fill(&WHITE)?;
+        root.fill(&BACKGROUND_COLOR)?;
 
-        // Extract y-axis range from PlotData (provided by domain logic)
-        let (y_min, y_max) = match &data.y_axis {
-            YAxis::Integer { min, max } => (*min as f64, *max as f64),
+        // Extract y-axis range from PlotData and add padding
+        let (y_axis_min, y_axis_max) = match &data.y_axis {
+            YAxis::Integer { min, max } => {
+                add_y_padding(*min as i64, *max as i64, Y_MARGIN_PERCENT)
+            }
             YAxis::Time { .. } => {
                 return Err(anyhow!(
                     "LineChart plot requires Integer axis, but got Time axis"
@@ -102,50 +125,77 @@ impl PlottersRenderer {
         };
 
         let mut chart = ChartBuilder::on(&root)
-            .caption(&data.title, ("IPAMincho", 30))
-            .margin(10)
-            .x_label_area_size(40)
-            .y_label_area_size(50)
-            .build_cartesian_2d(data.date_range.start()..data.date_range.end(), y_min..y_max)?;
+            .x_label_area_size(25)
+            .y_label_area_size(52)
+            .margin_right(7)
+            .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
+            .build_cartesian_2d(
+                (data.date_range.start()..data.date_range.end()).into_segmented(),
+                y_axis_min..y_axis_max,
+            )?;
 
-        chart.configure_mesh().draw()?;
+        chart
+            .configure_mesh()
+            .disable_x_mesh()
+            .x_labels((data.date_range.end() - data.date_range.start()).num_days() as usize + 1)
+            .bold_line_style(WHITE.mix(0.2))
+            .x_label_formatter(&|seg| match seg {
+                SegmentValue::Exact(d) => d.format("%d.%m").to_string(),
+                SegmentValue::CenterOf(d) => d.format("%d.").to_string(),
+                SegmentValue::Last => "".to_string(),
+            })
+            .axis_style(WHITE)
+            .label_style(("IPAMincho", 20, &WHITE))
+            .draw()?;
 
-        // Extract line data using DrawableData
+        // Draw line connecting points
         let line_data: Vec<_> = data
             .points
             .iter()
             .filter_map(|point| {
                 if let DrawableData::Integer(v) = &point.value {
-                    Some((point.date, *v as f64))
+                    Some((SegmentValue::CenterOf(point.date), *v as i64))
                 } else {
                     None
                 }
             })
             .collect();
 
-        chart.draw_series(LineSeries::new(line_data.clone(), &BLUE))?;
+        if !line_data.is_empty() {
+            chart.draw_series(LineSeries::new(line_data, WHITE.mix(0.8)))?;
+        }
 
         // Draw points with pre-calculated colors
         for point in &data.points {
             if let DrawableData::Integer(value) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
-                chart.draw_series([Circle::new((point.date, *value as f64), 3, color.filled())])?;
+                chart.draw_series([Circle::new(
+                    (SegmentValue::CenterOf(point.date), *value as i64),
+                    5,
+                    color.filled(),
+                )])?;
             }
         }
 
         // Draw goal lines
         for point in &data.points {
             if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
-                chart.draw_series([PathElement::new(
-                    [
-                        (point.date, *goal_number as f64),
-                        (point.date + chrono::Duration::days(1), *goal_number as f64),
-                    ],
-                    GOAL_LINE_COLOR.stroke_width(2),
+                chart.draw_series([get_horizontal_line(
+                    point.date,
+                    *goal_number as i64,
+                    GOAL_LINE_COLOR,
                 )])?;
             }
         }
+
+        // Draw border
+        chart.draw_series([get_border(
+            &WHITE,
+            data.date_range.start(),
+            data.date_range.end(),
+            y_axis_max,
+        )])?;
 
         drop(chart);
         drop(root);
@@ -165,11 +215,13 @@ impl PlottersRenderer {
         let root = BitMapBackend::with_buffer(&mut buffer, (config.width, config.height))
             .into_drawing_area();
 
-        root.fill(&WHITE)?;
+        root.fill(&BACKGROUND_COLOR)?;
 
-        // Extract y-axis range from PlotData (provided by domain logic)
-        let (y_min, y_max) = match &data.y_axis {
-            YAxis::Integer { min, max } => (*min as f64, *max as f64),
+        // Extract y-axis range from PlotData and add padding
+        let (y_axis_min, y_axis_max) = match &data.y_axis {
+            YAxis::Integer { min, max } => {
+                add_y_padding(*min as i64, *max as i64, Y_MARGIN_PERCENT)
+            }
             YAxis::Time { .. } => {
                 return Err(anyhow!(
                     "Scatter plot requires Integer axis, but got Time axis"
@@ -178,35 +230,60 @@ impl PlottersRenderer {
         };
 
         let mut chart = ChartBuilder::on(&root)
-            .caption(&data.title, ("IPAMincho", 30))
-            .margin(10)
-            .x_label_area_size(40)
-            .y_label_area_size(50)
-            .build_cartesian_2d(data.date_range.start()..data.date_range.end(), y_min..y_max)?;
+            .x_label_area_size(25)
+            .y_label_area_size(52)
+            .margin_right(7)
+            .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
+            .build_cartesian_2d(
+                (data.date_range.start()..data.date_range.end()).into_segmented(),
+                y_axis_min..y_axis_max,
+            )?;
 
-        chart.configure_mesh().draw()?;
+        chart
+            .configure_mesh()
+            .disable_x_mesh()
+            .x_labels((data.date_range.end() - data.date_range.start()).num_days() as usize + 1)
+            .bold_line_style(WHITE.mix(0.2))
+            .x_label_formatter(&|seg| match seg {
+                SegmentValue::Exact(d) => d.format("%d.%m").to_string(),
+                SegmentValue::CenterOf(d) => d.format("%d.").to_string(),
+                SegmentValue::Last => "".to_string(),
+            })
+            .axis_style(WHITE)
+            .label_style(("IPAMincho", 20, &WHITE))
+            .draw()?;
 
-        // Draw scatter points with DrawableData and pre-calculated colors
+        // Draw horizontal lines for each data point (old scatter plot style)
         for point in &data.points {
             if let DrawableData::Integer(value) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
-                chart.draw_series([Circle::new((point.date, *value as f64), 5, color.filled())])?;
+                chart.draw_series([get_horizontal_line(
+                    point.date,
+                    *value as i64,
+                    color.to_rgba(),
+                )])?;
             }
         }
 
         // Draw goal lines
         for point in &data.points {
             if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
-                chart.draw_series([PathElement::new(
-                    [
-                        (point.date, *goal_number as f64),
-                        (point.date + chrono::Duration::days(1), *goal_number as f64),
-                    ],
-                    GOAL_LINE_COLOR.stroke_width(2),
+                chart.draw_series([get_horizontal_line(
+                    point.date,
+                    *goal_number as i64,
+                    GOAL_LINE_COLOR,
                 )])?;
             }
         }
+
+        // Draw border
+        chart.draw_series([get_border(
+            &WHITE,
+            data.date_range.start(),
+            data.date_range.end(),
+            y_axis_max,
+        )])?;
 
         drop(chart);
         drop(root);

@@ -1,0 +1,14 @@
+# infrastructure/plotting/Cargo.toml
+[package]
+name = "lifestats-plotting"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Internal: We implement domain's PlotRenderer trait
+lifestats-domain = { path = "../../domain" }
+
+# External: Rendering dependencies
+plotters = "0.3"
+image = "0.24"
+anyhow = "1.0"
