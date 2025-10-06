@@ -1,234 +1,101 @@
-# `TODO.md` - Priority 3: Solidify the Error Handling Strategy
+# ✓ COMPLETE: Refactor Stopwatch & Heartbeat Architecture
 
-## Objective
+**Status:** Implementation complete on `refactor` branch
+**All tests passing:** 36/36 tests pass (including 13 new HeartbeatSession tests)
 
-The goal of this refactoring is to create a clean, layered error handling strategy. Our current `StatisticError` mixes concerns from different architectural layers (domain, repository, general). This makes it difficult for consumers like the Web API to translate errors into meaningful responses (e.g., `400 Bad Request` vs. `500 Internal Server Error`).
+## Goal
 
-We will introduce distinct error types for each layer:
+Migrate the active session tracking logic from the `heart_beat_logger` infrastructure crate into the `lifestats-application` core crate. Convert the `stopwatch_logger` into a "thin" UI Adapter that drives this new core application service.
 
-1.  **Repository Layer:** A new `RepositoryError` for persistence-related failures.
-2.  **Domain Layer:** The existing `DomainError` will be the sole representation of business rule violations.
-3.  **Application Layer:** A new `ApplicationError` to classify errors from the layers below it.
+## Architectural Principles Applied
 
-This will allow for clean, explicit error propagation and translation at each architectural boundary.
+1.  **Single Responsibility Principle:** Core business logic (tracking time sessions) is separated from UI concerns (TUI rendering) and persistence details (HTTP vs Local).
+2.  **Dependency Inversion:** The new session service will depend on the `StatisticRepository` **Port** (abstract trait), not on concrete logger implementations.
 
-## Phase 1: Define Core and Repository Error Types
+---
 
-We will start at the innermost layers by defining the new error contracts.
+## Phase 1: Application Layer Refactoring ✓
 
-### 1.1. Define `RepositoryError` in `lifestats-core`
+**Objective:** Establish the `HeartbeatSession` service within the Application Layer (`lifestats-application`), removing dependencies on concrete logging mechanisms.
 
-- **Action:** In a new file `core/core/src/statistic/ports/error.rs`, define a `RepositoryError` enum. This error type will become part of the public contract for all persistence ports.
-- **Justification:** By defining the error type alongside the port (trait), we decouple the application from the specific errors of the persistence implementation (e.g., `diesel::Error`).
+### 1. Create the Service Module ✓
 
-  ```rust
-  // In: core/core/src/statistic/ports/error.rs
-  use thiserror::Error;
+- [x] Create a new file: `core/application/src/use_cases/session_tracking_service.rs`.
+- [x] Register the module in `core/application/src/use_cases/mod.rs`.
 
-  #[derive(Debug, Error)]
-  pub enum RepositoryError {
-      #[error("Resource not found")]
-      NotFound,
+### 2. Port Configuration & Data Types ✓
 
-      #[error("Operation failed: {0}")]
-      OperationFailed(#[from] anyhow::Error),
-  }
-  ```
+**Context:** Move the pure data structures that define a session's state and configuration.
+**Source:** `logger_applications/heart_beat_logger/src/lib.rs`
+**Destination:** The new `session_tracking_service.rs`.
 
-- **Action:** Expose this new module by adding `pub mod error;` to `core/core/src/statistic/ports/mod.rs`.
+- [x] Move `HeartbeatConfig` struct.
+- [x] Move `HeartbeatUpdate` enum.
+- [x] Move internal types `HeartMessage` enum and `TimeoutAction` enum.
+- [x] Move `TotalDurationManager` struct and its implementation.
 
-### 1.2. Update the `StatisticRepository` Port
+### 3. Port & Refactor Core Logic (`HeartTiming` & `Heart`) ✓
 
-- **Action:** In `core/core/src/statistic/ports/statistic_repository.rs`, update all method signatures to return `Result<..., RepositoryError>` instead of `anyhow::Result`.
-- **Justification:** This enforces the new, explicit error contract for all repository implementations.
+**Context:** Move the complex timing logic and apply **Dependency Inversion** to the worker thread.
 
-  ```rust
-  // In: core/core/src/statistic/ports/statistic_repository.rs
-  use super::error::RepositoryError; // Add this import
+- [x] **Move `HeartTiming`:** Copy the `HeartTiming` struct and `impl` block into `session_tracking_service.rs`. Ensure it retains the generic dependency on `TP: TimeProvider`.
+- [x] **Refactor `Heart` (Apply Dependency Inversion):**
+  - [x] Copy the `Heart` struct.
+  - [x] **CRITICAL:** Remove the `TL: TimeFrameLogger` generic and field.
+  - [x] Add fields for `statistic_id: StatisticId` and `repository: Arc<R>` where `R: StatisticRepository + Send + Sync`.
+- [x] **Implement Domain Logging in `Heart::main_loop`:** Replace all calls to `self.logger.log(start, end)` with direct use of the `StatisticRepository` port.
+  - [x] _Guidance:_ Create a private helper method in `Heart`: `fn persist_time_frame(&self, start: NaiveTime, end: NaiveTime) -> Result<()>`.
+  - [x] _Implementation:_ Inside this helper:
+    1. Fetch current value using `self.repository.find_log_value(...)`.
+    2. Construct the new `TimeFrame` and `TimeFrameList` domain objects.
+    3. Apply `TimeFrameListUpdatePolicy::UpdateEndValue` logic (similar to `LoggingService::log_time_frame`, but implemented specifically for this worker to avoid circular dependencies with `LoggingService`).
+    4. Save the result using `self.repository.save_log_value(...)`.
 
-  // ...
+### 4. Create the Public Application Service (`HeartbeatSession`) ✓
 
-  #[cfg_attr(any(test, feature = "testing"), mockall::automock)]
-  pub trait StatisticRepository {
-      // Change every method signature like this:
-      // Before: fn find_metadata_by_id(&self, id: StatisticId) -> Result<AnyStatistic>;
-      // After:
-      fn find_metadata_by_id(&self, id: StatisticId) -> Result<AnyStatistic, RepositoryError>;
+**Context:** This is the public face of the service that the UI adapters will interact with.
 
-      // ... update all other methods in the trait ...
-      fn find_all_metadata(&self) -> Result<Vec<AnyStatistic>, RepositoryError>;
-      fn save_metadata(&self, statistic: &AnyStatistic) -> Result<(), RepositoryError>;
-      fn find_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>, RepositoryError>;
-      // etc.
-  }
-  ```
+- [x] Port `HeartbeatLogger` from `heart_beat_logger/src/lib.rs` to `session_tracking_service.rs` and rename it to `HeartbeatSession`.
+- [x] Refactor its `new` constructor:
+  - [x] Remove `TL: TimeFrameLogger` generic.
+  - [x] Accept `statistic_id: StatisticId` and `repository: Arc<R: StatisticRepository + Send + Sync>`.
+- [x] Update `spawn_heart_thread` to initialize the refactored `Heart` worker with the `statistic_id` and `repository`.
 
-### 1.3. Update the `PlotRepository` Port (in `plot-domain`)
+### 5. Add Testing ✓
 
-- **Action:** Perform the same change for the `PlotRepository` trait in `plot-domain`. You can add a similar `error.rs` module in `plot-domain` or, for simplicity in this project, have `plot-domain` depend on `lifestats-core` and reuse the same `RepositoryError`. Let's reuse it.
-- **Instruction:**
-  1.  Ensure `plot-domain/Cargo.toml` has `lifestats-core` as a dependency.
-  2.  Update `core/plot-domain/src/repository.rs` to use `lifestats_core::statistic::ports::error::RepositoryError`.
+- [x] Tests integrated into `session_tracking_service.rs` (13 tests).
+- [x] Implemented tests using `MockStatisticRepository` and `MockTimeProvider`. Verified that `beat()`, `stop()`, and timeouts correctly result in calls to `repository.save_log_value` with the expected `TimeFrameList` data.
 
-  ```rust
-  // In: core/plot-domain/src/repository.rs
-  use lifestats_core::statistic::ports::error::RepositoryError; // Add this import
+---
 
-  // ...
+## Phase 2: Adapter Layer Refactoring (`StopwatchLogger`) ✓
 
-  #[cfg_attr(feature = "testing", mockall::automock)]
-  pub trait PlotRepository: Send + Sync {
-      // Change every method signature:
-      fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>, RepositoryError>;
-      // ... update all other methods ...
-  }
-  ```
+**Objective:** Convert the `stopwatch_logger` binary into a "dumb" UI adapter that depends on the new Application Layer service.
 
-## Phase 2: Implement the Application Error Layer
+### 1. Update Dependencies ✓
 
-This is the central translation layer that gives context to errors from lower layers.
+- [x] In `logger_applications/stopwatch_logger/Cargo.toml`:
+  - [x] Remove dependency on `heart_beat_logger`.
+  - [x] Ensure dependency on `lifestats-application` is present and correct.
 
-### 2.1. Define `ApplicationError`
+### 2. Refactor `main.rs` ✓
 
-- **Action:** In a new file `core/application/src/error.rs`, define the `ApplicationError` enum.
-- **Justification:** This enum classifies errors into categories that the outer layers (like the API) can act upon, such as distinguishing a user error from a server error.
+**Context:** Wire the UI directly to the new application service.
 
-  ```rust
-  // In: core/application/src/error.rs
-  use thiserror::Error;
-  use lifestats_core::statistic::{error::DomainError, ports::error::RepositoryError};
+- [x] Remove `mod stopwatch;` and `use crate::stopwatch::...`.
+- [x] Import `lifestats_application::use_cases::HeartbeatSession` (and related config/update types).
+- [x] In `run_stopwatch`:
+  - [x] Replace `Stopwatch::new(...)` with `HeartbeatSession::new(...)`.
+  - [x] Pass `metadata.id()`, configuration, and `app_context.statistic_repository` to the constructor.
+  - [x] Update the event loop to handle the imported `HeartbeatUpdate` variants.
 
-  #[derive(Debug, Error)]
-  pub enum ApplicationError {
-      #[error("A business rule was violated: {0}")]
-      Domain(#[from] DomainError),
+---
 
-      #[error("A persistence error occurred: {0}")]
-      Repository(#[from] RepositoryError),
+## Phase 3: Cleanup ✓
 
-      #[error("An unexpected infrastructure error occurred: {0}")]
-      Infrastructure(#[from] anyhow::Error),
-  }
-
-  pub type ApplicationResult<T> = Result<T, ApplicationError>;
-  ```
-
-- **Action:** Expose this module by adding `pub mod error;` to `core/application/src/lib.rs`.
-
-### 2.2. Update Application Services
-
-- **Action:** Go through every service in `core/application/src/use_cases/` (`LoggingService`, `GoalManagementService`, `PlottingService`, `StatisticQueryService`).
-- **Instruction:** Change the return type of every public method from `anyhow::Result<...>` to `ApplicationResult<...>` (which is `Result<..., ApplicationError>`).
-- **Justification:** This forces the application services to conform to the new error handling strategy. The `#[from]` attributes on `ApplicationError` mean that in most cases, you will only need to change the function signature, and the `?` operator will handle the error conversion automatically.
-
-  ```rust
-  // Example in core/application/src/use_cases/logging_service.rs
-  use crate::error::ApplicationResult; // Add this import
-
-  // ...
+**Objective:** Remove the now-obsolete infrastructure code.
 
-  // Before: pub fn log_value(&self, command: LogValueCommand) -> Result<()>
-  // After:
-  pub fn log_value(&self, command: LogValueCommand) -> ApplicationResult<()> {
-      // ... implementation remains the same ...
-      // The `?` operator on repository or domain calls will now
-      // automatically convert RepositoryError/DomainError into ApplicationError.
-      let statistic = self.statistic_repository.find_metadata_by_id(command.statistic_id)?;
-
-      // ...
-      Ok(())
-  }
-  ```
-
-## Phase 3: Update Adapters (Persistence and Web API)
-
-Now we update the concrete implementations to conform to the new contracts.
-
-### 3.1. Update `lifestats-persistence` Adapter
-
-- **Action:** In `core/infrastructure/persistence/src/repository.rs` and `plot_repository.rs`, update all method signatures to match the traits they implement (`Result<..., RepositoryError>`).
-- **Action:** Map `diesel::Error` to `RepositoryError`. You can do this by creating a `From` implementation.
-
-  ```rust
-  // Add this to a relevant place, e.g., at the top of repository.rs
-  use lifestats_core::statistic::ports::error::RepositoryError;
-
-  impl From<diesel::Error> for RepositoryError {
-      fn from(err: diesel::Error) -> Self {
-          match err {
-              diesel::Error::NotFound => RepositoryError::NotFound,
-              _ => RepositoryError::OperationFailed(err.into()),
-          }
-      }
-  }
-  ```
-
-- **Action:** Update the method implementations to handle the error conversion. The `?` operator or `.map_err` will now work cleanly.
-
-  ```rust
-  // Example in core/infrastructure/persistence/src/repository.rs
-  fn find_metadata_by_id(&self, id: StatisticId) -> Result<AnyStatistic, RepositoryError> {
-      let mut conn = self.connection().map_err(|e| RepositoryError::OperationFailed(e))?;
-
-      let dto = statistics::table
-          .find(id.0 as i32)
-          .first::<StatisticDto>(&mut conn)?; // The `?` will now convert diesel::Error to RepositoryError
-
-      // ...
-      Ok(dto.into_any_statistic(default_goal)?) // This `?` handles anyhow conversion
-  }
-  ```
-
-- **Note:** You will also need to update mocks and tests that use the repositories to align with the new error types.
-
-### 3.2. Update `web-api` Adapter
-
-- **Action:** In `core/infrastructure/web_api/src/error.rs`, remove the `From<StatisticError>` and `From<DomainError>` implementations for `ApiError`.
-- **Action:** Add a single `From<ApplicationError>` implementation for `ApiError`.
-- **Justification:** This is the final and most important translation step. The API layer now only needs to know about `ApplicationError` and can map its variants to the correct HTTP status codes without knowledge of the underlying cause.
-
-  ```rust
-  // In: core/infrastructure/web_api/src/error.rs
-  use lifestats_application::error::ApplicationError;
-  use lifestats_core::statistic::ports::error::RepositoryError;
-
-  impl From<ApplicationError> for ApiError {
-      fn from(err: ApplicationError) -> Self {
-          match err {
-              // User-fixable errors -> 400 Bad Request
-              ApplicationError::Domain(domain_err) => {
-                  ApiError::BadRequest(domain_err.to_string())
-              }
-
-              // Not found error -> 404 Not Found
-              ApplicationError::Repository(RepositoryError::NotFound) => {
-                  ApiError::NotFound("The requested resource was not found.".to_string()) // Add a NotFound variant to ApiError
-              }
-
-              // Database or other unexpected errors -> 500 Internal Server Error
-              ApplicationError::Repository(err) => {
-                  ApiError::InternalServerError(err.into())
-              }
-              ApplicationError::Infrastructure(err) => {
-                  ApiError::InternalServerError(err)
-              }
-          }
-      }
-  }
-  ```
-
-  _(You will need to add a `NotFound(String)` variant to your `ApiError` enum to handle this case gracefully)._
-
-- **Action:** Update all API route handlers in `routes/*.rs` to return `Result<..., ApiError>`. The `?` operator on application service calls will now work seamlessly.
-
-## Phase 4: Final Cleanup and Verification
-
-### 4.1. Delete the Old `StatisticError`
-
-- **Action:** In `core/core/src/statistic/error.rs`, **delete** the entire `StatisticError` enum. It should now be completely unused across the workspace.
-- **Justification:** This final deletion confirms that the refactoring is complete and all parts of the system have adopted the new layered error strategy.
-
-### 4.2. Verify Full Project Compilation and Testing
-
-- **Action:** Run `cargo check --workspace` and `cargo test --workspace` from the root of the project.
-- **Goal:** Ensure the entire workspace compiles and all tests pass. This confirms that the new error handling has been implemented correctly without breaking existing functionality.
+- [x] Delete `logger_applications/stopwatch_logger/src/stopwatch.rs`.
+- [x] Delete the entire directory `logger_applications/heart_beat_logger/`.
+- [x] `heart_beat_logger` was not in workspace members (legacy code).
+- [x] Run `cargo build` and `cargo test` from the workspace root - **ALL TESTS PASS** (36/36)

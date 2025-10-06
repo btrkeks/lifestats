@@ -1,27 +1,53 @@
-/// This library allows logging data by sending 'pings' or 'heartbeats'.
-/// A heartbeat indicates, that the action is currently ongoing and
-/// starts the data logging.
-/// If there was no heartbeat for a certain period of time, it is
-/// assumed that the action isn't ongoing anymore and logging will stop.
-pub mod logger;
+//! Session tracking service for managing active time-tracking sessions.
+//!
+//! This module provides the `HeartbeatSession` service which manages heartbeat-based
+//! session tracking. It applies the Dependency Inversion Principle by depending on
+//! the `StatisticRepository` port rather than concrete logger implementations.
+//!
+//! The service manages a background worker thread that handles timing logic and
+//! persists time frames directly to the repository using the domain's update policies.
 
-use chrono::{DateTime, Local};
-use lifestats_core::app_context::AppContext;
+use chrono::{DateTime, Local, NaiveTime};
+use lifestats_core::shared::ids::StatisticId;
+use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
+use lifestats_core::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
 use log::{debug, error};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{mpsc, Arc};
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use std::{thread, time};
-use transfer_objects::statistic_id::StatisticId;
-
-use crate::logger::http_logger::HttpLogger;
-use logger::local_logger::LocalLogger;
-use logger::logger_trait::TimeFrameLogger;
-use testing_utilities::time_provider::TimeProvider;
-
 use tokio::sync::mpsc as tmpsc;
+
+// =================================================================================================
+//  Time Provider Abstraction
+// =================================================================================================
+
+/// Abstraction for time operations to enable testing
+pub trait TimeProvider: Send + Sync {
+    fn now(&self) -> DateTime<Local>;
+    fn current_instant(&self) -> Instant;
+}
+
+/// Real-world time provider using system time
+#[derive(Clone, Copy)]
+pub struct RealTimeProvider;
+
+impl TimeProvider for RealTimeProvider {
+    fn now(&self) -> DateTime<Local> {
+        Local::now()
+    }
+
+    fn current_instant(&self) -> Instant {
+        Instant::now()
+    }
+}
+
+// =================================================================================================
+//  Configuration & Public Types
+// =================================================================================================
 
 #[derive(Clone)]
 pub struct HeartbeatConfig {
@@ -52,245 +78,8 @@ pub enum HeartMessage {
     Stop,
 }
 
-pub struct HeartbeatLogger<TL: TimeFrameLogger + 'static, TP: TimeProvider + 'static> {
-    time_provider: Arc<TP>,
-    logger: Arc<TL>,
-    config: Arc<HeartbeatConfig>,
-    heart_tx: Option<Sender<HeartMessage>>,
-    heart_thread_handle: Option<JoinHandle<()>>,
-    update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
-    total_duration_manager: Arc<TotalDurationManager>,
-}
-
-impl<TL: TimeFrameLogger + 'static, TP: TimeProvider + 'static> HeartbeatLogger<TL, TP> {
-    pub fn new(time_provider: Arc<TP>, logger: TL, config: HeartbeatConfig) -> Self {
-        HeartbeatLogger {
-            time_provider,
-            logger: Arc::new(logger),
-            config: Arc::new(config),
-            heart_tx: None,
-            heart_thread_handle: None,
-            update_tx: None,
-            total_duration_manager: Arc::new(TotalDurationManager::new()),
-        }
-    }
-
-    pub fn new_with_local_logger(
-        time_provider: Arc<TP>,
-        app_context: Arc<AppContext>,
-        statistic_id: StatisticId,
-        config: HeartbeatConfig,
-    ) -> HeartbeatLogger<LocalLogger, TP> {
-        HeartbeatLogger::new(
-            time_provider,
-            LocalLogger::new(statistic_id, app_context),
-            config,
-        )
-    }
-
-    pub fn new_with_http_logger(
-        time_provider: Arc<TP>,
-        statistic_id: StatisticId,
-        server_url: &str,
-        config: HeartbeatConfig,
-    ) -> anyhow::Result<HeartbeatLogger<HttpLogger, TP>> {
-        Ok(HeartbeatLogger::new(
-            time_provider,
-            HttpLogger::new(statistic_id, server_url)?,
-            config,
-        ))
-    }
-
-    // 操作
-
-    pub fn beat(&mut self) {
-        match &self.heart_tx {
-            Some(sender) if sender.send(HeartMessage::Beat).is_ok() => {}
-            _ => self.spawn_heart_thread(),
-        }
-    }
-
-    pub fn stop(&mut self) {
-        if let Some(sender) = self.heart_tx.take() {
-            let _ = sender.send(HeartMessage::Stop);
-        }
-
-        if let Some(handle) = self.heart_thread_handle.take() {
-            if let Err(e) = handle.join() {
-                error!("Heartbeat thread panicked: {:?}", e);
-            }
-        }
-    }
-
-    // Status
-
-    pub fn is_running(&self) -> bool {
-        if let Some(heart_handle) = &self.heart_thread_handle {
-            !heart_handle.is_finished()
-        } else {
-            false
-        }
-    }
-
-    pub fn total_time_elapsed(&self) -> chrono::Duration {
-        self.total_duration_manager.get_current_duration()
-    }
-
-    // Observing
-
-    pub fn subscribe_to_updates(&mut self) -> tmpsc::Receiver<HeartbeatUpdate> {
-        let (tx, rx) = tmpsc::channel(32);
-        self.update_tx = Some(tx);
-        rx
-    }
-
-    // ------------------------------------------------
-
-    fn spawn_heart_thread(&mut self) {
-        let (sender, receiver) = mpsc::channel();
-        self.heart_tx = Some(sender);
-
-        let time_provider = self.time_provider.clone();
-        let logger = Arc::clone(&self.logger);
-        let config = Arc::clone(&self.config);
-        let update_tx = self.update_tx.clone();
-        let total_time_manager = Arc::clone(&self.total_duration_manager);
-
-        self.heart_thread_handle = Some(thread::spawn(move || {
-            let mut heart =
-                Heart::new(time_provider, logger, config, update_tx, total_time_manager);
-            heart.run(receiver);
-        }));
-    }
-}
-
-impl<TL: TimeFrameLogger + 'static, TP: TimeProvider + 'static> Drop for HeartbeatLogger<TL, TP> {
-    fn drop(&mut self) {
-        self.stop();
-    }
-}
-
 // =================================================================================================
-//  Heart / Worker
-// =================================================================================================
-
-/// Internal worker struct that runs in a dedicated thread.
-pub struct Heart<TL: TimeFrameLogger, TP: TimeProvider> {
-    time_provider: Arc<TP>,
-    logger: Arc<TL>,
-    config: Arc<HeartbeatConfig>,
-    update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
-    total_duration_manager: Arc<TotalDurationManager>,
-}
-
-impl<TL: TimeFrameLogger, TP: TimeProvider> Heart<TL, TP> {
-    pub fn new(
-        time_provider: Arc<TP>,
-        logger: Arc<TL>,
-        config: Arc<HeartbeatConfig>,
-        update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
-        total_duration_manager: Arc<TotalDurationManager>,
-    ) -> Self {
-        Self {
-            time_provider,
-            logger,
-            config,
-            update_tx,
-            total_duration_manager,
-        }
-    }
-
-    pub fn run(&mut self, receiver: Receiver<HeartMessage>) {
-        let heart_timing = HeartTiming::new(self.time_provider.clone(), self.config.clone());
-
-        self.emit_start_event();
-        let result = self.main_loop(receiver, heart_timing);
-        self.emit_stop_event();
-
-        if let Err(e) = result {
-            error!("Error in Heart thread: {}", e);
-        }
-    }
-
-    fn main_loop(
-        &mut self,
-        receiver: Receiver<HeartMessage>,
-        mut heart_timing: HeartTiming<TP>,
-    ) -> anyhow::Result<()> {
-        // TODO: If nobody is listening, we could increase the next wait duration
-        debug!("Starting heart thread main loop");
-        self.flush_log_now(&heart_timing)?;
-        loop {
-            match receiver.recv_timeout(heart_timing.calculate_next_wait_duration()) {
-                Ok(HeartMessage::Stop) => {
-                    debug!("Heart thread received stop message");
-                    let (start_time, end_time) = heart_timing.get_current_log_duration();
-                    self.logger.log(start_time.time(), end_time.time())?;
-                    break;
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    let timeout_action = heart_timing.get_next_action();
-                    match timeout_action {
-                        TimeoutAction::FlushLog((start_time, end_time)) => {
-                            debug!("Flushing log in heart thread");
-                            self.logger.log(start_time.time(), end_time.time())?;
-                        }
-                        TimeoutAction::EmitDurationUpdate(elapsed_seconds) => {
-                            debug!("Emitting duration update");
-                            let new_total_duration = self
-                                .total_duration_manager
-                                .add_and_fetch_total(elapsed_seconds);
-                            self.emit_duration_update(new_total_duration);
-                        }
-                        TimeoutAction::IdleTimeout((start_time, end_time)) => {
-                            self.logger.log(start_time.time(), end_time.time())?;
-                            break;
-                        }
-                        TimeoutAction::Noop => {}
-                    }
-                }
-                Ok(HeartMessage::Beat) => {
-                    debug!("Heart thread received beat message");
-                    heart_timing.record_beat();
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    // Something went wrong, just stop
-                    // (should never happen anyway due to the drop implementation)
-                    error!("HeartbeatLogger disconnected, stop logging");
-                    self.flush_log_now(&heart_timing)?;
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn flush_log_now(&self, heart_timing: &HeartTiming<TP>) -> anyhow::Result<()> {
-        let (start_time, end_time) = heart_timing.get_current_log_duration();
-        self.logger.log(start_time.time(), end_time.time())
-    }
-
-    fn emit_start_event(&self) {
-        if let Some(tx) = &self.update_tx {
-            let _ = tx.try_send(HeartbeatUpdate::Started);
-        }
-    }
-
-    fn emit_stop_event(&self) {
-        if let Some(tx) = &self.update_tx {
-            let _ = tx.try_send(HeartbeatUpdate::Stopped);
-        }
-    }
-
-    pub fn emit_duration_update(&mut self, current_duration: chrono::Duration) {
-        if let Some(tx) = &self.update_tx {
-            let _ = tx.try_send(HeartbeatUpdate::DurationChanged(current_duration));
-        }
-    }
-}
-
-// =================================================================================================
-//  HeartTiming
+//  Internal Types
 // =================================================================================================
 
 #[derive(Debug, Hash, Eq, PartialEq)]
@@ -303,6 +92,32 @@ enum TimeoutAction {
     IdleTimeout((DateTime<Local>, DateTime<Local>)),
     Noop,
 }
+
+struct TotalDurationManager {
+    seconds: AtomicU64,
+}
+
+impl TotalDurationManager {
+    pub fn new() -> Self {
+        Self {
+            seconds: AtomicU64::new(0),
+        }
+    }
+
+    pub fn add_and_fetch_total(&self, seconds: u64) -> chrono::Duration {
+        let total_seconds = self.seconds.fetch_add(seconds, Ordering::Relaxed) + seconds;
+        chrono::Duration::seconds(total_seconds as i64)
+    }
+
+    pub fn get_current_duration(&self) -> chrono::Duration {
+        let total_seconds = self.seconds.load(Ordering::Relaxed);
+        chrono::Duration::seconds(total_seconds as i64)
+    }
+}
+
+// =================================================================================================
+//  HeartTiming
+// =================================================================================================
 
 /// All timing-related state and logic for heartbeats.
 pub struct HeartTiming<TP: TimeProvider> {
@@ -339,7 +154,7 @@ impl<TP: TimeProvider> HeartTiming<TP> {
     }
 
     /// Determines how long to wait before the next check of timeouts or flushing.
-    fn calculate_next_wait_duration(&self) -> time::Duration {
+    fn calculate_next_wait_duration(&self) -> Duration {
         // Next required updates happen at:
         // 1. next duration update (every 1s)
         // 2. next flush log
@@ -418,25 +233,289 @@ impl<TP: TimeProvider> HeartTiming<TP> {
     }
 }
 
-struct TotalDurationManager {
-    seconds: AtomicU64,
+// =================================================================================================
+//  HeartbeatSession (Public API)
+// =================================================================================================
+
+/// Public session tracking service that manages heartbeat-based time tracking.
+///
+/// This service applies Dependency Inversion by accepting a `StatisticRepository` port
+/// instead of concrete logger implementations, following the Ports & Adapters architecture.
+pub struct HeartbeatSession<
+    R: StatisticRepository + Send + Sync + 'static,
+    TP: TimeProvider + 'static,
+> {
+    statistic_id: StatisticId,
+    repository: Arc<R>,
+    time_provider: Arc<TP>,
+    config: Arc<HeartbeatConfig>,
+    heart_tx: Option<Sender<HeartMessage>>,
+    heart_thread_handle: Option<JoinHandle<()>>,
+    update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
+    total_duration_manager: Arc<TotalDurationManager>,
 }
 
-impl TotalDurationManager {
-    pub fn new() -> Self {
-        Self {
-            seconds: AtomicU64::new(0),
+impl<R: StatisticRepository + Send + Sync + 'static, TP: TimeProvider + 'static>
+    HeartbeatSession<R, TP>
+{
+    pub fn new(
+        statistic_id: StatisticId,
+        repository: Arc<R>,
+        time_provider: Arc<TP>,
+        config: HeartbeatConfig,
+    ) -> Self {
+        HeartbeatSession {
+            statistic_id,
+            repository,
+            time_provider,
+            config: Arc::new(config),
+            heart_tx: None,
+            heart_thread_handle: None,
+            update_tx: None,
+            total_duration_manager: Arc::new(TotalDurationManager::new()),
         }
     }
 
-    pub fn add_and_fetch_total(&self, seconds: u64) -> chrono::Duration {
-        let total_seconds = self.seconds.fetch_add(seconds, Ordering::Relaxed) + seconds;
-        chrono::Duration::seconds(total_seconds as i64)
+    // --- Operations ---
+
+    pub fn beat(&mut self) {
+        match &self.heart_tx {
+            Some(sender) if sender.send(HeartMessage::Beat).is_ok() => {}
+            _ => self.spawn_heart_thread(),
+        }
     }
 
-    pub fn get_current_duration(&self) -> chrono::Duration {
-        let total_seconds = self.seconds.load(Ordering::Relaxed);
-        chrono::Duration::seconds(total_seconds as i64)
+    pub fn stop(&mut self) {
+        if let Some(sender) = self.heart_tx.take() {
+            let _ = sender.send(HeartMessage::Stop);
+        }
+
+        if let Some(handle) = self.heart_thread_handle.take() {
+            if let Err(e) = handle.join() {
+                error!("Heartbeat thread panicked: {:?}", e);
+            }
+        }
+    }
+
+    // --- Status ---
+
+    pub fn is_running(&self) -> bool {
+        if let Some(heart_handle) = &self.heart_thread_handle {
+            !heart_handle.is_finished()
+        } else {
+            false
+        }
+    }
+
+    pub fn total_time_elapsed(&self) -> chrono::Duration {
+        self.total_duration_manager.get_current_duration()
+    }
+
+    // --- Observing ---
+
+    pub fn subscribe_to_updates(&mut self) -> tmpsc::Receiver<HeartbeatUpdate> {
+        let (tx, rx) = tmpsc::channel(32);
+        self.update_tx = Some(tx);
+        rx
+    }
+
+    // --- Internal ---
+
+    fn spawn_heart_thread(&mut self) {
+        let (sender, receiver) = mpsc::channel();
+        self.heart_tx = Some(sender);
+
+        let statistic_id = self.statistic_id;
+        let repository = Arc::clone(&self.repository);
+        let time_provider = Arc::clone(&self.time_provider);
+        let config = Arc::clone(&self.config);
+        let update_tx = self.update_tx.clone();
+        let total_time_manager = Arc::clone(&self.total_duration_manager);
+
+        self.heart_thread_handle = Some(thread::spawn(move || {
+            let mut heart = Heart::new(
+                statistic_id,
+                repository,
+                time_provider,
+                config,
+                update_tx,
+                total_time_manager,
+            );
+            heart.run(receiver);
+        }));
+    }
+}
+
+impl<R: StatisticRepository + Send + Sync + 'static, TP: TimeProvider + 'static> Drop
+    for HeartbeatSession<R, TP>
+{
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+// =================================================================================================
+//  Heart / Worker
+// =================================================================================================
+
+/// Internal worker struct that runs in a dedicated thread.
+///
+/// This worker applies Dependency Inversion by depending on the `StatisticRepository` port
+/// instead of concrete logger implementations. It persists time frames directly using
+/// domain update policies.
+pub struct Heart<R: StatisticRepository + Send + Sync, TP: TimeProvider> {
+    statistic_id: StatisticId,
+    repository: Arc<R>,
+    time_provider: Arc<TP>,
+    config: Arc<HeartbeatConfig>,
+    update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
+    total_duration_manager: Arc<TotalDurationManager>,
+}
+
+impl<R: StatisticRepository + Send + Sync, TP: TimeProvider> Heart<R, TP> {
+    pub fn new(
+        statistic_id: StatisticId,
+        repository: Arc<R>,
+        time_provider: Arc<TP>,
+        config: Arc<HeartbeatConfig>,
+        update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
+        total_duration_manager: Arc<TotalDurationManager>,
+    ) -> Self {
+        Self {
+            statistic_id,
+            repository,
+            time_provider,
+            config,
+            update_tx,
+            total_duration_manager,
+        }
+    }
+
+    pub fn run(&mut self, receiver: Receiver<HeartMessage>) {
+        let heart_timing = HeartTiming::new(self.time_provider.clone(), self.config.clone());
+
+        self.emit_start_event();
+        let result = self.main_loop(receiver, heart_timing);
+        self.emit_stop_event();
+
+        if let Err(e) = result {
+            error!("Error in Heart thread: {}", e);
+        }
+    }
+
+    fn main_loop(
+        &mut self,
+        receiver: Receiver<HeartMessage>,
+        mut heart_timing: HeartTiming<TP>,
+    ) -> anyhow::Result<()> {
+        debug!("Starting heart thread main loop");
+        self.flush_log_now(&heart_timing)?;
+        loop {
+            match receiver.recv_timeout(heart_timing.calculate_next_wait_duration()) {
+                Ok(HeartMessage::Stop) => {
+                    debug!("Heart thread received stop message");
+                    let (start_time, end_time) = heart_timing.get_current_log_duration();
+                    self.persist_time_frame(start_time.time(), end_time.time())?;
+                    break;
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    let timeout_action = heart_timing.get_next_action();
+                    match timeout_action {
+                        TimeoutAction::FlushLog((start_time, end_time)) => {
+                            debug!("Flushing log in heart thread");
+                            self.persist_time_frame(start_time.time(), end_time.time())?;
+                        }
+                        TimeoutAction::EmitDurationUpdate(elapsed_seconds) => {
+                            debug!("Emitting duration update");
+                            let new_total_duration = self
+                                .total_duration_manager
+                                .add_and_fetch_total(elapsed_seconds);
+                            self.emit_duration_update(new_total_duration);
+                        }
+                        TimeoutAction::IdleTimeout((start_time, end_time)) => {
+                            self.persist_time_frame(start_time.time(), end_time.time())?;
+                            break;
+                        }
+                        TimeoutAction::Noop => {}
+                    }
+                }
+                Ok(HeartMessage::Beat) => {
+                    debug!("Heart thread received beat message");
+                    heart_timing.record_beat();
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    // Something went wrong, just stop
+                    error!("HeartbeatLogger disconnected, stop logging");
+                    self.flush_log_now(&heart_timing)?;
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn flush_log_now(&self, heart_timing: &HeartTiming<TP>) -> anyhow::Result<()> {
+        let (start_time, end_time) = heart_timing.get_current_log_duration();
+        self.persist_time_frame(start_time.time(), end_time.time())
+    }
+
+    /// Persists a time frame directly to the repository using domain update policies.
+    ///
+    /// This method replaces the old logger abstraction, implementing the persistence
+    /// logic inline according to the TODO requirements.
+    fn persist_time_frame(&self, start: NaiveTime, end: NaiveTime) -> anyhow::Result<()> {
+        // 1. Get current date from time provider
+        let date = self.time_provider.now().date_naive();
+
+        // 2. Fetch current value from repository
+        let current_value_json = self.repository.find_log_value(self.statistic_id, date)?;
+
+        let current_value: Option<TimeFrameList> = current_value_json
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize current value: {}", e))?;
+
+        // 3. Create new TimeFrame and list
+        let time_frame = TimeFrame::new(start, end)
+            .map_err(|e| anyhow::anyhow!("Failed to create TimeFrame: {}", e))?;
+
+        let mut new_time_frame_list = TimeFrameList::default();
+        new_time_frame_list
+            .append_frame(time_frame)
+            .map_err(|e| anyhow::anyhow!("Failed to append frame: {}", e))?;
+
+        // 4. Apply UpdateEndValue policy (as per TODO requirements and LocalLogger implementation)
+        let policy = TimeFrameListUpdatePolicy::UpdateEndValue;
+        let (result_value, changed) = policy.apply(current_value, new_time_frame_list);
+
+        // 5. Save if changed
+        if changed {
+            let result_json = serde_json::to_value(&result_value)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize result: {}", e))?;
+
+            self.repository
+                .save_log_value(self.statistic_id, date, result_json)?;
+        }
+
+        Ok(())
+    }
+
+    fn emit_start_event(&self) {
+        if let Some(tx) = &self.update_tx {
+            let _ = tx.try_send(HeartbeatUpdate::Started);
+        }
+    }
+
+    fn emit_stop_event(&self) {
+        if let Some(tx) = &self.update_tx {
+            let _ = tx.try_send(HeartbeatUpdate::Stopped);
+        }
+    }
+
+    pub fn emit_duration_update(&mut self, current_duration: chrono::Duration) {
+        if let Some(tx) = &self.update_tx {
+            let _ = tx.try_send(HeartbeatUpdate::DurationChanged(current_duration));
+        }
     }
 }
 
@@ -446,7 +525,40 @@ mod tests {
     use std::collections::HashSet;
     use std::sync::Arc;
     use std::time::Duration;
-    use testing_utilities::time_provider::MockTimeProvider;
+
+    /// Mock time provider for testing
+    struct MockTimeProvider {
+        current_time: std::sync::Mutex<DateTime<Local>>,
+        current_instant: std::sync::Mutex<Instant>,
+    }
+
+    impl MockTimeProvider {
+        fn new() -> Self {
+            Self {
+                current_time: std::sync::Mutex::new(Local::now()),
+                current_instant: std::sync::Mutex::new(Instant::now()),
+            }
+        }
+
+        fn advance(&self, duration: Duration) {
+            let mut time = self.current_time.lock().unwrap();
+            *time = *time + chrono::Duration::from_std(duration).unwrap();
+            drop(time);
+
+            let mut instant = self.current_instant.lock().unwrap();
+            *instant = *instant + duration;
+        }
+    }
+
+    impl TimeProvider for MockTimeProvider {
+        fn now(&self) -> DateTime<Local> {
+            *self.current_time.lock().unwrap()
+        }
+
+        fn current_instant(&self) -> Instant {
+            *self.current_instant.lock().unwrap()
+        }
+    }
 
     fn setup_heart_timing() -> (Arc<MockTimeProvider>, HeartTiming<MockTimeProvider>) {
         let time_provider = Arc::new(MockTimeProvider::new());

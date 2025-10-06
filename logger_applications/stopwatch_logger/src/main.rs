@@ -3,19 +3,18 @@
 // CLI interface with play/pause functionality and integration with the statistics system.
 #![feature(duration_constructors)]
 
-mod stopwatch;
 mod ui;
 
-use crate::stopwatch::{Stopwatch, StopwatchConfig};
 use crate::ui::terminal_interface::TerminalInterface;
 use crate::ui::user_interface_trait::{UserEvent, UserInput, UserInterface};
 use anyhow::Result;
-use heart_beat_logger::HeartbeatUpdate;
+use lifestats_application::use_cases::{
+    HeartbeatConfig, HeartbeatSession, HeartbeatUpdate, RealTimeProvider,
+};
 use lifestats_core::app_context::{build_application, AppContext};
 use lifestats_core::statistics::get_time_spans_metadata;
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
-use testing_utilities::time_provider::RealTimeProvider;
 use tokio::select;
 use transfer_objects::statistic_id::StatisticId;
 use domain_models::statistic::statistic_metadata::StatisticMetadata;
@@ -25,44 +24,50 @@ async fn run_stopwatch<I: UserInterface>(
     ui: &mut I,
     metadata: StatisticMetadata,
 ) -> Result<()> {
-    let mut stopwatch = Stopwatch::new(
-        app_context,
+    // Create HeartbeatSession directly using the new application service
+    let mut session = HeartbeatSession::new(
+        metadata.id(),
+        app_context.statistic_repository.clone(),
         Arc::new(RealTimeProvider),
-        StopwatchConfig {
-            statistic_id: metadata.id(),
-            log_flush_interval: chrono::Duration::minutes(1),
+        HeartbeatConfig {
+            idle_timeout: chrono::Duration::days(1), // Long timeout for manual stopwatch
+            flush_interval: chrono::Duration::minutes(1),
         },
     );
 
-    let mut stopwatch_rx = stopwatch.subscribe_to_updates();
+    let mut session_rx = session.subscribe_to_updates();
     let mut ui_rx = ui.run_event_loop()?;
 
     ui.show_stopwatch_header(&metadata)?;
-    stopwatch.start();
+    session.beat(); // Start the session
 
     loop {
         select! {
             Some(event) = ui_rx.recv() => {
                 match event {
                     UserEvent::Toggle => {
-                        stopwatch.toggle();
+                        if session.is_running() {
+                            session.stop();
+                        } else {
+                            session.beat();
+                        }
                     }
                     UserEvent::Quit => {
-                        stopwatch.stop();
+                        session.stop();
                         break;
                     }
                 }
             }
-            Some(update) = stopwatch_rx.recv() => {
+            Some(update) = session_rx.recv() => {
                 match update {
                     HeartbeatUpdate::DurationChanged(elapsed) => {
-                        ui.update_stopwatch_state(stopwatch.is_running(), elapsed)?;
+                        ui.update_stopwatch_state(session.is_running(), elapsed)?;
                     }
                     HeartbeatUpdate::Stopped => {
-                        ui.update_stopwatch_state(false, stopwatch.get_elapsed_time())?;
+                        ui.update_stopwatch_state(false, session.total_time_elapsed())?;
                     }
                     HeartbeatUpdate::Started => {
-                        ui.update_stopwatch_state(true, stopwatch.get_elapsed_time())?;
+                        ui.update_stopwatch_state(true, session.total_time_elapsed())?;
                     }
                 }
             }

@@ -1214,11 +1214,13 @@ dependencies = [
  "chrono",
  "events",
  "lifestats-core",
+ "log",
  "mockall",
  "plot-domain",
  "serde",
  "serde_json",
  "thiserror 2.0.9",
+ "tokio",
 ]
 
 [[package]]
