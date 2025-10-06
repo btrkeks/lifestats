@@ -1,4 +1,4 @@
-use crate::statistic::error::{DomainError, DomainResult, Result};
+use crate::statistic::error::{DomainError, DomainResult};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
 use std::str::FromStr;
@@ -39,7 +39,7 @@ where
         current_value: Option<Self::LogValueType>,
         value_str: &str,
         update_policy_str: Option<&str>,
-    ) -> Result<(Self::LogValueType, bool)> {
+    ) -> DomainResult<(Self::LogValueType, bool)> {
         let value = self.parse_log_value(value_str)?;
         let update_policy = self.parse_update_policy(update_policy_str)?;
         Ok(self.calculate_new_log_value(current_value, value, update_policy))

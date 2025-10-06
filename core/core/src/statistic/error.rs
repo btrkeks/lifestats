@@ -32,34 +32,5 @@ pub enum DomainError {
     UpdatePolicyError(String),
 }
 
-/// Legacy error type for backward compatibility during migration
-#[derive(Debug, thiserror::Error)]
-pub enum StatisticError {
-    #[error("Repository error: {0}")]
-    Repository(String),
-
-    #[error("Invalid value: {0}")]
-    InvalidValue(String),
-
-    #[error("Invalid operation: {0}")]
-    InvalidOperation(String),
-
-    #[error("Goal not found for date {0}")]
-    GoalNotFound(NaiveDate),
-
-    #[error("Time frame error: {0}")]
-    TimeFrame(#[from] TimeFrameError),
-
-    #[error("Update policy error: {0}")]
-    UpdatePolicy(String),
-
-    #[error("General error: {0}")]
-    General(#[from] anyhow::Error),
-
-    #[error("Domain error: {0}")]
-    Domain(#[from] DomainError),
-}
-
-// Create type aliases
-pub type Result<T> = std::result::Result<T, StatisticError>;
+// Create type alias
 pub type DomainResult<T> = std::result::Result<T, DomainError>;

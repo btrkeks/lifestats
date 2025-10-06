@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use crate::error::{ApplicationError, ApplicationResult};
 use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
 use lifestats_core::shared::ids::StatisticId;
@@ -44,7 +44,7 @@ where
         current_value_json: Option<serde_json::Value>,
         value_str: &str,
         update_policy_str: Option<&str>,
-    ) -> Result<(serde_json::Value, bool)>
+    ) -> ApplicationResult<(serde_json::Value, bool)>
     where
         S::LogValueType: serde::de::DeserializeOwned + serde::Serialize + std::str::FromStr,
         <S::LogValueType as std::str::FromStr>::Err: std::error::Error + Send + Sync + 'static,
@@ -74,7 +74,7 @@ where
     ///
     /// This method acts as the Application Layer translator, parsing primitives
     /// into domain types before calling pure domain logic.
-    pub fn log_value(&self, command: LogValueCommand) -> Result<()> {
+    pub fn log_value(&self, command: LogValueCommand) -> ApplicationResult<()> {
         use anyhow::{anyhow, Context};
         use lifestats_core::statistic::any_statistic::AnyStatistic;
         use lifestats_core::statistic::traits::logable_statistic::LogableStatistic;
@@ -119,7 +119,11 @@ where
                     new_val_wrapper.into_inner(),
                     update_policy,
                 );
-                (serde_json::to_value(result)?, changed)
+                (
+                    serde_json::to_value(result)
+                        .map_err(|e| ApplicationError::Infrastructure(e.into()))?,
+                    changed,
+                )
             }
             AnyStatistic::TimeSpans(s) => {
                 use lifestats_core::shared::time_frame_list::TimeFrameList;
@@ -134,10 +138,16 @@ where
 
                 let (result, changed) =
                     s.calculate_new_log_value(current_val, new_val, update_policy);
-                (serde_json::to_value(result)?, changed)
+                (
+                    serde_json::to_value(result)
+                        .map_err(|e| ApplicationError::Infrastructure(e.into()))?,
+                    changed,
+                )
             }
             AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
-                return Err(anyhow!("Cannot log values to a derived statistic."));
+                return Err(ApplicationError::Infrastructure(anyhow!(
+                    "Cannot log values to a derived statistic."
+                )));
             }
         };
 
@@ -159,7 +169,7 @@ where
     ///
     /// This method provides type safety by accepting structured time values
     /// rather than strings, preventing parsing errors at the domain layer.
-    pub fn log_time_frame(&self, command: LogTimeFrameCommand) -> Result<()> {
+    pub fn log_time_frame(&self, command: LogTimeFrameCommand) -> ApplicationResult<()> {
         use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
         use lifestats_core::statistic::any_statistic::AnyStatistic;
         use lifestats_core::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
@@ -173,19 +183,22 @@ where
         let time_spans_stat = match &statistic {
             AnyStatistic::TimeSpans(s) => s,
             _ => {
-                return Err(anyhow::anyhow!(
+                return Err(ApplicationError::Infrastructure(anyhow::anyhow!(
                     "Statistic {} is not a TimeSpans statistic",
                     command.statistic_id.0
-                ));
+                )));
             }
         };
 
         // 3. Create the TimeFrame from the command
-        let time_frame = TimeFrame::new(command.start_time, command.end_time)?;
+        let time_frame = TimeFrame::new(command.start_time, command.end_time)
+            .map_err(|e| ApplicationError::Domain(e.into()))?;
 
         // 4. Create a TimeFrameList containing the single frame
         let mut new_time_frame_list = TimeFrameList::default();
-        new_time_frame_list.append_frame(time_frame)?;
+        new_time_frame_list
+            .append_frame(time_frame)
+            .map_err(|e| ApplicationError::Domain(e.into()))?;
 
         // 5. Fetch the current value
         let current_value_json = self

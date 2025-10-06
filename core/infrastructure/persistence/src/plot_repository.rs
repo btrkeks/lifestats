@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::SqliteConnection;
 use lifestats_core::shared::ids::{PlotId, StatisticId};
+use lifestats_core::statistic::ports::error::RepositoryError;
 use plot_domain::plot::repository::PlotRepository;
 use plot_domain::plot::specification::PlotSpecification;
 
@@ -12,6 +13,14 @@ use crate::db::models::PlotRaw;
 use crate::db::schema::plots;
 
 type SqlitePool = Pool<ConnectionManager<SqliteConnection>>;
+
+// Helper function to convert diesel errors to RepositoryError
+fn diesel_to_repository_error(err: diesel::result::Error) -> RepositoryError {
+    match err {
+        diesel::result::Error::NotFound => RepositoryError::NotFound,
+        _ => RepositoryError::OperationFailed(err.into()),
+    }
+}
 
 pub struct SqlitePlotRepository {
     pool: Arc<SqlitePool>,
@@ -22,51 +31,70 @@ impl SqlitePlotRepository {
         Self { pool }
     }
 
-    fn connection(&self) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>> {
+    fn connection(
+        &self,
+    ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, RepositoryError> {
         self.pool
             .get()
             .context("failed to get SQLite connection from pool")
+            .map_err(RepositoryError::OperationFailed)
     }
 }
 
 impl PlotRepository for SqlitePlotRepository {
-    fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>> {
+    fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>, RepositoryError> {
         let mut conn = self.connection()?;
 
         let result = plots::table
             .find(id.0 as i32)
             .first::<PlotRaw>(&mut conn)
             .optional()
-            .context("failed to query plot by id")?;
+            .map_err(diesel_to_repository_error)?;
 
         match result {
-            Some(raw) => Ok(Some(raw.into_plot_spec()?)),
+            Some(raw) => Ok(Some(
+                raw.into_plot_spec()
+                    .map_err(|e| RepositoryError::OperationFailed(e))?,
+            )),
             None => Ok(None),
         }
     }
 
-    fn find_all(&self) -> Result<Vec<PlotSpecification>> {
+    fn find_all(&self) -> Result<Vec<PlotSpecification>, RepositoryError> {
         let mut conn = self.connection()?;
 
         let raws = plots::table
             .load::<PlotRaw>(&mut conn)
-            .context("failed to load all plots")?;
+            .map_err(diesel_to_repository_error)?;
 
-        raws.into_iter().map(|raw| raw.into_plot_spec()).collect()
+        raws.into_iter()
+            .map(|raw| {
+                raw.into_plot_spec()
+                    .map_err(|e| RepositoryError::OperationFailed(e))
+            })
+            .collect()
     }
 
-    fn find_by_statistic_id(&self, statistic_id: StatisticId) -> Result<Vec<PlotSpecification>> {
+    fn find_by_statistic_id(
+        &self,
+        statistic_id: StatisticId,
+    ) -> Result<Vec<PlotSpecification>, RepositoryError> {
         let mut conn = self.connection()?;
 
         let raws = plots::table
             .filter(plots::statistic_id.eq(statistic_id.0 as i32))
             .load::<PlotRaw>(&mut conn)
-            .context("failed to load plots by statistic_id")?;
+            .map_err(diesel_to_repository_error)?;
 
-        raws.into_iter().map(|raw| raw.into_plot_spec()).collect()
+        raws.into_iter()
+            .map(|raw| {
+                raw.into_plot_spec()
+                    .map_err(|e| RepositoryError::OperationFailed(e))
+            })
+            .collect()
     }
 
-    fn save(&self, plot_spec: &PlotSpecification) -> Result<()> {
+    fn save(&self, plot_spec: &PlotSpecification) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
         let raw = PlotRaw::from_plot_spec(plot_spec);
 
@@ -76,17 +104,17 @@ impl PlotRepository for SqlitePlotRepository {
             .do_update()
             .set(&raw)
             .execute(&mut conn)
-            .context("failed to upsert plot specification")?;
+            .map_err(diesel_to_repository_error)?;
 
         Ok(())
     }
 
-    fn delete(&self, id: PlotId) -> Result<()> {
+    fn delete(&self, id: PlotId) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
 
         diesel::delete(plots::table.find(id.0 as i32))
             .execute(&mut conn)
-            .context("failed to delete plot")?;
+            .map_err(diesel_to_repository_error)?;
 
         Ok(())
     }

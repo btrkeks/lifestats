@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
@@ -9,6 +9,7 @@ use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::dated_value::DatedValue;
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 
 use crate::db::mappers::StatisticDto;
@@ -17,6 +18,14 @@ use crate::db::queries;
 use crate::db::schema::{default_goals, goals, logging_data, statistics};
 
 type SqlitePool = Pool<ConnectionManager<SqliteConnection>>;
+
+// Helper function to convert diesel errors to RepositoryError
+fn diesel_to_repository_error(err: diesel::result::Error) -> RepositoryError {
+    match err {
+        diesel::result::Error::NotFound => RepositoryError::NotFound,
+        _ => RepositoryError::OperationFailed(err.into()),
+    }
+}
 
 pub struct SqliteStatisticRepository {
     pool: Arc<SqlitePool>,
@@ -27,48 +36,58 @@ impl SqliteStatisticRepository {
         Self { pool }
     }
 
-    fn connection(&self) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>> {
+    fn connection(
+        &self,
+    ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, RepositoryError> {
         self.pool
             .get()
             .context("failed to get SQLite connection from pool")
+            .map_err(RepositoryError::OperationFailed)
     }
 }
 
 impl StatisticRepository for SqliteStatisticRepository {
-    fn find_metadata_by_id(&self, id: StatisticId) -> Result<AnyStatistic> {
+    fn find_metadata_by_id(&self, id: StatisticId) -> Result<AnyStatistic, RepositoryError> {
         let mut conn = self.connection()?;
 
         let dto = statistics::table
             .find(id.0 as i32)
             .first::<StatisticDto>(&mut conn)
-            .with_context(|| format!("statistic {} not found", id.0))?;
+            .map_err(diesel_to_repository_error)?;
 
-        let default_goal = queries::fetch_default_goal(&mut conn, id)?;
+        let default_goal = queries::fetch_default_goal(&mut conn, id)
+            .map_err(|e| RepositoryError::OperationFailed(e))?;
         dto.into_any_statistic(default_goal)
+            .map_err(|e| RepositoryError::OperationFailed(e))
     }
 
-    fn find_all_metadata(&self) -> Result<Vec<AnyStatistic>> {
+    fn find_all_metadata(&self) -> Result<Vec<AnyStatistic>, RepositoryError> {
         let mut conn = self.connection()?;
 
         let dtos = statistics::table
             .load::<StatisticDto>(&mut conn)
-            .context("failed to load statistics")?;
+            .map_err(diesel_to_repository_error)?;
 
         let ids: Vec<i32> = dtos.iter().map(|dto| dto.id).collect();
-        let default_goal_map = queries::fetch_default_goals(&mut conn, &ids)?;
+        let default_goal_map = queries::fetch_default_goals(&mut conn, &ids)
+            .map_err(|e| RepositoryError::OperationFailed(e))?;
 
         let mut result = Vec::with_capacity(dtos.len());
         for dto in dtos {
             let default_goal = default_goal_map.get(&dto.id).cloned();
-            result.push(dto.into_any_statistic(default_goal)?);
+            result.push(
+                dto.into_any_statistic(default_goal)
+                    .map_err(|e| RepositoryError::OperationFailed(e))?,
+            );
         }
 
         Ok(result)
     }
 
-    fn save_metadata(&self, statistic: &AnyStatistic) -> Result<()> {
+    fn save_metadata(&self, statistic: &AnyStatistic) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
-        let dto = StatisticDto::from_any_statistic(statistic)?;
+        let dto = StatisticDto::from_any_statistic(statistic)
+            .map_err(|e| RepositoryError::OperationFailed(e))?;
 
         diesel::insert_into(statistics::table)
             .values(&dto)
@@ -76,16 +95,16 @@ impl StatisticRepository for SqliteStatisticRepository {
             .do_update()
             .set(&dto)
             .execute(&mut conn)
-            .context("failed to upsert statistic metadata")?;
+            .map_err(diesel_to_repository_error)?;
 
         Ok(())
     }
 
-    fn delete_default_goal(&self, id: StatisticId) -> Result<()> {
+    fn delete_default_goal(&self, id: StatisticId) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
         diesel::delete(default_goals::table.find(id.0 as i32))
             .execute(&mut conn)
-            .context("failed to delete default goal")?;
+            .map_err(diesel_to_repository_error)?;
         Ok(())
     }
 
@@ -93,17 +112,21 @@ impl StatisticRepository for SqliteStatisticRepository {
         &self,
         id: StatisticId,
         date: NaiveDate,
-    ) -> Result<Option<serde_json::Value>> {
+    ) -> Result<Option<serde_json::Value>, RepositoryError> {
         let mut conn = self.connection()?;
         let row = logging_data::table
             .filter(logging_data::statistic_id.eq(id.0 as i32))
             .filter(logging_data::date.eq(date.to_string()))
             .first::<LoggingDataRaw>(&mut conn)
             .optional()
-            .context("failed to fetch log value")?;
+            .map_err(diesel_to_repository_error)?;
 
-        row.map(|raw| serde_json::from_str(&raw.value).context("failed to parse log value JSON"))
-            .transpose()
+        row.map(|raw| {
+            serde_json::from_str(&raw.value)
+                .context("failed to parse log value JSON")
+                .map_err(RepositoryError::OperationFailed)
+        })
+        .transpose()
     }
 
     fn save_log_value(
@@ -111,14 +134,14 @@ impl StatisticRepository for SqliteStatisticRepository {
         id: StatisticId,
         date: NaiveDate,
         value: serde_json::Value,
-    ) -> Result<()> {
+    ) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
-        let serialized = serde_json::to_string(&value).with_context(|| {
-            format!(
+        let serialized = serde_json::to_string(&value)
+            .context(format!(
                 "failed to serialize log value for statistic {} on {}",
                 id.0, date
-            )
-        })?;
+            ))
+            .map_err(RepositoryError::OperationFailed)?;
 
         let record = LoggingDataRaw {
             statistic_id: id.0 as i32,
@@ -132,7 +155,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             .do_update()
             .set(&record)
             .execute(&mut conn)
-            .context("failed to upsert log value")?;
+            .map_err(diesel_to_repository_error)?;
 
         Ok(())
     }
@@ -141,7 +164,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         &self,
         id: StatisticId,
         range: DateRange,
-    ) -> Result<Vec<DatedValue<serde_json::Value>>> {
+    ) -> Result<Vec<DatedValue<serde_json::Value>>, RepositoryError> {
         let mut conn = self.connection()?;
         let rows = logging_data::table
             .filter(logging_data::statistic_id.eq(id.0 as i32))
@@ -149,35 +172,42 @@ impl StatisticRepository for SqliteStatisticRepository {
             .filter(logging_data::date.le(range.end().to_string()))
             .order(logging_data::date.asc())
             .load::<LoggingDataRaw>(&mut conn)
-            .context("failed to fetch logging data range")?;
+            .map_err(diesel_to_repository_error)?;
 
         rows.into_iter()
             .map(|raw| {
                 let date = raw
                     .date
                     .parse::<NaiveDate>()
-                    .with_context(|| format!("failed to parse date: {}", raw.date))?;
-                let value =
-                    serde_json::from_str(&raw.value).context("failed to parse log value JSON")?;
+                    .context(format!("failed to parse date: {}", raw.date))
+                    .map_err(RepositoryError::OperationFailed)?;
+                let value = serde_json::from_str(&raw.value)
+                    .context("failed to parse log value JSON")
+                    .map_err(RepositoryError::OperationFailed)?;
                 Ok(DatedValue::new(date, value))
             })
             .collect()
     }
 
-    fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>> {
+    fn find_goal(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+    ) -> Result<Option<serde_json::Value>, RepositoryError> {
         let mut conn = self.connection()?;
         let row = goals::table
             .filter(goals::statistic_id.eq(id.0 as i32))
             .filter(goals::date.eq(date.to_string()))
             .first::<GoalDataRaw>(&mut conn)
             .optional()
-            .context("failed to fetch goal")?;
+            .map_err(diesel_to_repository_error)?;
 
         match row {
             Some(raw) => match raw.goal {
                 Some(goal_str) => {
                     let goal = serde_json::from_str(&goal_str)
-                        .with_context(|| format!("failed to parse goal JSON: {}", goal_str))?;
+                        .context(format!("failed to parse goal JSON: {}", goal_str))
+                        .map_err(RepositoryError::OperationFailed)?;
                     Ok(Some(goal))
                 }
                 None => Ok(None),
@@ -191,12 +221,13 @@ impl StatisticRepository for SqliteStatisticRepository {
         id: StatisticId,
         date: NaiveDate,
         goal: Option<serde_json::Value>,
-    ) -> Result<()> {
+    ) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
 
         if let Some(goal_value) = goal {
-            let goal_str =
-                serde_json::to_string(&goal_value).context("failed to serialize goal to JSON")?;
+            let goal_str = serde_json::to_string(&goal_value)
+                .context("failed to serialize goal to JSON")
+                .map_err(RepositoryError::OperationFailed)?;
 
             let record = GoalDataRaw {
                 statistic_id: id.0 as i32,
@@ -210,7 +241,7 @@ impl StatisticRepository for SqliteStatisticRepository {
                 .do_update()
                 .set(&record)
                 .execute(&mut conn)
-                .context("failed to upsert goal")?;
+                .map_err(diesel_to_repository_error)?;
         } else {
             diesel::delete(
                 goals::table
@@ -218,7 +249,7 @@ impl StatisticRepository for SqliteStatisticRepository {
                     .filter(goals::date.eq(date.to_string())),
             )
             .execute(&mut conn)
-            .context("failed to delete goal")?;
+            .map_err(diesel_to_repository_error)?;
         }
 
         Ok(())
@@ -228,7 +259,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         &self,
         id: StatisticId,
         range: DateRange,
-    ) -> Result<Vec<DatedValue<serde_json::Value>>> {
+    ) -> Result<Vec<DatedValue<serde_json::Value>>, RepositoryError> {
         let mut conn = self.connection()?;
         let rows = goals::table
             .filter(goals::statistic_id.eq(id.0 as i32))
@@ -236,7 +267,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             .filter(goals::date.le(range.end().to_string()))
             .order(goals::date.asc())
             .load::<GoalDataRaw>(&mut conn)
-            .context("failed to fetch goals range")?;
+            .map_err(diesel_to_repository_error)?;
 
         let mut result = Vec::new();
         for row in rows {
@@ -244,36 +275,47 @@ impl StatisticRepository for SqliteStatisticRepository {
                 let date = row
                     .date
                     .parse::<NaiveDate>()
-                    .with_context(|| format!("failed to parse date: {}", row.date))?;
+                    .context(format!("failed to parse date: {}", row.date))
+                    .map_err(RepositoryError::OperationFailed)?;
                 let goal = serde_json::from_str(&goal_str)
-                    .with_context(|| format!("failed to parse goal JSON: {}", goal_str))?;
+                    .context(format!("failed to parse goal JSON: {}", goal_str))
+                    .map_err(RepositoryError::OperationFailed)?;
                 result.push(DatedValue::new(date, goal));
             }
         }
         Ok(result)
     }
 
-    fn find_default_goal(&self, id: StatisticId) -> Result<Option<serde_json::Value>> {
+    fn find_default_goal(
+        &self,
+        id: StatisticId,
+    ) -> Result<Option<serde_json::Value>, RepositoryError> {
         let mut conn = self.connection()?;
-        let row = queries::fetch_default_goal(&mut conn, id)?;
+        let row = queries::fetch_default_goal(&mut conn, id)
+            .map_err(|e| RepositoryError::OperationFailed(e))?;
 
         match row {
             Some(raw) => {
-                let goal = serde_json::from_str(&raw.goal).with_context(|| {
-                    format!(
+                let goal = serde_json::from_str(&raw.goal)
+                    .context(format!(
                         "Failed to parse default goal '{}' for statistic_id {}",
                         raw.goal, raw.statistic_id
-                    )
-                })?;
+                    ))
+                    .map_err(RepositoryError::OperationFailed)?;
                 Ok(Some(goal))
             }
             None => Ok(None),
         }
     }
 
-    fn save_default_goal(&self, id: StatisticId, goal: serde_json::Value) -> Result<()> {
+    fn save_default_goal(
+        &self,
+        id: StatisticId,
+        goal: serde_json::Value,
+    ) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
-        let serialized_goal = serde_json::to_string(&goal)?;
+        let serialized_goal =
+            serde_json::to_string(&goal).map_err(|e| RepositoryError::OperationFailed(e.into()))?;
 
         let record = DefaultGoalRaw {
             statistic_id: id.0 as i32,
@@ -286,7 +328,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             .do_update()
             .set(default_goals::goal.eq(&record.goal))
             .execute(&mut conn)
-            .context("failed to upsert default goal")?;
+            .map_err(diesel_to_repository_error)?;
 
         Ok(())
     }
@@ -296,6 +338,7 @@ impl StatisticRepository for SqliteStatisticRepository {
 mod tests {
     use super::*;
     use crate::pool::MIGRATIONS;
+    use anyhow::Result;
     use chrono::NaiveDate;
     use diesel_migrations::MigrationHarness;
     use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;

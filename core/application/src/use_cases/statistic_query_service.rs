@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::Result;
+use crate::error::ApplicationResult;
 use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::shared::seconds::Seconds;
@@ -32,44 +32,46 @@ where
         }
     }
 
-    pub fn get_all_statistics(&self) -> Result<Vec<AnyStatistic>> {
-        self.statistic_repository.find_all_metadata()
+    pub fn get_all_statistics(&self) -> ApplicationResult<Vec<AnyStatistic>> {
+        Ok(self.statistic_repository.find_all_metadata()?)
     }
 
-    pub fn get_all_metadata(&self) -> Result<Vec<StatisticMetadata>> {
-        self.statistic_repository.find_all_metadata().map(|stats| {
-            stats
-                .into_iter()
-                .map(|stat| stat.get_metadata().clone())
-                .collect()
-        })
-    }
-
-    pub fn get_time_spans_metadata(&self) -> Result<Vec<StatisticMetadata>> {
-        self.statistic_repository.find_all_metadata().map(|stats| {
-            stats
-                .into_iter()
-                .filter_map(|stat| {
-                    if matches!(&stat, AnyStatistic::TimeSpans(_)) {
-                        Some(stat.get_metadata().clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
-    }
-
-    pub fn get_metadata(&self, statistic_id: StatisticId) -> Result<StatisticMetadata> {
-        self.statistic_repository
-            .find_metadata_by_id(statistic_id)
+    pub fn get_all_metadata(&self) -> ApplicationResult<Vec<StatisticMetadata>> {
+        Ok(self
+            .statistic_repository
+            .find_all_metadata()?
+            .into_iter()
             .map(|stat| stat.get_metadata().clone())
+            .collect())
+    }
+
+    pub fn get_time_spans_metadata(&self) -> ApplicationResult<Vec<StatisticMetadata>> {
+        Ok(self
+            .statistic_repository
+            .find_all_metadata()?
+            .into_iter()
+            .filter_map(|stat| {
+                if matches!(&stat, AnyStatistic::TimeSpans(_)) {
+                    Some(stat.get_metadata().clone())
+                } else {
+                    None
+                }
+            })
+            .collect())
+    }
+
+    pub fn get_metadata(&self, statistic_id: StatisticId) -> ApplicationResult<StatisticMetadata> {
+        Ok(self
+            .statistic_repository
+            .find_metadata_by_id(statistic_id)?
+            .get_metadata()
+            .clone())
     }
 
     // -------------------------------------------------------
     // TODO: Those don't quite belong here
 
-    pub fn get_streak(&self, statistic_id: StatisticId) -> Result<u32> {
+    pub fn get_streak(&self, statistic_id: StatisticId) -> ApplicationResult<u32> {
         let statistic = self
             .statistic_repository
             .find_metadata_by_id(statistic_id)?;
@@ -143,7 +145,7 @@ where
         statistic: &AnyStatistic,
         default_goal: Option<GoalType>,
         default_goal_valid_since: NaiveDate,
-    ) -> Result<u32>
+    ) -> anyhow::Result<u32>
     where
         LogValue: serde::de::DeserializeOwned + 'static,
         GoalType: serde::de::DeserializeOwned + Clone + 'static,

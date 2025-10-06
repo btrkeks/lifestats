@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Result;
+use crate::error::{ApplicationError, ApplicationResult};
 use chrono::{Local, NaiveDate};
 use events::event_port::{Event, EventPublisher};
 use lifestats_core::shared::ids::StatisticId;
@@ -51,13 +51,16 @@ where
     //===========================================================================
 
     /// Helper to get a required field from the goal data HashMap
-    fn get_required_field<'a>(data: &'a HashMap<String, String>, key: &str) -> Result<&'a String> {
+    fn get_required_field<'a>(
+        data: &'a HashMap<String, String>,
+        key: &str,
+    ) -> anyhow::Result<&'a String> {
         data.get(key)
             .ok_or_else(|| anyhow::anyhow!("Missing required goal field: '{}'", key))
     }
 
     /// Helper to parse a string field into a specific type
-    fn parse_field<T: std::str::FromStr>(s: &str, field_name: &str) -> Result<T> {
+    fn parse_field<T: std::str::FromStr>(s: &str, field_name: &str) -> anyhow::Result<T> {
         s.parse::<T>()
             .map_err(|_| anyhow::anyhow!("Invalid format for field '{}'", field_name))
     }
@@ -67,7 +70,7 @@ where
         &self,
         statistic: &lifestats_core::statistic::any_statistic::AnyStatistic,
         data: &HashMap<String, String>,
-    ) -> Result<TypedGoal> {
+    ) -> anyhow::Result<TypedGoal> {
         use lifestats_core::shared::{percentage::Percentage, time_frame_list::TimeFrameList};
         use lifestats_core::statistic::any_statistic::AnyStatistic;
 
@@ -133,7 +136,7 @@ where
     //===========================================================================
 
     /// Set a goal for a specific date using primitive data (generic for all types)
-    pub fn set_goal(&self, command: SetGoalCommand) -> Result<()> {
+    pub fn set_goal(&self, command: SetGoalCommand) -> ApplicationResult<()> {
         let statistic = self
             .statistic_repository
             .find_metadata_by_id(command.statistic_id)?;
@@ -142,7 +145,8 @@ where
         let typed_goal = self.create_typed_goal(&statistic, &command.goal_data)?;
 
         // 2. Serialize it to JSON for persistence
-        let goal_json = serde_json::to_value(&typed_goal)?;
+        let goal_json = serde_json::to_value(&typed_goal)
+            .map_err(|e| ApplicationError::Infrastructure(e.into()))?;
 
         self.statistic_repository
             .save_goal(command.statistic_id, command.date, Some(goal_json))?;
@@ -152,7 +156,10 @@ where
     }
 
     /// Set a new default goal using primitive data (generic for all types)
-    pub fn set_default_goal_generic(&self, command: SetDefaultGoalGenericCommand) -> Result<()> {
+    pub fn set_default_goal_generic(
+        &self,
+        command: SetDefaultGoalGenericCommand,
+    ) -> ApplicationResult<()> {
         use lifestats_core::statistic::any_statistic::AnyStatistic;
         use lifestats_core::statistic::traits::base_statistic::Statistic;
 
@@ -164,7 +171,8 @@ where
         let typed_goal = self.create_typed_goal(&statistic, &command.goal_data)?;
 
         // 2. Serialize it to JSON for persistence
-        let goal_json = serde_json::to_value(&typed_goal)?;
+        let goal_json = serde_json::to_value(&typed_goal)
+            .map_err(|e| ApplicationError::Infrastructure(e.into()))?;
 
         // 3. Clone typed_goal before moving it into the match statement
         let typed_goal_for_domain = typed_goal;
@@ -172,28 +180,28 @@ where
         // 4. Update the domain entity using the typed object
         let start_date = Local::now().date_naive();
         match (&mut statistic, typed_goal_for_domain) {
-            (AnyStatistic::IntegerAmount(s), TypedGoal::IntegerAmount(g)) => {
-                s.set_new_default_goal(g, start_date)?
-            }
-            (AnyStatistic::Habit(s), TypedGoal::Habit(g)) => {
-                s.set_new_default_goal(g, start_date)?
-            }
-            (AnyStatistic::PointInTime(s), TypedGoal::FinishedInTime(g)) => {
-                s.set_new_default_goal(g, start_date)?
-            }
-            (AnyStatistic::TimeSpans(s), TypedGoal::TimeSpans(g)) => {
-                s.set_new_default_goal(g, start_date)?
-            }
-            (AnyStatistic::Summing(s), TypedGoal::SecondsAmount(g)) => {
-                s.set_new_default_goal(g, start_date)?
-            }
-            (AnyStatistic::TimeDifference(s), TypedGoal::SecondsAmount(g)) => {
-                s.set_new_default_goal(g, start_date)?
-            }
+            (AnyStatistic::IntegerAmount(s), TypedGoal::IntegerAmount(g)) => s
+                .set_new_default_goal(g, start_date)
+                .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?,
+            (AnyStatistic::Habit(s), TypedGoal::Habit(g)) => s
+                .set_new_default_goal(g, start_date)
+                .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?,
+            (AnyStatistic::PointInTime(s), TypedGoal::FinishedInTime(g)) => s
+                .set_new_default_goal(g, start_date)
+                .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?,
+            (AnyStatistic::TimeSpans(s), TypedGoal::TimeSpans(g)) => s
+                .set_new_default_goal(g, start_date)
+                .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?,
+            (AnyStatistic::Summing(s), TypedGoal::SecondsAmount(g)) => s
+                .set_new_default_goal(g, start_date)
+                .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?,
+            (AnyStatistic::TimeDifference(s), TypedGoal::SecondsAmount(g)) => s
+                .set_new_default_goal(g, start_date)
+                .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?,
             _ => {
-                return Err(anyhow::anyhow!(
+                return Err(ApplicationError::Infrastructure(anyhow::anyhow!(
                     "Mismatched statistic and goal type during default goal setting."
-                ))
+                )))
             }
         };
 
@@ -207,7 +215,7 @@ where
     }
 
     /// Delete a goal for a specific date (generic for all types)
-    pub fn delete_goal(&self, command: DeleteGoalCommand) -> Result<()> {
+    pub fn delete_goal(&self, command: DeleteGoalCommand) -> ApplicationResult<()> {
         self.statistic_repository
             .save_goal(command.statistic_id, command.date, None)?;
 

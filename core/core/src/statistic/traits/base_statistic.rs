@@ -1,5 +1,5 @@
 use crate::shared::ids::StatisticId;
-use crate::statistic::error::Result;
+use crate::statistic::error::DomainResult;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::NaiveDate;
@@ -42,7 +42,11 @@ pub trait Statistic {
     /// The application layer is responsible for applying any persistence
     /// side-effects (like flushing per-day goals) when the default goal
     /// changes.
-    fn set_new_default_goal(&mut self, goal: Self::GoalType, start_date: NaiveDate) -> Result<()> {
+    fn set_new_default_goal(
+        &mut self,
+        goal: Self::GoalType,
+        start_date: NaiveDate,
+    ) -> DomainResult<()> {
         self._set_default_goal(goal, start_date);
         Ok(())
     }

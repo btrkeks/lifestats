@@ -2,6 +2,7 @@ mod helpers;
 
 use axum_test::TestServer;
 use helpers::{mock_app_state, mock_integer_statistic};
+use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
 use lifestats_web_api::dto::statistic::StatisticMetadataResponse;
 use lifestats_web_api::routes::create_router;
@@ -56,10 +57,11 @@ async fn test_get_all_statistics_repository_error() {
     let mut mock_repo = MockStatisticRepository::new();
 
     // Set expectation: return an error
-    mock_repo
-        .expect_find_all_metadata()
-        .times(1)
-        .returning(|| Err(anyhow::anyhow!("Database offline")));
+    mock_repo.expect_find_all_metadata().times(1).returning(|| {
+        Err(RepositoryError::OperationFailed(anyhow::anyhow!(
+            "Database offline"
+        )))
+    });
 
     // Create app state and router
     let app_state = mock_app_state(Arc::new(mock_repo));
@@ -168,7 +170,7 @@ async fn test_log_value_statistic_not_found() {
     mock_repo
         .expect_find_metadata_by_id()
         .times(1)
-        .returning(|_| Err(anyhow::anyhow!("Statistic not found")));
+        .returning(|_| Err(RepositoryError::NotFound));
 
     // Create app state and router
     let app_state = mock_app_state(Arc::new(mock_repo));
@@ -188,10 +190,10 @@ async fn test_log_value_statistic_not_found() {
         .json(&payload)
         .await;
 
-    // Assert status code (500 for repository errors)
-    assert_eq!(response.status_code(), 500);
+    // Assert status code (404 for NotFound errors with new error handling)
+    assert_eq!(response.status_code(), 404);
 
     // Assert error response
     let body: serde_json::Value = response.json();
-    assert_eq!(body["error"], "Internal server error");
+    assert_eq!(body["error"], "The requested resource was not found.");
 }

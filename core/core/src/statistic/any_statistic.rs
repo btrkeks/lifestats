@@ -1,6 +1,6 @@
 use crate::shared::seconds::Seconds;
 use crate::shared::time_frame_list::TimeFrameList;
-use crate::statistic::error::{Result, StatisticError};
+use crate::statistic::error::{DomainError, DomainResult};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::integer_statistic::IntegerStatistic;
 use crate::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
@@ -22,10 +22,10 @@ fn downcast_option<'a, T: 'static>(
     metadata: &StatisticMetadata,
     input: Option<&'a dyn Any>,
     label: &str,
-) -> Result<Option<&'a T>> {
+) -> DomainResult<Option<&'a T>> {
     match input {
         Some(raw) => raw.downcast_ref::<T>().map(Some).ok_or_else(|| {
-            StatisticError::InvalidOperation(format!(
+            DomainError::InvalidOperation(format!(
                 "Statistic {} ({}) expected {label} of type {} but received incompatible type",
                 metadata.id(),
                 metadata.name(),
@@ -40,7 +40,7 @@ fn evaluate_streak_for_day_inner<'a, V, G>(
     metadata: &StatisticMetadata,
     log_value: Option<&'a dyn Any>,
     goal: Option<&'a dyn Any>,
-) -> Result<StreakDayResult>
+) -> DomainResult<StreakDayResult>
 where
     V: 'static,
     G: Goal<LogValue = V> + 'static,
@@ -110,16 +110,16 @@ impl AnyStatistic {
     }
 
     /// Attempts to convert a statistic's log value (encoded as JSON) into an integer.
-    pub fn value_as_i64_from_json(&self, value_json: &serde_json::Value) -> Result<i64> {
+    pub fn value_as_i64_from_json(&self, value_json: &serde_json::Value) -> DomainResult<i64> {
         use serde::de::DeserializeOwned;
 
         fn deserialize<T: DeserializeOwned>(
             value_json: &serde_json::Value,
             metadata: &StatisticMetadata,
             expected: &str,
-        ) -> Result<T> {
+        ) -> DomainResult<T> {
             serde_json::from_value(value_json.clone()).map_err(|e| {
-                StatisticError::InvalidValue(format!(
+                DomainError::ValidationError(format!(
                     "Statistic {} ({}) expected {expected} log value but received incompatible JSON: {}",
                     metadata.id(),
                     metadata.name(),
@@ -198,7 +198,7 @@ impl AnyStatistic {
         &self,
         log_value: Option<&dyn Any>,
         goal: Option<&dyn Any>,
-    ) -> Result<StreakDayResult> {
+    ) -> DomainResult<StreakDayResult> {
         let metadata = self.get_metadata();
 
         match self {
@@ -233,11 +233,15 @@ impl AnyStatistic {
     //===========================================================================
 
     /// Set a new default goal for a Habit statistic
-    pub fn set_habit_default_goal(&mut self, goal: HabitGoal, start_date: NaiveDate) -> Result<()> {
+    pub fn set_habit_default_goal(
+        &mut self,
+        goal: HabitGoal,
+        start_date: NaiveDate,
+    ) -> DomainResult<()> {
         if let AnyStatistic::Habit(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
+            Err(crate::statistic::error::DomainError::InvalidOperation(
                 "Not a Habit statistic".into(),
             ))
         }
@@ -248,11 +252,11 @@ impl AnyStatistic {
         &mut self,
         goal: AmountGoal<i64>,
         start_date: NaiveDate,
-    ) -> Result<()> {
+    ) -> DomainResult<()> {
         if let AnyStatistic::IntegerAmount(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
+            Err(crate::statistic::error::DomainError::InvalidOperation(
                 "Not an IntegerAmount statistic".into(),
             ))
         }
@@ -263,11 +267,11 @@ impl AnyStatistic {
         &mut self,
         goal: FinishedInTimeGoal,
         start_date: NaiveDate,
-    ) -> Result<()> {
+    ) -> DomainResult<()> {
         if let AnyStatistic::PointInTime(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
+            Err(crate::statistic::error::DomainError::InvalidOperation(
                 "Not a PointInTime statistic".into(),
             ))
         }
@@ -278,11 +282,11 @@ impl AnyStatistic {
         &mut self,
         goal: TimeSpansGoal,
         start_date: NaiveDate,
-    ) -> Result<()> {
+    ) -> DomainResult<()> {
         if let AnyStatistic::TimeSpans(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
+            Err(crate::statistic::error::DomainError::InvalidOperation(
                 "Not a TimeSpans statistic".into(),
             ))
         }
@@ -293,11 +297,11 @@ impl AnyStatistic {
         &mut self,
         goal: AmountGoal<Seconds>,
         start_date: NaiveDate,
-    ) -> Result<()> {
+    ) -> DomainResult<()> {
         if let AnyStatistic::Summing(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
+            Err(crate::statistic::error::DomainError::InvalidOperation(
                 "Not a Summing statistic".into(),
             ))
         }
@@ -308,11 +312,11 @@ impl AnyStatistic {
         &mut self,
         goal: AmountGoal<Seconds>,
         start_date: NaiveDate,
-    ) -> Result<()> {
+    ) -> DomainResult<()> {
         if let AnyStatistic::TimeDifference(s) = self {
             s.set_new_default_goal(goal, start_date)
         } else {
-            Err(crate::statistic::error::StatisticError::InvalidOperation(
+            Err(crate::statistic::error::DomainError::InvalidOperation(
                 "Not a TimeDifference statistic".into(),
             ))
         }

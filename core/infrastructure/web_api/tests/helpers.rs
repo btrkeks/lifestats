@@ -7,6 +7,7 @@ use lifestats_application::use_cases::{
 };
 use lifestats_core::shared::ids::{PlotId, StatisticId};
 use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
 use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
@@ -41,11 +42,11 @@ mock! {
     }
 
     impl PlotRepository for PlotRepo {
-        fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>>;
-        fn find_all(&self) -> Result<Vec<PlotSpecification>>;
-        fn find_by_statistic_id(&self, statistic_id: StatisticId) -> Result<Vec<PlotSpecification>>;
-        fn save(&self, plot_spec: &PlotSpecification) -> Result<()>;
-        fn delete(&self, id: PlotId) -> Result<()>;
+        fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>, RepositoryError>;
+        fn find_all(&self) -> Result<Vec<PlotSpecification>, RepositoryError>;
+        fn find_by_statistic_id(&self, statistic_id: StatisticId) -> Result<Vec<PlotSpecification>, RepositoryError>;
+        fn save(&self, plot_spec: &PlotSpecification) -> Result<(), RepositoryError>;
+        fn delete(&self, id: PlotId) -> Result<(), RepositoryError>;
     }
 }
 

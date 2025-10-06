@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use crate::error::{ApplicationError, ApplicationResult};
+use anyhow::anyhow;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::ids::PlotId;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
@@ -43,7 +44,11 @@ where
 
     /// Retrieves and assembles plot-ready data for a given plot ID and date range
     /// This is a reusable, testable unit for fetching plot data
-    pub fn get_plot_data(&self, plot_id: PlotId, date_range: DateRange) -> Result<PlotData> {
+    pub fn get_plot_data(
+        &self,
+        plot_id: PlotId,
+        date_range: DateRange,
+    ) -> ApplicationResult<PlotData> {
         // 1. Load the plot specification
         let plot_spec = self
             .plot_repository
@@ -89,7 +94,7 @@ where
         });
 
         // 7. Convert log values to data points with DrawableData and colors
-        let points: Result<Vec<DataPoint>> = log_values
+        let points: ApplicationResult<Vec<DataPoint>> = log_values
             .into_iter()
             .map(|log| {
                 // Convert JSON value to DrawableData (type-safe!)
@@ -145,12 +150,14 @@ where
         plot_id: PlotId,
         date_range: DateRange,
         config: RenderConfig,
-    ) -> Result<Vec<u8>> {
+    ) -> ApplicationResult<Vec<u8>> {
         // 1. Get the plot data
         let plot_data = self.get_plot_data(plot_id, date_range)?;
 
         // 2. Render using the injected renderer
-        self.renderer.render(&plot_data, &config)
+        self.renderer
+            .render(&plot_data, &config)
+            .map_err(ApplicationError::Infrastructure)
     }
 }
 
@@ -177,36 +184,36 @@ mod tests {
     mock! {
         PlotRepo {}
         impl PlotRepository for PlotRepo {
-            fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>>;
-            fn find_all(&self) -> Result<Vec<PlotSpecification>>;
-            fn find_by_statistic_id(&self, statistic_id: StatisticId) -> Result<Vec<PlotSpecification>>;
-            fn save(&self, plot_spec: &PlotSpecification) -> Result<()>;
-            fn delete(&self, id: PlotId) -> Result<()>;
+            fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_all(&self) -> Result<Vec<PlotSpecification>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_by_statistic_id(&self, statistic_id: StatisticId) -> Result<Vec<PlotSpecification>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn save(&self, plot_spec: &PlotSpecification) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
+            fn delete(&self, id: PlotId) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
         }
     }
 
     mock! {
         StatRepo {}
         impl StatisticRepository for StatRepo {
-            fn find_metadata_by_id(&self, id: StatisticId) -> Result<lifestats_core::statistic::any_statistic::AnyStatistic>;
-            fn find_all_metadata(&self) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
-            fn save_metadata(&self, statistic: &lifestats_core::statistic::any_statistic::AnyStatistic) -> Result<()>;
-            fn find_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<Option<Value>>;
-            fn save_log_value(&self, id: StatisticId, date: NaiveDate, value: Value) -> Result<()>;
-            fn find_log_values_in_range(&self, id: StatisticId, range: DateRange) -> Result<Vec<DatedValue<Value>>>;
-            fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<Option<Value>>;
-            fn save_goal(&self, id: StatisticId, date: NaiveDate, goal: Option<Value>) -> Result<()>;
-            fn find_goals_in_range(&self, id: StatisticId, range: DateRange) -> Result<Vec<DatedValue<Value>>>;
-            fn find_default_goal(&self, id: StatisticId) -> Result<Option<Value>>;
-            fn save_default_goal(&self, id: StatisticId, goal: Value) -> Result<()>;
-            fn delete_default_goal(&self, id: StatisticId) -> Result<()>;
+            fn find_metadata_by_id(&self, id: StatisticId) -> Result<lifestats_core::statistic::any_statistic::AnyStatistic, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_all_metadata(&self) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn save_metadata(&self, statistic: &lifestats_core::statistic::any_statistic::AnyStatistic) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<Option<Value>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn save_log_value(&self, id: StatisticId, date: NaiveDate, value: Value) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_log_values_in_range(&self, id: StatisticId, range: DateRange) -> Result<Vec<DatedValue<Value>>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<Option<Value>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn save_goal(&self, id: StatisticId, date: NaiveDate, goal: Option<Value>) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_goals_in_range(&self, id: StatisticId, range: DateRange) -> Result<Vec<DatedValue<Value>>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_default_goal(&self, id: StatisticId) -> Result<Option<Value>, lifestats_core::statistic::ports::error::RepositoryError>;
+            fn save_default_goal(&self, id: StatisticId, goal: Value) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
+            fn delete_default_goal(&self, id: StatisticId) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
         }
     }
 
     mock! {
         Renderer {}
         impl PlotRenderer for Renderer {
-            fn render(&self, data: &PlotData, config: &RenderConfig) -> Result<Vec<u8>>;
+            fn render(&self, data: &PlotData, config: &RenderConfig) -> Result<Vec<u8>, anyhow::Error>;
         }
     }
 
