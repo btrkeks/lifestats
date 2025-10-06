@@ -16,6 +16,10 @@ pub enum ApplicationError {
     #[error("A persistence error occurred: {0}")]
     Repository(#[from] RepositoryError),
 
+    /// Invalid input provided by the user (maps to 400 Bad Request)
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     /// An unexpected infrastructure error occurred (maps to 500 Internal Server Error)
     #[error("An unexpected infrastructure error occurred: {0}")]
     Infrastructure(#[from] anyhow::Error),

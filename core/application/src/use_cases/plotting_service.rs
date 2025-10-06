@@ -198,6 +198,7 @@ mod tests {
             fn find_metadata_by_id(&self, id: StatisticId) -> Result<lifestats_core::statistic::any_statistic::AnyStatistic, lifestats_core::statistic::ports::error::RepositoryError>;
             fn find_all_metadata(&self) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>, lifestats_core::statistic::ports::error::RepositoryError>;
             fn save_metadata(&self, statistic: &lifestats_core::statistic::any_statistic::AnyStatistic) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
+            fn find_by_tags(&self, tags: &std::collections::HashMap<String, String>) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>, lifestats_core::statistic::ports::error::RepositoryError>;
             fn find_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<Option<Value>, lifestats_core::statistic::ports::error::RepositoryError>;
             fn save_log_value(&self, id: StatisticId, date: NaiveDate, value: Value) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
             fn find_log_values_in_range(&self, id: StatisticId, range: DateRange) -> Result<Vec<DatedValue<Value>>, lifestats_core::statistic::ports::error::RepositoryError>;

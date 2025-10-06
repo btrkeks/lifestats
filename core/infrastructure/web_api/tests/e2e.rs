@@ -6,8 +6,11 @@ use diesel::RunQueryDsl;
 use diesel::SqliteConnection;
 use diesel_migrations::MigrationHarness;
 use lifestats_application::use_cases::{
-    goal_management_service::GoalManagementService, logging_service::LoggingService,
-    plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
+    goal_management_service::GoalManagementService,
+    integration::{AnkiBundleFactory, BundleFactory, IntegrationService},
+    logging_service::LoggingService,
+    plotting_service::PlottingService,
+    statistic_query_service::StatisticQueryService,
 };
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
@@ -85,11 +88,19 @@ async fn test_log_and_get_e2e() -> Result<()> {
     let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&repo)));
     let plotting_service = Arc::new(PlottingService::new(Arc::clone(&repo), plot_repo, renderer));
 
+    // Create integration service
+    let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
+    let integration_service = Arc::new(IntegrationService::new(
+        repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
+        factories,
+    ));
+
     let app_state = AppState::new(
         logging_service,
         goal_service,
         query_service,
         plotting_service,
+        integration_service,
     );
 
     // ========================================================================

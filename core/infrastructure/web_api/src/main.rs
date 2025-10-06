@@ -8,9 +8,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use events::event_port::{Event, EventPublisher};
 use lifestats_application::use_cases::{
-    goal_management_service::GoalManagementService, logging_service::LoggingService,
-    plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
+    goal_management_service::GoalManagementService,
+    integration::{AnkiBundleFactory, BundleFactory, IntegrationService},
+    logging_service::LoggingService,
+    plotting_service::PlottingService,
+    statistic_query_service::StatisticQueryService,
 };
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_persistence::pool::get_database_pool;
 use lifestats_persistence::repository::SqliteStatisticRepository;
 use lifestats_persistence::SqlitePlotRepository;
@@ -79,12 +83,22 @@ async fn main() -> Result<()> {
         Arc::clone(&renderer),
     ));
 
+    // Create integration bundle factories
+    let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
+
+    // Create integration service (cast repo to trait object)
+    let integration_service = Arc::new(IntegrationService::new(
+        repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
+        factories,
+    ));
+
     // Create shared application state
     let app_state = AppState::new(
         logging_service,
         goal_service,
         query_service,
         plotting_service,
+        integration_service,
     );
 
     // Build the router with all routes

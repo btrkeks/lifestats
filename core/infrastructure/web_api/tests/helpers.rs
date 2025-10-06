@@ -2,13 +2,18 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
 use lifestats_application::use_cases::{
-    goal_management_service::GoalManagementService, logging_service::LoggingService,
-    plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
+    goal_management_service::GoalManagementService,
+    integration::{AnkiBundleFactory, BundleFactory, IntegrationService},
+    logging_service::LoggingService,
+    plotting_service::PlottingService,
+    statistic_query_service::StatisticQueryService,
 };
 use lifestats_core::shared::ids::{PlotId, StatisticId};
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
-use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
+use lifestats_core::statistic::ports::statistic_repository::{
+    MockStatisticRepository, StatisticRepository,
+};
 use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_web_api::state::AppState;
@@ -86,11 +91,19 @@ pub fn mock_app_state(
         renderer,
     ));
 
+    // Create integration service
+    let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
+    let integration_service = Arc::new(IntegrationService::new(
+        mock_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
+        factories,
+    ));
+
     AppState::new(
         logging_service,
         goal_service,
         query_service,
         plotting_service,
+        integration_service,
     )
 }
 

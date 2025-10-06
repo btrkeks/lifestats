@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -98,6 +99,51 @@ impl StatisticRepository for SqliteStatisticRepository {
             .map_err(diesel_to_repository_error)?;
 
         Ok(())
+    }
+
+    fn find_by_tags(
+        &self,
+        tags: &HashMap<String, String>,
+    ) -> Result<Vec<AnyStatistic>, RepositoryError> {
+        let mut conn = self.connection()?;
+
+        // Build a raw SQL query to filter by tags using JSON functions
+        // We need to check that ALL tags match (AND logic)
+        let mut sql_conditions = String::new();
+        for (key, value) in tags {
+            sql_conditions.push_str(&format!(
+                " AND json_extract(tags, '$.{}') = '{}'",
+                key.replace('\'', "''"), // Escape single quotes
+                value.replace('\'', "''")
+            ));
+        }
+
+        // Build the final query
+        let final_sql = format!(
+            "SELECT id, name, category, statistic_type, default_goal_valid_since, tags FROM statistics WHERE 1=1{}",
+            sql_conditions
+        );
+
+        let dtos: Vec<StatisticDto> = diesel::sql_query(final_sql)
+            .load::<StatisticDto>(&mut conn)
+            .map_err(diesel_to_repository_error)?;
+
+        // Fetch default goals for all found statistics
+        let ids: Vec<i32> = dtos.iter().map(|dto| dto.id).collect();
+        let default_goal_map = queries::fetch_default_goals(&mut conn, &ids)
+            .map_err(|e| RepositoryError::OperationFailed(e))?;
+
+        // Convert DTOs to domain objects
+        let mut result = Vec::with_capacity(dtos.len());
+        for dto in dtos {
+            let default_goal = default_goal_map.get(&dto.id).cloned();
+            result.push(
+                dto.into_any_statistic(default_goal)
+                    .map_err(|e| RepositoryError::OperationFailed(e))?,
+            );
+        }
+
+        Ok(result)
     }
 
     fn delete_default_goal(&self, id: StatisticId) -> Result<(), RepositoryError> {

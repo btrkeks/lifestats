@@ -1,4 +1,5 @@
 pub mod goal_management_service;
+pub mod integration;
 pub mod logging_service;
 pub mod plotting_service;
 pub mod session_tracking_service;

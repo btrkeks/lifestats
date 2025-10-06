@@ -1,3 +1,4 @@
+pub mod integrations;
 pub mod plots;
 pub mod statistics;
 
@@ -25,5 +26,9 @@ where
             post(statistics::log_time_frame),
         )
         .route("/plots/:id/image", get(plots::get_plot_image))
+        .route(
+            "/integrations/:source",
+            post(integrations::provision_integration),
+        )
         .with_state(app_state)
 }

@@ -63,14 +63,21 @@ impl FromSql<Text, Sqlite> for StatisticTypeDto {
     }
 }
 
-#[derive(Debug, Queryable, Selectable, Insertable, AsChangeset)]
+#[derive(Debug, Queryable, QueryableByName, Selectable, Insertable, AsChangeset)]
 #[diesel(table_name = crate::db::schema::statistics)]
 pub struct StatisticDto {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
     pub id: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub name: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub category: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub statistic_type: StatisticTypeDto,
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub default_goal_valid_since: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub tags: String,
 }
 
 impl StatisticDto {
@@ -91,22 +98,36 @@ impl StatisticDto {
             }
         };
 
+        // Serialize tags to JSON
+        let tags_json =
+            serde_json::to_string(metadata.tags()).context("failed to serialize tags to JSON")?;
+
         Ok(Self {
             id: metadata.id().0 as i32,
             name: metadata.name().to_string(),
             category: metadata.category().to_string(),
             statistic_type,
-            // Add this line to serialize the date to a string for the DB
             default_goal_valid_since: statistic.get_default_goal_valid_since().to_string(),
+            tags: tags_json,
         })
     }
 
     pub fn into_any_statistic(self, default_goal: Option<DefaultGoalRaw>) -> Result<AnyStatistic> {
-        let metadata = StatisticMetadata::new(
+        // Deserialize tags from JSON
+        let tags: std::collections::HashMap<String, String> =
+            serde_json::from_str(&self.tags).context("failed to deserialize tags from JSON")?;
+
+        // Create metadata and add tags
+        let mut metadata = StatisticMetadata::new(
             StatisticId(self.id as u32),
             self.category.into_boxed_str(),
             self.name.into_boxed_str(),
         );
+
+        // Apply all tags using the builder pattern
+        for (key, value) in tags {
+            metadata = metadata.with_tag(key, value);
+        }
 
         // Parse the date from our new, reliable column.
         let start_date = NaiveDate::parse_from_str(&self.default_goal_valid_since, "%Y-%m-%d")
