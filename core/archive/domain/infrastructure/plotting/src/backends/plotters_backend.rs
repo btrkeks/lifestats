@@ -1,4 +1,4 @@
-use lifestats_domain::plot::{PlotData, RenderConfig, PlotRenderer};
+use plot_domain::plot::{PlotData, RenderConfig, PlotRenderer};
 use anyhow::Result;
 
 /// Concrete implementation of PlotRenderer using the plotters library.

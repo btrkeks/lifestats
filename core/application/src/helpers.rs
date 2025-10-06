@@ -1,14 +1,14 @@
 use anyhow::{anyhow, Result};
-use lifestats_domain::plot::data::{DrawableData, DrawableGoal};
-use lifestats_domain::plot::specification::PlotType;
-use lifestats_domain::shared::percentage::Percentage;
-use lifestats_domain::shared::time_frame_list::TimeFrameList;
-use lifestats_domain::statistic::any_statistic::AnyStatistic;
-use lifestats_domain::statistic::value_objects::goals::amount_goal::AmountGoal;
-use lifestats_domain::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
-use lifestats_domain::statistic::value_objects::goals::goal_trait::Goal;
-use lifestats_domain::statistic::value_objects::goals::habit_goal::HabitGoal;
-use lifestats_domain::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
+use lifestats_core::shared::percentage::Percentage;
+use lifestats_core::shared::time_frame_list::TimeFrameList;
+use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+use lifestats_core::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
+use lifestats_core::statistic::value_objects::goals::goal_trait::Goal;
+use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
+use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
+use plot_domain::plot::data::{DrawableData, DrawableGoal};
+use plot_domain::plot::specification::PlotType;
 use serde_json::Value;
 
 /// Maps goal achievement percentage to an RGB color tuple

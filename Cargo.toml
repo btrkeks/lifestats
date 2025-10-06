@@ -2,11 +2,12 @@
 
 resolver = "2"
 members = [
-    "core/domain",
+    "core/core",
     "core/application",
     "core/infrastructure/persistence",
     "core/infrastructure/plotting",
     "core/infrastructure/web_api",
+    "core/plot-domain",
     "client"
 ]
 

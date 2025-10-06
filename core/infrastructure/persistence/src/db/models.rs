@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use diesel::prelude::*;
-use lifestats_domain::shared::dated_value::DatedValue;
-use lifestats_domain::shared::ids::StatisticId;
+use lifestats_core::shared::dated_value::DatedValue;
+use lifestats_core::shared::ids::StatisticId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -121,7 +121,7 @@ pub struct PlotRaw {
 }
 
 impl PlotRaw {
-    pub fn from_plot_spec(spec: &lifestats_domain::plot::specification::PlotSpecification) -> Self {
+    pub fn from_plot_spec(spec: &plot_domain::plot::specification::PlotSpecification) -> Self {
         Self {
             id: spec.id.0 as i32,
             statistic_id: spec.statistic_id.0 as i32,
@@ -129,23 +129,19 @@ impl PlotRaw {
             width: 800,  // Default width
             height: 600, // Default height
             plot_type: match spec.plot_type {
-                lifestats_domain::plot::specification::PlotType::BarChart => "bar_chart",
-                lifestats_domain::plot::specification::PlotType::LineChart => "line_chart",
-                lifestats_domain::plot::specification::PlotType::TimeFrames => "time_frames",
-                lifestats_domain::plot::specification::PlotType::Scatter => "scatter",
-                lifestats_domain::plot::specification::PlotType::CircularProgress => {
-                    "circular_progress"
-                }
+                plot_domain::plot::specification::PlotType::BarChart => "bar_chart",
+                plot_domain::plot::specification::PlotType::LineChart => "line_chart",
+                plot_domain::plot::specification::PlotType::TimeFrames => "time_frames",
+                plot_domain::plot::specification::PlotType::Scatter => "scatter",
+                plot_domain::plot::specification::PlotType::CircularProgress => "circular_progress",
             }
             .to_string(),
         }
     }
 
-    pub fn into_plot_spec(
-        self,
-    ) -> Result<lifestats_domain::plot::specification::PlotSpecification> {
-        use lifestats_domain::plot::specification::{PlotSpecification, PlotType};
-        use lifestats_domain::shared::ids::{PlotId, StatisticId};
+    pub fn into_plot_spec(self) -> Result<plot_domain::plot::specification::PlotSpecification> {
+        use lifestats_core::shared::ids::{PlotId, StatisticId};
+        use plot_domain::plot::specification::{PlotSpecification, PlotType};
 
         let plot_type = match self.plot_type.as_str() {
             "bar_chart" => PlotType::BarChart,

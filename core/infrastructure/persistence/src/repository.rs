@@ -5,11 +5,11 @@ use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::SqliteConnection;
-use lifestats_domain::shared::date_range::DateRange;
-use lifestats_domain::shared::dated_value::DatedValue;
-use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::statistic::any_statistic::AnyStatistic;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::shared::date_range::DateRange;
+use lifestats_core::shared::dated_value::DatedValue;
+use lifestats_core::shared::ids::StatisticId;
+use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 
 use crate::db::mappers::StatisticDto;
 use crate::db::models::{DefaultGoalRaw, GoalDataRaw, LoggingDataRaw};
@@ -298,10 +298,10 @@ mod tests {
     use crate::pool::MIGRATIONS;
     use chrono::NaiveDate;
     use diesel_migrations::MigrationHarness;
-    use lifestats_domain::statistic::types::logable_statistics::habit::HabitStatistic;
-    use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
-    use lifestats_domain::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
-    use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
+    use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+    use lifestats_core::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
+    use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
     // ==================== Test Helper ====================
 

@@ -96,7 +96,7 @@ fn attempt_publish(socket_path: &Path, event: Event) -> Result<()> {
 mod tests {
     use crate::event_port::{Event, EventHandler, EventPublisher, EventSubscriber};
     use crate::unix_socket::UnixSocketEvent;
-    use lifestats_domain::shared::ids::StatisticId;
+    use lifestats_core::shared::ids::StatisticId;
     use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::Duration;

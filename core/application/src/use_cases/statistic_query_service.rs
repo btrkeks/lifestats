@@ -3,16 +3,16 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
-use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::shared::seconds::Seconds;
-use lifestats_domain::shared::time_frame_list::TimeFrameList;
-use lifestats_domain::statistic::any_statistic::{AnyGoal, AnyStatistic, StreakDayResult};
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_domain::statistic::value_objects::goals::amount_goal::AmountGoal;
-use lifestats_domain::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
-use lifestats_domain::statistic::value_objects::goals::habit_goal::HabitGoal;
-use lifestats_domain::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
-use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+use lifestats_core::shared::ids::StatisticId;
+use lifestats_core::shared::seconds::Seconds;
+use lifestats_core::shared::time_frame_list::TimeFrameList;
+use lifestats_core::statistic::any_statistic::{AnyGoal, AnyStatistic, StreakDayResult};
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+use lifestats_core::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
+use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
+use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
+use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
 #[derive(Clone)]
 pub struct StatisticQueryService<R>

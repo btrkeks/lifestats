@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_time_axis_with_time_frames() {
-        use crate::shared::time_frame_list::TimeFrameList;
+        use lifestats_core::shared::time_frame_list::TimeFrameList;
 
         let time_frame_list = serde_json::from_value::<TimeFrameList>(json!([
             {"start": "09:00:00", "end": "12:00:00"},

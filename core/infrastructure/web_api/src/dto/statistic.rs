@@ -1,4 +1,4 @@
-use lifestats_domain::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::any_statistic::AnyStatistic;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -52,9 +52,9 @@ impl From<&AnyStatistic> for StatisticMetadataResponse {
 mod tests {
     use super::*;
     use chrono::NaiveDate;
-    use lifestats_domain::shared::ids::StatisticId;
-    use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
-    use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use lifestats_core::shared::ids::StatisticId;
+    use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+    use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
     #[test]
     fn test_from_any_statistic_to_dto() {

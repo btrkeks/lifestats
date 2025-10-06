@@ -1,6 +1,6 @@
 use crate::plot::specification::PlotSpecification;
-use crate::shared::ids::{PlotId, StatisticId};
 use anyhow::Result;
+use lifestats_core::shared::ids::{PlotId, StatisticId};
 
 /// Port (trait) for persisting plot configurations
 /// This keeps the domain independent of specific database implementations

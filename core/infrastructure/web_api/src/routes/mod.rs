@@ -3,9 +3,9 @@ pub mod statistics;
 
 use axum::{routing::get, routing::post, Router};
 use events::event_port::EventPublisher;
-use lifestats_domain::plot::renderer::PlotRenderer;
-use lifestats_domain::plot::repository::PlotRepository;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::renderer::PlotRenderer;
+use plot_domain::plot::repository::PlotRepository;
 
 use crate::state::AppState;
 

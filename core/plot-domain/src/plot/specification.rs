@@ -1,4 +1,4 @@
-use crate::shared::ids::{PlotId, StatisticId};
+use lifestats_core::shared::ids::{PlotId, StatisticId};
 use serde::{Deserialize, Serialize};
 
 /// Represents the type of plot to be rendered

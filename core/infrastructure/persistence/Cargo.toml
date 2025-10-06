@@ -8,8 +8,9 @@ testing = []
 db-compat-test = []
 
 [dependencies]
-# Internal: Domain only (implements its repository traits)
-lifestats-domain = { path = "../../domain" }
+# Internal: Implements repository traits from both domains
+lifestats-core = { path = "../../core" }
+plot-domain = { path = "../../plot-domain" }
 
 chrono = { workspace = true }
 anyhow = { workspace = true }

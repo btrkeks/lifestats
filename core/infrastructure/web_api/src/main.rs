@@ -14,7 +14,7 @@ use lifestats_application::use_cases::{
 use lifestats_persistence::pool::get_database_pool;
 use lifestats_persistence::repository::SqliteStatisticRepository;
 use lifestats_persistence::SqlitePlotRepository;
-use plotting::PlottersRenderer;
+use lifestats_plotting::PlottersRenderer;
 use state::AppState;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 

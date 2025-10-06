@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use lifestats_domain::plot::axis::YAxis;
-use lifestats_domain::plot::data::{DataPoint, PlotData};
-use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
-use lifestats_domain::plot::repository::PlotRepository;
-use lifestats_domain::shared::date_range::DateRange;
-use lifestats_domain::shared::ids::PlotId;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::shared::date_range::DateRange;
+use lifestats_core::shared::ids::PlotId;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::axis::YAxis;
+use plot_domain::plot::data::{DataPoint, PlotData};
+use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
+use plot_domain::plot::repository::PlotRepository;
 
 use crate::helpers::{
     evaluate_goal_achievement, json_to_drawable_data, json_to_drawable_goal, percentage_to_color,
@@ -78,7 +78,7 @@ where
         let default_goal_json = statistic.get_default_goal().and_then(|any_goal| {
             // The renderer expects a JSON Value, so we must serialize the typed goal
             // We match on the AnyGoal and serialize the inner type to avoid enum wrapper
-            use lifestats_domain::statistic::any_statistic::AnyGoal;
+            use lifestats_core::statistic::any_statistic::AnyGoal;
             match any_goal {
                 AnyGoal::Habit(g) => serde_json::to_value(g).ok(),
                 AnyGoal::IntegerAmount(g) => serde_json::to_value(g).ok(),
@@ -158,17 +158,17 @@ where
 mod tests {
     use super::*;
     use chrono::NaiveDate;
-    use lifestats_domain::plot::data::DrawableData;
-    use lifestats_domain::plot::specification::{PlotSpecification, PlotType};
-    use lifestats_domain::shared::dated_value::DatedValue;
-    use lifestats_domain::shared::ids::StatisticId;
-    use lifestats_domain::shared::time_frame_list::TimeFrameList;
-    use lifestats_domain::statistic::any_statistic::AnyStatistic;
-    use lifestats_domain::statistic::types::logable_statistics::{
+    use lifestats_core::shared::dated_value::DatedValue;
+    use lifestats_core::shared::ids::StatisticId;
+    use lifestats_core::shared::time_frame_list::TimeFrameList;
+    use lifestats_core::statistic::any_statistic::AnyStatistic;
+    use lifestats_core::statistic::types::logable_statistics::{
         integer_amount::IntegerAmountStatistic, time_spans::TimeSpansStatistic,
     };
-    use lifestats_domain::statistic::value_objects::goals::amount_goal::AmountGoal;
-    use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+    use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use plot_domain::plot::data::DrawableData;
+    use plot_domain::plot::specification::{PlotSpecification, PlotType};
     use serde_json::{json, Value};
 
     // We'll use mockall to create mock implementations
@@ -188,9 +188,9 @@ mod tests {
     mock! {
         StatRepo {}
         impl StatisticRepository for StatRepo {
-            fn find_metadata_by_id(&self, id: StatisticId) -> Result<lifestats_domain::statistic::any_statistic::AnyStatistic>;
-            fn find_all_metadata(&self) -> Result<Vec<lifestats_domain::statistic::any_statistic::AnyStatistic>>;
-            fn save_metadata(&self, statistic: &lifestats_domain::statistic::any_statistic::AnyStatistic) -> Result<()>;
+            fn find_metadata_by_id(&self, id: StatisticId) -> Result<lifestats_core::statistic::any_statistic::AnyStatistic>;
+            fn find_all_metadata(&self) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
+            fn save_metadata(&self, statistic: &lifestats_core::statistic::any_statistic::AnyStatistic) -> Result<()>;
             fn find_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<Option<Value>>;
             fn save_log_value(&self, id: StatisticId, date: NaiveDate, value: Value) -> Result<()>;
             fn find_log_values_in_range(&self, id: StatisticId, range: DateRange) -> Result<Vec<DatedValue<Value>>>;
@@ -448,7 +448,7 @@ mod tests {
 
         // This assertion will FAIL with the current code, as `point.goal` will be `None`.
         // It will PASS after applying the fix.
-        use lifestats_domain::plot::data::DrawableGoal;
+        use plot_domain::plot::data::DrawableGoal;
         let expected_goal = DrawableGoal::Integer(default_goal.target_amount());
         assert_eq!(
             point.goal,

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-lifestats-domain = { path = "../../core/domain" }
+lifestats-core = { path = "../../core/core" }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 anyhow = "1.0.93"

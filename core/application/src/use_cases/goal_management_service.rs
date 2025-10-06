@@ -4,10 +4,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use events::event_port::{Event, EventPublisher};
-use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::shared::seconds::Seconds;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_domain::statistic::value_objects::goals::{
+use lifestats_core::shared::ids::StatisticId;
+use lifestats_core::shared::seconds::Seconds;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::value_objects::goals::{
     amount_goal::AmountGoal, finished_in_time_goal::FinishedInTimeGoal, habit_goal::HabitGoal,
     time_spans_goal::TimeSpansGoal,
 };
@@ -65,11 +65,11 @@ where
     /// Helper to create a strongly-typed goal from primitive data
     fn create_typed_goal(
         &self,
-        statistic: &lifestats_domain::statistic::any_statistic::AnyStatistic,
+        statistic: &lifestats_core::statistic::any_statistic::AnyStatistic,
         data: &HashMap<String, String>,
     ) -> Result<TypedGoal> {
-        use lifestats_domain::shared::{percentage::Percentage, time_frame_list::TimeFrameList};
-        use lifestats_domain::statistic::any_statistic::AnyStatistic;
+        use lifestats_core::shared::{percentage::Percentage, time_frame_list::TimeFrameList};
+        use lifestats_core::statistic::any_statistic::AnyStatistic;
 
         match statistic {
             AnyStatistic::IntegerAmount(_) => {
@@ -153,8 +153,8 @@ where
 
     /// Set a new default goal using primitive data (generic for all types)
     pub fn set_default_goal_generic(&self, command: SetDefaultGoalGenericCommand) -> Result<()> {
-        use lifestats_domain::statistic::any_statistic::AnyStatistic;
-        use lifestats_domain::statistic::traits::base_statistic::Statistic;
+        use lifestats_core::statistic::any_statistic::AnyStatistic;
+        use lifestats_core::statistic::traits::base_statistic::Statistic;
 
         let mut statistic = self
             .statistic_repository
@@ -249,7 +249,7 @@ mod tests {
     use super::*;
     use chrono::Local;
     use events::event_port::MockEventPublisher;
-    use lifestats_domain::statistic::{
+    use lifestats_core::statistic::{
         any_statistic::AnyStatistic,
         ports::statistic_repository::MockStatisticRepository,
         types::logable_statistics::{

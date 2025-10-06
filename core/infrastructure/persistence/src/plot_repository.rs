@@ -4,9 +4,9 @@ use anyhow::{Context, Result};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::SqliteConnection;
-use lifestats_domain::plot::repository::PlotRepository;
-use lifestats_domain::plot::specification::PlotSpecification;
-use lifestats_domain::shared::ids::{PlotId, StatisticId};
+use lifestats_core::shared::ids::{PlotId, StatisticId};
+use plot_domain::plot::repository::PlotRepository;
+use plot_domain::plot::specification::PlotSpecification;
 
 use crate::db::models::PlotRaw;
 use crate::db::schema::plots;
@@ -95,7 +95,7 @@ impl PlotRepository for SqlitePlotRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lifestats_domain::plot::specification::PlotType;
+    use plot_domain::plot::specification::PlotType;
 
     #[test]
     fn test_plot_raw_conversion() {

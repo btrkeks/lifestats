@@ -3,8 +3,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
-use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::shared::ids::StatisticId;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 
 #[derive(Clone)]
 pub struct LoggingService<R, E>
@@ -37,7 +37,7 @@ where
     /// 4. Calling the pure domain calculation
     /// 5. Serializing the result back to JSON
     fn parse_and_calculate<
-        S: lifestats_domain::statistic::traits::logable_statistic::LogableStatistic,
+        S: lifestats_core::statistic::traits::logable_statistic::LogableStatistic,
     >(
         &self,
         stat: &S,
@@ -76,8 +76,8 @@ where
     /// into domain types before calling pure domain logic.
     pub fn log_value(&self, command: LogValueCommand) -> Result<()> {
         use anyhow::{anyhow, Context};
-        use lifestats_domain::statistic::any_statistic::AnyStatistic;
-        use lifestats_domain::statistic::traits::logable_statistic::LogableStatistic;
+        use lifestats_core::statistic::any_statistic::AnyStatistic;
+        use lifestats_core::statistic::traits::logable_statistic::LogableStatistic;
 
         // 1. Fetch the domain entity
         let statistic = self
@@ -104,7 +104,7 @@ where
                 command.update_policy_str.as_deref(),
             )?,
             AnyStatistic::PointInTime(s) => {
-                use lifestats_domain::shared::my_time::MyTime;
+                use lifestats_core::shared::my_time::MyTime;
                 use std::str::FromStr;
                 let current_val: Option<chrono::NaiveTime> = current_value_json
                     .map(serde_json::from_value)
@@ -122,7 +122,7 @@ where
                 (serde_json::to_value(result)?, changed)
             }
             AnyStatistic::TimeSpans(s) => {
-                use lifestats_domain::shared::time_frame_list::TimeFrameList;
+                use lifestats_core::shared::time_frame_list::TimeFrameList;
                 let current_val: Option<TimeFrameList> = current_value_json
                     .map(serde_json::from_value)
                     .transpose()
@@ -160,9 +160,9 @@ where
     /// This method provides type safety by accepting structured time values
     /// rather than strings, preventing parsing errors at the domain layer.
     pub fn log_time_frame(&self, command: LogTimeFrameCommand) -> Result<()> {
-        use lifestats_domain::shared::time_frame_list::{TimeFrame, TimeFrameList};
-        use lifestats_domain::statistic::any_statistic::AnyStatistic;
-        use lifestats_domain::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
+        use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
+        use lifestats_core::statistic::any_statistic::AnyStatistic;
+        use lifestats_core::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
 
         // 1. Fetch the domain entity
         let statistic = self
@@ -242,7 +242,7 @@ pub struct LogTimeFrameCommand {
     pub date: NaiveDate,
     pub start_time: chrono::NaiveTime,
     pub end_time: chrono::NaiveTime,
-    pub update_policy: Option<lifestats_domain::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy>,
+    pub update_policy: Option<lifestats_core::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy>,
 }
 
 #[cfg(test)]
@@ -250,7 +250,7 @@ mod tests {
     use super::*;
     use chrono::Local;
     use events::event_port::MockEventPublisher;
-    use lifestats_domain::statistic::{
+    use lifestats_core::statistic::{
         any_statistic::AnyStatistic,
         ports::statistic_repository::MockStatisticRepository,
         types::logable_statistics::{
@@ -410,7 +410,7 @@ mod tests {
         let test_date = Local::now().date_naive();
 
         // Create a derived statistic (Summing)
-        use lifestats_domain::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
+        use lifestats_core::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
         let metadata = create_test_metadata(4, "test_summing");
 
         // Create source statistics for the summing statistic

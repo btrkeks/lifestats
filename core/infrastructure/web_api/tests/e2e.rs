@@ -9,17 +9,17 @@ use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, logging_service::LoggingService,
     plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
 };
-use lifestats_domain::shared::ids::StatisticId;
-use lifestats_domain::statistic::any_statistic::AnyStatistic;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
-use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+use lifestats_core::shared::ids::StatisticId;
+use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_persistence::pool::MIGRATIONS;
 use lifestats_persistence::repository::SqliteStatisticRepository;
 use lifestats_persistence::SqlitePlotRepository;
+use lifestats_plotting::PlottersRenderer;
 use lifestats_web_api::routes::create_router;
 use lifestats_web_api::state::AppState;
-use plotting::PlottersRenderer;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 

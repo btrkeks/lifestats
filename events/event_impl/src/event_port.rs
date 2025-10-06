@@ -1,5 +1,5 @@
 use anyhow::Result;
-use lifestats_domain::shared::ids::StatisticId;
+use lifestats_core::shared::ids::StatisticId;
 use mockall::automock;
 use serde::{Deserialize, Serialize};
 use std::thread::JoinHandle;

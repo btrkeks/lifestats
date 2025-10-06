@@ -1,8 +1,8 @@
 use crate::plot::axis::YAxis;
 use crate::plot::specification::PlotType;
-use crate::shared::date_range::DateRange;
-use crate::shared::time_frame_list::TimeFrameList;
 use chrono::NaiveDate;
+use lifestats_core::shared::date_range::DateRange;
+use lifestats_core::shared::time_frame_list::TimeFrameList;
 
 /// Represents data that has been processed and is ready for visualization
 /// This enum eliminates the need for renderers to parse generic JSON

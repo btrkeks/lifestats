@@ -54,9 +54,9 @@ impl From<validator::ValidationErrors> for ApiError {
     }
 }
 
-impl From<lifestats_domain::statistic::error::DomainError> for ApiError {
-    fn from(err: lifestats_domain::statistic::error::DomainError) -> Self {
-        use lifestats_domain::statistic::error::DomainError;
+impl From<lifestats_core::statistic::error::DomainError> for ApiError {
+    fn from(err: lifestats_core::statistic::error::DomainError) -> Self {
+        use lifestats_core::statistic::error::DomainError;
 
         match err {
             // Map domain validation and parsing errors to 400 Bad Request
@@ -72,9 +72,9 @@ impl From<lifestats_domain::statistic::error::DomainError> for ApiError {
     }
 }
 
-impl From<lifestats_domain::statistic::error::StatisticError> for ApiError {
-    fn from(err: lifestats_domain::statistic::error::StatisticError) -> Self {
-        use lifestats_domain::statistic::error::StatisticError;
+impl From<lifestats_core::statistic::error::StatisticError> for ApiError {
+    fn from(err: lifestats_core::statistic::error::StatisticError) -> Self {
+        use lifestats_core::statistic::error::StatisticError;
 
         match err {
             // Map domain errors to appropriate API errors

@@ -5,17 +5,17 @@ use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, logging_service::LoggingService,
     plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
 };
-use lifestats_domain::plot::data::PlotData;
-use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
-use lifestats_domain::plot::repository::PlotRepository;
-use lifestats_domain::plot::specification::PlotSpecification;
-use lifestats_domain::shared::ids::{PlotId, StatisticId};
-use lifestats_domain::statistic::any_statistic::AnyStatistic;
-use lifestats_domain::statistic::ports::statistic_repository::MockStatisticRepository;
-use lifestats_domain::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
-use lifestats_domain::statistic::value_objects::statistic_metadata::StatisticMetadata;
+use lifestats_core::shared::ids::{PlotId, StatisticId};
+use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
+use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_web_api::state::AppState;
 use mockall::mock;
+use plot_domain::plot::data::PlotData;
+use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
+use plot_domain::plot::repository::PlotRepository;
+use plot_domain::plot::specification::PlotSpecification;
 use std::sync::Arc;
 
 /// Simple no-op event publisher for testing

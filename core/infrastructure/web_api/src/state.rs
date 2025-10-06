@@ -5,9 +5,9 @@ use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, logging_service::LoggingService,
     plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
 };
-use lifestats_domain::plot::renderer::PlotRenderer;
-use lifestats_domain::plot::repository::PlotRepository;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::renderer::PlotRenderer;
+use plot_domain::plot::repository::PlotRepository;
 
 /// Shared application state injected into every request handler
 pub struct AppState<R, P, Rend, E>

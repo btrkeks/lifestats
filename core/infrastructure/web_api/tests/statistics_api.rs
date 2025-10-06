@@ -2,7 +2,7 @@ mod helpers;
 
 use axum_test::TestServer;
 use helpers::{mock_app_state, mock_integer_statistic};
-use lifestats_domain::statistic::ports::statistic_repository::MockStatisticRepository;
+use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
 use lifestats_web_api::dto::statistic::StatisticMetadataResponse;
 use lifestats_web_api::routes::create_router;
 use std::sync::Arc;

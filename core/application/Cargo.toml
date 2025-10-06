@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Internal: Only domain
-lifestats-domain = { path = "../domain" }
+# Internal: Domain crates
+lifestats-core = { path = "../core" }
+plot-domain = { path = "../plot-domain" }
 
 events = { path = "../../events/event_impl/" }
 
@@ -17,4 +18,5 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 mockall = "0.13.1"
-lifestats-domain = { path = "../domain", features = ["testing"] }
+lifestats-core = { path = "../core", features = ["testing"] }
+plot-domain = { path = "../plot-domain", features = ["testing"] }

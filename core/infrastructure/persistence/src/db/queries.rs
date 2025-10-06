@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
-use lifestats_domain::shared::ids::StatisticId;
+use lifestats_core::shared::ids::StatisticId;
 
 use crate::db::models::DefaultGoalRaw;
 use crate::db::schema::default_goals;

@@ -2,7 +2,7 @@
 // NEW FILE
 
 use anyhow::Result;
-use lifestats_domain::{
+use lifestats_core::{
     plot::{PlotData, PlotRenderer, RenderConfig},
     statistic::StatisticId,
     value_objects::DateRange,

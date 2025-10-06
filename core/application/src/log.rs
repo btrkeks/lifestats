@@ -1,12 +1,12 @@
 use crate::app_context::AppContext;
 use anyhow::{anyhow, Context, Result};
 use chrono::{NaiveDate, NaiveTime};
-use lifestats_domain::shared::time_frame_list::TimeFrame;
-use lifestats_domain::statistic::statistic_types::statistic_types::logable_statistics::update_policy::time_frame_list::TimeFrameListUpdatePolicy;
-use lifestats_domain::statistic::statistic::Statistic;
-use lifestats_domain::statistic::statistic_types::any_statistic::AnyStatistic;
+use lifestats_core::shared::time_frame_list::TimeFrame;
+use lifestats_core::statistic::statistic_types::statistic_types::logable_statistics::update_policy::time_frame_list::TimeFrameListUpdatePolicy;
+use lifestats_core::statistic::statistic::Statistic;
+use lifestats_core::statistic::statistic_types::any_statistic::AnyStatistic;
 use events::event_port::Event;
-use lifestats_domain::shared::ids::StatisticId;
+use lifestats_core::shared::ids::StatisticId;
 
 /// Value Formatting guidelines:
 /// - Times should be in the format "HH:MM:SS" or "HH:MM", e.g. "12:30:00", "12:30"

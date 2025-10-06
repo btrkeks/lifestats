@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_persistence::repository::SqliteStatisticRepository;
 use std::env;
 use std::sync::Arc;

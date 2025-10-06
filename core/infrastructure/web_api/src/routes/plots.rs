@@ -4,16 +4,16 @@ use axum::{
     response::IntoResponse,
 };
 use chrono::NaiveDate;
-use lifestats_domain::plot::renderer::PlotRenderer;
-use lifestats_domain::plot::repository::PlotRepository;
-use lifestats_domain::shared::date_range::DateRange;
-use lifestats_domain::shared::ids::PlotId;
-use lifestats_domain::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::shared::date_range::DateRange;
+use lifestats_core::shared::ids::PlotId;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::renderer::PlotRenderer;
+use plot_domain::plot::repository::PlotRepository;
 use serde::Deserialize;
 
 use crate::{error::ApiError, state::AppState};
 use events::event_port::EventPublisher;
-use lifestats_domain::plot::renderer::RenderConfig;
+use plot_domain::plot::renderer::RenderConfig;
 
 #[derive(Debug, Deserialize)]
 pub struct PlotImageQuery {

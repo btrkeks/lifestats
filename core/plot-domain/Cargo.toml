@@ -1,20 +1,21 @@
 [package]
-name = "lifestats-domain"
+name = "plot-domain"
 version = "0.1.0"
 edition = "2021"
 
 [features]
-testing = []
+testing = ["dep:mockall"]
 
 [dependencies]
+# Internal: Depends on core for shared types (IDs, DateRange, etc.)
+lifestats-core = { path = "../core" }
+
+# Workspace dependencies
 chrono = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-
-strum = "0.27"
-strum_macros = "0.27"
-thiserror = "2.0.3"
+mockall = { version = "0.13.1", optional = true }
 
 [dev-dependencies]
 mockall = "0.13.1"

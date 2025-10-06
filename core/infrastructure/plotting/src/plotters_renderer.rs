@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
 use chrono::Timelike;
 use image::{ImageBuffer, Rgb};
-use lifestats_domain::plot::axis::YAxis;
-use lifestats_domain::plot::data::{DrawableData, DrawableGoal, PlotData};
-use lifestats_domain::plot::renderer::{PlotRenderer, RenderConfig};
-use lifestats_domain::plot::specification::PlotType;
+use plot_domain::plot::axis::YAxis;
+use plot_domain::plot::data::{DrawableData, DrawableGoal, PlotData};
+use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
+use plot_domain::plot::specification::PlotType;
 use plotters::prelude::*;
 
 use crate::common::{
@@ -391,8 +391,8 @@ impl PlotRenderer for PlottersRenderer {
 mod tests {
     use super::*;
     use chrono::NaiveDate;
-    use lifestats_domain::plot::data::{DataPoint, PlotData};
-    use lifestats_domain::shared::date_range::DateRange;
+    use lifestats_core::shared::date_range::DateRange;
+    use plot_domain::plot::data::{DataPoint, PlotData};
 
     #[test]
     fn test_render_line_chart() {
@@ -438,7 +438,7 @@ mod tests {
 
     #[test]
     fn test_render_time_frames_plot() {
-        use lifestats_domain::shared::time_frame_list::TimeFrameList;
+        use lifestats_core::shared::time_frame_list::TimeFrameList;
 
         let renderer = PlottersRenderer::new();
         let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();

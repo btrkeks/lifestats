@@ -15,3 +15,6 @@ __pycache__/
 
 # AnkiLogger bundled dependencies (install via requirements.txt)
 logger_applications/AnkiLogger/vendor/
+logger_applications/AnkiLogger/anki_logger.log
+
+lcov.info

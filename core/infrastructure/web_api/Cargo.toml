@@ -5,11 +5,12 @@ edition = "2021"
 
 [dependencies]
 lifestats-application = { path = "../../application" }
-lifestats-domain = { path = "../../domain" }
+lifestats-core = { path = "../../core" }
+plot-domain = { path = "../../plot-domain" }
 
 # The concrete persistence implementation needed at the composition root
 lifestats-persistence = { path = "../persistence", features = ["testing"] }
-plotting = { path = "../plotting" }
+lifestats-plotting = { path = "../plotting" }
 events = { path = "../../../events/event_impl/" }
 
 # Web Framework
@@ -50,7 +51,8 @@ tokio-test = "0.4"
 mockall = "0.13.1"
 
 # Enable testing feature to access mocks
-lifestats-domain = { path = "../../domain", features = ["testing"] }
+lifestats-core = { path = "../../core", features = ["testing"] }
+plot-domain = { path = "../../plot-domain", features = ["testing"] }
 
 # Database tooling for E2E tests
 diesel = { version = "2.0", features = ["sqlite", "chrono", "r2d2"] }

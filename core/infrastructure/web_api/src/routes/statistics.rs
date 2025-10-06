@@ -6,10 +6,10 @@ use axum::{
 use chrono::NaiveDate;
 use events::event_port::EventPublisher;
 use lifestats_application::use_cases::logging_service::LogValueCommand;
-use lifestats_domain::{
-    plot::renderer::PlotRenderer, plot::repository::PlotRepository, shared::ids::StatisticId,
-    statistic::ports::statistic_repository::StatisticRepository,
+use lifestats_core::{
+    shared::ids::StatisticId, statistic::ports::statistic_repository::StatisticRepository,
 };
+use plot_domain::plot::{renderer::PlotRenderer, repository::PlotRepository};
 use validator::Validate;
 
 use crate::{
@@ -78,7 +78,7 @@ where
 {
     use chrono::NaiveTime;
     use lifestats_application::use_cases::logging_service::LogTimeFrameCommand;
-    use lifestats_domain::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
+    use lifestats_core::statistic::value_objects::update_policies::time_frame_list::TimeFrameListUpdatePolicy;
     use std::str::FromStr;
 
     // Validate the request payload
