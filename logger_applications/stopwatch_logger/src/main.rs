@@ -1,36 +1,30 @@
-// stopwatch/src/main.rs
-// Stopwatch application for tracking time spent on activities. Provides an interactive
-// CLI interface with play/pause functionality and integration with the statistics system.
-#![feature(duration_constructors)]
-
 mod ui;
 
 use crate::ui::terminal_interface::TerminalInterface;
 use crate::ui::user_interface_trait::{UserEvent, UserInput, UserInterface};
 use anyhow::Result;
-use domain_models::statistic::statistic_metadata::StatisticMetadata;
 use lifestats_application::use_cases::{
-    HeartbeatConfig, HeartbeatSession, HeartbeatUpdate, RealTimeProvider,
+    HeartbeatConfig, HeartbeatSession, HeartbeatUpdate, RealTimeProvider, StatisticQueryService,
 };
-use lifestats_core::app_context::{build_application, AppContext};
-use lifestats_core::statistics::get_time_spans_metadata;
+use lifestats_application::{StatisticMetadata, StatisticRepository};
 use std::sync::Arc;
-use std::time::Duration as StdDuration;
 use tokio::select;
-use transfer_objects::statistic_id::StatisticId;
 
-async fn run_stopwatch<I: UserInterface>(
-    app_context: AppContext,
+async fn run_stopwatch<I, R>(
+    statistic_repository: Arc<R>,
     ui: &mut I,
     metadata: StatisticMetadata,
-) -> Result<()> {
-    // Create HeartbeatSession directly using the new application service
+) -> Result<()>
+where
+    I: UserInterface,
+    R: StatisticRepository + Send + Sync + 'static,
+{
     let mut session = HeartbeatSession::new(
         metadata.id(),
-        app_context.statistic_repository.clone(),
+        statistic_repository,
         Arc::new(RealTimeProvider),
         HeartbeatConfig {
-            idle_timeout: chrono::Duration::days(1), // Long timeout for manual stopwatch
+            idle_timeout: chrono::Duration::days(1),
             flush_interval: chrono::Duration::minutes(1),
         },
     );
@@ -39,7 +33,7 @@ async fn run_stopwatch<I: UserInterface>(
     let mut ui_rx = ui.run_event_loop()?;
 
     ui.show_stopwatch_header(&metadata)?;
-    session.beat(); // Start the session
+    session.beat();
 
     loop {
         select! {
@@ -77,20 +71,23 @@ async fn run_stopwatch<I: UserInterface>(
     Ok(())
 }
 
-fn ask_for_valid_statistic<I: UserInterface>(
-    app_context: &AppContext,
+fn ask_for_valid_statistic<I, R>(
+    query_service: &StatisticQueryService<R>,
     ui: &mut I,
-) -> Result<Option<StatisticMetadata>> {
-    let time_spans_statistics = get_time_spans_metadata(app_context)?;
+) -> Result<Option<StatisticMetadata>>
+where
+    I: UserInterface,
+    R: StatisticRepository + Send + Sync + 'static,
+{
+    let time_spans_statistics = query_service.get_time_spans_metadata()?;
 
     loop {
         let user_input = ui.show_choose_statistic_dialog(&time_spans_statistics)?;
 
         match user_input {
             UserInput::Number(id) => {
-                let stat_id = StatisticId(id);
-                if let Some(index) = time_spans_statistics.iter().position(|s| s.id() == stat_id) {
-                    return Ok(Some(Vec::from(time_spans_statistics).swap_remove(index)));
+                if let Some(stat) = time_spans_statistics.iter().find(|s| s.id().0 == id) {
+                    return Ok(Some(stat.clone()));
                 } else {
                     ui.show_invalid_id_message(id)?;
                 }
@@ -102,15 +99,22 @@ fn ask_for_valid_statistic<I: UserInterface>(
     }
 }
 
-async fn run<I: UserInterface>(app_context: AppContext, mut ui: I) -> Result<()> {
+async fn run<I, R>(
+    query_service: Arc<StatisticQueryService<R>>,
+    statistic_repository: Arc<R>,
+    mut ui: I,
+) -> Result<()>
+where
+    I: UserInterface,
+    R: StatisticRepository + Send + Sync + 'static,
+{
     ui.init()?;
 
-    // Properly close the UI if an error occurs
     let result = async {
-        let stat_metadata = ask_for_valid_statistic(&app_context, &mut ui)?;
+        let stat_metadata = ask_for_valid_statistic(&query_service, &mut ui)?;
 
         if let Some(metadata) = stat_metadata {
-            run_stopwatch(app_context, &mut ui, metadata).await?;
+            run_stopwatch(statistic_repository, &mut ui, metadata).await?;
         }
 
         Ok(())
@@ -123,7 +127,8 @@ async fn run<I: UserInterface>(app_context: AppContext, mut ui: I) -> Result<()>
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let app_context = build_application()?;
+    env_logger::init();
+    let app = lifestats_bootstrap::build_services()?;
     let user_interface = TerminalInterface::new();
-    run(app_context, user_interface).await
+    run(app.query_service, app.statistic_repository, user_interface).await
 }

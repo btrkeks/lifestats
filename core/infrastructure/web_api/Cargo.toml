@@ -7,6 +7,7 @@ edition = "2021"
 lifestats-application = { path = "../../application" }
 lifestats-core = { path = "../../core" }
 plot-domain = { path = "../../plot-domain" }
+lifestats-bootstrap = { path = "../../../lifestats-bootstrap" }
 
 # The concrete persistence implementation needed at the composition root
 lifestats-persistence = { path = "../persistence", features = ["testing"] }

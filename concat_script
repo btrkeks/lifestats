@@ -164,6 +164,7 @@ project_directories = [
     # "./core/core/",
     "./core/application/",
     "./core/infrastructure/web_api/",
+    "./lifestats-bootstrap/",
     # "./ui/web-ui/",
     # "./docs/ARCHITECTURE.md",
     # "./README.md",

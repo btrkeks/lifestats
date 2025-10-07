@@ -6,9 +6,8 @@ use crossterm::{
     execute, queue,
     style::Print,
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
-    ExecutableCommand,
 };
-use domain_models::statistic::statistic_metadata::StatisticMetadata;
+use lifestats_application::StatisticMetadata;
 use std::io::{self, Write};
 use tokio::sync::mpsc;
 

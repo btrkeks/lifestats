@@ -6,11 +6,7 @@ edition = "2021"
 [dependencies]
 # Core crates - refactored
 lifestats-application = { path = "../../core/application" }
-lifestats-core = { path = "../../core/core" }
-
-# Old dependencies (to be migrated gradually)
-application_service = { path = "../../logging_core/core/application_service" }
-transfer_objects = { path = "../../transfer_objects" }
+lifestats-bootstrap = { path = "../../lifestats-bootstrap" }
 
 # External
 crossterm = "0.28.1"

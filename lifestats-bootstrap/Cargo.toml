@@ -1,0 +1,19 @@
+[package]
+name = "lifestats-bootstrap"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Application Layer (for the service definitions)
+lifestats-application = { path = "../core/application" }
+lifestats-core = { path = "../core/core" }
+plot-domain = { path = "../core/plot-domain" }
+events = { path = "../events/event_impl" }
+
+# Concrete Infrastructure Adapters
+lifestats-persistence = { path = "../core/infrastructure/persistence" }
+lifestats-plotting = { path = "../core/infrastructure/plotting" }
+
+# Utilities
+anyhow = { workspace = true }
+dotenvy = "0.15"

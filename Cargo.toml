@@ -8,11 +8,8 @@ members = [
     "core/infrastructure/plotting",
     "core/infrastructure/web_api",
     "core/plot-domain",
-    "client"
-]
-
-exclude = [
-    "logger_applications/*"
+    "./logger_applications/stopwatch_logger/",
+    "lifestats-bootstrap",
 ]
 
 [workspace.dependencies]

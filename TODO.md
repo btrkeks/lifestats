@@ -1,109 +1,75 @@
-# `TODO.md`
+# Refactor: Consolidate Logging Logic into `LoggingService`
 
-This document outlines the implementation plan for the new Web UI, focusing first on the required API enhancements and then on the frontend application itself.
-
-## Phase 1: Enhance the Backend Web API
-
-Our first priority is to create a robust and comprehensive JSON API within the `lifestats-web-api` crate. This API will serve as the single source of truth for the new frontend, ensuring a clean separation of concerns.
-
-### `lifestats-application`: New Use Cases
-
-The existing services are query- and command-oriented, which is excellent. We need to add capabilities for creating and managing the `Statistic` entities themselves.
-
-- **1. Implement `StatisticManagementService`:**
-  - **Action:** In `core/application/src/use_cases/`, create a new module `statistic_management_service.rs`.
-  - **Content:** This service will handle the creation, updating, and deletion of statistic metadata.
-  - **Methods:**
-    - `create_statistic(command: CreateStatisticCommand) -> ApplicationResult<StatisticMetadata>`
-    - `update_statistic(command: UpdateStatisticCommand) -> ApplicationResult<()>`
-    - `delete_statistic(command: DeleteStatisticCommand) -> ApplicationResult<()>`
-  - **Rationale:** This encapsulates the business logic for managing statistics in a dedicated use case, keeping it separate from logging or querying. It continues our pattern of command-oriented services.
-  - **Commands:** Define the `CreateStatisticCommand`, `UpdateStatisticCommand`, and `DeleteStatisticCommand` structs. These will contain primitives like `name: String`, `category: String`, `statistic_type: String`, etc., which the service will translate into domain objects.
-
-### `lifestats-web-api`: New API Endpoints
-
-We will now expose the new use cases and existing goal management features via RESTful endpoints.
-
-- **1. Create Statistic Management Endpoints:**
-  - **Action:** In `core/infrastructure/web_api/src/routes/statistics.rs`, add the following handlers.
-  - **Endpoints:**
-    - `POST /statistics` -> `create_statistic()`: Accepts a JSON body, validates it, creates a `CreateStatisticCommand`, calls the `StatisticManagementService`, and returns `201 Created` with the new statistic's metadata.
-    - `PUT /statistics/:id` -> `update_statistic()`: Accepts a JSON body for updating a statistic's metadata, creates an `UpdateStatisticCommand`, and returns `204 No Content`.
-    - `DELETE /statistics/:id` -> `delete_statistic()`: Creates a `DeleteStatisticCommand` and returns `204 No Content`.
-  - **Rationale:** These endpoints provide the necessary CRUD operations for the UI to manage the list of available statistics.
-
-- **2. Create Comprehensive Goal Management Endpoints:**
-  - **Action:** In `core/infrastructure/web_api/src/routes/`, create a new `goals.rs` module and wire it into the router.
-  - **Endpoints:**
-    - `GET /statistics/:id/goals/default` -> `get_default_goal()`: Fetches and returns the current default goal for a statistic.
-    - `PUT /statistics/:id/goals/default` -> `set_default_goal()`: Accepts a JSON body with goal data (e.g., `{ "target": 100 }`), calls the `GoalManagementService`, and returns `204 No Content`.
-    - `DELETE /statistics/:id/goals/default` -> `delete_default_goal()`: Clears the default goal for a statistic.
-    - `GET /statistics/:id/goals/:date` -> `get_daily_goal()`: Fetches a specific goal override for a given date.
-    - `PUT /statistics/:id/goals/:date` -> `set_daily_goal()`: Sets or updates a goal override for a specific date.
-    - `DELETE /statistics/:id/goals/:date` -> `delete_daily_goal()`: Deletes a goal override for a specific date.
-  - **Rationale:** The UI needs granular control over both default and daily goals. Exposing these actions via a RESTful API makes the frontend logic simple and declarative.
-
-- **3. Create Data Transfer Objects (DTOs):**
-  - **Action:** In `core/infrastructure/web_api/src/dto/`, create `statistic.rs` and `goal.rs` to define the JSON request/response structures for the new endpoints.
-  - **Content:** Use `serde` for serialization and `validator` for incoming request validation. This keeps validation logic at the boundary of the system, protecting the application services from invalid data.
-  - **Example:**
-    ```rust
-    // In dto/statistic.rs
-    #[derive(Deserialize, Validate)]
-    pub struct CreateStatisticRequest {
-        #[validate(length(min = 1))]
-        pub name: String,
-        #[validate(length(min = 1))]
-        pub category: String,
-        pub statistic_type: String, // e.g., "IntegerAmount", "TimeSpans"
-    }
-    ```
-  - **Rationale:** DTOs are a critical part of the Adapter pattern. They decouple the API's public contract from the internal domain models, allowing them to evolve independently.
+**Objective:** Finalize the service layer refactoring by migrating all logging-related logic into the `LoggingService` and removing the obsolete `log.rs` file. This will establish a single, consistent pattern for all application use cases and eliminate architectural remnants.
 
 ---
 
-## Phase 2: Frontend SPA Implementation
+## 1. Eliminate Orphaned Logging Functions
 
-With a capable API in place, we can now build the frontend. This will live in a new top-level directory, `ui/`, sibling to `core/` and `docs/`.
+The file `core/application/src/log.rs` contains outdated logic that bypasses our service architecture. We will migrate its functionality into the `LoggingService` where it belongs.
 
-- **1. Initialize the Next.js Project:**
-  - **Action:** Use the official Next.js setup tool to create a new project with TypeScript and Tailwind CSS.
-    ```bash
-    npx create-next-app@latest ui
-    # When prompted, choose:
-    # - TypeScript: Yes
-    # - ESLint: Yes
-    # - Tailwind CSS: Yes
-    # - `src/` directory: Yes
-    # - App Router: Yes
-    ```
-  - **Rationale:** This command scaffolds a complete, production-ready frontend project with all the recommended tooling, saving significant setup time.
+### 1.1. Enhance `LoggingService` with Type-Safe Methods
 
-- **2. Structure the Frontend Project:**
-  - **Action:** Inside `ui/src/`, create the following directory structure.
-    ```
-    ui/src/
-    ├── app/              # Next.js App Router pages
-    ├── components/       # Reusable UI components (buttons, inputs, etc.)
-    ├── features/         # Components and hooks for specific features
-    │   └── goals/
-    │       ├── components/  # e.g., GoalEditorForm.tsx
-    │       └── hooks/       # e.g., useGoals.ts (data fetching logic)
-    ├── lib/              # API client, utility functions
-    └── types/            # TypeScript type definitions
-    ```
-  - **Rationale:** A feature-sliced structure is highly maintainable. It co-locates all the code related to a single feature (like "goal management"), making it easier to understand and modify than a role-based structure (e.g., all components in one folder, all hooks in another).
+- **Task:** Replicate the functionality of the old `log_time_frame` free-standing function as a new, type-safe method on `LoggingService`. This service already has a method with this name, but the one in `log.rs` is slightly different. We need to ensure the service method is robust and complete.
+- **Why:** Application logic must reside within services. Providing a type-safe method (`log_time_frame` which takes `NaiveTime`) is preferable to a string-based one (`log_value` which takes a `value_str`) for internal system operations, as it prevents an entire class of parsing errors.
+- **Action:**
+  1.  Open `core/application/src/use_cases/logging_service.rs`.
+  2.  Review the existing `log_time_frame` method. It already correctly implements the required logic (fetching the domain entity, creating the `TimeFrame`, calculating the new value, and saving). Verify that its logic is complete and matches the intent of the old function.
+  3.  Ensure the `log_time_frame` method correctly uses the injected `statistic_repository` and `event_publisher` from the `self` context. _The current implementation in the file dump is already excellent and serves as a perfect model._
 
-- **3. Implement the API Client:**
-  - **Action:** In `ui/src/lib/api.ts`, create a simple, typed API client using `fetch` or a library like `axios`. Define functions that correspond to our new backend endpoints.
-  - **Action:** In `ui/src/types/index.ts`, define TypeScript interfaces that match the API's DTOs (e.g., `StatisticMetadata`, `Goal`).
-  - **Rationale:** Centralizing API communication makes the code DRY and easy to debug. Typing the responses ensures that the rest of the application knows what data shape to expect from the backend.
+### 1.2. Consolidate String-Based Logging
 
-- **4. Implement the Goals Management Page:**
-  - **Action:** Create the main page component in `ui/src/app/statistics/[id]/goals/page.tsx`.
-  - **Action:** In `ui/src/features/goals/hooks/useGoals.ts`, use **TanStack Query** (`useQuery`, `useMutation`) to fetch and update goal data. This hook will encapsulate all the logic for interacting with the goals API.
-  - **Action:** In `ui/src/features/goals/components/`, build the UI components:
-    - `DefaultGoalEditor.tsx`: A form to view and edit the default goal.
-    - `DailyGoalOverride.tsx`: A calendar or date picker to select a day and a form to set a goal for that day.
-    - `GoalList.tsx`: A component to display existing daily overrides.
-  - **Rationale:** Using TanStack Query will drastically simplify state management by handling caching, loading states, and error states automatically. Building small, focused components makes the UI easier to test and reason about.
+- **Task:** Ensure the polymorphic `log_value` method on `LoggingService` fully covers the use cases of the old `log_statistic` function.
+- **Why:** The `log_value` method is the public entry point for any external adapter (like a CLI or API) that works with string inputs. It acts as the "anti-corruption layer" that translates raw data into domain concepts.
+- **Action:**
+  1.  In `core/application/src/use_cases/logging_service.rs`, review the `log_value` method.
+  2.  Compare its logic to the old `log_statistic` function in `log.rs`. The service method is far more robust: it correctly fetches the entity, uses pure domain logic for calculation (`calculate_new_log_value`), and handles persistence. The existing implementation is superior and already replaces the old function.
+
+### 1.3. Delete the Obsolete `log.rs` File
+
+- **Task:** Remove the now-redundant `log.rs` file and update the module tree.
+- **Why:** This file represents an obsolete architectural pattern. Deleting it prevents confusion and ensures all developers use the `LoggingService` as the single source of truth for logging operations.
+- **Action:**
+  1.  **Delete the file**: `core/application/src/log.rs`.
+  2.  Search the entire codebase for any remaining `use` statements that import from `crate::log` or `lifestats_application::log` and remove them. These should not exist if the `stopwatch_logger` and other adapters were refactored correctly, but it's important to verify.
+
+## 2. Refine Application Crate Structure
+
+With the old files removed, let's ensure the `lifestats-application` crate is clean and well-organized.
+
+### 2.1. Remove `app_context.rs`
+
+- **Task:** Delete the now-defunct `app_context.rs` file.
+- **Why:** The `AppContext` struct was part of the old dependency injection pattern. It has been superseded by the `Application` struct in the `lifestats-bootstrap` crate. Removing it finalizes our transition to the new architecture.
+- **Action:**
+  1.  If you have not already, **delete the file**: `core/application/src/app_context.rs`.
+  2.  This file might already be gone or commented out from the previous refactor. This step ensures it is fully removed.
+
+### 2.2. Clean up `lib.rs` Public Exports
+
+- **Task:** Review the public exports (`pub use`) in `lifestats-application/src/lib.rs` to ensure they expose the correct and necessary APIs to the outside world (the adapters).
+- **Why:** A crate's `lib.rs` file defines its public API. It should be intentional and clean. We should primarily export the service structs and any necessary command/DTO structs.
+- **Action:**
+  1.  Open `core/application/src/lib.rs`.
+  2.  Ensure it exports the application services and any other types that adapters need to interact with. A good set of exports would look like this:
+
+  ```rust
+  // In: core/application/src/lib.rs
+
+  pub mod error;
+  pub mod use_cases;
+  // helpers module is internal, no need to make it public.
+
+  // Publicly export the services themselves so adapters can use them.
+  pub use use_cases::{
+      GoalManagementService, LoggingService, PlottingService, StatisticManagementService,
+      StatisticQueryService, HeartbeatSession, HeartbeatConfig, HeartbeatUpdate, RealTimeProvider,
+      // etc.
+  };
+
+  // Publicly export key types that adapters will need.
+  pub use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+  pub use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+  ```
+
+After completing these steps, the `lifestats-application` crate will be a clean, consistent, and well-defined layer. The entire system will adhere strictly to our target architecture.

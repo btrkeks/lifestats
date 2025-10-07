@@ -1,5 +1,5 @@
 use anyhow::Result;
-use domain_models::statistic::statistic_metadata::StatisticMetadata;
+use lifestats_application::StatisticMetadata;
 use tokio::sync::mpsc;
 
 pub trait UserInterface: Send + Sync {
