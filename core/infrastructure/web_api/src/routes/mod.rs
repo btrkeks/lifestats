@@ -54,6 +54,7 @@ where
         )
         // Plot endpoints
         .route("/plots/:id/image", get(plots::get_plot_image))
+        .route("/plots/:id/data", get(plots::get_plot_data))
         // Integration endpoints
         .route(
             "/integrations/:source",
