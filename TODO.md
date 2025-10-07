@@ -1,75 +1,179 @@
-# Refactor: Consolidate Logging Logic into `LoggingService`
+# `TODO.md`
 
-**Objective:** Finalize the service layer refactoring by migrating all logging-related logic into the `LoggingService` and removing the obsolete `log.rs` file. This will establish a single, consistent pattern for all application use cases and eliminate architectural remnants.
+## Frontend: Implement "Dashboard-First" Goal Editing
+
+**Objective:** Replace the current ID-based goal editing page with a user-friendly dashboard. This new interface will display all statistics as interactive cards, allowing users to manage goals in a modal window directly from the context of the statistic they wish to modify.
+
+This refactor improves user experience by removing the need for users to know statistic IDs and creates a more intuitive, centralized management view.
 
 ---
 
-## 1. Eliminate Orphaned Logging Functions
+### Phase 1: Build the Core Dashboard UI (Read-Only)
 
-The file `core/application/src/log.rs` contains outdated logic that bypasses our service architecture. We will migrate its functionality into the `LoggingService` where it belongs.
+#### 1. Create the New Dashboard Page Route
 
-### 1.1. Enhance `LoggingService` with Type-Safe Methods
+- **Action:** Create the main page file for our new dashboard. This component will act as the "container" or "smart" component, responsible for fetching data and managing the application's state.
+- **File:** `src/app/dashboard/page.tsx`
+- **Details:**
+  - Create a basic functional component that renders a heading like "Statistics Dashboard".
+  - This file will be expanded upon in subsequent steps.
 
-- **Task:** Replicate the functionality of the old `log_time_frame` free-standing function as a new, type-safe method on `LoggingService`. This service already has a method with this name, but the one in `log.rs` is slightly different. We need to ensure the service method is robust and complete.
-- **Why:** Application logic must reside within services. Providing a type-safe method (`log_time_frame` which takes `NaiveTime`) is preferable to a string-based one (`log_value` which takes a `value_str`) for internal system operations, as it prevents an entire class of parsing errors.
-- **Action:**
-  1.  Open `core/application/src/use_cases/logging_service.rs`.
-  2.  Review the existing `log_time_frame` method. It already correctly implements the required logic (fetching the domain entity, creating the `TimeFrame`, calculating the new value, and saving). Verify that its logic is complete and matches the intent of the old function.
-  3.  Ensure the `log_time_frame` method correctly uses the injected `statistic_repository` and `event_publisher` from the `self` context. _The current implementation in the file dump is already excellent and serves as a perfect model._
+#### 2. Create the `StatisticCard` Presentational Component
 
-### 1.2. Consolidate String-Based Logging
+- **Action:** Create a new, reusable "dumb" component that is only responsible for displaying the data for a single statistic. It will receive all its data and behavior via props.
+- **File:** `src/features/statistics/components/StatisticCard.tsx`
+- **Contract:** Implement the component with the following props interface and structure:
 
-- **Task:** Ensure the polymorphic `log_value` method on `LoggingService` fully covers the use cases of the old `log_statistic` function.
-- **Why:** The `log_value` method is the public entry point for any external adapter (like a CLI or API) that works with string inputs. It acts as the "anti-corruption layer" that translates raw data into domain concepts.
-- **Action:**
-  1.  In `core/application/src/use_cases/logging_service.rs`, review the `log_value` method.
-  2.  Compare its logic to the old `log_statistic` function in `log.rs`. The service method is far more robust: it correctly fetches the entity, uses pure domain logic for calculation (`calculate_new_log_value`), and handles persistence. The existing implementation is superior and already replaces the old function.
+  ```typescript
+  import type { StatisticMetadata } from '@/types';
 
-### 1.3. Delete the Obsolete `log.rs` File
+  interface StatisticCardProps {
+    statistic: StatisticMetadata;
+    onManageGoal: () => void; // A callback function to be triggered on button click
+  }
 
-- **Task:** Remove the now-redundant `log.rs` file and update the module tree.
-- **Why:** This file represents an obsolete architectural pattern. Deleting it prevents confusion and ensures all developers use the `LoggingService` as the single source of truth for logging operations.
-- **Action:**
-  1.  **Delete the file**: `core/application/src/log.rs`.
-  2.  Search the entire codebase for any remaining `use` statements that import from `crate::log` or `lifestats_application::log` and remove them. These should not exist if the `stopwatch_logger` and other adapters were refactored correctly, but it's important to verify.
-
-## 2. Refine Application Crate Structure
-
-With the old files removed, let's ensure the `lifestats-application` crate is clean and well-organized.
-
-### 2.1. Remove `app_context.rs`
-
-- **Task:** Delete the now-defunct `app_context.rs` file.
-- **Why:** The `AppContext` struct was part of the old dependency injection pattern. It has been superseded by the `Application` struct in the `lifestats-bootstrap` crate. Removing it finalizes our transition to the new architecture.
-- **Action:**
-  1.  If you have not already, **delete the file**: `core/application/src/app_context.rs`.
-  2.  This file might already be gone or commented out from the previous refactor. This step ensures it is fully removed.
-
-### 2.2. Clean up `lib.rs` Public Exports
-
-- **Task:** Review the public exports (`pub use`) in `lifestats-application/src/lib.rs` to ensure they expose the correct and necessary APIs to the outside world (the adapters).
-- **Why:** A crate's `lib.rs` file defines its public API. It should be intentional and clean. We should primarily export the service structs and any necessary command/DTO structs.
-- **Action:**
-  1.  Open `core/application/src/lib.rs`.
-  2.  Ensure it exports the application services and any other types that adapters need to interact with. A good set of exports would look like this:
-
-  ```rust
-  // In: core/application/src/lib.rs
-
-  pub mod error;
-  pub mod use_cases;
-  // helpers module is internal, no need to make it public.
-
-  // Publicly export the services themselves so adapters can use them.
-  pub use use_cases::{
-      GoalManagementService, LoggingService, PlottingService, StatisticManagementService,
-      StatisticQueryService, HeartbeatSession, HeartbeatConfig, HeartbeatUpdate, RealTimeProvider,
-      // etc.
-  };
-
-  // Publicly export key types that adapters will need.
-  pub use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-  pub use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+  export function StatisticCard({ statistic, onManageGoal }: StatisticCardProps) {
+    // TODO: Implement the JSX for the card layout.
+    // It should display statistic.name and statistic.category.
+    // It must include a button that calls `onManageGoal` when clicked.
+    return (
+      <div className="p-4 bg-white rounded-lg shadow-md">
+        <h3>{statistic.name}</h3>
+        <p>{statistic.category}</p>
+        <button onClick={onManageGoal}>Manage Goal</button>
+      </div>
+    );
+  }
   ```
 
-After completing these steps, the `lifestats-application` crate will be a clean, consistent, and well-defined layer. The entire system will adhere strictly to our target architecture.
+#### 3. Create the `StatisticGrid` Presentational Component
+
+- **Action:** Create a component that arranges multiple `StatisticCard` components in a grid layout. This component is also "dumb" and simply maps data to child components.
+- **File:** `src/features/statistics/components/StatisticGrid.tsx`
+- **Contract:** Implement the component to accept a list of statistics and pass the `onManageGoal` callback down to each card.
+
+  ```typescript
+  import type { StatisticMetadata } from '@/types';
+  import { StatisticCard } from './StatisticCard';
+
+  interface StatisticGridProps {
+    statistics: StatisticMetadata[];
+    onManageGoal: (statistic: StatisticMetadata) => void;
+  }
+
+  export function StatisticGrid({ statistics, onManageGoal }: StatisticGridProps) {
+    // TODO: Implement the grid layout (e.g., using Tailwind CSS).
+    // Map over the `statistics` array and render a `StatisticCard` for each one.
+    // The `key` should be `stat.id`.
+    // The `onManageGoal` prop for the card should be `() => onManageGoal(stat)`.
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {statistics.map(stat => (
+          <StatisticCard
+            key={stat.id}
+            statistic={stat}
+            onManageGoal={() => onManageGoal(stat)}
+          />
+        ))}
+      </div>
+    );
+  }
+  ```
+
+---
+
+### Phase 2: Integrate Data and Interactivity
+
+#### 4. Implement Data Fetching and State Management on the Dashboard Page
+
+- **Action:** Turn the static `DashboardPage` into a dynamic container that fetches live data and prepares for interactivity.
+- **File:** `src/app/dashboard/page.tsx`
+- **Details:**
+  1.  **Data Fetching:** Use the `useQuery` hook from `@tanstack/react-query` to call the `getAllStatistics` API function.
+  2.  **State Management:** Introduce a `useState` hook to manage which statistic is currently selected for editing. The initial state should be `null`.
+      ```typescript
+      const [editingStatistic, setEditingStatistic] =
+        useState<StatisticMetadata | null>(null);
+      ```
+  3.  **Handlers:** Create a handler function `handleOpenModal` that takes a `StatisticMetadata` object and sets it as the `editingStatistic`.
+  4.  **Integration:** Render the `StatisticGrid` component, passing the fetched `statistics` data and the `handleOpenModal` handler as props. Implement loading and error states.
+
+#### 5. Create the `GoalEditorModal` Wrapper Component
+
+- **Action:** Create a new component that provides the modal UI and _wraps our existing goal editor components_. This demonstrates the power of component reuse.
+- **File:** `src/features/goals/components/GoalEditorModal.tsx`
+- **Contract:** The component will receive the selected statistic and a close handler as props.
+
+  ```typescript
+  import type { StatisticMetadata } from '@/types';
+  import { DefaultGoalEditor } from './DefaultGoalEditor';
+  import { DailyGoalOverride } from './DailyGoalOverride';
+
+  interface GoalEditorModalProps {
+    statistic: StatisticMetadata;
+    onClose: () => void;
+  }
+
+  export function GoalEditorModal({ statistic, onClose }: GoalEditorModalProps) {
+    // TODO: Implement the modal structure (backdrop, main container, header).
+    // The header should contain the statistic name and a close button that calls `onClose`.
+    // The modal body should render the *existing* `DefaultGoalEditor` and `DailyGoalOverride`
+    // components, passing `statistic.id` to them as a prop.
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div className="bg-gray-50 rounded-lg w-full max-w-4xl p-6">
+          {/* ... Modal Header ... */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <DefaultGoalEditor statisticId={statistic.id} />
+            <DailyGoalOverride statisticId={statistic.id} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ```
+
+#### 6. Integrate the Modal into the Dashboard Page
+
+- **Action:** Wire up the `GoalEditorModal` to the `DashboardPage` so it appears and disappears based on the `editingStatistic` state.
+- **File:** `src/app/dashboard/page.tsx`
+- **Details:**
+  1.  **Handler:** Create a `handleCloseModal` function that sets `editingStatistic` back to `null`.
+  2.  **Conditional Rendering:** Use a conditional expression to render the `GoalEditorModal` only when `editingStatistic` is not `null`.
+      ```jsx
+      {
+        editingStatistic && (
+          <GoalEditorModal
+            statistic={editingStatistic}
+            onClose={handleCloseModal}
+          />
+        );
+      }
+      ```
+
+---
+
+### Phase 3: Cleanup and Finalization
+
+#### 7. Update Application Navigation
+
+- **Action:** Update the main landing page to link to our new dashboard instead of the old demo.
+- **File:** `src/app/page.tsx`
+- **Details:** Find the `<Link>` component pointing to `/demo/goals` and change its `href` to `/dashboard`.
+
+#### 8. Remove Obsolete Code
+
+- **Action:** Delete the old goal management page to keep the codebase clean and avoid confusion.
+- **File:** `src/app/demo/goals/page.tsx`
+- **Details:** Delete the file and its parent `goals` directory (`src/app/demo/goals/`).
+
+#### 9. Final Review
+
+- **Action:** Run the application and perform a full end-to-end test of the new user flow.
+- **Checklist:**
+  - [ ] The dashboard loads and displays all statistics correctly.
+  - [ ] Clicking "Manage Goal" on a card opens the modal.
+  - [ ] The modal correctly displays the goal editors for the selected statistic.
+  - [ ] Setting/deleting both default and daily goals works as expected from within the modal.
+  - [ ] Closing the modal (either via button or backdrop click) returns the user to the dashboard.
+  - [ ] The UI is responsive and looks good on different screen sizes.

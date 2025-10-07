@@ -28,7 +28,7 @@ export function useStatistic(statisticId: number) {
 
 export function useDefaultGoal(
   statisticId: number,
-  statisticType: StatisticType,
+  statisticType: StatisticType | undefined,
 ) {
   return useQuery({
     queryKey: ["goal", statisticId, "default"],
@@ -70,11 +70,11 @@ export function useDeleteDefaultGoal(statisticId: number) {
 export function useDailyGoal(
   statisticId: number,
   date: string,
-  statisticType: StatisticType,
+  statisticType: StatisticType | undefined,
 ) {
   return useQuery({
     queryKey: ["goal", statisticId, date],
-    queryFn: () => getDailyGoal(statisticId, date, statisticType),
+    queryFn: () => getDailyGoal(statisticId, date, statisticType!),
     enabled: !!statisticId && !!date && !!statisticType,
   });
 }

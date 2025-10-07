@@ -468,7 +468,7 @@ mod tests {
         );
 
         // This assertion also verifies the logic by checking the resulting color.
-        // 75 is < 100, so the color should be red. With the bug, the color would be gray [128, 128, 128].
+        // 75 is < 100 and < 90, so the color should be red. With the bug, the color would be white [255, 255, 255].
         assert_eq!(
             point.color,
             [245, 169, 142],

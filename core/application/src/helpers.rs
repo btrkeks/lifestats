@@ -13,24 +13,27 @@ use serde_json::Value;
 
 /// Maps goal achievement percentage to an RGB color tuple
 ///
-/// Color scheme:
-/// - >= 100%: Green [0, 255, 0]
-/// - 90-99%: Yellow [255, 255, 0]
+/// Color scheme (matching legacy colors):
+/// - >= 150%: Gold [255, 215, 0]
+/// - >= 100%: Green [169, 252, 177]
+/// - >= 90%: Orange [255, 174, 113]
 /// - < 90%: Red [245, 169, 142]
-/// - No goal: Gray [128, 128, 128]
+/// - No goal: White [255, 255, 255]
 pub fn percentage_to_color(percentage: Option<Percentage>) -> [u8; 3] {
     match percentage {
         Some(p) => {
             let value = p.as_num();
-            if value >= 100 {
-                [0, 255, 0] // Green - goal achieved or exceeded
+            if value >= 150 {
+                [255, 215, 0] // Gold - exceeded goal significantly
+            } else if value >= 100 {
+                [169, 252, 177] // Green - goal achieved
             } else if value >= 90 {
-                [255, 255, 0] // Yellow - close to goal
+                [255, 174, 113] // Orange - close to goal
             } else {
                 [245, 169, 142] // Red - below goal
             }
         }
-        None => [128, 128, 128], // Gray - no goal set
+        None => [255, 255, 255], // White - no goal set
     }
 }
 
@@ -153,25 +156,51 @@ mod tests {
 
     #[test]
     fn test_percentage_to_color_no_goal() {
-        assert_eq!(percentage_to_color(None), [128, 128, 128]);
+        assert_eq!(percentage_to_color(None), [255, 255, 255]); // White
+    }
+
+    #[test]
+    fn test_percentage_to_color_gold() {
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(150))),
+            [255, 215, 0]
+        ); // Gold
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(200))),
+            [255, 215, 0]
+        ); // Gold
     }
 
     #[test]
     fn test_percentage_to_color_achieved() {
-        assert_eq!(percentage_to_color(Some(Percentage::new(100))), [0, 255, 0]);
-        assert_eq!(percentage_to_color(Some(Percentage::new(150))), [0, 255, 0]);
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(100))),
+            [169, 252, 177]
+        ); // Green
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(120))),
+            [169, 252, 177]
+        ); // Green
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(149))),
+            [169, 252, 177]
+        ); // Green (just below gold)
     }
 
     #[test]
     fn test_percentage_to_color_close() {
         assert_eq!(
             percentage_to_color(Some(Percentage::new(90))),
-            [255, 255, 0]
-        );
+            [255, 174, 113]
+        ); // Orange
         assert_eq!(
             percentage_to_color(Some(Percentage::new(95))),
-            [255, 255, 0]
-        );
+            [255, 174, 113]
+        ); // Orange
+        assert_eq!(
+            percentage_to_color(Some(Percentage::new(99))),
+            [255, 174, 113]
+        ); // Orange
     }
 
     #[test]
@@ -179,14 +208,14 @@ mod tests {
         assert_eq!(
             percentage_to_color(Some(Percentage::new(0))),
             [245, 169, 142]
-        );
+        ); // Red
         assert_eq!(
             percentage_to_color(Some(Percentage::new(50))),
             [245, 169, 142]
-        );
+        ); // Red
         assert_eq!(
             percentage_to_color(Some(Percentage::new(89))),
             [245, 169, 142]
-        );
+        ); // Red
     }
 }

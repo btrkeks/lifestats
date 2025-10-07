@@ -18,10 +18,10 @@ export default function Home() {
               Set and manage default goals or daily overrides for your statistics
             </p>
             <Link
-              href="/demo/goals"
+              href="/dashboard"
               className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
-              Try Goal Manager Demo
+              Open Dashboard
             </Link>
           </div>
 
