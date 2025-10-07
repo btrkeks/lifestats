@@ -3,7 +3,6 @@ aigen.sh
 target
 .idea
 .env
-concat_script
 project_dump.txt
 /generate_graph.sh
 /graph.png

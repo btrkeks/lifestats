@@ -67,4 +67,7 @@ pub trait StatisticRepository {
         goal: serde_json::Value,
     ) -> Result<(), RepositoryError>;
     fn delete_default_goal(&self, id: StatisticId) -> Result<(), RepositoryError>;
+
+    // --- Metadata Deletion ---
+    fn delete_metadata(&self, id: StatisticId) -> Result<(), RepositoryError>;
 }

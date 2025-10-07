@@ -225,6 +225,32 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(())
     }
 
+    fn delete_metadata(&self, id: StatisticId) -> Result<(), RepositoryError> {
+        let mut conn = self.connection()?;
+
+        // Delete in a transaction to ensure all related data is removed
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            // Delete logging data for this statistic
+            diesel::delete(logging_data::table.filter(logging_data::statistic_id.eq(id.0 as i32)))
+                .execute(conn)?;
+
+            // Delete goals for this statistic
+            diesel::delete(goals::table.filter(goals::statistic_id.eq(id.0 as i32)))
+                .execute(conn)?;
+
+            // Delete default goal for this statistic
+            diesel::delete(default_goals::table.find(id.0 as i32)).execute(conn)?;
+
+            // Finally, delete the statistic itself
+            diesel::delete(statistics::table.find(id.0 as i32)).execute(conn)?;
+
+            Ok(())
+        })
+        .map_err(diesel_to_repository_error)?;
+
+        Ok(())
+    }
+
     fn find_log_value(
         &self,
         id: StatisticId,

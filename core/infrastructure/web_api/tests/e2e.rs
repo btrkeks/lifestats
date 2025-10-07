@@ -10,6 +10,7 @@ use lifestats_application::use_cases::{
     integration::{AnkiBundleFactory, BundleFactory, IntegrationService},
     logging_service::LoggingService,
     plotting_service::PlottingService,
+    statistic_management_service::StatisticManagementService,
     statistic_query_service::StatisticQueryService,
 };
 use lifestats_core::shared::ids::StatisticId;
@@ -85,6 +86,10 @@ async fn test_log_and_get_e2e() -> Result<()> {
         Arc::clone(&repo),
         Arc::clone(&publisher),
     ));
+    let management_service = Arc::new(StatisticManagementService::new(
+        Arc::clone(&repo),
+        Arc::clone(&publisher),
+    ));
     let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&repo)));
     let plotting_service = Arc::new(PlottingService::new(Arc::clone(&repo), plot_repo, renderer));
 
@@ -98,6 +103,7 @@ async fn test_log_and_get_e2e() -> Result<()> {
     let app_state = AppState::new(
         logging_service,
         goal_service,
+        management_service,
         query_service,
         plotting_service,
         integration_service,

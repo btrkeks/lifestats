@@ -1,8 +1,12 @@
+pub mod goals;
 pub mod integrations;
 pub mod plots;
 pub mod statistics;
 
-use axum::{routing::get, routing::post, Router};
+use axum::{
+    routing::{delete, get, post},
+    Router,
+};
 use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
@@ -21,13 +25,33 @@ where
     I: IntegrationServiceTrait + 'static,
 {
     Router::new()
-        .route("/statistics", get(statistics::get_all_statistics))
+        // Statistics endpoints
+        .route(
+            "/statistics",
+            get(statistics::get_all_statistics).post(statistics::create_statistic),
+        )
+        .route("/statistics/:id", delete(statistics::delete_statistic))
         .route("/statistics/:id/log/:date", post(statistics::log_value))
         .route(
             "/statistics/:id/log_time_frame/:date",
             post(statistics::log_time_frame),
         )
+        // Goal management endpoints
+        .route(
+            "/statistics/:id/goals/default",
+            get(goals::get_default_goal)
+                .put(goals::set_default_goal)
+                .delete(goals::delete_default_goal),
+        )
+        .route(
+            "/statistics/:id/goals/:date",
+            get(goals::get_daily_goal)
+                .put(goals::set_daily_goal)
+                .delete(goals::delete_daily_goal),
+        )
+        // Plot endpoints
         .route("/plots/:id/image", get(plots::get_plot_image))
+        // Integration endpoints
         .route(
             "/integrations/:source",
             post(integrations::provision_integration),

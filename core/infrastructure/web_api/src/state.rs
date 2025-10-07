@@ -4,6 +4,7 @@ use events::event_port::EventPublisher;
 use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, integration::IntegrationServiceTrait,
     logging_service::LoggingService, plotting_service::PlottingService,
+    statistic_management_service::StatisticManagementService,
     statistic_query_service::StatisticQueryService,
 };
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
@@ -21,6 +22,7 @@ where
 {
     pub logging_service: Arc<LoggingService<R, E>>,
     pub goal_service: Arc<GoalManagementService<R, E>>,
+    pub management_service: Arc<StatisticManagementService<R, E>>,
     pub query_service: Arc<StatisticQueryService<R>>,
     pub plotting_service: Arc<PlottingService<R, P, Rend>>,
     pub integration_service: Arc<I>,
@@ -38,6 +40,7 @@ where
         Self {
             logging_service: Arc::clone(&self.logging_service),
             goal_service: Arc::clone(&self.goal_service),
+            management_service: Arc::clone(&self.management_service),
             query_service: Arc::clone(&self.query_service),
             plotting_service: Arc::clone(&self.plotting_service),
             integration_service: Arc::clone(&self.integration_service),
@@ -56,6 +59,7 @@ where
     pub fn new(
         logging_service: Arc<LoggingService<R, E>>,
         goal_service: Arc<GoalManagementService<R, E>>,
+        management_service: Arc<StatisticManagementService<R, E>>,
         query_service: Arc<StatisticQueryService<R>>,
         plotting_service: Arc<PlottingService<R, P, Rend>>,
         integration_service: Arc<I>,
@@ -63,6 +67,7 @@ where
         Self {
             logging_service,
             goal_service,
+            management_service,
             query_service,
             plotting_service,
             integration_service,

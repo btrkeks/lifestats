@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import os
+
+
+def generate_tree_view(directory, indent="", exclude_dirs=None):
+    """
+    Generates a tree view of the directory structure as a string.
+
+    Args:
+        directory: The root directory for the tree view.
+        indent: A string used for indentation (used recursively).
+        exclude_dirs: A set of directory names to exclude from the tree.
+
+    Returns:
+        A string representing the directory tree structure.
+    """
+    if exclude_dirs is None:
+        exclude_dirs = set()
+
+    tree = ""
+    items = sorted(os.listdir(directory))
+    # Filter out excluded directories
+    items = [item for item in items if item not in exclude_dirs]
+
+    for i, item in enumerate(items):
+        path = os.path.join(directory, item)
+        if i == len(items) - 1:
+            tree += f"{indent}└── {item}\n"
+            sub_indent = indent + "    "
+        else:
+            tree += f"{indent}├── {item}\n"
+            sub_indent = indent + "│   "
+
+        if os.path.isdir(path):
+            tree += generate_tree_view(path, sub_indent, exclude_dirs)
+
+    return tree
+
+
+def concatenate_project_files(
+    project_roots,
+    output_file,
+    extensions=(".py", ".json", ".yaml", ".yml", ".toml", ".md"),
+    exclude_dirs=None,
+):
+    """
+    Traverses multiple project directories, filters files by extension,
+    and concatenates their content into a single output file.
+
+    Args:
+        project_roots: A list of root directories of your projects.
+        output_file: The path to the output file where the concatenated content will be written.
+        extensions: A tuple of file extensions to include.
+        exclude_dirs: A set of directory names to exclude from traversal.
+    """
+    if exclude_dirs is None:
+        exclude_dirs = {
+            "__pycache__",
+            ".venv",
+            "venv",
+            "__pypackages__",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".ruff_cache",
+            "node_modules",
+            "target",
+            ".next",
+            "dist",
+            "build",
+            ".git",
+            "wandb",
+            "checkpoints",
+            "outputs",
+            ".uv",
+            "my_dataset",
+            "vendor",
+        }
+
+    with open(output_file, "w") as outfile:
+        for project_root in project_roots:
+            if os.path.isdir(project_root):
+                # Add tree view of the directory
+                outfile.write(f"// --- Directory Tree for: {project_root} ---\n")
+                outfile.write(
+                    generate_tree_view(project_root, exclude_dirs=exclude_dirs)
+                )
+                outfile.write("\n\n")
+
+                # Add file contents
+                for dirpath, dirnames, filenames in os.walk(project_root):
+                    # Filter out excluded directories
+                    dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
+
+                    for filename in filenames:
+                        if (
+                            filename.endswith(extensions)
+                            and not filename == output_file
+                        ):
+                            filepath = os.path.join(dirpath, filename)
+
+                            # Add a separator with the file path
+                            outfile.write(f"// --- File: {filepath} ---\n")
+
+                            try:
+                                with open(filepath, "r") as infile:
+                                    outfile.write(infile.read())
+                            except Exception as e:
+                                outfile.write(f"Error reading file: {e}\n")
+
+                            outfile.write("\n\n")
+            elif os.path.isfile(project_root):
+                # Handle individual files
+                outfile.write(f"// --- File: {project_root} ---\n")
+                try:
+                    with open(project_root, "r") as infile:
+                        outfile.write(infile.read())
+                except Exception as e:
+                    outfile.write(f"Error reading file: {e}\n")
+                outfile.write("\n\n")
+
+
+project_directories = [
+    "./core/core/",
+    "./core/application/",
+    "./core/infrastructure/web_api/",
+    # "./docs/ARCHITECTURE.md",
+    # "./README.md",
+    # "./logger_applications/AnkiLogger/",
+    # "./logger_applications/stopwatch_logger/",
+    # "./logger_applications/heart_beat_logger/",
+    # "./archive/"
+    # "./core/application/src/use_cases/goal_management_service.rs",
+    # "./core/application/src/use_cases/logging_service.rs",
+    # "./core/domain/src/statistic/any_statistic.rs",
+    # "./core/application/Cargo.toml",
+]
+
+# File extensions relevant for ML/OMR project
+extensions = (
+    ".rs",
+    ".toml",
+    ".sql",
+    ".py",
+    ".json",
+)
+
+output_filename = "project_dump.txt"
+concatenate_project_files(
+    project_directories,
+    output_filename,
+    extensions=extensions,
+)
+
+print(f"Project files concatenated to {output_filename}")

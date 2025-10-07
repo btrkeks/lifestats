@@ -15,7 +15,8 @@ use mockall::mock;
 use crate::helpers::{MockPlotRend, MockPlotRepo, NoOpEventPublisher};
 use lifestats_application::use_cases::{
     goal_management_service::GoalManagementService, logging_service::LoggingService,
-    plotting_service::PlottingService, statistic_query_service::StatisticQueryService,
+    plotting_service::PlottingService, statistic_management_service::StatisticManagementService,
+    statistic_query_service::StatisticQueryService,
 };
 use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
 
@@ -55,6 +56,10 @@ fn mock_app_state_with_integrations(
         Arc::clone(&mock_repo),
         Arc::clone(&publisher),
     ));
+    let management_service = Arc::new(StatisticManagementService::new(
+        Arc::clone(&mock_repo),
+        Arc::clone(&publisher),
+    ));
     let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&mock_repo)));
     let plotting_service = Arc::new(PlottingService::new(
         Arc::clone(&mock_repo),
@@ -65,6 +70,7 @@ fn mock_app_state_with_integrations(
     AppState::new(
         logging_service,
         goal_service,
+        management_service,
         query_service,
         plotting_service,
         mock_integration_service,

@@ -210,6 +210,7 @@ mod tests {
             fn find_default_goal(&self, id: StatisticId) -> Result<Option<Value>, lifestats_core::statistic::ports::error::RepositoryError>;
             fn save_default_goal(&self, id: StatisticId, goal: Value) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
             fn delete_default_goal(&self, id: StatisticId) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
+            fn delete_metadata(&self, id: StatisticId) -> Result<(), lifestats_core::statistic::ports::error::RepositoryError>;
         }
     }
 

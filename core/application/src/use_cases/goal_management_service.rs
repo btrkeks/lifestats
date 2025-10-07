@@ -224,6 +224,17 @@ where
 
         Ok(())
     }
+
+    /// Delete the default goal for a statistic
+    pub fn delete_default_goal(&self, command: DeleteDefaultGoalCommand) -> ApplicationResult<()> {
+        self.statistic_repository
+            .delete_default_goal(command.statistic_id)?;
+
+        self.event_publisher
+            .publish_event_async(Event::GoalUpdated(command.statistic_id));
+
+        Ok(())
+    }
 }
 
 //===========================================================================
@@ -250,6 +261,12 @@ pub struct SetDefaultGoalGenericCommand {
 pub struct DeleteGoalCommand {
     pub statistic_id: StatisticId,
     pub date: NaiveDate,
+}
+
+/// Command for deleting the default goal
+#[derive(Debug, Clone)]
+pub struct DeleteDefaultGoalCommand {
+    pub statistic_id: StatisticId,
 }
 
 #[cfg(test)]

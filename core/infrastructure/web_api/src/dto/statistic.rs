@@ -2,6 +2,26 @@ use lifestats_core::statistic::any_statistic::AnyStatistic;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
+/// Request DTO for creating a new statistic
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateStatisticRequest {
+    #[validate(length(min = 1))]
+    pub name: String,
+    #[validate(length(min = 1))]
+    pub category: String,
+    #[validate(length(min = 1))]
+    pub statistic_type: String, // "IntegerAmount", "Habit", "PointInTime", "TimeSpans", "Summing", "TimeDifference"
+    /// Required for Summing and TimeDifference statistics
+    pub source_statistic_ids: Option<Vec<u32>>,
+}
+
+/// Request DTO for updating a statistic's metadata
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateStatisticRequest {
+    pub name: Option<String>,
+    pub category: Option<String>,
+}
+
 /// Request DTO for logging a value to a statistic
 #[derive(Debug, Deserialize, Validate)]
 pub struct LogValueRequest {

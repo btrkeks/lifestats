@@ -68,6 +68,23 @@ where
             .clone())
     }
 
+    /// Get the default goal for a statistic
+    pub fn get_default_goal(
+        &self,
+        statistic_id: StatisticId,
+    ) -> ApplicationResult<Option<serde_json::Value>> {
+        Ok(self.statistic_repository.find_default_goal(statistic_id)?)
+    }
+
+    /// Get a goal for a specific date
+    pub fn get_goal(
+        &self,
+        statistic_id: StatisticId,
+        date: NaiveDate,
+    ) -> ApplicationResult<Option<serde_json::Value>> {
+        Ok(self.statistic_repository.find_goal(statistic_id, date)?)
+    }
+
     // -------------------------------------------------------
     // TODO: Those don't quite belong here
 

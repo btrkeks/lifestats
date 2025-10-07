@@ -14,7 +14,9 @@ use plot_domain::plot::{renderer::PlotRenderer, repository::PlotRepository};
 use validator::Validate;
 
 use crate::{
-    dto::statistic::{LogTimeFrameRequest, LogValueRequest, StatisticMetadataResponse},
+    dto::statistic::{
+        CreateStatisticRequest, LogTimeFrameRequest, LogValueRequest, StatisticMetadataResponse,
+    },
     error::ApiError,
     state::AppState,
 };
@@ -118,6 +120,72 @@ where
 
     // Execute the command
     app_state.logging_service.log_time_frame(command)?;
+
+    // Return 204 No Content on success
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// POST /statistics - Create a new statistic
+pub async fn create_statistic<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
+    Json(payload): Json<CreateStatisticRequest>,
+) -> Result<(StatusCode, Json<StatisticMetadataResponse>), ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    P: PlotRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::use_cases::statistic_management_service::CreateStatisticCommand;
+
+    // Validate the request payload
+    payload.validate()?;
+
+    // Convert source_statistic_ids from Vec<u32> to Vec<StatisticId>
+    let source_statistic_ids = payload
+        .source_statistic_ids
+        .map(|ids| ids.into_iter().map(StatisticId).collect());
+
+    // Create the command
+    let command = CreateStatisticCommand {
+        name: payload.name,
+        category: payload.category,
+        statistic_type: payload.statistic_type,
+        source_statistic_ids,
+    };
+
+    // Execute the command using the injected service
+    let created_statistic = app_state.management_service.create_statistic(command)?;
+
+    // Convert to response DTO
+    let response = StatisticMetadataResponse::from(&created_statistic);
+
+    // Return 201 Created with the created statistic
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// DELETE /statistics/:id - Delete a statistic
+pub async fn delete_statistic<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+) -> Result<StatusCode, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    P: PlotRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::use_cases::statistic_management_service::DeleteStatisticCommand;
+
+    // Create the command
+    let command = DeleteStatisticCommand {
+        statistic_id: StatisticId(statistic_id),
+    };
+
+    // Execute the command using the injected service
+    app_state.management_service.delete_statistic(command)?;
 
     // Return 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
