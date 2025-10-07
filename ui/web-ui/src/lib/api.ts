@@ -4,7 +4,10 @@ import type {
   CreateStatisticRequest,
   SetGoalRequest,
   GoalResponse,
+  GoalResponseRaw,
+  StatisticType,
 } from '@/types';
+import { parseGoalData } from './schemas';
 
 // Base URL for the API - can be configured via environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -25,6 +28,11 @@ export async function getAllStatistics(): Promise<StatisticMetadata[]> {
   return response.data;
 }
 
+export async function getStatistic(id: number): Promise<StatisticMetadata> {
+  const response = await api.get(`/statistics/${id}`);
+  return response.data;
+}
+
 export async function createStatistic(
   data: CreateStatisticRequest
 ): Promise<StatisticMetadata> {
@@ -37,14 +45,39 @@ export async function deleteStatistic(id: number): Promise<void> {
 }
 
 // ============================================================================
-// Goals API
+// Goals API (Type-Safe with Zod Parsing)
 // ============================================================================
 
+/**
+ * Fetches and parses a default goal with type safety.
+ * Returns null if no goal exists.
+ */
 export async function getDefaultGoal(
-  statisticId: number
+  statisticId: number,
+  statisticType: StatisticType
 ): Promise<GoalResponse | null> {
-  const response = await api.get(`/statistics/${statisticId}/goals/default`);
-  return response.data;
+  try {
+    const response = await api.get<GoalResponseRaw>(
+      `/statistics/${statisticId}/goals/default`
+    );
+
+    if (!response.data || !response.data.goal_data) {
+      return null;
+    }
+
+    // Parse raw data through Zod schemas for type safety
+    const parsedGoalData = parseGoalData(statisticType, response.data.goal_data);
+
+    return {
+      statistic_type: statisticType,
+      goal_data: parsedGoalData,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function setDefaultGoal(
@@ -58,12 +91,37 @@ export async function deleteDefaultGoal(statisticId: number): Promise<void> {
   await api.delete(`/statistics/${statisticId}/goals/default`);
 }
 
+/**
+ * Fetches and parses a daily goal with type safety.
+ * Returns null if no goal exists.
+ */
 export async function getDailyGoal(
   statisticId: number,
-  date: string // YYYY-MM-DD format
+  date: string, // YYYY-MM-DD format
+  statisticType: StatisticType
 ): Promise<GoalResponse | null> {
-  const response = await api.get(`/statistics/${statisticId}/goals/${date}`);
-  return response.data;
+  try {
+    const response = await api.get<GoalResponseRaw>(
+      `/statistics/${statisticId}/goals/${date}`
+    );
+
+    if (!response.data || !response.data.goal_data) {
+      return null;
+    }
+
+    // Parse raw data through Zod schemas for type safety
+    const parsedGoalData = parseGoalData(statisticType, response.data.goal_data);
+
+    return {
+      statistic_type: statisticType,
+      goal_data: parsedGoalData,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function setDailyGoal(

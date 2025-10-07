@@ -4,47 +4,77 @@ export interface StatisticMetadata {
   id: number;
   name: string;
   category: string;
+  statistic_type: StatisticType;
 }
 
-export interface Goal {
-  goal_data: Record<string, string>;
-}
-
-export interface GoalResponse {
-  goal_data: Record<string, unknown>; // JSON value from backend
-}
+// Statistic types matching backend enums
+export type StatisticType =
+  | 'IntegerAmount'
+  | 'Habit'
+  | 'PointInTime'
+  | 'TimeSpans'
+  | 'Summing'
+  | 'TimeDifference';
 
 export interface CreateStatisticRequest {
   name: string;
   category: string;
-  statistic_type: string; // "IntegerAmount" | "Habit" | "PointInTime" | "TimeSpans" | "Summing" | "TimeDifference"
+  statistic_type: StatisticType;
   source_statistic_ids?: number[];
 }
 
-export interface SetGoalRequest {
-  goal_data: Record<string, string>;
+// ============================================================================
+// Goal Data Types - Strongly Typed (for frontend use)
+// ============================================================================
+
+export interface IntegerAmountGoalData {
+  target: number;
+  is_at_least: boolean;
 }
 
-// Specific goal types for type safety
-export interface IntegerAmountGoal {
-  target: string;
-  is_at_least?: string; // "true" or "false"
+export interface HabitGoalData {
+  occurred: boolean;
 }
 
-export interface HabitGoal {
-  occurred: string; // "true" or "false"
-}
-
-export interface PointInTimeGoal {
+export interface PointInTimeGoalData {
   deadline: string; // "HH:MM" or "HH:MM:SS"
 }
 
-export interface TimeSpansGoal {
-  target: string; // JSON string of TimeFrameList
-  efficiency?: string; // "0" to "100"
+export interface TimeSpansGoalData {
+  target: unknown; // TimeFrameList structure - will be JSON
+  efficiency?: number; // 0 to 100
 }
 
-export interface SecondsAmountGoal {
-  target: string; // seconds as string
-  is_at_least?: string; // "true" or "false"
+export interface SecondsAmountGoalData {
+  target: number; // seconds
+  is_at_least: boolean;
+}
+
+// Discriminated union for all possible goal types
+export type GoalData =
+  | { type: 'IntegerAmount'; data: IntegerAmountGoalData }
+  | { type: 'Habit'; data: HabitGoalData }
+  | { type: 'PointInTime'; data: PointInTimeGoalData }
+  | { type: 'TimeSpans'; data: TimeSpansGoalData }
+  | { type: 'Summing'; data: IntegerAmountGoalData } // Same as IntegerAmount
+  | { type: 'TimeDifference'; data: SecondsAmountGoalData };
+
+// ============================================================================
+// API Request/Response Types
+// ============================================================================
+
+// Raw response from backend (before parsing)
+export interface GoalResponseRaw {
+  goal_data: Record<string, unknown>; // JSON value from backend
+}
+
+// Parsed response with type information
+export interface GoalResponse {
+  statistic_type: StatisticType;
+  goal_data: GoalData;
+}
+
+// Request to set a goal (must match backend string format)
+export interface SetGoalRequest {
+  goal_data: Record<string, string>;
 }

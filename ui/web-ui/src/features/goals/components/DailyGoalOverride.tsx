@@ -2,33 +2,37 @@
 
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { useDailyGoal, useSetDailyGoal, useDeleteDailyGoal } from '../hooks/useGoals';
+import { useStatistic, useDailyGoal, useSetDailyGoal, useDeleteDailyGoal } from '../hooks/useGoals';
+import { GoalForm } from './GoalForm';
 import type { SetGoalRequest } from '@/types';
 
 interface DailyGoalOverrideProps {
   statisticId: number;
 }
 
+/**
+ * Controller component for editing daily goal overrides.
+ * Fetches data and delegates rendering to the presentational GoalForm.
+ */
 export function DailyGoalOverride({ statisticId }: DailyGoalOverrideProps) {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [target, setTarget] = useState('');
-  const [isAtLeast, setIsAtLeast] = useState(true);
 
-  const { data: goal, isLoading } = useDailyGoal(statisticId, selectedDate);
+  // Fetch statistic metadata to get the type
+  const { data: statistic, isLoading: isLoadingStatistic } = useStatistic(statisticId);
+
+  // Fetch existing goal for the selected date
+  const { data: goal, isLoading: isLoadingGoal } = useDailyGoal(
+    statisticId,
+    selectedDate,
+    statistic?.statistic_type ?? 'IntegerAmount'
+  );
+
   const setGoal = useSetDailyGoal(statisticId, selectedDate);
   const deleteGoal = useDeleteDailyGoal(statisticId, selectedDate);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const goalData: SetGoalRequest = {
-      goal_data: {
-        target,
-        is_at_least: isAtLeast ? 'true' : 'false',
-      },
-    };
-
-    setGoal.mutate(goalData);
+  const handleSubmit = (goalData: Record<string, string>) => {
+    const request: SetGoalRequest = { goal_data: goalData };
+    setGoal.mutate(request);
   };
 
   const handleDelete = () => {
@@ -37,11 +41,21 @@ export function DailyGoalOverride({ statisticId }: DailyGoalOverrideProps) {
     }
   };
 
+  if (isLoadingStatistic) {
+    return <div className="p-4 text-gray-600">Loading statistic...</div>;
+  }
+
+  if (!statistic) {
+    return <div className="p-4 text-red-600">Statistic not found</div>;
+  }
+
   return (
     <div className="p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4">Daily Goal Override</h2>
+      <h2 className="text-2xl font-bold mb-4">
+        Daily Goal Override - {statistic.name} ({statistic.statistic_type})
+      </h2>
 
-      <div className="mb-4">
+      <div className="mb-6">
         <label htmlFor="date" className="block text-sm font-medium text-gray-700">
           Select Date
         </label>
@@ -50,72 +64,31 @@ export function DailyGoalOverride({ statisticId }: DailyGoalOverrideProps) {
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 px-3 py-2 border"
         />
       </div>
 
-      {isLoading && <div className="p-4 text-gray-600">Loading...</div>}
+      {isLoadingGoal && <div className="p-4 text-gray-600">Loading goal...</div>}
 
-      {goal && (
-        <div className="mb-4 p-4 bg-green-50 rounded">
-          <p className="text-sm font-semibold text-green-900">Current Goal for {selectedDate}:</p>
-          <pre className="text-sm text-green-700 mt-2">
-            {JSON.stringify(goal.goal_data, null, 2)}
-          </pre>
-          <button
-            onClick={handleDelete}
-            disabled={deleteGoal.isPending}
-            className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-          >
-            {deleteGoal.isPending ? 'Deleting...' : 'Delete Goal'}
-          </button>
-        </div>
+      {!isLoadingGoal && (
+        <GoalForm
+          statisticType={statistic.statistic_type}
+          existingGoal={goal}
+          onSubmit={handleSubmit}
+          onDelete={handleDelete}
+          isSubmitting={setGoal.isPending}
+          isDeleting={deleteGoal.isPending}
+          submitLabel="Set Daily Goal"
+          submitColor="green"
+        />
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="dailyTarget" className="block text-sm font-medium text-gray-700">
-            Target Value
-          </label>
-          <input
-            id="dailyTarget"
-            type="text"
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
-            placeholder="e.g., 150"
-            required
-          />
-        </div>
-
-        <div className="flex items-center">
-          <input
-            id="dailyIsAtLeast"
-            type="checkbox"
-            checked={isAtLeast}
-            onChange={(e) => setIsAtLeast(e.target.checked)}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-          />
-          <label htmlFor="dailyIsAtLeast" className="ml-2 block text-sm text-gray-700">
-            Is At Least (vs. At Most)
-          </label>
-        </div>
-
-        <button
-          type="submit"
-          disabled={setGoal.isPending}
-          className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-        >
-          {setGoal.isPending ? 'Setting Goal...' : 'Set Daily Goal'}
-        </button>
-
-        {setGoal.isError && (
-          <p className="text-red-600 text-sm">Error: {setGoal.error.message}</p>
-        )}
-        {setGoal.isSuccess && (
-          <p className="text-green-600 text-sm">Goal set successfully!</p>
-        )}
-      </form>
+      {setGoal.isError && (
+        <p className="text-red-600 text-sm mt-4">Error: {setGoal.error.message}</p>
+      )}
+      {setGoal.isSuccess && (
+        <p className="text-green-600 text-sm mt-4">Goal set successfully!</p>
+      )}
     </div>
   );
 }
