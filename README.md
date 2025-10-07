@@ -1,61 +1,338 @@
-# lifestats
+# LifeStats
 
-LifeStats is a personal observability platform for daily habits and wellness metrics. It collects data from many touchpoints, keeps a consistent history, and produces ambient visualisations that make trends easy to spot at a glance. The codebase is geared toward developers (including automation tooling and LLM agents) who want a clear picture of how the system hangs together.
+LifeStats is a personal observability platform for tracking daily habits and wellness metrics. It is built in Rust using **Ports & Adapters (Hexagonal) Architecture** to ensure a clean separation between core business logic and external concerns (persistence, HTTP, plotting, etc.). This repository is currently mid-refactor (see `refactor` branch) and is geared toward developers, not yet end-users.
 
-## Why It Exists
+**Status:** Active development; architecture stabilization in progress.
 
-- Track recurring activities such as sleep, practice sessions, study time, or workouts.
-- Capture events the moment they happen—manually, via sensors, or by syncing third-party data.
-- Surface engaging feedback through live dashboards, desktop wallpapers, and simple scores.
-- Experiment with routines by adding new statistics without rewriting core logic.
+---
 
-## Core Capabilities
+## At a Glance
 
-- Multi-channel logging (CLI, web UI, HTTP API, stopwatch, heartbeat feeds, MIDI input, Fitbit sync, Anki add-on).
-- Goal management with custom targets per statistic and day.
-- Automated plot generation with a gallery UI and wallpaper updater for multi-monitor setups.
-- Event-driven updates: whenever new data or goals arrive, subscribers refresh themselves.
-- Extensible Rust workspace with focused crates for logging, persistence, plotting, utilities, and integration glue.
+- Multi-channel logging: CLI, stopwatch, MIDI input, Fitbit sync, Anki add-on, HTTP API
+- SQLite persistence with Diesel ORM and migrations
+- HTTP API (Axum) serving statistic/goal CRUD and plotting endpoints
+- Goal management: daily & default targets for various statistic types
+- Derived statistics (e.g., sum multiple time-spans, compute time deltas)
+- Event-driven updates (publish-subscribe for data changes)
+- Plotting/visualization infrastructure (wallpaper, gallery—in progress)
+- Session tracking with heartbeat mechanism
+- Backward-compatible database reads (verified via compatibility tests)
 
-## Logging Interfaces
+---
 
-The system deliberately offers multiple ways to capture data so that logging can happen wherever the user already is.
+## Repository Layout
 
-- **CLI logger (`logging/cli_logger`)** – quick terminal logging for any statistic, including date overrides and update-policy hints.
-- **Web UI (`interfaces/web/server`)** – a browser-based form for logging values, plus goal management pages and an API under `/api`.
-- **HTTP client crate (`interfaces/web/api`)** – reusable API client for other services or scripts that want to push data remotely.
-- **Stopwatch logger (`logging/stopwatch_logger`)** – interactive terminal UI that toggles play/pause, surfaces live durations, and writes directly to statistics.
-- **Heartbeat logger (`logging/heart_beat_logger`)** – a generic engine that converts periodic “beats” into time-span logs, with pluggable backends (local DB or HTTP).
-- **MIDI logger (`logging/midi_logger`)** – connects an instrument to the heartbeat logger to track practice sessions automatically.
-- **Fitbit sync (`logging/third_party/fitbit`)** – pulls recent Fitbit metrics (sleep duration, wake times, steps, etc.) and maps them into statistics.
-- **Anki add-on (`AnkiLogger`)** – monitors study sessions inside Anki, logging focused time via the heartbeat mechanism.
-- **Event sender (`interfaces/event_sender`)** – emits synthetic events such as “New Day” to force recalculations or wallpaper refreshes.
-  Every channel converges on the same domain model, so once data lands it is treated uniformly regardless of its origin.
+```
+lifestats/
+├── core/
+│   ├── core/                     # Domain model (zero dependencies)
+│   ├── application/              # Use case orchestration (LoggingService, GoalManagementService, etc.)
+│   ├── infrastructure/
+│   │   ├── persistence/          # SQLite repository implementations + migrations
+│   │   ├── plotting/             # Plot rendering (plotters crate)
+│   │   └── web_api/              # HTTP server (Axum, port 3000)
+│   └── plot-domain/              # Plot-specific domain types
+├── client/                       # HTTP client (in progress)
+├── events/
+│   ├── event_impl/               # Event types & publisher trait
+│   └── event_sender/             # CLI to emit synthetic events
+├── logger_applications/          # Legacy loggers (excluded from workspace)
+│   ├── AnkiLogger/               # Anki add-on (Python)
+│   ├── cli_logger/               # Terminal logger (Rust, old)
+│   ├── stopwatch_logger/         # Interactive stopwatch (Rust, old)
+│   ├── fitbit_logger/            # Fitbit sync (Rust, old)
+│   ├── midi_logger/              # MIDI input tracker (Rust, old)
+│   ├── ebook-reader/             # E-reader integration
+│   ├── mpv_logger/               # MPV video tracker
+│   └── web-activity-time-tracker/# Browser activity tracker
+├── ui/
+│   ├── wallpaper/                # Desktop wallpaper updater
+│   └── web_ui/                   # Browser-based logging/gallery
+├── docs/                         # Architecture & design docs
+├── test_data/                    # DB snapshots for compatibility tests
+├── .cargo/config.toml            # Shared target dir, sccache, build profiles
+├── justfile                      # Task shortcuts (just test, just test-db-compat)
+└── Cargo.toml                    # Workspace root
+```
 
-## Plots, Scores, and Feedback Loops
+**Workspace members** (actively maintained):
+- `core/core` (domain)
+- `core/application`
+- `core/infrastructure/{persistence,plotting,web_api}`
+- `core/plot-domain`
+- `client`
 
-- **Wallpaper service (`interfaces/wallpaper`)** – renders plot images for one or more monitors, keeps them up to date, and sets them as wallpapers. Plots re-render when events arrive (goal changes, new values, or daily rollovers).
-- **Web gallery** – the root page of the web server serves a masonry grid of the latest plots for a quick overview.
-- **Scoring CLI (`interfaces/cli`)** – calculates per-statistic scores and aggregated totals for a chosen day, useful for quick retrospectives.
+**Excluded** (legacy or WIP): `logger_applications/*`, `events/*`, `ui/*`
 
-## Goals & Habit Tracking
+---
 
-Goals live alongside statistics. The goal editor in the web interface supports:
+## Prerequisites
 
-- Setting daily or default targets for different statistic types (numbers, durations, time spans, habits, point-in-time targets).
-- Supplying extra metadata (e.g., “is higher better?”, efficiency percentages) depending on the statistic type.
-- Deleting daily or default goals with instant feedback.
-  When goals change, the event bus notifies subscribers so wallpapers or other clients can recalculate progress indicators.
+- **Rust** 1.70+ (2021 edition): `rustup` recommended
+- **sccache** (optional): configured in `.cargo/config.toml` for faster builds
+- **SQLite**: bundled via `diesel` (no separate install required)
+- **just** (optional): for running recipes in `justfile`
+
+---
+
+## Quick Start
+
+### 1. Clone & Build
+
+```bash
+git clone <repo-url>
+cd lifestats
+cargo build
+```
+
+Release build:
+```bash
+cargo build --release
+```
+
+### 2. Configuration
+
+Set the database URL (required for live usage; tests use in-memory DB):
+
+```bash
+export DATABASE_URL=/path/to/your/lifestats.db
+```
+
+Alternatively, create a `.env` file in the project root:
+
+```env
+DATABASE_URL=/path/to/your/lifestats.db
+```
+
+The HTTP server (`web_api`) will automatically run migrations on startup if `DATABASE_URL` is set.
+
+**Environment Variables:**
+
+| Variable          | Purpose                                   | Default/Required |
+|-------------------|-------------------------------------------|------------------|
+| `DATABASE_URL`    | Path to SQLite DB for live usage         | Required for live|
+| `COMPAT_DB_URL`   | Snapshot DB for compatibility tests       | Required for compat test |
+| `RUST_LOG`        | Log level (tracing-subscriber)            | `info,web_api=debug,tower_http=debug` |
+
+### 3. Run Tests
+
+```bash
+# All workspace tests
+cargo test --workspace
+
+# Or via just
+just test
+
+# Database backward compatibility test (requires test_data/test_snapshot.db)
+just test-db-compat
+```
+
+### 4. Start HTTP API
+
+```bash
+cargo run -p lifestats-web-api
+```
+
+The server binds to `0.0.0.0:3000`.
+
+**Available routes:**
+- `GET /statistics` – list all statistics
+- `POST /statistics/:id/log/:date` – log a value for a statistic on a given date
+- `POST /statistics/:id/log_time_frame/:date` – log a time frame
+- `GET /plots/:id/image` – retrieve plot image for a statistic
+- `POST /integrations/provision` – provision integration (e.g., Anki bundles)
+
+Example (requires a running server):
+```bash
+curl http://localhost:3000/statistics
+```
+
+---
+
+## Development Workflows
+
+### Linting & Formatting
+
+```bash
+cargo clippy             # Lint
+cargo fmt                # Format
+cargo check              # Quick compile check
+```
+
+### Running Specific Tests
+
+```bash
+# Domain tests only
+cargo test -p lifestats-core
+
+# Application tests
+cargo test -p lifestats-application
+
+# Persistence tests
+cargo test -p lifestats-persistence
+```
+
+### Shared Target Directory
+
+Builds use `/tmp/cargo-target-shared` (see `.cargo/config.toml`). To change:
+```toml
+[build]
+target-dir = "./target"  # Use local target dir instead
+```
+
+If `sccache` is unavailable, remove or comment out:
+```toml
+rustc-wrapper = "sccache"
+```
+
+---
+
+## Domain Model (Key Concepts)
+
+The domain is defined in `core/core` and has **zero external dependencies**.
+
+### Statistic Types
+
+**Logable Statistics** (accept direct input):
+- `TimeSpans` – tracks intervals (start/end times)
+- `IntegerAmount` – numeric counts
+- `Habit` – boolean occurrences
+- `PointInTime` – specific timestamps
+
+Each implements the `Logable` trait with pure methods like `calculate_new_log_value`.
+
+**Derived Statistics** (computed from other statistics):
+- `SummingStatistic` – aggregates multiple `TimeSpans`
+- `TimeDifference` – delta between two `PointInTime` stats
+
+Each implements the `Computable` trait with a pure `compute_value` method.
+
+**You cannot log directly to a derived statistic.** This separation prevents logical errors at compile time.
+
+### Goals
+
+- **Daily goals:** targets for specific dates
+- **Default goals:** fallback targets when no daily goal exists
+- Each statistic type supports different goal metadata (e.g., "is higher better?", efficiency percentages)
+
+### Events
+
+When data or goals change, the system publishes events (e.g., `ValueLogged`, `GoalSet`). Subscribers (wallpaper updater, plot renderer) listen and react.
+
+### Ports (Traits)
+
+- `StatisticRepository` – load/save statistics and goals
+- `PlotRenderer` – generate plot images
+- `EventPublisher` – publish domain events
+
+Infrastructure crates provide concrete implementations.
+
+---
 
 ## Data & Persistence
 
-- SQLite is the default backing store. `persistence/pool.rs` configures pooled connections, WAL mode, and foreign-key enforcement.
-- Environment variable `DATABASE_URL` points to the live database. Tests use in-memory SQLite.
-- Repositories translate domain objects to DTOs and vice versa, keeping storage concerns outside of the core.
+- **Engine:** SQLite via Diesel ORM
+- **Connection pooling:** configured with WAL mode in `core/infrastructure/persistence/src/pool.rs`
+- **Migrations:** located in `core/infrastructure/persistence/migrations/`
+- **Schema:** statistics, goals (daily & default), time frames, plots, integrations, tags
 
-## Roadmap & Vision
+### Migrations
 
-- **Refactor branch** – bring the ongoing refactor up to production quality.
-- **Unified logging transport** – converge all loggers on the HTTP API so they behave like micro-services rather than direct DB writers.
-- **Web UI refresh** – modernise the browser experience for logging, reviewing history, and managing goals.
-- Continued exploration of architectural refinements to keep the onion layers clean while adding new integrations.
+Migrations run automatically when starting `lifestats-web-api` with `DATABASE_URL` set. To run manually:
+
+```bash
+cd core/infrastructure/persistence
+diesel migration run
+```
+
+### Backward Compatibility
+
+The compatibility test (`just test-db-compat`) ensures new code can read older database snapshots. Requires a snapshot DB in `test_data/test_snapshot.db` (not committed; see `test_data/README.md`).
+
+---
+
+## Extensibility
+
+### Adding a New Statistic Type
+
+1. Add type to `core/core/src/statistic/types/{logable,derived}_statistics/`
+2. Implement `Logable` or `Computable` trait
+3. Update `AnyStatistic` enum if needed
+4. Add domain tests
+
+### Adding a New Use Case
+
+1. Create service in `core/application/src/use_cases/`
+2. Depend only on domain traits (ports)
+3. Add application-layer tests (use mocks for repositories)
+
+### Adding a New Logger
+
+1. Create binary crate (or add to `logger_applications/`)
+2. Wire up application services with concrete adapters:
+   - Instantiate `SqliteStatisticRepository`
+   - Instantiate `LoggingService` with injected repository
+   - Call use case methods
+3. See `CLAUDE.md` lines 185-235 for detailed example
+
+### Adding a New HTTP Route
+
+1. Add handler function to `core/infrastructure/web_api/src/routes/`
+2. Register route in `routes::create_router`
+3. Add integration test
+
+---
+
+## Architecture
+
+LifeStats follows **Hexagonal (Ports & Adapters) Architecture**:
+
+- **Domain (`core/core`):** Pure business logic, zero external dependencies. Defines ports as traits.
+- **Application (`core/application`):** Use case orchestration. Depends only on domain.
+- **Infrastructure (`core/infrastructure/*`):** Concrete implementations of ports (repositories, renderers, publishers). Depends on domain & application.
+- **Driving Adapters:** CLI tools, HTTP server, loggers—wire everything together via dependency injection.
+
+**Critical constraint:** Dependencies always point inward toward the domain.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for detailed diagrams and layer descriptions.
+
+---
+
+## Troubleshooting
+
+### Build Issues
+
+- **Disk space:** The shared target directory (`/tmp/cargo-target-shared`) can grow large. Clear with `cargo clean` or adjust `target-dir` in `.cargo/config.toml`.
+- **sccache errors:** If `sccache` is not installed, remove `rustc-wrapper = "sccache"` from `.cargo/config.toml`.
+
+### Runtime Issues
+
+- **`DATABASE_URL` not set:** Tests will pass (they use in-memory SQLite), but live usage requires setting this variable.
+- **Migration errors:** Ensure migrations have run. The `web_api` binary runs them automatically on startup.
+- **Port 3000 in use:** The HTTP server binds to `0.0.0.0:3000`. Change the address in `core/infrastructure/web_api/src/main.rs` if needed.
+
+### Logger Applications
+
+The `logger_applications/` directory contains legacy loggers (excluded from the workspace). These may use outdated APIs or have missing dependencies. Refer to individual logger README files (if present) or check `CLAUDE.md` for architectural guidance.
+
+---
+
+## Contributing
+
+This project is in active refactor. Contribution guidelines are not yet formalized. For architectural questions, see `CLAUDE.md` and `docs/ARCHITECTURE.md`.
+
+**Development branch:** `refactor`
+**Main branch:** `main`
+
+---
+
+## Further Reading
+
+- [`CLAUDE.md`](CLAUDE.md) – guidance for Claude Code when working with this repository
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – detailed architecture diagrams and layer descriptions
+- [`docs/statistics.md`](docs/statistics.md) – statistic types and their behaviors
+- [`docs/IDEAS.md`](docs/IDEAS.md) – design ideas and future explorations
+
+---
+
+**Note:** This README reflects the current state of the `refactor` branch and is derived directly from the codebase. Some logger applications and UI components are legacy or WIP and may not be fully functional.
