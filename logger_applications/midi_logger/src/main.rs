@@ -1,100 +1,94 @@
-mod config;
-/// This application connects a midi device to the hearbeat logger.
-/// It is used to track the time where the user played an instrument (e.g. a piano).
-mod midi;
-mod port_selection;
+mod midi_adapter;
+mod user_interface;
 
-use crate::config::MidiLoggerConfig;
-use crate::midi::midi_device::MidiDevice;
-use crate::midi::{LoggerMessage, MidiLogger};
-use crate::port_selection::PortSelector;
-use anyhow::{Context, Result};
-use heart_beat_logger::logger::http_logger::HttpLogger;
-use log::{error, info, warn};
-use std::io::{stdin, stdout, Write};
-use std::sync::mpsc::Sender;
-use std::time::Duration;
-use transfer_objects::statistic_id::StatisticId;
-use util::stdout_logging::init_logging;
+use anyhow::Result;
+use lifestats_application::use_cases::{HeartbeatConfig, HeartbeatSession, RealTimeProvider};
+use log::info;
+use midi_adapter::MidiAdapter;
+use std::sync::Arc;
+use tokio::select;
+use user_interface::TerminalUI;
 
-const SERVER_URL: &str = "http://192.168.0.103:8000";
-const HEARTBEAT_TIMEOUT_SECS: u64 = 60;
-
-fn main() {
-    init_logging();
+/// Main MIDI logger application entry point.
+/// This is a Driving Adapter that translates MIDI hardware events into application use case calls.
+#[tokio::main]
+async fn main() -> Result<()> {
+    env_logger::init();
     info!("Starting MIDI logger application");
-    match run() {
-        Ok(_) => info!("Application terminated successfully"),
-        Err(err) => error!("Application error: {}", err),
-    }
-}
 
-fn run() -> Result<()> {
-    let config = MidiLoggerConfig::load().unwrap_or_else(|_| create_new_config());
+    // Build all application services from the composition root
+    let app = lifestats_bootstrap::build_services()?;
 
-    let mut midi_device = MidiDevice::new()?;
-    select_midi_port(&mut midi_device)?;
+    // Create UI and hardware adapters
+    let ui = TerminalUI::new();
 
-    let (mut logger, stop_sender) = MidiLogger::new(midi_device, config)?;
+    // Step 1: Select MIDI port
+    let midi_adapter = MidiAdapter::new()?;
+    let ports = midi_adapter.list_ports()?;
+    let port_index = match ui.select_midi_port(&ports)? {
+        Some(index) => index,
+        None => {
+            info!("User cancelled port selection");
+            return Ok(());
+        }
+    };
+    let selected_port_name = ports
+        .get(port_index)
+        .expect("Selected port index should be valid");
 
-    setup_ctrl_c(stop_sender)?;
+    // Step 2: Select statistic to log to
+    let time_spans_statistics = app.query_service.get_time_spans_metadata()?;
+    let statistic = match ui.select_statistic(&time_spans_statistics)? {
+        Some(stat) => stat,
+        None => {
+            info!("User cancelled statistic selection");
+            return Ok(());
+        }
+    };
 
-    logger.run()
-}
-
-fn setup_ctrl_c(message_tx: Sender<LoggerMessage>) -> Result<()> {
-    let tx = message_tx.clone();
-    ctrlc::set_handler(move || {
-        info!("Received Ctrl-C signal");
-        tx.send(LoggerMessage::Stop).unwrap_or_else(|e| {
-            error!("Failed to send stop message: {}", e);
-        });
-    })?;
-    Ok(())
-}
-
-fn create_new_config() -> MidiLoggerConfig {
-    // TODO: Ask the user to enter the config instead
-
-    let config = MidiLoggerConfig::new(
-        SERVER_URL,
-        Duration::from_secs(HEARTBEAT_TIMEOUT_SECS),
-        StatisticId(5),
+    // Step 3: Create heartbeat session
+    let mut session = HeartbeatSession::new(
+        statistic.id(),
+        app.statistic_repository.clone(),
+        Arc::new(RealTimeProvider),
+        HeartbeatConfig {
+            idle_timeout: chrono::Duration::days(1),
+            flush_interval: chrono::Duration::minutes(1),
+        },
     );
 
-    if let Err(e) = config.save() {
-        warn!("Failed to save configuration: {}", e);
-    } else {
-        info!("Created and saved new configuration");
+    // Step 4: Connect to MIDI port and get event receiver
+    let mut midi_rx = midi_adapter.connect(port_index)?;
+
+    // Step 5: Setup Ctrl+C handler
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+    ctrlc::set_handler(move || {
+        info!("Received Ctrl+C signal");
+        let _ = shutdown_tx.try_send(());
+    })?;
+
+    // Display session header
+    ui.show_session_header(statistic.name(), selected_port_name);
+
+    // Main event loop: listen for MIDI events and Ctrl+C
+    loop {
+        select! {
+            Some(midi_event) = midi_rx.recv() => {
+                info!("Received MIDI event: {:?}", midi_event);
+                session.beat();
+                ui.show_beat_message();
+            }
+            Some(_) = shutdown_rx.recv() => {
+                info!("Shutdown signal received");
+                break;
+            }
+        }
     }
 
-    config
-}
+    // Graceful shutdown: stop the session to ensure final time frame is persisted
+    ui.show_shutdown_message();
+    session.stop();
+    info!("MIDI logger stopped successfully");
 
-fn select_midi_port(midi_device: &mut MidiDevice) -> Result<()> {
-    let port_selector = PortSelector::default();
-    let available_ports = midi_device.get_available_ports();
-
-    let chosen_port_index = port_selector.select_port(&available_ports, select_port_interactive)?;
-    let chosen_port = available_ports
-        .get(chosen_port_index)
-        .context("Invalid port index")?;
-
-    midi_device.select_port(chosen_port)?;
-    port_selector.save_port_selection(chosen_port)?;
     Ok(())
-}
-
-fn select_port_interactive(port_names: &[String]) -> Result<usize> {
-    println!("\nAvailable input ports:");
-    for (i, p) in port_names.iter().enumerate() {
-        println!("{}: {}", i, p);
-    }
-
-    print!("Please select input port: ");
-    stdout().flush()?;
-    let mut input = String::new();
-    stdin().read_line(&mut input)?;
-
-    input.trim().parse().context("Invalid port number")
 }

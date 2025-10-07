@@ -4,15 +4,25 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-heart_beat_logger = { path = "../heart_beat_logger" }
-util = { path  = "../../util" }
-anyhow = "1.0"
+# Core crates for application access
+lifestats-bootstrap = { path = "../../lifestats-bootstrap" }
+lifestats-application = { path = "../../core/application" }
+lifestats-core = { path = "../../core/core" }
+
+# Async runtime and tools
+tokio = { version = "1", features = ["full"] }
+
+# MIDI hardware interaction
 midir = "0.10.0"
-ctrlc = "3.4"
+
+# Terminal UI for port/statistic selection
+crossterm = "0.28"
+
+# Graceful shutdown
+ctrlc = { version = "3.4", features = ["termination"] }
+
+# Utilities
+anyhow = "1.0"
 log = "0.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-dirs = "5.0"
-serde_with = { version = "3.9.0", features = ["chrono_0_4"] }
-testing_utilities = { path = "../../testing_utilities" }
-chrono = "0.4.39"
+env_logger = "0.11"
+chrono = "0.4"

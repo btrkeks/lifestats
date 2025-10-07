@@ -9,6 +9,7 @@ members = [
     "core/infrastructure/web_api",
     "core/plot-domain",
     "./logger_applications/stopwatch_logger/",
+    "./logger_applications/midi_logger/",
     "lifestats-bootstrap",
 ]
 

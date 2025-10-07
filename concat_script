@@ -162,14 +162,14 @@ def concatenate_project_files(
 
 project_directories = [
     # "./core/core/",
-    "./core/application/",
-    "./core/infrastructure/web_api/",
-    "./lifestats-bootstrap/",
+    # "./core/application/",
+    # "./core/infrastructure/web_api/",
+    # "./lifestats-bootstrap/",
     # "./ui/web-ui/",
-    "./docs/ARCHITECTURE.md",
-    "./README.md",
+    # "./docs/ARCHITECTURE.md",
+    # "./README.md",
     # "./logger_applications/AnkiLogger/",
-    "./logger_applications/stopwatch_logger/",
+    # "./logger_applications/stopwatch_logger/",
     "./logger_applications/midi_logger/",
     # "./logger_applications/heart_beat_logger/",
     # "./archive/"
