@@ -55,15 +55,26 @@ pub struct StatisticMetadataResponse {
     pub id: u32,
     pub name: String,
     pub category: String,
+    pub statistic_type: String,
 }
 
 impl From<&AnyStatistic> for StatisticMetadataResponse {
     fn from(statistic: &AnyStatistic) -> Self {
         let metadata = statistic.get_metadata();
+        let statistic_type = match statistic {
+            AnyStatistic::Habit(_) => "Habit",
+            AnyStatistic::IntegerAmount(_) => "IntegerAmount",
+            AnyStatistic::PointInTime(_) => "PointInTime",
+            AnyStatistic::TimeSpans(_) => "TimeSpans",
+            AnyStatistic::Summing(_) => "Summing",
+            AnyStatistic::TimeDifference(_) => "TimeDifference",
+        }
+        .to_string();
         Self {
             id: metadata.id().0,
             name: metadata.name().to_string(),
             category: metadata.category().to_string(),
+            statistic_type,
         }
     }
 }
@@ -97,5 +108,6 @@ mod tests {
         assert_eq!(dto.id, 42);
         assert_eq!(dto.name, "Push Ups");
         assert_eq!(dto.category, "Fitness");
+        assert_eq!(dto.statistic_type, "IntegerAmount");
     }
 }

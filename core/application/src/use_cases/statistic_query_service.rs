@@ -36,6 +36,15 @@ where
         Ok(self.statistic_repository.find_all_metadata()?)
     }
 
+    pub fn get_statistic_by_id(
+        &self,
+        statistic_id: StatisticId,
+    ) -> ApplicationResult<AnyStatistic> {
+        Ok(self
+            .statistic_repository
+            .find_metadata_by_id(statistic_id)?)
+    }
+
     pub fn get_all_metadata(&self) -> ApplicationResult<Vec<StatisticMetadata>> {
         Ok(self
             .statistic_repository

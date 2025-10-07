@@ -30,7 +30,10 @@ where
             "/statistics",
             get(statistics::get_all_statistics).post(statistics::create_statistic),
         )
-        .route("/statistics/:id", delete(statistics::delete_statistic))
+        .route(
+            "/statistics/:id",
+            get(statistics::get_statistic).delete(statistics::delete_statistic),
+        )
         .route("/statistics/:id/log/:date", post(statistics::log_value))
         .route(
             "/statistics/:id/log_time_frame/:date",

@@ -46,9 +46,11 @@ async fn test_get_all_statistics_happy_path() {
     assert_eq!(body[0].id, 1);
     assert_eq!(body[0].name, "Push Ups");
     assert_eq!(body[0].category, "Fitness");
+    assert_eq!(body[0].statistic_type, "IntegerAmount");
     assert_eq!(body[1].id, 2);
     assert_eq!(body[1].name, "Water Intake");
     assert_eq!(body[1].category, "Health");
+    assert_eq!(body[1].statistic_type, "IntegerAmount");
 }
 
 #[tokio::test]

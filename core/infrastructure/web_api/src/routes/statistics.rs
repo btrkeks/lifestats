@@ -38,6 +38,25 @@ where
     Ok(Json(response))
 }
 
+/// GET /statistics/:id - Get a single statistic's metadata
+pub async fn get_statistic<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+) -> Result<Json<StatisticMetadataResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    P: PlotRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    let statistic = app_state
+        .query_service
+        .get_statistic_by_id(StatisticId(statistic_id))?;
+    let response = StatisticMetadataResponse::from(&statistic);
+    Ok(Json(response))
+}
+
 /// POST /statistics/:id/log/:date - Log a value for a statistic on a specific date
 pub async fn log_value<R, P, Rend, E, I>(
     State(app_state): State<AppState<R, P, Rend, E, I>>,
