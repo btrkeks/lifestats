@@ -1,6 +1,6 @@
 use anyhow::Result;
-use tokio::sync::mpsc;
 use domain_models::statistic::statistic_metadata::StatisticMetadata;
+use tokio::sync::mpsc;
 
 pub trait UserInterface: Send + Sync {
     fn init(&mut self) -> Result<()>;

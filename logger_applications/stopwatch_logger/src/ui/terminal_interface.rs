@@ -8,9 +8,9 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
+use domain_models::statistic::statistic_metadata::StatisticMetadata;
 use std::io::{self, Write};
 use tokio::sync::mpsc;
-use domain_models::statistic::statistic_metadata::StatisticMetadata;
 
 pub struct TerminalInterface {
     stdout: io::Stdout,

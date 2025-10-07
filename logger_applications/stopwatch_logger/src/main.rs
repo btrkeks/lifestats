@@ -8,6 +8,7 @@ mod ui;
 use crate::ui::terminal_interface::TerminalInterface;
 use crate::ui::user_interface_trait::{UserEvent, UserInput, UserInterface};
 use anyhow::Result;
+use domain_models::statistic::statistic_metadata::StatisticMetadata;
 use lifestats_application::use_cases::{
     HeartbeatConfig, HeartbeatSession, HeartbeatUpdate, RealTimeProvider,
 };
@@ -17,7 +18,6 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 use tokio::select;
 use transfer_objects::statistic_id::StatisticId;
-use domain_models::statistic::statistic_metadata::StatisticMetadata;
 
 async fn run_stopwatch<I: UserInterface>(
     app_context: AppContext,
