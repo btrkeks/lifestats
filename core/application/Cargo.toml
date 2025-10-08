@@ -16,7 +16,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = "0.1"
-chrono-tz = "0.8"
+chrono-tz = "0.10.4"
 futures = "0.3"
 rand = "0.8"
 secrecy = "0.8"

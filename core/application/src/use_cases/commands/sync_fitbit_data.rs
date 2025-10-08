@@ -50,7 +50,7 @@ pub struct SyncFitbitDataCommandHandler {
     tag_repository: Arc<dyn TagQueryableStatisticRepository>,
     statistic_repository: Arc<dyn StatisticRepository + Send + Sync>,
     clock: Arc<dyn Clock>,
-    timezone: Tz,
+    timezone: chrono_tz::Tz,
     token_expiry_skew: StdDuration,
     max_concurrency: usize,
     max_retries: usize,
@@ -69,7 +69,7 @@ impl SyncFitbitDataCommandHandler {
         tag_repository: Arc<dyn TagQueryableStatisticRepository>,
         statistic_repository: Arc<dyn StatisticRepository + Send + Sync>,
         clock: Arc<dyn Clock>,
-        timezone: Tz,
+        timezone: chrono_tz::Tz,
         enabled_metrics: HashSet<FitbitMetric>,
     ) -> Self {
         Self {

@@ -10,7 +10,7 @@ use lifestats_application::integrations::fitbit::ports::{
 use lifestats_application::statistic::ports::TagQueryableStatisticRepository;
 use lifestats_application::use_cases::{
     commands::sync_fitbit_data::SyncFitbitDataCommandHandler,
-    integration::{AnkiBundleFactory, BundleFactory, IntegrationService},
+    integration::{AnkiBundleFactory, BundleFactory, FitbitBundleFactory, IntegrationService},
 };
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_fitbit_client::{HttpFitbitDataClient, HttpFitbitOAuthClient};
@@ -61,7 +61,8 @@ pub fn build_services() -> Result<Application> {
     let renderer = Arc::new(PlottersRenderer::new());
     let publisher = Arc::new(NoOpEventPublisher);
 
-    let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
+    let factories: Vec<Arc<dyn BundleFactory>> =
+        vec![Arc::new(AnkiBundleFactory), Arc::new(FitbitBundleFactory)];
     let integration_service = Arc::new(IntegrationService::new(
         statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
