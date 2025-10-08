@@ -170,7 +170,7 @@ impl From<FitbitUpstreamError> for ApplicationError {
 
 ---
 
-## Phase 2: Application Logic & Reliability Policies
+## Phase 2: Application Logic & Reliability Policies (COMPLETED)
 
 ### `lifestats-application`
 
@@ -406,6 +406,5 @@ impl Clock for SystemClock {
 
 ## Optional Enhancements
 
-- **Feature Flag:** `INTEGRATION_FITBIT=on/off` for safe rollout.
 - **Operational Metrics:** Counters (`sync.success`, `sync.failure`), histograms (`fitbit.latency`), gauge (`token.expires_in_seconds`).
 - **Secure Storage:** Consider OS keyring integration for refresh tokens behind `TokenStorePort`.

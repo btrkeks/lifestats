@@ -24,6 +24,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    integrations (id) {
+        id -> Integer,
+        source_name -> Text,
+        access_token -> Nullable<Text>,
+        refresh_token -> Nullable<Text>,
+        expires_at_epoch_seconds -> Nullable<BigInt>,
+        scopes -> Nullable<Text>,
+        last_sync_at -> Nullable<Text>,
+        canonical_tags -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     plots (id) {
         id -> Integer,
         statistic_id -> Integer,
@@ -42,6 +55,7 @@ diesel::table! {
         statistic_type -> Text,
         default_goal_valid_since -> Text,
         tags -> Text,
+        canonical_tags -> Nullable<Text>,
     }
 }
 
@@ -52,6 +66,7 @@ diesel::joinable!(plots -> statistics (statistic_id));
 diesel::allow_tables_to_appear_in_same_query!(
     default_goals,
     goals,
+    integrations,
     logging_data,
     plots,
     statistics,

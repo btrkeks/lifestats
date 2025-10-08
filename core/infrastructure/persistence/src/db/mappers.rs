@@ -20,6 +20,7 @@ use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::db::models::DefaultGoalRaw;
 
@@ -78,6 +79,8 @@ pub struct StatisticDto {
     pub default_goal_valid_since: String,
     #[diesel(sql_type = diesel::sql_types::Text)]
     pub tags: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub canonical_tags: Option<String>,
 }
 
 impl StatisticDto {
@@ -102,6 +105,8 @@ impl StatisticDto {
         let tags_json =
             serde_json::to_string(metadata.tags()).context("failed to serialize tags to JSON")?;
 
+        let canonical_tags = canonicalize_tags(metadata.tags());
+
         Ok(Self {
             id: metadata.id().0 as i32,
             name: metadata.name().to_string(),
@@ -109,6 +114,7 @@ impl StatisticDto {
             statistic_type,
             default_goal_valid_since: statistic.get_default_goal_valid_since().to_string(),
             tags: tags_json,
+            canonical_tags,
         })
     }
 
@@ -175,6 +181,8 @@ pub struct InsertStatisticDto {
     pub default_goal_valid_since: String,
     #[diesel(sql_type = diesel::sql_types::Text)]
     pub tags: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub canonical_tags: Option<String>,
 }
 
 impl InsertStatisticDto {
@@ -186,7 +194,33 @@ impl InsertStatisticDto {
             statistic_type: dto.statistic_type,
             default_goal_valid_since: dto.default_goal_valid_since,
             tags: dto.tags,
+            canonical_tags: dto.canonical_tags,
         })
+    }
+}
+
+fn canonicalize_tags(tags: &HashMap<String, String>) -> Option<String> {
+    if tags.is_empty() {
+        return None;
+    }
+
+    let mut normalized: Vec<(String, String)> = tags
+        .iter()
+        .map(|(key, value)| (key.trim().to_ascii_lowercase(), value.trim().to_string()))
+        .collect();
+
+    normalized.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let fingerprint = normalized
+        .into_iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(";");
+
+    if fingerprint.is_empty() {
+        None
+    } else {
+        Some(fingerprint)
     }
 }
 

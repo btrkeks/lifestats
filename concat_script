@@ -161,17 +161,20 @@ def concatenate_project_files(
 
 
 project_directories = [
-    # "./core/core/",
-    # "./core/application/",
-    # "./core/infrastructure/web_api/",
-    # "./lifestats-bootstrap/",
+    "./core/application/",
+    "./core/core/",
+    "./core/infrastructure/",
+    "./core/plot-domain/",
+    "./lifestats-bootstrap/",
+    # "./core/infrastructure/persistence/",
+    # "./core/infrastructure/plotting/",
     # "./ui/web-ui/",
     # "./docs/ARCHITECTURE.md",
     # "./README.md",
     # "./logger_applications/AnkiLogger/",
     # "./logger_applications/stopwatch_logger/",
-    "./logger_applications/midi_logger/",
-    # "./logger_applications/heart_beat_logger/",
+    # "./logger_applications/midi_logger/",
+    # "./logger_applications/fitbit_logger/",
     # "./archive/"
     # "./core/application/src/use_cases/goal_management_service.rs",
     # "./core/application/src/use_cases/logging_service.rs",
@@ -188,6 +191,7 @@ extensions = (
     ".tsx",  # TypeScript React
     ".mjs",  # ES modules
     ".py",  # Python
+    ".md",  # Markdown
     # Configuration
     ".toml",  # Rust/general config
     ".json",  # Package/TS config (lock files excluded separately)

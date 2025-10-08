@@ -1,5 +1,7 @@
+use std::time::Duration as StdDuration;
+
 use axum::{
-    http::StatusCode,
+    http::{header::RETRY_AFTER, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -13,32 +15,58 @@ pub enum ApiError {
     ValidationError(String),
     InternalError(String),
     InternalServerError(anyhow::Error),
+    BadGateway(String),
+    RateLimited {
+        message: String,
+        retry_after: Option<StdDuration>,
+    },
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, error_message) = match self {
-            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
-            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
-            ApiError::ValidationError(msg) => (StatusCode::BAD_REQUEST, msg),
+        match self {
+            ApiError::NotFound(msg) => {
+                (StatusCode::NOT_FOUND, Json(json!({ "error": msg }))).into_response()
+            }
+            ApiError::BadRequest(msg) | ApiError::ValidationError(msg) => {
+                (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response()
+            }
             ApiError::InternalError(msg) => {
                 tracing::error!("Internal error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, msg)
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": msg })),
+                )
+                    .into_response()
             }
             ApiError::InternalServerError(err) => {
                 tracing::error!("Internal server error: {:?}", err);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal server error".to_string(),
+                    Json(json!({ "error": "Internal server error" })),
                 )
+                    .into_response()
             }
-        };
-
-        let body = Json(json!({
-            "error": error_message
-        }));
-
-        (status, body).into_response()
+            ApiError::BadGateway(msg) => {
+                (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response()
+            }
+            ApiError::RateLimited {
+                message,
+                retry_after,
+            } => {
+                let mut response = (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(json!({ "error": message })),
+                )
+                    .into_response();
+                if let Some(duration) = retry_after {
+                    if let Ok(value) = HeaderValue::from_str(&duration.as_secs().to_string()) {
+                        response.headers_mut().insert(RETRY_AFTER, value);
+                    }
+                }
+                response
+            }
+        }
     }
 }
 
@@ -86,6 +114,22 @@ impl From<lifestats_application::error::ApplicationError> for ApiError {
 
             // Infrastructure errors → 500 Internal Server Error
             ApplicationError::Infrastructure(err) => ApiError::InternalServerError(err),
+
+            ApplicationError::FitbitSyncFailed(upstream) => match upstream {
+                lifestats_application::integrations::fitbit::error::FitbitUpstreamError::RateLimited {
+                    retry_after,
+                } => ApiError::RateLimited {
+                    message: "Fitbit rate limited the request".to_string(),
+                    retry_after,
+                },
+                lifestats_application::integrations::fitbit::error::FitbitUpstreamError::Unauthorized
+                | lifestats_application::integrations::fitbit::error::FitbitUpstreamError::InvalidGrant => {
+                    ApiError::BadGateway(
+                        "Fitbit authentication failed. Please re-authorize the integration.".to_string(),
+                    )
+                }
+                other => ApiError::BadGateway(other.to_string()),
+            },
         }
     }
 }

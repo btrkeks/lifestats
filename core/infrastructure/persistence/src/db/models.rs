@@ -160,3 +160,29 @@ impl PlotRaw {
         ))
     }
 }
+
+#[derive(Debug, Queryable, Selectable)]
+#[allow(dead_code)]
+#[diesel(table_name = crate::db::schema::integrations)]
+pub struct IntegrationRow {
+    pub id: i32,
+    pub source_name: String,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub expires_at_epoch_seconds: Option<i64>,
+    pub scopes: Option<String>,
+    pub last_sync_at: Option<String>,
+    pub canonical_tags: Option<String>,
+}
+
+#[derive(Debug, Insertable, AsChangeset)]
+#[diesel(table_name = crate::db::schema::integrations)]
+pub struct IntegrationUpsert {
+    pub source_name: String,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub expires_at_epoch_seconds: Option<i64>,
+    pub scopes: Option<String>,
+    pub last_sync_at: Option<String>,
+    pub canonical_tags: Option<String>,
+}

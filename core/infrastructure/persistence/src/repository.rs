@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use async_trait::async_trait;
 use chrono::NaiveDate;
 use diesel::connection::Connection;
 use diesel::dsl::sql;
@@ -9,6 +10,9 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::sql_types::{BigInt, Text};
 use diesel::SqliteConnection;
+use lifestats_application::error::{ApplicationError, ApplicationResult};
+use lifestats_application::shared::tags::TagSet;
+use lifestats_application::statistic::ports::TagQueryableStatisticRepository;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::dated_value::DatedValue;
 use lifestats_core::shared::ids::StatisticId;
@@ -129,6 +133,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             statistic_type,
             default_goal_valid_since,
             tags,
+            canonical_tags,
         } = dto;
 
         diesel::update(statistics::table.find(id))
@@ -138,6 +143,7 @@ impl StatisticRepository for SqliteStatisticRepository {
                 statistics::statistic_type.eq(statistic_type),
                 statistics::default_goal_valid_since.eq(default_goal_valid_since),
                 statistics::tags.eq(tags),
+                statistics::canonical_tags.eq(canonical_tags),
             ))
             .execute(&mut conn)
             .map_err(diesel_to_repository_error)?;
@@ -477,6 +483,32 @@ impl StatisticRepository for SqliteStatisticRepository {
     }
 }
 
+#[async_trait]
+impl TagQueryableStatisticRepository for SqliteStatisticRepository {
+    async fn find_statistic_id_by_exact_tags(
+        &self,
+        tags: &TagSet,
+    ) -> ApplicationResult<Option<StatisticId>> {
+        let canonical = Some(tags.canonical_fingerprint());
+
+        let mut conn = self.connection().map_err(ApplicationError::from)?;
+
+        let ids: Vec<i32> = statistics::table
+            .filter(statistics::canonical_tags.eq(canonical))
+            .select(statistics::id)
+            .load(&mut conn)
+            .map_err(|err| ApplicationError::Infrastructure(err.into()))?;
+
+        match ids.len() {
+            0 => Ok(None),
+            1 => Ok(Some(StatisticId(ids[0] as u32))),
+            _ => Err(ApplicationError::Infrastructure(anyhow!(
+                "Multiple statistics share canonical tags; expected unique fingerprint"
+            ))),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -488,6 +520,7 @@ mod tests {
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use tokio::runtime::Runtime;
 
     // ==================== Test Helper ====================
 
@@ -825,6 +858,45 @@ mod tests {
             let goal = repo.find_goal(statistic_id, date)?;
             assert!(goal.is_some());
             assert_eq!(goal.unwrap()["target"], 20);
+            Ok(())
+        }
+    }
+
+    mod canonical_tag_tests {
+        use super::*;
+        use lifestats_application::shared::tags::TagSet;
+
+        #[test]
+        fn find_statistic_by_exact_tags() -> Result<()> {
+            let repo = setup_repository();
+            let statistic = integer_stat_with_tags(&[("source", "fitbit"), ("metric", "steps")]);
+            let stored_id = persist_stat(&repo, statistic)?;
+
+            let tag_set = TagSet::new([("source", "fitbit"), ("metric", "steps")]);
+
+            let runtime = Runtime::new().expect("tokio runtime for test");
+            let found = runtime
+                .block_on(repo.find_statistic_id_by_exact_tags(&tag_set))
+                .expect("lookup should succeed");
+
+            assert_eq!(found, Some(stored_id));
+            Ok(())
+        }
+
+        #[test]
+        fn returns_none_when_tags_do_not_match() -> Result<()> {
+            let repo = setup_repository();
+            let statistic = integer_stat_with_tags(&[("source", "fitbit"), ("metric", "sleep")]);
+            persist_stat(&repo, statistic)?;
+
+            let tag_set = TagSet::new([("source", "fitbit"), ("metric", "steps")]);
+
+            let runtime = Runtime::new().expect("tokio runtime for test");
+            let found = runtime
+                .block_on(repo.find_statistic_id_by_exact_tags(&tag_set))
+                .expect("lookup should succeed");
+
+            assert!(found.is_none());
             Ok(())
         }
     }

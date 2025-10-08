@@ -1,0 +1,8 @@
+[package]
+name = "lifestats-system-clock"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lifestats-application = { path = "../../application" }
+chrono = { workspace = true }
