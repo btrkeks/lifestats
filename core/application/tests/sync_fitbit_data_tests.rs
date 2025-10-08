@@ -1,0 +1,518 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration as StdDuration;
+
+use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, TimeZone, Utc};
+use mockall::{mock, predicate::*};
+
+use lifestats_application::error::{ApplicationError, ApplicationResult};
+use lifestats_application::integrations::fitbit::error::FitbitUpstreamError;
+use lifestats_application::integrations::fitbit::ports::{
+    FitbitActivityData, FitbitDataApi, FitbitMetric, FitbitOAuthApi, FitbitSleepData,
+    TokenStorePort,
+};
+use lifestats_application::integrations::fitbit::Clock;
+use lifestats_application::integrations::tokens::{AccessToken, FitbitTokenData, RefreshToken};
+use lifestats_application::shared::tags::TagSet;
+use lifestats_application::statistic::ports::TagQueryableStatisticRepository;
+use lifestats_application::use_cases::commands::sync_fitbit_data::{
+    SyncFitbitDataCommand, SyncFitbitDataCommandHandler,
+};
+use lifestats_application::StatisticRepository;
+use lifestats_core::shared::ids::StatisticId;
+
+// ============================================================================
+// Mock Implementations
+// ============================================================================
+
+mock! {
+    pub FitbitOAuth {}
+
+    #[async_trait::async_trait]
+    impl FitbitOAuthApi for FitbitOAuth {
+        async fn exchange_code_for_token(
+            &self,
+            code: &str,
+            pkce_verifier: Option<String>,
+        ) -> ApplicationResult<FitbitTokenData>;
+
+        async fn refresh(
+            &self,
+            refresh_token: &RefreshToken,
+        ) -> ApplicationResult<FitbitTokenData>;
+    }
+}
+
+mock! {
+    pub FitbitData {}
+
+    #[async_trait::async_trait]
+    impl FitbitDataApi for FitbitData {
+        async fn get_activity_data(
+            &self,
+            access_token: &AccessToken,
+            date: NaiveDate,
+        ) -> ApplicationResult<FitbitActivityData>;
+
+        async fn get_sleep_data(
+            &self,
+            access_token: &AccessToken,
+            date: NaiveDate,
+        ) -> ApplicationResult<FitbitSleepData>;
+    }
+}
+
+mock! {
+    pub TokenStore {}
+
+    #[async_trait::async_trait]
+    impl TokenStorePort for TokenStore {
+        async fn load(&self, source: &str) -> ApplicationResult<Option<FitbitTokenData>>;
+        async fn save(&self, source: &str, token: &FitbitTokenData) -> ApplicationResult<()>;
+        async fn set_last_sync_at(&self, source: &str, t: DateTime<Utc>) -> ApplicationResult<()>;
+        async fn last_sync_at(&self, source: &str) -> ApplicationResult<Option<DateTime<Utc>>>;
+    }
+}
+
+mock! {
+    pub TagRepository {}
+
+    #[async_trait::async_trait]
+    impl TagQueryableStatisticRepository for TagRepository {
+        async fn find_statistic_id_by_exact_tags(
+            &self,
+            tags: &TagSet,
+        ) -> ApplicationResult<Option<StatisticId>>;
+    }
+}
+
+mock! {
+    pub StatRepository {}
+
+    impl StatisticRepository for StatRepository {
+        fn save_log_value(
+            &self,
+            statistic_id: StatisticId,
+            date: NaiveDate,
+            value: serde_json::Value,
+        ) -> ApplicationResult<()>;
+
+        fn all_statistics(&self) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
+        fn find_by_id(
+            &self,
+            id: StatisticId,
+        ) -> ApplicationResult<Option<lifestats_core::statistic::any_statistic::AnyStatistic>>;
+        fn find_metadata_by_id(&self, id: StatisticId) -> ApplicationResult<lifestats_core::statistic::any_statistic::AnyStatistic>;
+        fn find_all_metadata(&self) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
+        fn create_metadata(&self, statistic: lifestats_core::statistic::any_statistic::AnyStatistic) -> ApplicationResult<lifestats_core::statistic::any_statistic::AnyStatistic>;
+        fn update_metadata(&self, statistic: lifestats_core::statistic::any_statistic::AnyStatistic) -> ApplicationResult<()>;
+        fn create_many_metadata(&self, statistics: Vec<lifestats_core::statistic::any_statistic::AnyStatistic>) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
+        fn find_by_tags(&self, tags: &HashMap<String, String>) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
+        fn find_log_value(&self, statistic_id: StatisticId, date: NaiveDate) -> ApplicationResult<Option<serde_json::Value>>;
+        fn find_log_values_in_range(&self, statistic_id: StatisticId, range: lifestats_core::shared::value_objects::date_range::DateRange) -> ApplicationResult<Vec<lifestats_core::shared::value_objects::dated_value::DatedValue<serde_json::Value>>>;
+        fn find_goal(&self, statistic_id: StatisticId, date: NaiveDate) -> ApplicationResult<Option<serde_json::Value>>;
+        fn save_goal(&self, statistic_id: StatisticId, date: NaiveDate, value: Option<serde_json::Value>) -> ApplicationResult<()>;
+        fn find_goals_in_range(&self, statistic_id: StatisticId, range: lifestats_core::shared::value_objects::date_range::DateRange) -> ApplicationResult<Vec<lifestats_core::shared::value_objects::dated_value::DatedValue<serde_json::Value>>>;
+        fn find_default_goal(&self, statistic_id: StatisticId) -> ApplicationResult<Option<serde_json::Value>>;
+        fn save_default_goal(&self, statistic_id: StatisticId, value: serde_json::Value) -> ApplicationResult<()>;
+        fn delete_default_goal(&self, statistic_id: StatisticId) -> ApplicationResult<()>;
+        fn delete_metadata(&self, id: StatisticId) -> ApplicationResult<()>;
+        fn save(&self, statistic: &lifestats_core::statistic::any_statistic::AnyStatistic) -> ApplicationResult<()>;
+        fn save_statistic_with_id(
+            &self,
+            id: StatisticId,
+            statistic: &lifestats_core::statistic::any_statistic::AnyStatistic,
+        ) -> ApplicationResult<()>;
+        fn delete(&self, id: StatisticId) -> ApplicationResult<()>;
+    }
+}
+
+#[derive(Clone)]
+struct MockClock {
+    now: DateTime<Utc>,
+}
+
+impl Clock for MockClock {
+    fn now_utc(&self) -> DateTime<Utc> {
+        self.now
+    }
+}
+
+// ============================================================================
+// Test Helpers
+// ============================================================================
+
+fn create_test_token(expires_in_seconds: i64) -> FitbitTokenData {
+    FitbitTokenData {
+        access_token: AccessToken::new("test_access_token".to_string()),
+        refresh_token: RefreshToken::new("test_refresh_token".to_string()),
+        expires_at: Utc::now() + ChronoDuration::seconds(expires_in_seconds),
+        scopes: vec!["activity".to_string(), "sleep".to_string()],
+    }
+}
+
+fn create_test_activity_data() -> FitbitActivityData {
+    FitbitActivityData {
+        steps: Some(10000),
+        calories_out: Some(2000),
+        active_minutes: Some(60),
+        cardio_minutes: Some(20),
+        peak_minutes: Some(10),
+    }
+}
+
+fn create_test_sleep_data() -> FitbitSleepData {
+    FitbitSleepData {
+        total_duration_asleep: Some(ChronoDuration::hours(8)),
+        sleep_efficiency: Some(95),
+        fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2025, 1, 1, 22, 0, 0).unwrap()),
+        woke_up_at_utc: Some(Utc.with_ymd_and_hms(2025, 1, 2, 6, 0, 0).unwrap()),
+        total_duration_awake: Some(ChronoDuration::minutes(30)),
+    }
+}
+
+// ============================================================================
+// Integration Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_unauthorized_triggers_refresh_and_retry() {
+    // Arrange
+    let mut oauth_mock = MockFitbitOAuth::new();
+    let mut data_mock = MockFitbitData::new();
+    let mut token_store = MockTokenStore::new();
+    let mut tag_repo = MockTagRepository::new();
+    let mut stat_repo = MockStatRepository::new();
+
+    let clock = Arc::new(MockClock { now: Utc::now() });
+
+    let token = create_test_token(3600);
+    let refreshed_token = create_test_token(3600);
+
+    // Token store returns initial token
+    token_store
+        .expect_load()
+        .times(1)
+        .returning(move |_| Ok(Some(token.clone())));
+
+    // Tag repository returns statistic ID for steps
+    tag_repo
+        .expect_find_statistic_id_by_exact_tags()
+        .times(1)
+        .returning(|_| Ok(Some(StatisticId(1))));
+
+    // First API call returns 401 Unauthorized
+    let unauthorized_call = StdMutex::new(false);
+    data_mock
+        .expect_get_activity_data()
+        .times(2)
+        .returning(move |_, _| {
+            let mut called = unauthorized_call.lock().unwrap();
+            if !*called {
+                *called = true;
+                Err(ApplicationError::FitbitSyncFailed(
+                    FitbitUpstreamError::Unauthorized,
+                ))
+            } else {
+                Ok(create_test_activity_data())
+            }
+        });
+
+    // OAuth API expects refresh call
+    oauth_mock
+        .expect_refresh()
+        .times(1)
+        .returning(move |_| Ok(refreshed_token.clone()));
+
+    // Token store expects save after refresh
+    token_store.expect_save().times(1).returning(|_, _| Ok(()));
+
+    // Stat repository expects save_log_value
+    stat_repo
+        .expect_save_log_value()
+        .times(1)
+        .returning(|_, _, _| Ok(()));
+
+    // Token store expects set_last_sync_at
+    token_store
+        .expect_set_last_sync_at()
+        .times(1)
+        .returning(|_, _| Ok(()));
+
+    // Build handler with mocks
+    let handler = SyncFitbitDataCommandHandler::new(
+        Arc::new(oauth_mock),
+        Arc::new(data_mock),
+        Arc::new(token_store),
+        Arc::new(tag_repo),
+        Arc::new(stat_repo),
+        clock,
+        chrono_tz::UTC,
+        HashSet::from([FitbitMetric::Steps]),
+    );
+
+    let command = SyncFitbitDataCommand {
+        since: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        until: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+    };
+
+    // Act
+    let result = handler.handle(command).await;
+
+    // Assert
+    assert!(
+        result.is_ok(),
+        "Sync should succeed after refresh: {:?}",
+        result
+    );
+}
+
+#[tokio::test]
+async fn test_missing_scopes_returns_actionable_error() {
+    // Arrange
+    let oauth_mock = MockFitbitOAuth::new();
+    let data_mock = MockFitbitData::new();
+    let mut token_store = MockTokenStore::new();
+    let tag_repo = MockTagRepository::new();
+    let stat_repo = MockStatRepository::new();
+
+    let clock = Arc::new(MockClock { now: Utc::now() });
+
+    // Token with incomplete scopes (missing "sleep")
+    let incomplete_token = FitbitTokenData {
+        access_token: AccessToken::new("test".to_string()),
+        refresh_token: RefreshToken::new("test".to_string()),
+        expires_at: Utc::now() + ChronoDuration::hours(1),
+        scopes: vec!["activity".to_string()], // Missing "sleep"
+    };
+
+    token_store
+        .expect_load()
+        .times(1)
+        .returning(move |_| Ok(Some(incomplete_token.clone())));
+
+    let handler = SyncFitbitDataCommandHandler::new(
+        Arc::new(oauth_mock),
+        Arc::new(data_mock),
+        Arc::new(token_store),
+        Arc::new(tag_repo),
+        Arc::new(stat_repo),
+        clock,
+        chrono_tz::UTC,
+        HashSet::from([FitbitMetric::Steps, FitbitMetric::SleepDuration]),
+    );
+
+    let command = SyncFitbitDataCommand {
+        since: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        until: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+    };
+
+    // Act
+    let result = handler.handle(command).await;
+
+    // Assert
+    assert!(result.is_err());
+    let error_msg = format!("{:?}", result.err().unwrap());
+    assert!(
+        error_msg.contains("missing required scopes") || error_msg.contains("sleep"),
+        "Error should mention missing scopes: {}",
+        error_msg
+    );
+}
+
+#[tokio::test]
+async fn test_token_expiring_triggers_proactive_refresh() {
+    // Arrange
+    let mut oauth_mock = MockFitbitOAuth::new();
+    let mut data_mock = MockFitbitData::new();
+    let mut token_store = MockTokenStore::new();
+    let mut tag_repo = MockTagRepository::new();
+    let mut stat_repo = MockStatRepository::new();
+
+    let now = Utc::now();
+    let clock = Arc::new(MockClock { now });
+
+    // Token expiring in 2 minutes (less than 5 minute default skew)
+    let expiring_token = FitbitTokenData {
+        access_token: AccessToken::new("expiring".to_string()),
+        refresh_token: RefreshToken::new("refresh".to_string()),
+        expires_at: now + ChronoDuration::minutes(2),
+        scopes: vec!["activity".to_string()],
+    };
+
+    let refreshed_token = create_test_token(3600);
+
+    token_store
+        .expect_load()
+        .times(1)
+        .returning(move |_| Ok(Some(expiring_token.clone())));
+
+    // Expect proactive refresh BEFORE any API calls
+    oauth_mock
+        .expect_refresh()
+        .times(1)
+        .returning(move |_| Ok(refreshed_token.clone()));
+
+    // Expect token save after proactive refresh
+    token_store.expect_save().times(1).returning(|_, _| Ok(()));
+
+    tag_repo
+        .expect_find_statistic_id_by_exact_tags()
+        .times(1)
+        .returning(|_| Ok(Some(StatisticId(1))));
+
+    data_mock
+        .expect_get_activity_data()
+        .times(1)
+        .returning(|_, _| Ok(create_test_activity_data()));
+
+    stat_repo
+        .expect_save_log_value()
+        .times(1)
+        .returning(|_, _, _| Ok(()));
+
+    token_store
+        .expect_set_last_sync_at()
+        .times(1)
+        .returning(|_, _| Ok(()));
+
+    let handler = SyncFitbitDataCommandHandler::new(
+        Arc::new(oauth_mock),
+        Arc::new(data_mock),
+        Arc::new(token_store),
+        Arc::new(tag_repo),
+        Arc::new(stat_repo),
+        clock,
+        chrono_tz::UTC,
+        HashSet::from([FitbitMetric::Steps]),
+    );
+
+    let command = SyncFitbitDataCommand {
+        since: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        until: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+    };
+
+    // Act
+    let result = handler.handle(command).await;
+
+    // Assert
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_sync_same_date_twice_is_idempotent() {
+    // Arrange
+    let oauth_mock = MockFitbitOAuth::new();
+    let mut data_mock = MockFitbitData::new();
+    let mut token_store = MockTokenStore::new();
+    let mut tag_repo = MockTagRepository::new();
+    let mut stat_repo = MockStatRepository::new();
+
+    let clock = Arc::new(MockClock { now: Utc::now() });
+
+    let token = create_test_token(3600);
+
+    token_store
+        .expect_load()
+        .times(2)
+        .returning(move |_| Ok(Some(token.clone())));
+
+    tag_repo
+        .expect_find_statistic_id_by_exact_tags()
+        .times(2)
+        .returning(|_| Ok(Some(StatisticId(1))));
+
+    // API should return same data both times
+    data_mock
+        .expect_get_activity_data()
+        .times(2)
+        .returning(|_, _| Ok(create_test_activity_data()));
+
+    // Repository should receive same data twice (UPSERT behavior)
+    stat_repo
+        .expect_save_log_value()
+        .times(2)
+        .withf(|id, date, value| {
+            *id == StatisticId(1)
+                && *date == NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()
+                && value == &serde_json::json!(10000)
+        })
+        .returning(|_, _, _| Ok(()));
+
+    token_store
+        .expect_set_last_sync_at()
+        .times(2)
+        .returning(|_, _| Ok(()));
+
+    let handler = SyncFitbitDataCommandHandler::new(
+        Arc::new(oauth_mock),
+        Arc::new(data_mock),
+        Arc::new(token_store),
+        Arc::new(tag_repo),
+        Arc::new(stat_repo),
+        clock,
+        chrono_tz::UTC,
+        HashSet::from([FitbitMetric::Steps]),
+    );
+
+    let command = SyncFitbitDataCommand {
+        since: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        until: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+    };
+
+    // Act - Run sync twice
+    let result1 = handler.handle(command).await;
+    let result2 = handler.handle(command).await;
+
+    // Assert
+    assert!(result1.is_ok());
+    assert!(result2.is_ok());
+}
+
+#[tokio::test]
+async fn test_validates_date_range() {
+    // Arrange
+    let oauth_mock = MockFitbitOAuth::new();
+    let data_mock = MockFitbitData::new();
+    let token_store = MockTokenStore::new();
+    let tag_repo = MockTagRepository::new();
+    let stat_repo = MockStatRepository::new();
+
+    let clock = Arc::new(MockClock { now: Utc::now() });
+
+    let handler = SyncFitbitDataCommandHandler::new(
+        Arc::new(oauth_mock),
+        Arc::new(data_mock),
+        Arc::new(token_store),
+        Arc::new(tag_repo),
+        Arc::new(stat_repo),
+        clock,
+        chrono_tz::UTC,
+        HashSet::from([FitbitMetric::Steps]),
+    );
+
+    // Test 1: since > until
+    let command = SyncFitbitDataCommand {
+        since: NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
+        until: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+    };
+
+    let result = handler.handle(command).await;
+    assert!(result.is_err());
+    assert!(format!("{:?}", result.err().unwrap()).contains("before"));
+
+    // Test 2: Range too large (> 31 days)
+    let command = SyncFitbitDataCommand {
+        since: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        until: NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
+    };
+
+    let result = handler.handle(command).await;
+    assert!(result.is_err());
+    let error_msg = format!("{:?}", result.err().unwrap());
+    assert!(
+        error_msg.contains("range") || error_msg.contains("31"),
+        "Error should mention range or 31: {}",
+        error_msg
+    );
+}

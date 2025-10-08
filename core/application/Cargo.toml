@@ -29,5 +29,7 @@ zeroize = { version = "1.6", features = ["derive"] }
 
 [dev-dependencies]
 mockall = "0.13.1"
+proptest = "1.5"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }
 lifestats-core = { path = "../core", features = ["testing"] }
 plot-domain = { path = "../plot-domain", features = ["testing"] }
