@@ -5,8 +5,10 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, Utc};
 
+use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
+
 use crate::{
-    error::ApplicationResult,
+    error::{ApplicationError, ApplicationResult},
     integrations::tokens::{AccessToken, FitbitTokenData, RefreshToken},
 };
 
@@ -103,6 +105,26 @@ pub struct FitbitSleepData {
     pub sleep_efficiency: Option<u8>,
 }
 
+impl FitbitSleepData {
+    /// Extracts the main sleep period and converts it into a TimeFrameList.
+    /// Returns Ok(None) if there is no main sleep period for the day.
+    pub fn into_main_sleep_time_frames(&self) -> ApplicationResult<Option<TimeFrameList>> {
+        if let (Some(start), Some(end)) = (self.fell_asleep_at_utc, self.woke_up_at_utc) {
+            let time_frame = TimeFrame::new(start.time(), end.time())
+                .map_err(|e| ApplicationError::InvalidInput(e.to_string()))?;
+
+            let mut time_frame_list = TimeFrameList::default();
+            time_frame_list
+                .append_frame(time_frame)
+                .map_err(|e| ApplicationError::InvalidInput(e.to_string()))?;
+
+            Ok(Some(time_frame_list))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 #[async_trait]
 pub trait FitbitOAuthApi: Send + Sync {
     async fn exchange_code_for_token(
@@ -139,4 +161,121 @@ pub trait TokenStorePort: Send + Sync {
 
 pub trait Clock: Send + Sync {
     fn now_utc(&self) -> DateTime<Utc>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn test_into_main_sleep_time_frames_happy_path() {
+        // Arrange: Create sleep data with valid start and end times on the same day
+        // Note: TimeFrame only supports same-day ranges, so this represents a nap
+        let sleep_data = FitbitSleepData {
+            total_duration_asleep: None,
+            total_duration_awake: None,
+            fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 14, 0, 0).unwrap()),
+            woke_up_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 16, 30, 0).unwrap()),
+            sleep_efficiency: None,
+        };
+
+        // Act
+        let result = sleep_data.into_main_sleep_time_frames();
+
+        // Assert
+        assert!(result.is_ok());
+        let time_frame_list = result.unwrap();
+        assert!(time_frame_list.is_some());
+
+        let list = time_frame_list.unwrap();
+        assert_eq!(list.len(), 1);
+
+        let frames: Vec<_> = list.iter().collect();
+        assert_eq!(
+            frames[0].get_start(),
+            chrono::NaiveTime::from_hms_opt(14, 0, 0).unwrap()
+        );
+        assert_eq!(
+            frames[0].get_end(),
+            chrono::NaiveTime::from_hms_opt(16, 30, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_into_main_sleep_time_frames_no_sleep_data() {
+        // Arrange: Create sleep data with no start/end times
+        let sleep_data = FitbitSleepData {
+            total_duration_asleep: None,
+            total_duration_awake: None,
+            fell_asleep_at_utc: None,
+            woke_up_at_utc: None,
+            sleep_efficiency: None,
+        };
+
+        // Act
+        let result = sleep_data.into_main_sleep_time_frames();
+
+        // Assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_into_main_sleep_time_frames_only_start_time() {
+        // Arrange: Create sleep data with only start time (incomplete data)
+        let sleep_data = FitbitSleepData {
+            total_duration_asleep: None,
+            total_duration_awake: None,
+            fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 22, 30, 0).unwrap()),
+            woke_up_at_utc: None,
+            sleep_efficiency: None,
+        };
+
+        // Act
+        let result = sleep_data.into_main_sleep_time_frames();
+
+        // Assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_into_main_sleep_time_frames_only_end_time() {
+        // Arrange: Create sleep data with only end time (incomplete data)
+        let sleep_data = FitbitSleepData {
+            total_duration_asleep: None,
+            total_duration_awake: None,
+            fell_asleep_at_utc: None,
+            woke_up_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 16, 6, 15, 0).unwrap()),
+            sleep_efficiency: None,
+        };
+
+        // Act
+        let result = sleep_data.into_main_sleep_time_frames();
+
+        // Assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_into_main_sleep_time_frames_invalid_order() {
+        // Arrange: Create sleep data with end time before start time (same day)
+        let sleep_data = FitbitSleepData {
+            total_duration_asleep: None,
+            total_duration_awake: None,
+            fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 6, 15, 0).unwrap()),
+            woke_up_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 3, 30, 0).unwrap()),
+            sleep_efficiency: None,
+        };
+
+        // Act
+        let result = sleep_data.into_main_sleep_time_frames();
+
+        // Assert
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Start time cannot be later than end time"));
+    }
 }

@@ -6,7 +6,6 @@ use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_core::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;
-use lifestats_core::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use std::collections::HashMap;
 
@@ -61,7 +60,7 @@ impl BundleFactory for FitbitBundleFactory {
                 .to_string(),
         );
 
-        let sleep_duration = AnyStatistic::TimeSpans(TimeSpansStatistic::new(
+        let sleep_duration = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             sleep_duration_metadata,
             None,
             current_date,
