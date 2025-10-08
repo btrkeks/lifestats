@@ -39,6 +39,10 @@ impl BundleFactory for FitbitBundleFactory {
                 .with_tag(
                     "metric".to_string(),
                     FitbitMetric::Steps.canonical_tag_value().to_string(),
+                )
+                .with_tag(
+                    "stat_key".to_string(),
+                    FitbitMetric::Steps.canonical_tag_value().to_string(),
                 );
 
         let steps = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
@@ -56,6 +60,12 @@ impl BundleFactory for FitbitBundleFactory {
         .with_tag("source".to_string(), "fitbit".to_string())
         .with_tag(
             "metric".to_string(),
+            FitbitMetric::SleepDuration
+                .canonical_tag_value()
+                .to_string(),
+        )
+        .with_tag(
+            "stat_key".to_string(),
             FitbitMetric::SleepDuration
                 .canonical_tag_value()
                 .to_string(),
@@ -79,6 +89,12 @@ impl BundleFactory for FitbitBundleFactory {
             FitbitMetric::FellAsleepTime
                 .canonical_tag_value()
                 .to_string(),
+        )
+        .with_tag(
+            "stat_key".to_string(),
+            FitbitMetric::FellAsleepTime
+                .canonical_tag_value()
+                .to_string(),
         );
 
         let fell_asleep_time = AnyStatistic::PointInTime(PointInTimeStatistic::new(
@@ -96,6 +112,10 @@ impl BundleFactory for FitbitBundleFactory {
         .with_tag("source".to_string(), "fitbit".to_string())
         .with_tag(
             "metric".to_string(),
+            FitbitMetric::WakeUpTime.canonical_tag_value().to_string(),
+        )
+        .with_tag(
+            "stat_key".to_string(),
             FitbitMetric::WakeUpTime.canonical_tag_value().to_string(),
         );
 

@@ -16,23 +16,23 @@ diesel::table! {
 }
 
 diesel::table! {
-    logging_data (statistic_id, date) {
-        statistic_id -> Integer,
-        date -> Text,
-        value -> Text,
+    integrations (id) {
+        id -> Nullable<Integer>,
+        source_name -> Text,
+        access_token -> Nullable<Text>,
+        refresh_token -> Nullable<Text>,
+        expires_at_epoch_seconds -> Nullable<Integer>,
+        scopes -> Nullable<Text>,
+        last_sync_at -> Nullable<Text>,
+        canonical_tags -> Nullable<Text>,
     }
 }
 
 diesel::table! {
-    integrations (id) {
-        id -> Integer,
-        source_name -> Text,
-        access_token -> Nullable<Text>,
-        refresh_token -> Nullable<Text>,
-        expires_at_epoch_seconds -> Nullable<BigInt>,
-        scopes -> Nullable<Text>,
-        last_sync_at -> Nullable<Text>,
-        canonical_tags -> Nullable<Text>,
+    logging_data (statistic_id, date) {
+        statistic_id -> Integer,
+        date -> Text,
+        value -> Text,
     }
 }
 
