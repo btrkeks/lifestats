@@ -7,7 +7,7 @@ pub struct AccessToken(SecretString);
 
 impl AccessToken {
     pub fn new(token: impl Into<String>) -> Self {
-        Self(SecretString::new(token.into()))
+        Self(SecretString::new(token.into().into_boxed_str()))
     }
 
     pub fn as_str(&self) -> &str {
@@ -20,7 +20,7 @@ pub struct RefreshToken(SecretString);
 
 impl RefreshToken {
     pub fn new(token: impl Into<String>) -> Self {
-        Self(SecretString::new(token.into()))
+        Self(SecretString::new(token.into().into_boxed_str()))
     }
 
     pub fn as_str(&self) -> &str {

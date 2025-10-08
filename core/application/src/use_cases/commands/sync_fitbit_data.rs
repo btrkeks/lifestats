@@ -457,8 +457,8 @@ impl SyncFitbitDataCommandHandler {
         let exponent = (attempt.saturating_sub(1)) as u32;
         let base = (self.base_backoff_ms as f64 * self.backoff_multiplier.powi(exponent as i32))
             .max(self.base_backoff_ms as f64);
-        let mut rng = rand::thread_rng();
-        let jitter = rng.gen_range(0.0..=base);
+        let mut rng = rand::rng();
+        let jitter = rng.random_range(0.0..=base);
         StdDuration::from_millis(jitter as u64)
     }
 
