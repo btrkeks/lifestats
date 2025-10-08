@@ -709,7 +709,7 @@ mod tests {
                 integer_stat_with_tags(&[
                     ("source", "anki"),
                     ("deck", "spanish"),
-                    ("stat_key", "time_spent"),
+                    ("metric", "time_spent"),
                 ]),
             )?;
 
@@ -718,7 +718,7 @@ mod tests {
                 integer_stat_with_tags(&[
                     ("source", "anki"),
                     ("deck", "french"),
-                    ("stat_key", "time_spent"),
+                    ("metric", "time_spent"),
                 ]),
             )?;
 
@@ -746,7 +746,7 @@ mod tests {
 
             persist_stat(
                 &repo,
-                integer_stat_with_tags(&[("source", "anki"), ("stat_key", "time_spent")]),
+                integer_stat_with_tags(&[("source", "anki"), ("metric", "time_spent")]),
             )?;
 
             let mut filter = HashMap::new();

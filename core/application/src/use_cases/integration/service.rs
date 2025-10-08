@@ -67,62 +67,46 @@ impl IntegrationServiceTrait for IntegrationService {
         source: &str,
         context: HashMap<String, String>,
     ) -> ApplicationResult<HashMap<String, StatisticId>> {
-        // Build tags map for querying existing statistics
-        let mut tags = HashMap::new();
-        tags.insert("source".to_string(), source.to_string());
-        for (key, value) in &context {
-            tags.insert(key.clone(), value.clone());
-        }
-
-        // Check if statistics already exist
-        let existing_stats = self
-            .repository
-            .find_by_tags(&tags)
-            .map_err(ApplicationError::Repository)?;
-
-        if !existing_stats.is_empty() {
-            // Statistics already exist - extract IDs and return
-            let mut result = HashMap::new();
-            for stat in existing_stats {
-                if let Some(key) = stat.get_metadata().tags().get("stat_key") {
-                    result.insert(key.clone(), stat.get_metadata().id());
-                } else {
-                    log::warn!(
-                        "Integration statistic {} missing stat_key tag; skipping idempotency mapping",
-                        stat.get_metadata().id().0
-                    );
-                }
-            }
-            return Ok(result);
-        }
-
-        // Statistics don't exist - create them
         let factory = self
             .factories
             .get(source)
             .ok_or_else(|| ApplicationError::InvalidInput(format!("Unknown source: {}", source)))?;
 
         let provisioned_stats = factory.provision(&context)?;
-        let statistics: Vec<_> = provisioned_stats
-            .into_iter()
-            .map(|provisioned| provisioned.statistic)
-            .collect();
+
+        let mut result = HashMap::new();
+        let mut statistics_to_create = Vec::new();
+        let mut keys_to_create = Vec::new();
+
+        // Each provisioned statistic defines canonical tags. Reuse them to look up
+        // existing metadata so factories control idempotency via their tag design.
+        for provisioned in provisioned_stats {
+            let tags = provisioned.statistic.get_metadata().tags().clone();
+
+            let existing = self
+                .repository
+                .find_by_tags(&tags)
+                .map_err(ApplicationError::Repository)?;
+
+            if let Some(statistic) = existing.into_iter().next() {
+                result.insert(provisioned.key, statistic.get_metadata().id());
+            } else {
+                keys_to_create.push(provisioned.key);
+                statistics_to_create.push(provisioned.statistic);
+            }
+        }
+
+        if statistics_to_create.is_empty() {
+            return Ok(result);
+        }
 
         let persisted = self
             .repository
-            .create_many_metadata(statistics)
+            .create_many_metadata(statistics_to_create)
             .map_err(ApplicationError::Repository)?;
 
-        let mut result = HashMap::new();
-        for statistic in persisted {
-            if let Some(key) = statistic.get_metadata().tags().get("stat_key") {
-                result.insert(key.clone(), statistic.get_metadata().id());
-            } else {
-                log::warn!(
-                    "Integration statistic {} missing stat_key tag; skipping idempotency mapping",
-                    statistic.get_metadata().id().0
-                );
-            }
+        for (key, statistic) in keys_to_create.into_iter().zip(persisted.into_iter()) {
+            result.insert(key, statistic.get_metadata().id());
         }
 
         Ok(result)

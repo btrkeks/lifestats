@@ -1,11 +1,12 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex as StdMutex};
-use std::time::Duration as StdDuration;
-
 use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, TimeZone, Utc};
 use mockall::{mock, predicate::*};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex as StdMutex};
 
 use lifestats_application::error::{ApplicationError, ApplicationResult};
+mod helpers;
+
+use helpers::mock_fitbit_statistic_metadata;
 use lifestats_application::integrations::fitbit::error::FitbitUpstreamError;
 use lifestats_application::integrations::fitbit::ports::{
     FitbitActivityData, FitbitDataApi, FitbitMetric, FitbitOAuthApi, FitbitSleepData,
@@ -195,11 +196,21 @@ async fn test_unauthorized_triggers_refresh_and_retry() {
         .times(1)
         .returning(move |_| Ok(Some(token.clone())));
 
-    // Tag repository returns statistic ID for steps
+    // Tag repository returns statistic ID for steps with canonical Fitbit tags
+    let steps_metadata =
+        mock_fitbit_statistic_metadata(1, FitbitMetric::Steps.canonical_tag_value());
+    let expected_steps_tags = TagSet::new(
+        steps_metadata
+            .tags()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone())),
+    );
+    let steps_stat_id = steps_metadata.id();
     tag_repo
         .expect_find_statistic_id_by_exact_tags()
         .times(1)
-        .returning(|_| Ok(Some(StatisticId(1))));
+        .withf(move |tags| *tags == expected_steps_tags)
+        .returning(move |_| Ok(Some(steps_stat_id)));
 
     // First API call returns 401 Unauthorized
     let unauthorized_call = StdMutex::new(false);
@@ -356,10 +367,20 @@ async fn test_token_expiring_triggers_proactive_refresh() {
     // Expect token save after proactive refresh
     token_store.expect_save().times(1).returning(|_, _| Ok(()));
 
+    let steps_metadata =
+        mock_fitbit_statistic_metadata(1, FitbitMetric::Steps.canonical_tag_value());
+    let expected_steps_tags = TagSet::new(
+        steps_metadata
+            .tags()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone())),
+    );
+    let steps_stat_id = steps_metadata.id();
     tag_repo
         .expect_find_statistic_id_by_exact_tags()
         .times(1)
-        .returning(|_| Ok(Some(StatisticId(1))));
+        .withf(move |tags| *tags == expected_steps_tags)
+        .returning(move |_| Ok(Some(steps_stat_id)));
 
     data_mock
         .expect_get_activity_data()
@@ -417,10 +438,20 @@ async fn test_sync_same_date_twice_is_idempotent() {
         .times(2)
         .returning(move |_| Ok(Some(token.clone())));
 
+    let steps_metadata =
+        mock_fitbit_statistic_metadata(1, FitbitMetric::Steps.canonical_tag_value());
+    let expected_steps_tags = TagSet::new(
+        steps_metadata
+            .tags()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone())),
+    );
+    let steps_stat_id = steps_metadata.id();
     tag_repo
         .expect_find_statistic_id_by_exact_tags()
         .times(2)
-        .returning(|_| Ok(Some(StatisticId(1))));
+        .withf(move |tags| *tags == expected_steps_tags)
+        .returning(move |_| Ok(Some(steps_stat_id)));
 
     // API should return same data both times
     data_mock

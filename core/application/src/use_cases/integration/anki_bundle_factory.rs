@@ -14,6 +14,11 @@ use std::collections::HashMap;
 /// - Time Spent: tracks study sessions
 /// - Disruptions: counts interruptions during study
 /// - Backlog: tracks number of cards due
+const ANKI_SOURCE_TAG: &str = "anki";
+const METRIC_TIME_SPENT: &str = "time_spent";
+const METRIC_DISRUPTIONS: &str = "disruptions";
+const METRIC_BACKLOG: &str = "backlog";
+
 pub struct AnkiBundleFactory;
 
 impl BundleFactory for AnkiBundleFactory {
@@ -40,9 +45,9 @@ impl BundleFactory for AnkiBundleFactory {
             "Anki".to_string(),
             format!("[Anki] Study Time ({})", deck_name),
         )
-        .with_tag("source".to_string(), "anki".to_string())
+        .with_tag("source".to_string(), ANKI_SOURCE_TAG.to_string())
         .with_tag("deck_name".to_string(), deck_name.clone())
-        .with_tag("stat_key".to_string(), "time_spent".to_string());
+        .with_tag("metric".to_string(), METRIC_TIME_SPENT.to_string());
 
         let time_spent = AnyStatistic::TimeSpans(TimeSpansStatistic::new(
             time_spent_metadata,
@@ -56,9 +61,9 @@ impl BundleFactory for AnkiBundleFactory {
             "Anki".to_string(),
             format!("[Anki] Disruptions ({})", deck_name),
         )
-        .with_tag("source".to_string(), "anki".to_string())
+        .with_tag("source".to_string(), ANKI_SOURCE_TAG.to_string())
         .with_tag("deck_name".to_string(), deck_name.clone())
-        .with_tag("stat_key".to_string(), "disruptions".to_string());
+        .with_tag("metric".to_string(), METRIC_DISRUPTIONS.to_string());
 
         let disruptions = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             disruptions_metadata,
@@ -72,9 +77,9 @@ impl BundleFactory for AnkiBundleFactory {
             "Anki".to_string(),
             format!("[Anki] Backlog ({})", deck_name),
         )
-        .with_tag("source".to_string(), "anki".to_string())
+        .with_tag("source".to_string(), ANKI_SOURCE_TAG.to_string())
         .with_tag("deck_name".to_string(), deck_name.clone())
-        .with_tag("stat_key".to_string(), "backlog".to_string());
+        .with_tag("metric".to_string(), METRIC_BACKLOG.to_string());
 
         let backlog = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             backlog_metadata,
@@ -85,15 +90,15 @@ impl BundleFactory for AnkiBundleFactory {
         // Return the provisioned statistics
         Ok(vec![
             ProvisionedStatistic {
-                key: "time_spent".to_string(),
+                key: METRIC_TIME_SPENT.to_string(),
                 statistic: time_spent,
             },
             ProvisionedStatistic {
-                key: "disruptions".to_string(),
+                key: METRIC_DISRUPTIONS.to_string(),
                 statistic: disruptions,
             },
             ProvisionedStatistic {
-                key: "backlog".to_string(),
+                key: METRIC_BACKLOG.to_string(),
                 statistic: backlog,
             },
         ])
