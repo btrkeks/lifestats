@@ -190,7 +190,7 @@ impl StatisticRepository for SqliteStatisticRepository {
             serde_json::to_string(tags).map_err(|e| RepositoryError::OperationFailed(e.into()))?;
 
         let query = diesel::sql_query(
-            "SELECT id, name, category, statistic_type, default_goal_valid_since, tags \
+            "SELECT id, name, category, statistic_type, default_goal_valid_since, tags, canonical_tags \
              FROM statistics \
              WHERE NOT EXISTS ( \
                  SELECT 1 \
