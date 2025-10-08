@@ -244,7 +244,7 @@ Generate a `sync_run_id = Uuid::new_v4()` and propagate through all spans.
 
 ---
 
-## Phase 3: Infrastructure Adapters (Driven)
+## Phase 3: Infrastructure Adapters (Driven) (COMPLETED)
 
 ### `core/infrastructure/fitbit_client`
 
@@ -304,7 +304,7 @@ impl Clock for SystemClock {
 
 ---
 
-## Phase 4: Driving Adapter (Web API)
+## Phase 4: Driving Adapter (Web API) (COMPLETED)
 
 ### `lifestats-web-api`
 

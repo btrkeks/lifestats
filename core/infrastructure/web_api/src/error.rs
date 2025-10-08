@@ -12,6 +12,7 @@ use serde_json::json;
 pub enum ApiError {
     NotFound(String),
     BadRequest(String),
+    Unauthorized(String),
     ValidationError(String),
     InternalError(String),
     InternalServerError(anyhow::Error),
@@ -30,6 +31,9 @@ impl IntoResponse for ApiError {
             }
             ApiError::BadRequest(msg) | ApiError::ValidationError(msg) => {
                 (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response()
+            }
+            ApiError::Unauthorized(msg) => {
+                (StatusCode::UNAUTHORIZED, Json(json!({ "error": msg }))).into_response()
             }
             ApiError::InternalError(msg) => {
                 tracing::error!("Internal error: {}", msg);
@@ -122,10 +126,14 @@ impl From<lifestats_application::error::ApplicationError> for ApiError {
                     message: "Fitbit rate limited the request".to_string(),
                     retry_after,
                 },
-                lifestats_application::integrations::fitbit::error::FitbitUpstreamError::Unauthorized
-                | lifestats_application::integrations::fitbit::error::FitbitUpstreamError::InvalidGrant => {
+                lifestats_application::integrations::fitbit::error::FitbitUpstreamError::InvalidGrant => {
+                    ApiError::Unauthorized(
+                        "Invalid grant. Please re-authorize the Fitbit integration.".to_string(),
+                    )
+                }
+                lifestats_application::integrations::fitbit::error::FitbitUpstreamError::Unauthorized => {
                     ApiError::BadGateway(
-                        "Fitbit authentication failed. Please re-authorize the integration.".to_string(),
+                        "Fitbit authentication failed. Token may have been revoked.".to_string(),
                     )
                 }
                 other => ApiError::BadGateway(other.to_string()),

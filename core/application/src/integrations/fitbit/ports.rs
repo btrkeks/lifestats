@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::fmt;
+use std::str::FromStr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, Utc};
@@ -20,6 +22,32 @@ pub enum FitbitMetric {
     ActiveMinutes,
     CardioMinutes,
     PeakMinutes,
+}
+
+impl FromStr for FitbitMetric {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "sleep_duration" => Ok(FitbitMetric::SleepDuration),
+            "wake_up_time" => Ok(FitbitMetric::WakeUpTime),
+            "fell_asleep_time" => Ok(FitbitMetric::FellAsleepTime),
+            "sleep_efficiency" => Ok(FitbitMetric::SleepEfficiency),
+            "total_duration_awake" => Ok(FitbitMetric::TotalDurationAwake),
+            "steps" => Ok(FitbitMetric::Steps),
+            "calories_out" => Ok(FitbitMetric::CaloriesOut),
+            "active_minutes" => Ok(FitbitMetric::ActiveMinutes),
+            "cardio_minutes" => Ok(FitbitMetric::CardioMinutes),
+            "peak_minutes" => Ok(FitbitMetric::PeakMinutes),
+            _ => Err(format!("Unknown Fitbit metric: {}", s)),
+        }
+    }
+}
+
+impl fmt::Display for FitbitMetric {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.canonical_tag_value())
+    }
 }
 
 impl FitbitMetric {

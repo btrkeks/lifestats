@@ -1,8 +1,11 @@
 mod dto;
 mod error;
 mod helpers;
+mod integrations;
 mod routes;
 mod state;
+
+use std::sync::Arc;
 
 use anyhow::Result;
 use lifestats_bootstrap::build_services;
@@ -30,6 +33,7 @@ async fn main() -> Result<()> {
 
     let app = build_services()?;
 
+    // Build lean AppState with only globally shared dependencies
     let app_state = AppState::new(
         app.statistic_repository,
         app.plot_repository,
@@ -38,7 +42,36 @@ async fn main() -> Result<()> {
         app.integration_service,
     );
 
+    // Load Fitbit configuration from environment
+    let fitbit_client_id =
+        std::env::var("FITBIT_CLIENT_ID").unwrap_or_else(|_| "dummy_client_id".to_string());
+    let fitbit_client_secret =
+        std::env::var("FITBIT_CLIENT_SECRET").unwrap_or_else(|_| "dummy_secret".to_string());
+    let fitbit_redirect_uri = std::env::var("FITBIT_REDIRECT_URI")
+        .unwrap_or_else(|_| "http://localhost:3000/integrations/fitbit/auth/callback".to_string());
+    let fitbit_scopes = std::env::var("FITBIT_SCOPES")
+        .unwrap_or_else(|_| "activity sleep".to_string())
+        .split_whitespace()
+        .map(String::from)
+        .collect();
+
+    let fitbit_config = Arc::new(crate::integrations::fitbit::config::FitbitConfig::new(
+        fitbit_client_id,
+        fitbit_client_secret,
+        fitbit_redirect_uri,
+        fitbit_scopes,
+    ));
+
+    let fitbit_state_cache =
+        Arc::new(crate::integrations::fitbit::state_cache::OAuthStateCache::new());
+
+    // Build router with state and inject Fitbit dependencies via Extension layers
     let app = routes::create_router(app_state)
+        .layer(axum::Extension(fitbit_config))
+        .layer(axum::Extension(app.fitbit_oauth_api))
+        .layer(axum::Extension(app.fitbit_token_store))
+        .layer(axum::Extension(fitbit_state_cache))
+        .layer(axum::Extension(app.fitbit_sync_handler))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 

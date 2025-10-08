@@ -38,6 +38,14 @@ dotenvy = "0.15"
 # Date/Time
 chrono = { workspace = true }
 
+# OAuth & State Management
+moka = { version = "0.12", features = ["future"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+base64 = "0.22"
+sha2 = "0.10"
+url = "2.0"
+rand = "0.8"
+
 [dev-dependencies]
 # For making in-memory requests to the axum router
 axum-test = "18.1"

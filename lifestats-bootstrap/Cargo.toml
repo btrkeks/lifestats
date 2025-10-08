@@ -13,7 +13,12 @@ events = { path = "../events/event_impl" }
 # Concrete Infrastructure Adapters
 lifestats-persistence = { path = "../core/infrastructure/persistence" }
 lifestats-plotting = { path = "../core/infrastructure/plotting" }
+lifestats-fitbit-client = { path = "../core/infrastructure/fitbit_client" }
+lifestats-system-clock = { path = "../core/infrastructure/system_clock" }
 
 # Utilities
 anyhow = { workspace = true }
 dotenvy = "0.15"
+chrono = { workspace = true }
+chrono-tz = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }

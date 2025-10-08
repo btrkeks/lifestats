@@ -8,8 +8,8 @@ use plot_domain::plot::repository::PlotRepository;
 
 /// Shared application state injected into every request handler
 ///
-/// Routes use repository fields directly and instantiate command/query handlers.
-/// The management_service is kept temporarily for create_statistic and delete_statistic routes.
+/// This contains only globally shared dependencies. Feature-specific
+/// dependencies (like Fitbit integration) are injected via Axum layers.
 pub struct AppState<R, P, Rend, E, I>
 where
     R: StatisticRepository + Send + Sync + 'static,
@@ -23,7 +23,6 @@ where
     pub plot_repository: Arc<P>,
     pub event_publisher: Arc<E>,
     pub renderer: Arc<Rend>,
-
     pub integration_service: Arc<I>,
 }
 

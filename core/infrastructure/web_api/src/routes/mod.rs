@@ -60,5 +60,18 @@ where
             "/integrations/{source}",
             post(integrations::provision_integration),
         )
+        // Fitbit OAuth & Sync endpoints
+        .route(
+            "/integrations/fitbit/auth/begin",
+            get(crate::integrations::fitbit::handlers::auth_begin_handler),
+        )
+        .route(
+            "/integrations/fitbit/auth/callback",
+            get(crate::integrations::fitbit::handlers::auth_callback_handler),
+        )
+        .route(
+            "/integrations/fitbit/sync",
+            post(crate::integrations::fitbit::handlers::sync_handler),
+        )
         .with_state(app_state)
 }
