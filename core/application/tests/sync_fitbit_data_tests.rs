@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex as StdMutex};
 
 use lifestats_application::error::{ApplicationError, ApplicationResult};
+use lifestats_core::statistic::ports::error::RepositoryError;
 mod helpers;
 
 use helpers::mock_fitbit_statistic_metadata;
@@ -91,40 +92,22 @@ mock! {
     pub StatRepository {}
 
     impl StatisticRepository for StatRepository {
-        fn save_log_value(
-            &self,
-            statistic_id: StatisticId,
-            date: NaiveDate,
-            value: serde_json::Value,
-        ) -> ApplicationResult<()>;
-
-        fn all_statistics(&self) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
-        fn find_by_id(
-            &self,
-            id: StatisticId,
-        ) -> ApplicationResult<Option<lifestats_core::statistic::any_statistic::AnyStatistic>>;
-        fn find_metadata_by_id(&self, id: StatisticId) -> ApplicationResult<lifestats_core::statistic::any_statistic::AnyStatistic>;
-        fn find_all_metadata(&self) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
-        fn create_metadata(&self, statistic: lifestats_core::statistic::any_statistic::AnyStatistic) -> ApplicationResult<lifestats_core::statistic::any_statistic::AnyStatistic>;
-        fn update_metadata(&self, statistic: lifestats_core::statistic::any_statistic::AnyStatistic) -> ApplicationResult<()>;
-        fn create_many_metadata(&self, statistics: Vec<lifestats_core::statistic::any_statistic::AnyStatistic>) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
-        fn find_by_tags(&self, tags: &HashMap<String, String>) -> ApplicationResult<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>>;
-        fn find_log_value(&self, statistic_id: StatisticId, date: NaiveDate) -> ApplicationResult<Option<serde_json::Value>>;
-        fn find_log_values_in_range(&self, statistic_id: StatisticId, range: lifestats_core::shared::value_objects::date_range::DateRange) -> ApplicationResult<Vec<lifestats_core::shared::value_objects::dated_value::DatedValue<serde_json::Value>>>;
-        fn find_goal(&self, statistic_id: StatisticId, date: NaiveDate) -> ApplicationResult<Option<serde_json::Value>>;
-        fn save_goal(&self, statistic_id: StatisticId, date: NaiveDate, value: Option<serde_json::Value>) -> ApplicationResult<()>;
-        fn find_goals_in_range(&self, statistic_id: StatisticId, range: lifestats_core::shared::value_objects::date_range::DateRange) -> ApplicationResult<Vec<lifestats_core::shared::value_objects::dated_value::DatedValue<serde_json::Value>>>;
-        fn find_default_goal(&self, statistic_id: StatisticId) -> ApplicationResult<Option<serde_json::Value>>;
-        fn save_default_goal(&self, statistic_id: StatisticId, value: serde_json::Value) -> ApplicationResult<()>;
-        fn delete_default_goal(&self, statistic_id: StatisticId) -> ApplicationResult<()>;
-        fn delete_metadata(&self, id: StatisticId) -> ApplicationResult<()>;
-        fn save(&self, statistic: &lifestats_core::statistic::any_statistic::AnyStatistic) -> ApplicationResult<()>;
-        fn save_statistic_with_id(
-            &self,
-            id: StatisticId,
-            statistic: &lifestats_core::statistic::any_statistic::AnyStatistic,
-        ) -> ApplicationResult<()>;
-        fn delete(&self, id: StatisticId) -> ApplicationResult<()>;
+        fn find_metadata_by_id(&self, id: StatisticId) -> Result<lifestats_core::statistic::any_statistic::AnyStatistic, RepositoryError>;
+        fn find_all_metadata(&self) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>, RepositoryError>;
+        fn create_metadata(&self, statistic: lifestats_core::statistic::any_statistic::AnyStatistic) -> Result<lifestats_core::statistic::any_statistic::AnyStatistic, RepositoryError>;
+        fn update_metadata(&self, statistic: lifestats_core::statistic::any_statistic::AnyStatistic) -> Result<(), RepositoryError>;
+        fn create_many_metadata(&self, statistics: Vec<lifestats_core::statistic::any_statistic::AnyStatistic>) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>, RepositoryError>;
+        fn find_by_tags(&self, tags: &HashMap<String, String>) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>, RepositoryError>;
+        fn find_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>, RepositoryError>;
+        fn save_log_value(&self, id: StatisticId, date: NaiveDate, value: serde_json::Value) -> Result<(), RepositoryError>;
+        fn find_log_values_in_range(&self, id: StatisticId, range: lifestats_core::shared::date_range::DateRange) -> Result<Vec<lifestats_core::shared::dated_value::DatedValue<serde_json::Value>>, RepositoryError>;
+        fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>, RepositoryError>;
+        fn save_goal(&self, id: StatisticId, date: NaiveDate, goal: Option<serde_json::Value>) -> Result<(), RepositoryError>;
+        fn find_goals_in_range(&self, id: StatisticId, range: lifestats_core::shared::date_range::DateRange) -> Result<Vec<lifestats_core::shared::dated_value::DatedValue<serde_json::Value>>, RepositoryError>;
+        fn find_default_goal(&self, id: StatisticId) -> Result<Option<serde_json::Value>, RepositoryError>;
+        fn save_default_goal(&self, id: StatisticId, goal: serde_json::Value) -> Result<(), RepositoryError>;
+        fn delete_default_goal(&self, id: StatisticId) -> Result<(), RepositoryError>;
+        fn delete_metadata(&self, id: StatisticId) -> Result<(), RepositoryError>;
     }
 }
 
