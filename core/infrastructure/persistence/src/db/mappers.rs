@@ -125,10 +125,7 @@ impl StatisticDto {
 
         // Create metadata and add tags
         let mut metadata =
-            StatisticMetadata::new(StatisticId(self.id as u32), self.category, self.name).with_tag(
-                "statistic_type".to_string(),
-                self.statistic_type.as_str().to_string(),
-            );
+            StatisticMetadata::new(StatisticId(self.id as u32), self.category, self.name);
 
         // Apply all tags using the builder pattern
         for (key, value) in tags {
