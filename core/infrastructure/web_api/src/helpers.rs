@@ -3,8 +3,6 @@ use lifestats_core::shared::percentage::Percentage;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
-use lifestats_core::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
-use lifestats_core::statistic::value_objects::goals::goal_trait::Goal;
 use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use plot_domain::plot::data::{DrawableData, DrawableGoal};
@@ -95,57 +93,6 @@ pub fn json_to_drawable_goal(statistic: &AnyStatistic, goal: &Value) -> Result<D
         AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
             // Derived statistics typically don't have goals
             Err(anyhow!("Derived statistics do not support goals"))
-        }
-    }
-}
-
-/// Evaluates goal achievement for a given statistic and returns a percentage
-/// Returns None if no goal is provided
-pub fn evaluate_goal_achievement(
-    statistic: &AnyStatistic,
-    log_value: &Value,
-    goal_value: Option<&Value>,
-) -> Result<Option<Percentage>> {
-    let goal = match goal_value {
-        Some(g) => g,
-        None => return Ok(None),
-    };
-
-    match statistic {
-        AnyStatistic::Habit(_) => {
-            let value = log_value
-                .as_bool()
-                .ok_or_else(|| anyhow!("Expected bool for Habit statistic"))?;
-            let goal_obj = serde_json::from_value::<HabitGoal>(goal.clone())
-                .map_err(|e| anyhow!("Failed to parse HabitGoal: {}", e))?;
-            Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
-        }
-        AnyStatistic::IntegerAmount(_) => {
-            let value = log_value
-                .as_i64()
-                .ok_or_else(|| anyhow!("Expected i64 for IntegerAmount statistic"))?;
-            let goal_obj = serde_json::from_value::<AmountGoal<i64>>(goal.clone())
-                .map_err(|e| anyhow!("Failed to parse AmountGoal<i64>: {}", e))?;
-            Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
-        }
-        AnyStatistic::PointInTime(_) => {
-            let value = serde_json::from_value::<chrono::NaiveTime>(log_value.clone())
-                .map_err(|e| anyhow!("Failed to parse NaiveTime: {}", e))?;
-            let goal_obj = serde_json::from_value::<FinishedInTimeGoal>(goal.clone())
-                .map_err(|e| anyhow!("Failed to parse FinishedInTimeGoal: {}", e))?;
-            Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
-        }
-        AnyStatistic::TimeSpans(_) => {
-            let value = serde_json::from_value::<TimeFrameList>(log_value.clone())
-                .map_err(|e| anyhow!("Failed to parse TimeFrameList: {}", e))?;
-            let goal_obj = serde_json::from_value::<TimeSpansGoal>(goal.clone())
-                .map_err(|e| anyhow!("Failed to parse TimeSpansGoal: {}", e))?;
-            Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
-        }
-        AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
-            // These use Seconds, which we'll skip for now as they're derived statistics
-            // and typically not directly plotted with goals
-            Ok(None)
         }
     }
 }

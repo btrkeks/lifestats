@@ -5,13 +5,8 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::RunQueryDsl;
 use diesel::SqliteConnection;
 use diesel_migrations::MigrationHarness;
-use lifestats_application::use_cases::{
-    goal_management_service::GoalManagementService,
-    integration::{AnkiBundleFactory, BundleFactory, IntegrationService},
-    logging_service::LoggingService,
-    plotting_service::PlottingService,
-    statistic_management_service::StatisticManagementService,
-    statistic_query_service::StatisticQueryService,
+use lifestats_application::use_cases::integration::{
+    AnkiBundleFactory, BundleFactory, IntegrationService,
 };
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
@@ -78,21 +73,6 @@ async fn test_log_and_get_e2e() -> Result<()> {
     let plot_repo = Arc::new(SqlitePlotRepository::new(Arc::new(pool.clone())));
     let renderer = Arc::new(PlottersRenderer::new());
 
-    let logging_service = Arc::new(LoggingService::new(
-        Arc::clone(&repo),
-        Arc::clone(&publisher),
-    ));
-    let goal_service = Arc::new(GoalManagementService::new(
-        Arc::clone(&repo),
-        Arc::clone(&publisher),
-    ));
-    let management_service = Arc::new(StatisticManagementService::new(
-        Arc::clone(&repo),
-        Arc::clone(&publisher),
-    ));
-    let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&repo)));
-    let plotting_service = Arc::new(PlottingService::new(Arc::clone(&repo), plot_repo, renderer));
-
     // Create integration service
     let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
     let integration_service = Arc::new(IntegrationService::new(
@@ -100,14 +80,7 @@ async fn test_log_and_get_e2e() -> Result<()> {
         factories,
     ));
 
-    let app_state = AppState::new(
-        logging_service,
-        goal_service,
-        management_service,
-        query_service,
-        plotting_service,
-        integration_service,
-    );
+    let app_state = AppState::new(repo, plot_repo, publisher, renderer, integration_service);
 
     // ========================================================================
     // 4. START SERVER: Spawn axum server on a random free port

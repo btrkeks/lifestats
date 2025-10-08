@@ -15,16 +15,16 @@ lifestats-plotting = { path = "../plotting" }
 events = { path = "../../../events/event_impl/" }
 
 # Web Framework
-axum = "0.7"
+axum = "0.8"
 tokio = { version = "1", features = ["full"] }
-tower-http = { version = "0.5.0", features = ["trace", "cors"] }
+tower-http = { version = "0.6", features = ["trace", "cors"] }
 
 # Serialization & Deserialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Validation
-validator = { version = "0.19", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 regex = "1.10"
 
 # Error Handling & Logging
@@ -40,7 +40,7 @@ chrono = { workspace = true }
 
 [dev-dependencies]
 # For making in-memory requests to the axum router
-axum-test = "16"
+axum-test = "18.1"
 
 # For HTTP client in E2E tests
 reqwest = { version = "0.12", features = ["json"] }

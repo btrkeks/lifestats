@@ -1,5 +1,6 @@
 mod dto;
 mod error;
+mod helpers;
 mod routes;
 mod state;
 
@@ -30,11 +31,10 @@ async fn main() -> Result<()> {
     let app = build_services()?;
 
     let app_state = AppState::new(
-        app.logging_service,
-        app.goal_service,
-        app.management_service,
-        app.query_service,
-        app.plotting_service,
+        app.statistic_repository,
+        app.plot_repository,
+        app.event_publisher,
+        app.renderer,
         app.integration_service,
     );
 

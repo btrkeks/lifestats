@@ -30,9 +30,17 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    let goal_json = app_state
-        .query_service
-        .get_default_goal(StatisticId(statistic_id))?;
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::use_cases::queries::get_default_goal::{
+        GetDefaultGoalQuery, GetDefaultGoalQueryHandler,
+    };
+
+    let handler = GetDefaultGoalQueryHandler::new(app_state.statistic_repository.clone());
+    let goal_json = handler
+        .handle(GetDefaultGoalQuery {
+            statistic_id: StatisticId(statistic_id),
+        })
+        .map_err(|e| ApiError::InternalError(format!("Failed to get default goal: {}", e)))?;
 
     let response = goal_json.map(|goal_data| GoalResponse { goal_data });
 
@@ -52,19 +60,146 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    use lifestats_application::use_cases::goal_management_service::SetDefaultGoalGenericCommand;
+    use chrono::NaiveTime;
+    use lifestats_application::cqrs::CommandHandler;
+    use lifestats_application::use_cases::commands::set_daily_goal::GoalPayload;
+    use lifestats_application::use_cases::commands::set_default_goal::{
+        SetDefaultGoalCommand, SetDefaultGoalCommandHandler,
+    };
+    use lifestats_core::shared::percentage::Percentage;
+    use lifestats_core::shared::seconds::Seconds;
+    use lifestats_core::shared::time_frame_list::TimeFrameList;
+    use lifestats_core::statistic::any_statistic::AnyStatistic;
 
     // Validate the request payload
     payload.validate()?;
 
-    // Create the command
-    let command = SetDefaultGoalGenericCommand {
-        statistic_id: StatisticId(statistic_id),
-        goal_data: payload.goal_data,
+    // THIS IS THE ADAPTER'S JOB: Parse the request HashMap into a strongly-typed payload
+    // The application core should never see a HashMap
+
+    // 1. Load statistic to determine its type
+    let stat = app_state
+        .statistic_repository
+        .find_metadata_by_id(StatisticId(statistic_id))
+        .map_err(|e| ApiError::InternalError(format!("Failed to load statistic: {}", e)))?;
+
+    // 2. Parse HashMap into GoalPayload based on statistic type
+    let goal_payload = match stat {
+        AnyStatistic::IntegerAmount(_) => {
+            let target = payload
+                .goal_data
+                .get("target")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'target' field".to_string()))?
+                .parse::<i64>()
+                .map_err(|_| {
+                    ApiError::BadRequest("'target' must be a valid integer".to_string())
+                })?;
+
+            let is_at_least = payload
+                .goal_data
+                .get("is_at_least")
+                .map(|v| v.parse::<bool>())
+                .transpose()
+                .map_err(|_| {
+                    ApiError::BadRequest("'is_at_least' must be 'true' or 'false'".to_string())
+                })?
+                .unwrap_or(true);
+
+            GoalPayload::IntegerAmount {
+                target,
+                is_at_least,
+            }
+        }
+        AnyStatistic::Habit(_) => {
+            let occurred = payload
+                .goal_data
+                .get("occurred")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'occurred' field".to_string()))?
+                .parse::<bool>()
+                .map_err(|_| {
+                    ApiError::BadRequest("'occurred' must be 'true' or 'false'".to_string())
+                })?;
+
+            GoalPayload::Habit { occurred }
+        }
+        AnyStatistic::PointInTime(_) => {
+            let deadline_str = payload
+                .goal_data
+                .get("deadline")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'deadline' field".to_string()))?;
+
+            let deadline = NaiveTime::parse_from_str(deadline_str, "%H:%M:%S")
+                .or_else(|_| NaiveTime::parse_from_str(deadline_str, "%H:%M"))
+                .map_err(|e| {
+                    ApiError::BadRequest(format!(
+                        "Invalid deadline format (expected HH:MM:SS or HH:MM): {}",
+                        e
+                    ))
+                })?;
+
+            GoalPayload::FinishedInTime { deadline }
+        }
+        AnyStatistic::TimeSpans(_) => {
+            let target_str = payload
+                .goal_data
+                .get("target")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'target' field".to_string()))?;
+
+            let target: TimeFrameList = serde_json::from_str(target_str)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid TimeFrameList JSON: {}", e)))?;
+
+            let efficiency = payload
+                .goal_data
+                .get("efficiency")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'efficiency' field".to_string()))?
+                .parse::<u8>()
+                .map_err(|_| {
+                    ApiError::BadRequest("'efficiency' must be a number 0-100".to_string())
+                })?;
+
+            let efficiency = Percentage::new(efficiency);
+
+            GoalPayload::TimeSpans { target, efficiency }
+        }
+        AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
+            let target = payload
+                .goal_data
+                .get("target")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'target' field".to_string()))?
+                .parse::<i64>()
+                .map_err(|_| ApiError::BadRequest("'target' must be a valid number".to_string()))?;
+
+            let is_at_least = payload
+                .goal_data
+                .get("is_at_least")
+                .map(|v| v.parse::<bool>())
+                .transpose()
+                .map_err(|_| {
+                    ApiError::BadRequest("'is_at_least' must be 'true' or 'false'".to_string())
+                })?
+                .unwrap_or(true);
+
+            GoalPayload::SecondsAmount {
+                target: Seconds::from_i64(target),
+                is_at_least,
+            }
+        }
     };
 
-    // Execute the command
-    app_state.goal_service.set_default_goal_generic(command)?;
+    // 3. Create command
+    let command = SetDefaultGoalCommand {
+        statistic_id: StatisticId(statistic_id),
+        goal: goal_payload,
+    };
+
+    // 4. Instantiate and execute handler
+    let handler = SetDefaultGoalCommandHandler::new(
+        app_state.statistic_repository.clone(),
+        app_state.event_publisher.clone(),
+    );
+    handler
+        .handle(command)
+        .map_err(|e| ApiError::InternalError(format!("Failed to set default goal: {}", e)))?;
 
     // Return 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
@@ -82,15 +217,22 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    use lifestats_application::use_cases::goal_management_service::DeleteDefaultGoalCommand;
+    use lifestats_application::cqrs::CommandHandler;
+    use lifestats_application::use_cases::commands::delete_default_goal::{
+        DeleteDefaultGoalCommand, DeleteDefaultGoalCommandHandler,
+    };
 
-    // Create the command
     let command = DeleteDefaultGoalCommand {
         statistic_id: StatisticId(statistic_id),
     };
 
-    // Execute the command
-    app_state.goal_service.delete_default_goal(command)?;
+    let handler = DeleteDefaultGoalCommandHandler::new(
+        app_state.statistic_repository.clone(),
+        app_state.event_publisher.clone(),
+    );
+    handler
+        .handle(command)
+        .map_err(|e| ApiError::InternalError(format!("Failed to delete default goal: {}", e)))?;
 
     // Return 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
@@ -108,9 +250,18 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    let goal_json = app_state
-        .query_service
-        .get_goal(StatisticId(statistic_id), date)?;
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::use_cases::queries::get_daily_goal::{
+        GetDailyGoalQuery, GetDailyGoalQueryHandler,
+    };
+
+    let handler = GetDailyGoalQueryHandler::new(app_state.statistic_repository.clone());
+    let goal_json = handler
+        .handle(GetDailyGoalQuery {
+            statistic_id: StatisticId(statistic_id),
+            date,
+        })
+        .map_err(|e| ApiError::InternalError(format!("Failed to get goal: {}", e)))?;
 
     let response = goal_json.map(|goal_data| GoalResponse { goal_data });
 
@@ -130,20 +281,146 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    use lifestats_application::use_cases::goal_management_service::SetGoalCommand;
+    use chrono::NaiveTime;
+    use lifestats_application::cqrs::CommandHandler;
+    use lifestats_application::use_cases::commands::set_daily_goal::{
+        GoalPayload, SetDailyGoalCommand, SetDailyGoalCommandHandler,
+    };
+    use lifestats_core::shared::percentage::Percentage;
+    use lifestats_core::shared::seconds::Seconds;
+    use lifestats_core::shared::time_frame_list::TimeFrameList;
+    use lifestats_core::statistic::any_statistic::AnyStatistic;
 
     // Validate the request payload
     payload.validate()?;
 
-    // Create the command
-    let command = SetGoalCommand {
-        statistic_id: StatisticId(statistic_id),
-        date,
-        goal_data: payload.goal_data,
+    // THIS IS THE ADAPTER'S JOB: Parse the request HashMap into a strongly-typed payload
+    // The application core should never see a HashMap
+
+    // 1. Load statistic to determine its type
+    let stat = app_state
+        .statistic_repository
+        .find_metadata_by_id(StatisticId(statistic_id))
+        .map_err(|e| ApiError::InternalError(format!("Failed to load statistic: {}", e)))?;
+
+    // 2. Parse HashMap into GoalPayload based on statistic type
+    let goal_payload = match stat {
+        AnyStatistic::IntegerAmount(_) => {
+            let target = payload
+                .goal_data
+                .get("target")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'target' field".to_string()))?
+                .parse::<i64>()
+                .map_err(|_| {
+                    ApiError::BadRequest("'target' must be a valid integer".to_string())
+                })?;
+
+            let is_at_least = payload
+                .goal_data
+                .get("is_at_least")
+                .map(|v| v.parse::<bool>())
+                .transpose()
+                .map_err(|_| {
+                    ApiError::BadRequest("'is_at_least' must be 'true' or 'false'".to_string())
+                })?
+                .unwrap_or(true);
+
+            GoalPayload::IntegerAmount {
+                target,
+                is_at_least,
+            }
+        }
+        AnyStatistic::Habit(_) => {
+            let occurred = payload
+                .goal_data
+                .get("occurred")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'occurred' field".to_string()))?
+                .parse::<bool>()
+                .map_err(|_| {
+                    ApiError::BadRequest("'occurred' must be 'true' or 'false'".to_string())
+                })?;
+
+            GoalPayload::Habit { occurred }
+        }
+        AnyStatistic::PointInTime(_) => {
+            let deadline_str = payload
+                .goal_data
+                .get("deadline")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'deadline' field".to_string()))?;
+
+            let deadline = NaiveTime::parse_from_str(deadline_str, "%H:%M:%S")
+                .or_else(|_| NaiveTime::parse_from_str(deadline_str, "%H:%M"))
+                .map_err(|e| {
+                    ApiError::BadRequest(format!(
+                        "Invalid deadline format (expected HH:MM:SS or HH:MM): {}",
+                        e
+                    ))
+                })?;
+
+            GoalPayload::FinishedInTime { deadline }
+        }
+        AnyStatistic::TimeSpans(_) => {
+            let target_str = payload
+                .goal_data
+                .get("target")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'target' field".to_string()))?;
+
+            let target: TimeFrameList = serde_json::from_str(target_str)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid TimeFrameList JSON: {}", e)))?;
+
+            let efficiency = payload
+                .goal_data
+                .get("efficiency")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'efficiency' field".to_string()))?
+                .parse::<u8>()
+                .map_err(|_| {
+                    ApiError::BadRequest("'efficiency' must be a number 0-100".to_string())
+                })?;
+
+            let efficiency = Percentage::new(efficiency);
+
+            GoalPayload::TimeSpans { target, efficiency }
+        }
+        AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
+            let target = payload
+                .goal_data
+                .get("target")
+                .ok_or_else(|| ApiError::BadRequest("Missing 'target' field".to_string()))?
+                .parse::<i64>()
+                .map_err(|_| ApiError::BadRequest("'target' must be a valid number".to_string()))?;
+
+            let is_at_least = payload
+                .goal_data
+                .get("is_at_least")
+                .map(|v| v.parse::<bool>())
+                .transpose()
+                .map_err(|_| {
+                    ApiError::BadRequest("'is_at_least' must be 'true' or 'false'".to_string())
+                })?
+                .unwrap_or(true);
+
+            GoalPayload::SecondsAmount {
+                target: Seconds::from_i64(target),
+                is_at_least,
+            }
+        }
     };
 
-    // Execute the command
-    app_state.goal_service.set_goal(command)?;
+    // 3. Create command
+    let command = SetDailyGoalCommand {
+        statistic_id: StatisticId(statistic_id),
+        date,
+        goal: goal_payload,
+    };
+
+    // 4. Instantiate and execute handler
+    let handler = SetDailyGoalCommandHandler::new(
+        app_state.statistic_repository.clone(),
+        app_state.event_publisher.clone(),
+    );
+    handler
+        .handle(command)
+        .map_err(|e| ApiError::InternalError(format!("Failed to set goal: {}", e)))?;
 
     // Return 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
@@ -161,16 +438,23 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    use lifestats_application::use_cases::goal_management_service::DeleteGoalCommand;
+    use lifestats_application::cqrs::CommandHandler;
+    use lifestats_application::use_cases::commands::delete_daily_goal::{
+        DeleteDailyGoalCommand, DeleteDailyGoalCommandHandler,
+    };
 
-    // Create the command
-    let command = DeleteGoalCommand {
+    let command = DeleteDailyGoalCommand {
         statistic_id: StatisticId(statistic_id),
         date,
     };
 
-    // Execute the command
-    app_state.goal_service.delete_goal(command)?;
+    let handler = DeleteDailyGoalCommandHandler::new(
+        app_state.statistic_repository.clone(),
+        app_state.event_publisher.clone(),
+    );
+    handler
+        .handle(command)
+        .map_err(|e| ApiError::InternalError(format!("Failed to delete goal: {}", e)))?;
 
     // Return 204 No Content on success
     Ok(StatusCode::NO_CONTENT)

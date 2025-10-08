@@ -1,11 +1,10 @@
+pub mod cqrs;
+pub mod dto;
 pub mod error;
-mod helpers;
 pub mod use_cases;
 
-pub use use_cases::{
-    GoalManagementService, HeartbeatConfig, HeartbeatSession, HeartbeatUpdate, LoggingService,
-    PlottingService, RealTimeProvider, StatisticManagementService, StatisticQueryService,
-    TimeProvider,
+pub use use_cases::session_tracking_service::{
+    HeartbeatConfig, HeartbeatSession, HeartbeatUpdate, RealTimeProvider, TimeProvider,
 };
 
 pub use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;

@@ -26,7 +26,7 @@ LifeStats is a personal observability platform for tracking daily habits and wel
 lifestats/
 ├── core/
 │   ├── core/                     # Domain model (zero dependencies)
-│   ├── application/              # Use case orchestration (LoggingService, GoalManagementService, etc.)
+│   ├── application/              # CQRS orchestration (commands, queries, heartbeat utilities)
 │   ├── infrastructure/
 │   │   ├── persistence/          # SQLite repository implementations + migrations
 │   │   ├── plotting/             # Plot rendering (plotters crate)
@@ -262,18 +262,16 @@ The compatibility test (`just test-db-compat`) ensures new code can read older d
 
 ### Adding a New Use Case
 
-1. Create service in `core/application/src/use_cases/`
-2. Depend only on domain traits (ports)
-3. Add application-layer tests (use mocks for repositories)
+1. Add a command or query slice under `core/application/src/use_cases/commands|queries`
+2. Keep handlers thin: orchestrate domain types via repository/event ports
+3. Add unit tests using the generated mock ports
 
 ### Adding a New Logger
 
-1. Create binary crate (or add to `logger_applications/`)
-2. Wire up application services with concrete adapters:
-   - Instantiate `SqliteStatisticRepository`
-   - Instantiate `LoggingService` with injected repository
-   - Call use case methods
-3. See `CLAUDE.md` lines 185-235 for detailed example
+1. Create a binary crate (or add to `logger_applications/`)
+2. Build the infrastructure you need (`SqliteStatisticRepository`, event publisher, etc.)
+3. Instantiate command/query handlers on demand (e.g., `LogValueCommandHandler`)
+4. See `CLAUDE.md` lines 185-235 for detailed guidance
 
 ### Adding a New HTTP Route
 

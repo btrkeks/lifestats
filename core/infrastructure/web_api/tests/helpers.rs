@@ -1,13 +1,8 @@
 use anyhow::Result;
 use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
-use lifestats_application::use_cases::{
-    goal_management_service::GoalManagementService,
-    integration::{AnkiBundleFactory, BundleFactory, IntegrationService},
-    logging_service::LoggingService,
-    plotting_service::PlottingService,
-    statistic_management_service::StatisticManagementService,
-    statistic_query_service::StatisticQueryService,
+use lifestats_application::use_cases::integration::{
+    AnkiBundleFactory, BundleFactory, IntegrationService,
 };
 use lifestats_core::shared::ids::{PlotId, StatisticId};
 use lifestats_core::statistic::any_statistic::AnyStatistic;
@@ -80,29 +75,9 @@ pub fn mock_app_state(
     IntegrationService,
 > {
     let publisher = Arc::new(NoOpEventPublisher);
-    let plot_repo = Arc::new(MockPlotRepo::new());
+    let plot_repository = Arc::new(MockPlotRepo::new());
     let renderer = Arc::new(MockPlotRend::new());
 
-    let logging_service = Arc::new(LoggingService::new(
-        Arc::clone(&mock_repo),
-        Arc::clone(&publisher),
-    ));
-    let goal_service = Arc::new(GoalManagementService::new(
-        Arc::clone(&mock_repo),
-        Arc::clone(&publisher),
-    ));
-    let management_service = Arc::new(StatisticManagementService::new(
-        Arc::clone(&mock_repo),
-        Arc::clone(&publisher),
-    ));
-    let query_service = Arc::new(StatisticQueryService::new(Arc::clone(&mock_repo)));
-    let plotting_service = Arc::new(PlottingService::new(
-        Arc::clone(&mock_repo),
-        plot_repo,
-        renderer,
-    ));
-
-    // Create integration service
     let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
     let integration_service = Arc::new(IntegrationService::new(
         mock_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
@@ -110,11 +85,10 @@ pub fn mock_app_state(
     ));
 
     AppState::new(
-        logging_service,
-        goal_service,
-        management_service,
-        query_service,
-        plotting_service,
+        mock_repo,
+        plot_repository,
+        publisher,
+        renderer,
         integration_service,
     )
 }
@@ -122,7 +96,8 @@ pub fn mock_app_state(
 /// Factory function to create a mock IntegerAmount statistic
 #[allow(dead_code)]
 pub fn mock_integer_statistic(id: u32, name: &str, category: &str) -> AnyStatistic {
-    let metadata = StatisticMetadata::new(StatisticId(id), category.to_string(), name.to_string());
+    let metadata = StatisticMetadata::new(StatisticId(id), category.to_string(), name.to_string())
+        .with_tag("statistic_type".to_string(), "IntegerAmount".to_string());
     AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
         metadata,
         None,

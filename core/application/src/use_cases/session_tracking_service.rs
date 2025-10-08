@@ -650,11 +650,11 @@ mod tests {
         let (provider, mut timing) = setup_heart_timing();
 
         let wait = timing.calculate_next_wait_duration();
-        let first_instant = provider.current_instant();
+        let _first_instant = provider.current_instant();
         assert_eq!(wait, Duration::from_secs(1));
 
         provider.advance(Duration::from_millis(30000));
-        let second_instant = provider.current_instant();
+        let _second_instant = provider.current_instant();
 
         // Clear all elapsed timings
         while timing.calculate_next_wait_duration() == Duration::from_millis(0) {

@@ -1,4 +1,5 @@
 use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -17,6 +18,7 @@ pub struct CreateStatisticRequest {
 
 /// Request DTO for updating a statistic's metadata
 #[derive(Debug, Deserialize, Validate)]
+#[allow(dead_code)]
 pub struct UpdateStatisticRequest {
     pub name: Option<String>,
     pub category: Option<String>,
@@ -58,6 +60,20 @@ pub struct StatisticMetadataResponse {
     pub statistic_type: String,
 }
 
+impl StatisticMetadataResponse {
+    fn from_metadata_and_type(
+        metadata: &StatisticMetadata,
+        statistic_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: metadata.id().0,
+            name: metadata.name().to_string(),
+            category: metadata.category().to_string(),
+            statistic_type: statistic_type.into(),
+        }
+    }
+}
+
 impl From<&AnyStatistic> for StatisticMetadataResponse {
     fn from(statistic: &AnyStatistic) -> Self {
         let metadata = statistic.get_metadata();
@@ -70,12 +86,17 @@ impl From<&AnyStatistic> for StatisticMetadataResponse {
             AnyStatistic::TimeDifference(_) => "TimeDifference",
         }
         .to_string();
-        Self {
-            id: metadata.id().0,
-            name: metadata.name().to_string(),
-            category: metadata.category().to_string(),
-            statistic_type,
-        }
+        Self::from_metadata_and_type(metadata, statistic_type)
+    }
+}
+
+impl From<&StatisticMetadata> for StatisticMetadataResponse {
+    fn from(metadata: &StatisticMetadata) -> Self {
+        let statistic_type = metadata
+            .get_tag("statistic_type")
+            .cloned()
+            .unwrap_or_else(|| "Unknown".to_string());
+        Self::from_metadata_and_type(metadata, statistic_type)
     }
 }
 
@@ -109,5 +130,21 @@ mod tests {
         assert_eq!(dto.name, "Push Ups");
         assert_eq!(dto.category, "Fitness");
         assert_eq!(dto.statistic_type, "IntegerAmount");
+    }
+
+    #[test]
+    fn test_from_metadata_uses_tag() {
+        let metadata = StatisticMetadata::new(
+            StatisticId(5),
+            "Wellness".to_string(),
+            "Meditation".to_string(),
+        )
+        .with_tag("statistic_type".to_string(), "Habit".to_string());
+
+        let dto = StatisticMetadataResponse::from(&metadata);
+
+        assert_eq!(dto.id, 5);
+        assert_eq!(dto.name, "Meditation");
+        assert_eq!(dto.statistic_type, "Habit");
     }
 }

@@ -2,7 +2,13 @@ mod midi_adapter;
 mod user_interface;
 
 use anyhow::Result;
-use lifestats_application::use_cases::{HeartbeatConfig, HeartbeatSession, RealTimeProvider};
+use lifestats_application::cqrs::QueryHandler;
+use lifestats_application::use_cases::{
+    queries::get_time_spans_metadata::{
+        GetTimeSpansMetadataQuery, GetTimeSpansMetadataQueryHandler,
+    },
+    HeartbeatConfig, HeartbeatSession, RealTimeProvider,
+};
 use log::info;
 use midi_adapter::MidiAdapter;
 use std::sync::Arc;
@@ -37,7 +43,9 @@ async fn main() -> Result<()> {
         .expect("Selected port index should be valid");
 
     // Step 2: Select statistic to log to
-    let time_spans_statistics = app.query_service.get_time_spans_metadata()?;
+    let time_spans_statistics =
+        GetTimeSpansMetadataQueryHandler::new(app.statistic_repository.clone())
+            .handle(GetTimeSpansMetadataQuery)?;
     let statistic = match ui.select_statistic(&time_spans_statistics)? {
         Some(stat) => stat,
         None => {
