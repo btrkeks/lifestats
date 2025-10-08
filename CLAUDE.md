@@ -34,8 +34,6 @@ cargo fmt
 cargo check
 ```
 
-**Note:** The project uses a shared target directory at `/tmp/cargo-target-shared` and `sccache` for faster builds (see `.cargo/config.toml`).
-
 ## Architecture: Ports & Adapters (Hexagonal)
 
 The codebase strictly separates business logic from external concerns. **Dependencies always point inward toward the domain.**
@@ -44,131 +42,103 @@ The codebase strictly separates business logic from external concerns. **Depende
 
 ```
 core/
-├── domain/              # Pure business logic, zero external dependencies
-│   ├── statistic/
-│   │   ├── types/      # SourceStatistic & DerivedStatistic types
-│   │   ├── ports/      # Trait definitions (e.g., StatisticRepository)
-│   │   └── traits/     # Logable, Computable
-│   └── shared/
-├── application/         # Use case orchestration layer
-│   └── use_cases/
-│       ├── logging_service.rs
-│       ├── goal_management_service.rs
-│       └── statistic_query_service.rs
+├── core/                # Pure business logic, zero external dependencies (domain layer)
+│   └── src/
+│       ├── statistic/
+│       │   ├── types/          # SourceStatistic & DerivedStatistic types
+│       │   │   ├── logable_statistics/
+│       │   │   └── derived_statistics/
+│       │   ├── ports/          # Trait definitions (e.g., StatisticRepository)
+│       │   ├── traits/         # Logable, Computable
+│       │   ├── goals/
+│       │   ├── update_policies/
+│       │   └── value_objects/
+│       └── shared/
+│
+├── application/         # Use case orchestration layer (CQRS pattern)
+│   └── src/
+│       ├── use_cases/
+│       │   ├── commands/       # Command handlers (write operations)
+│       │   │   ├── create_statistic/
+│       │   │   ├── log_value/
+│       │   │   ├── set_daily_goal/
+│       │   │   ├── set_default_goal/
+│       │   │   ├── delete_statistic/
+│       │   │   ├── delete_daily_goal/
+│       │   │   └── delete_default_goal/
+│       │   ├── queries/        # Query handlers (read operations)
+│       │   │   ├── get_all_statistics/
+│       │   │   ├── get_statistic_by_id/
+│       │   │   ├── get_metadata/
+│       │   │   ├── get_all_metadata/
+│       │   │   ├── get_plot_data/
+│       │   │   ├── get_streak/
+│       │   │   ├── get_daily_goal/
+│       │   │   ├── get_default_goal/
+│       │   │   └── get_time_spans_metadata/
+│       │   └── integration/
+│       ├── integrations/
+│       │   └── fitbit/
+│       ├── repositories/
+│       ├── dto/
+│       ├── statistic/
+│       └── shared/
+│
 └── infrastructure/      # Implementations of domain ports (Driven Adapters)
     ├── persistence/     # SQLite implementations of repository traits
-    └── web_api/         # HTTP API adapter
+    ├── web_api/         # HTTP API adapter (Axum-based REST API)
+    │   └── src/
+    │       ├── routes/
+    │       ├── dto/
+    │       └── integrations/
+    │           └── fitbit/
+    ├── fitbit_client/   # Fitbit API client
+    ├── plotting/        # Plot generation adapter
+    └── system_clock/    # System clock adapter
 
-client/                  # HTTP client (in progress)
+events/                  # Event infrastructure
+├── event_impl/
+└── event_sender/
+
+logger_applications/     # Various logging applications
+├── cli_logger/
+├── fitbit_logger/
+├── midi_logger/
+├── stopwatch_logger/
+├── mpv_logger/
+├── AnkiLogger/
+├── ebook-reader/
+└── web-activity-time-tracker/
+
+ui/                      # User interface components
+├── wallpaper/           # Desktop wallpaper display
+└── web-ui/              # Web-based UI
+
+lifestats-bootstrap/     # Application bootstrap and wiring
+
+client/                  # HTTP client library
 ```
 
 ### Critical Architectural Constraints
 
-1. **`core/domain` has ZERO dependencies** on other workspace crates. It defines all ports as traits.
-2. **`core/application` depends only on `domain`**. It coordinates domain logic but contains no business rules.
+1. **`core/core` (domain layer) has ZERO dependencies** on other workspace crates. It defines all ports as traits.
+2. **`core/application` depends only on `core/core` (domain)**. It coordinates domain logic but contains no business rules.
 3. **`core/infrastructure/*` implements domain ports**. The domain never depends on infrastructure.
-4. **Driving adapters** (CLI tools, web servers, loggers) wire everything together by injecting concrete implementations into application services.
+4. **Driving adapters** (CLI tools, web servers, loggers in `logger_applications/`, `lifestats-bootstrap`) wire everything together by injecting concrete implementations into application services.
 
-## Domain Model: Two Kinds of Statistics
+## Development Guidelines
 
-### SourceStatistic (Logable)
+### Handling Uncertainty with External Dependencies
 
-Statistics that accept logged values directly:
+**When uncertain about correct usage of a library, API, or framework:**
 
-- `TimeSpans` - tracks time ranges
-- `IntegerAmount` - numeric counts
-- `Habit` - boolean occurrences
-- `PointInTime` - specific timestamps
+1. **PAUSE** - Do not make assumptions or attempt to brute-force a solution
+2. **ASK** - Explicitly request clarification, documentation, or additional context from the user
+3. **VERIFY** - Use official documentation, examples, or the `apilookup` tool to confirm correct usage
 
-Each implements the `Logable` trait with pure methods like `calculate_new_log_value`.
-
-### DerivedStatistic (Computable)
-
-Computed views over source statistics. **You cannot log to these directly.**
-
-- `SummingStatistic` - aggregates multiple TimeSpans
-- `TimeDifference` - computes delta between PointInTime stats
-
-Each implements the `Computable` trait with a pure `compute_value` method.
-
-**This separation prevents logical errors at compile-time** (e.g., trying to log to a SummingStatistic).
-
-## Typical Flow: Logging a Value
-
-All logging follows this pattern (see `core/application/src/use_cases/logging_service.rs`):
-
-1. **Load** current state from repository
-2. **Call pure domain method** to calculate new state (e.g., `statistic.calculate_new_log_value()`)
-3. **Save** new state back via repository
-4. **Publish** event if changed
-
-**The domain entity never saves itself.** Application services orchestrate all I/O.
-
-## Database
-
-- SQLite is the default backing store
-- Environment variable `DATABASE_URL` points to the live database
-- Tests use in-memory SQLite
-- Connection pooling with WAL mode enabled
-- Repositories live in `core/infrastructure/persistence/`
-
-## Current State: Refactor Branch
-
-The `refactor` branch is bringing the architecture up to production quality. The old codebase had many loggers and interfaces; the new structure consolidates around clean hexagonal boundaries.
-
-**Main branch:** `main`
-**Active development:** `refactor` (current branch)
-
-## Testing Strategy
-
-### Unit Tests (`core/domain`)
-
-Test pure business logic with zero I/O or mocking:
-
-```rust
-#[test]
-fn test_calculate_new_log_value() {
-    let stat = IntegerAmountStatistic::new(/* ... */);
-    let (new_val, changed) = stat.calculate_new_log_value(
-        Some(10), 5, AmountUpdatePolicy::Sum
-    ).unwrap();
-    assert_eq!(new_val, 15);
-}
-```
-
-### Integration Tests (`core/application`)
-
-Test use cases with mock repository implementations (use `mockall` if available or manual test doubles).
-
-### Database Compatibility Tests
-
-The project includes backward compatibility tests to ensure new code can read data from older database schemas. This is critical for migrations and schema evolution.
-
-**Running the test:**
-
-```bash
-# Using just
-just test-db-compat
-```
-
-## Adding New Functionality
-
-### Adding a New Logger/Interface
-
-1. Create a new crate in `interfaces/` (if it existed, though current workspace has `client/` instead)
-2. Add dependencies on `lifestats-application` and `lifestats-domain`
-3. Add concrete adapter dependencies (e.g., `persistence`)
-4. In `main.rs`:
-   - Instantiate concrete adapters (e.g., `SqliteStatisticRepository`)
-   - Instantiate application services with dependency injection
-   - Create command objects
-   - Execute use cases
-
-See `docs/ARCHITECTURE.md` lines 185-235 for detailed example.
-
-### Adding a New Statistic Type
-
-1. Add type to `core/domain/src/statistic/types/logable_statistics/` or `derived_statistics/`
-2. Implement `Logable` or `Computable` trait
-3. Update `AnyStatistic` enum if needed
-4. Add tests in domain crate
+This applies to:
+- Unfamiliar Rust crates and their APIs
+- HTTP client/server frameworks
+- Database query builders
+- Testing frameworks
+- Any external dependency where the correct usage pattern is unclear
