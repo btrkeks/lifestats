@@ -1,6 +1,9 @@
 pub mod cqrs;
 pub mod dto;
 pub mod error;
+pub mod integrations;
+pub mod shared;
+pub mod statistic;
 pub mod use_cases;
 
 pub use use_cases::session_tracking_service::{

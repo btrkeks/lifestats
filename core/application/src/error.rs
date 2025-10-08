@@ -2,6 +2,8 @@ use lifestats_core::statistic::error::DomainError;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use thiserror::Error;
 
+use crate::integrations::fitbit::FitbitUpstreamError;
+
 /// Application-level errors that classify errors from lower layers
 ///
 /// This enum enables the outer layers (like the Web API) to translate
@@ -19,6 +21,10 @@ pub enum ApplicationError {
     /// Invalid input provided by the user (maps to 400 Bad Request)
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
+    /// Fitbit upstream interaction failed (maps to 502 Bad Gateway)
+    #[error("Fitbit sync failed: {0}")]
+    FitbitSyncFailed(FitbitUpstreamError),
 
     /// An unexpected infrastructure error occurred (maps to 500 Internal Server Error)
     #[error("An unexpected infrastructure error occurred: {0}")]

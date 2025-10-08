@@ -1,179 +1,411 @@
-# `TODO.md`
+# `TODO.md`: Fitbit Integration Revamp (Production Blueprint)
 
-## Frontend: Implement "Dashboard-First" Goal Editing
-
-**Objective:** Replace the current ID-based goal editing page with a user-friendly dashboard. This new interface will display all statistics as interactive cards, allowing users to manage goals in a modal window directly from the context of the statistic they wish to modify.
-
-This refactor improves user experience by removing the need for users to know statistic IDs and creates a more intuitive, centralized management view.
+This document outlines the phased implementation plan for refactoring the Fitbit integration into our modern, clean architecture.  
+Follow these steps sequentially to ensure a **secure, reliable, and correct** implementation.
 
 ---
 
-### Phase 1: Build the Core Dashboard UI (Read-Only)
+## Guiding Principles
 
-#### 1. Create the New Dashboard Page Route
-
-- **Action:** Create the main page file for our new dashboard. This component will act as the "container" or "smart" component, responsible for fetching data and managing the application's state.
-- **File:** `src/app/dashboard/page.tsx`
-- **Details:**
-  - Create a basic functional component that renders a heading like "Statistics Dashboard".
-  - This file will be expanded upon in subsequent steps.
-
-#### 2. Create the `StatisticCard` Presentational Component
-
-- **Action:** Create a new, reusable "dumb" component that is only responsible for displaying the data for a single statistic. It will receive all its data and behavior via props.
-- **File:** `src/features/statistics/components/StatisticCard.tsx`
-- **Contract:** Implement the component with the following props interface and structure:
-
-  ```typescript
-  import type { StatisticMetadata } from '@/types';
-
-  interface StatisticCardProps {
-    statistic: StatisticMetadata;
-    onManageGoal: () => void; // A callback function to be triggered on button click
-  }
-
-  export function StatisticCard({ statistic, onManageGoal }: StatisticCardProps) {
-    // TODO: Implement the JSX for the card layout.
-    // It should display statistic.name and statistic.category.
-    // It must include a button that calls `onManageGoal` when clicked.
-    return (
-      <div className="p-4 bg-white rounded-lg shadow-md">
-        <h3>{statistic.name}</h3>
-        <p>{statistic.category}</p>
-        <button onClick={onManageGoal}>Manage Goal</button>
-      </div>
-    );
-  }
-  ```
-
-#### 3. Create the `StatisticGrid` Presentational Component
-
-- **Action:** Create a component that arranges multiple `StatisticCard` components in a grid layout. This component is also "dumb" and simply maps data to child components.
-- **File:** `src/features/statistics/components/StatisticGrid.tsx`
-- **Contract:** Implement the component to accept a list of statistics and pass the `onManageGoal` callback down to each card.
-
-  ```typescript
-  import type { StatisticMetadata } from '@/types';
-  import { StatisticCard } from './StatisticCard';
-
-  interface StatisticGridProps {
-    statistics: StatisticMetadata[];
-    onManageGoal: (statistic: StatisticMetadata) => void;
-  }
-
-  export function StatisticGrid({ statistics, onManageGoal }: StatisticGridProps) {
-    // TODO: Implement the grid layout (e.g., using Tailwind CSS).
-    // Map over the `statistics` array and render a `StatisticCard` for each one.
-    // The `key` should be `stat.id`.
-    // The `onManageGoal` prop for the card should be `() => onManageGoal(stat)`.
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {statistics.map(stat => (
-          <StatisticCard
-            key={stat.id}
-            statistic={stat}
-            onManageGoal={() => onManageGoal(stat)}
-          />
-        ))}
-      </div>
-    );
-  }
-  ```
+- **Domain Stability:** `lifestats-core` remains unchanged. The new repository port will be defined at the application layer.
+- **Ports & Adapters:** The `application` layer defines traits (Ports); `infrastructure` crates provide concrete implementations (Adapters).
+- **Security First:** All sensitive data (tokens, secrets) must be handled using the `secrecy` crate and wiped via `zeroize`.
+- **Idempotency & Reliability:** The sync process must be idempotent and resilient to transient network failures.
+- **Single Source of Truth:** Token refresh, retry, and mapping logic live exclusively in the `SyncFitbitDataCommandHandler`.
 
 ---
 
-### Phase 2: Integrate Data and Interactivity
+## Phase 1: Foundational Types & Application Contracts (COMPLETED)
 
-#### 4. Implement Data Fetching and State Management on the Dashboard Page
+### `lifestats-application`
 
-- **Action:** Turn the static `DashboardPage` into a dynamic container that fetches live data and prepares for interactivity.
-- **File:** `src/app/dashboard/page.tsx`
-- **Details:**
-  1.  **Data Fetching:** Use the `useQuery` hook from `@tanstack/react-query` to call the `getAllStatistics` API function.
-  2.  **State Management:** Introduce a `useState` hook to manage which statistic is currently selected for editing. The initial state should be `null`.
-      ```typescript
-      const [editingStatistic, setEditingStatistic] =
-        useState<StatisticMetadata | null>(null);
-      ```
-  3.  **Handlers:** Create a handler function `handleOpenModal` that takes a `StatisticMetadata` object and sets it as the `editingStatistic`.
-  4.  **Integration:** Render the `StatisticGrid` component, passing the fetched `statistics` data and the `handleOpenModal` handler as props. Implement loading and error states.
+#### 1. Secure Token Types
 
-#### 5. Create the `GoalEditorModal` Wrapper Component
+Create `application/src/integrations/tokens.rs`.
 
-- **Action:** Create a new component that provides the modal UI and _wraps our existing goal editor components_. This demonstrates the power of component reuse.
-- **File:** `src/features/goals/components/GoalEditorModal.tsx`
-- **Contract:** The component will receive the selected statistic and a close handler as props.
+- Use `secrecy` + `zeroize` to wrap tokens safely.
+- **DO NOT** implement `Debug`, `Display`, or `Serialize`.  
+  Provide a manual redacting `Debug` if absolutely necessary.
+- Secrets may only be exposed via `as_str()` and **only inside driven adapters**.
 
-  ```typescript
-  import type { StatisticMetadata } from '@/types';
-  import { DefaultGoalEditor } from './DefaultGoalEditor';
-  import { DailyGoalOverride } from './DailyGoalOverride';
+```rust
+use secrecy::{Secret, SecretString, ExposeSecret};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
-  interface GoalEditorModalProps {
-    statistic: StatisticMetadata;
-    onClose: () => void;
-  }
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+pub struct AccessToken(Secret<SecretString>);
+impl AccessToken {
+    pub fn new(s: String) -> Self { Self(Secret::new(SecretString::new(s))) }
+    pub fn as_str(&self) -> &str { self.0.expose_secret().as_ref() }
+}
 
-  export function GoalEditorModal({ statistic, onClose }: GoalEditorModalProps) {
-    // TODO: Implement the modal structure (backdrop, main container, header).
-    // The header should contain the statistic name and a close button that calls `onClose`.
-    // The modal body should render the *existing* `DefaultGoalEditor` and `DailyGoalOverride`
-    // components, passing `statistic.id` to them as a prop.
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-        <div className="bg-gray-50 rounded-lg w-full max-w-4xl p-6">
-          {/* ... Modal Header ... */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <DefaultGoalEditor statisticId={statistic.id} />
-            <DailyGoalOverride statisticId={statistic.id} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-  ```
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+pub struct RefreshToken(Secret<SecretString>);
+impl RefreshToken {
+    pub fn new(s: String) -> Self { Self(Secret::new(SecretString::new(s))) }
+    pub fn as_str(&self) -> &str { self.0.expose_secret().as_ref() }
+}
 
-#### 6. Integrate the Modal into the Dashboard Page
+pub struct FitbitTokenData {
+    pub access_token: AccessToken,
+    pub refresh_token: RefreshToken,
+    pub expires_at: DateTime<Utc>,
+    pub scopes: Vec<String>,
+}
+```
 
-- **Action:** Wire up the `GoalEditorModal` to the `DashboardPage` so it appears and disappears based on the `editingStatistic` state.
-- **File:** `src/app/dashboard/page.tsx`
-- **Details:**
-  1.  **Handler:** Create a `handleCloseModal` function that sets `editingStatistic` back to `null`.
-  2.  **Conditional Rendering:** Use a conditional expression to render the `GoalEditorModal` only when `editingStatistic` is not `null`.
-      ```jsx
-      {
-        editingStatistic && (
-          <GoalEditorModal
-            statistic={editingStatistic}
-            onClose={handleCloseModal}
-          />
-        );
-      }
-      ```
+#### 2. Canonical TagSet Value Object
+
+Create `application/src/shared/tags.rs`.
+
+```rust
+pub struct TagSet(BTreeMap<String, String>);
+
+impl TagSet {
+    pub fn new<I: IntoIterator<Item = (impl Into<String>, impl Into<String>)>>(pairs: I) -> Self {
+        let mut map = BTreeMap::new();
+        for (k, v) in pairs {
+            let k = k.into().trim().to_ascii_lowercase();
+            let v = v.into().trim().to_string();
+            map.insert(k, v);
+        }
+        Self(map)
+    }
+
+    pub fn canonical_fingerprint(&self) -> String {
+        self.0.iter()
+            .map(|(k,v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(";")
+    }
+}
+```
+
+All keys must be lowercase, values trimmed, and pairs sorted by key.
+
+#### 3. Application-Level Repository Port
+
+Extend `application/src/statistic/ports.rs`:
+
+```rust
+#[async_trait]
+pub trait TagQueryableStatisticRepository {
+    async fn find_statistic_id_by_exact_tags(
+        &self,
+        tags: &TagSet
+    ) -> ApplicationResult<Option<StatisticId>>;
+}
+```
+
+> **Note:** This lives in the application layer (not domain) to preserve domain purity.
+
+#### 4. Fitbit Ports (API Contracts)
+
+Define in `application/src/integrations/fitbit/ports.rs`.
+
+```rust
+#[async_trait]
+pub trait FitbitOAuthApi {
+    async fn exchange_code_for_token(
+        &self,
+        code: &str,
+        pkce_verifier: Option<String>
+    ) -> ApplicationResult<FitbitTokenData>;
+
+    async fn refresh(
+        &self,
+        refresh_token: &RefreshToken
+    ) -> ApplicationResult<FitbitTokenData>;
+}
+
+#[async_trait]
+pub trait FitbitDataApi {
+    async fn get_activity_data(
+        &self,
+        access_token: &AccessToken,
+        date: NaiveDate
+    ) -> ApplicationResult<FitbitActivityData>;
+
+    async fn get_sleep_data(
+        &self,
+        access_token: &AccessToken,
+        date: NaiveDate
+    ) -> ApplicationResult<FitbitSleepData>;
+}
+
+#[async_trait]
+pub trait TokenStorePort {
+    async fn load(&self, source: &str) -> ApplicationResult<Option<FitbitTokenData>>;
+    async fn save(&self, source: &str, token: &FitbitTokenData) -> ApplicationResult<()>;
+    async fn set_last_sync_at(&self, source: &str, t: DateTime<Utc>) -> ApplicationResult<()>;
+    async fn last_sync_at(&self, source: &str) -> ApplicationResult<Option<DateTime<Utc>>>;
+}
+
+pub trait Clock { fn now_utc(&self) -> DateTime<Utc>; }
+```
+
+#### 5. Standardized Upstream Error Type
+
+`application/src/integrations/fitbit/error.rs`:
+
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum FitbitUpstreamError {
+    #[error("unauthorized")]
+    Unauthorized,
+    #[error("rate limited")]
+    RateLimited { retry_after: Option<Duration> },
+    #[error("invalid grant")]
+    InvalidGrant,
+    #[error("upstream service error: {0}")]
+    UpstreamServiceError(anyhow::Error),
+}
+
+impl From<FitbitUpstreamError> for ApplicationError {
+    fn from(e: FitbitUpstreamError) -> Self {
+        ApplicationError::FitbitSyncFailed(e)
+    }
+}
+```
 
 ---
 
-### Phase 3: Cleanup and Finalization
+## Phase 2: Application Logic & Reliability Policies
 
-#### 7. Update Application Navigation
+### `lifestats-application`
 
-- **Action:** Update the main landing page to link to our new dashboard instead of the old demo.
-- **File:** `src/app/page.tsx`
-- **Details:** Find the `<Link>` component pointing to `/demo/goals` and change its `href` to `/dashboard`.
+#### 1. Define `SyncFitbitDataCommand`
 
-#### 8. Remove Obsolete Code
+`application/src/use_cases/commands/sync_fitbit_data.rs`
 
-- **Action:** Delete the old goal management page to keep the codebase clean and avoid confusion.
-- **File:** `src/app/demo/goals/page.tsx`
-- **Details:** Delete the file and its parent `goals` directory (`src/app/demo/goals/`).
+```rust
+pub struct SyncFitbitDataCommand {
+    pub since: NaiveDate,
+    pub until: NaiveDate,
+}
+```
 
-#### 9. Final Review
+Validate `since <= until` and `(until - since) <= MAX_SYNC_RANGE` (e.g., 31 days).
 
-- **Action:** Run the application and perform a full end-to-end test of the new user flow.
-- **Checklist:**
-  - [ ] The dashboard loads and displays all statistics correctly.
-  - [ ] Clicking "Manage Goal" on a card opens the modal.
-  - [ ] The modal correctly displays the goal editors for the selected statistic.
-  - [ ] Setting/deleting both default and daily goals works as expected from within the modal.
-  - [ ] Closing the modal (either via button or backdrop click) returns the user to the dashboard.
-  - [ ] The UI is responsive and looks good on different screen sizes.
+#### 2. Implement `SyncFitbitDataCommandHandler`
+
+**Configuration**
+
+- Inject all required ports (`FitbitOAuthApi`, `FitbitDataApi`, `TokenStorePort`, `TagQueryableStatisticRepository`, `StatisticRepository`, `Clock`).
+- Include:
+  - `timezone: Tz`
+  - `token_expiry_skew: Duration` (default 5m)
+  - `max_concurrency: usize` (default 3)
+  - `max_retries: usize` (default 3)
+  - `base_backoff_ms: u64` (default 500)
+  - `backoff_multiplier: f64` (default 2.0)
+  - `http_timeout: Duration` (default 15s)
+  - `enabled_metrics: HashSet<FitbitMetric>`
+
+**Observability**
+
+```rust
+#[tracing::instrument(skip_all, fields(run_id = %sync_run_id))]
+```
+
+Generate a `sync_run_id = Uuid::new_v4()` and propagate through all spans.
+
+**Logic**
+
+1. **Validate Date Range** — enforce max range.
+2. **Load & Verify Token**
+   - Load via `TokenStorePort`.
+   - Verify token scopes ⊇ required scopes for `enabled_metrics`.
+     If missing, return actionable error listing scopes.
+
+3. **Proactive Token Refresh**
+   - If `clock.now_utc() >= token.expires_at - token_expiry_skew`, refresh via `FitbitOAuthApi::refresh()` and save immediately.
+
+4. **Metric-to-ID Mapping**
+   - For each enabled metric, build tags `{source="fitbit", metric=<metric>}` and call `find_statistic_id_by_exact_tags`.
+   - Fail fast if any metric is unmapped or has duplicates.
+
+5. **Per-Run Cache**
+   - Use `HashMap<(FitbitMetric, NaiveDate), FitbitData>` to deduplicate calls within a single run.
+
+6. **Concurrent Date Processing**
+   - Use `futures::stream::iter(...).for_each_concurrent(max_concurrency, ...)`.
+
+7. **Per-Date Logic**
+   - **Retry Loop:**
+     - On `Unauthorized`: refresh once, retry once.
+     - On `RateLimited`: respect `retry_after` or use exponential backoff with full jitter.
+     - Cap at `max_retries`.
+
+   - **Data Transformation:** Attribute cross-midnight sleep correctly (use tested `canonical_sleep_date` helper).
+   - **UPSERT Logging:** Call repository `save_log_value` using database UPSERT (replace existing value).
+
+8. **Post-Run:** Update `last_sync_at`.
+
+---
+
+## Phase 3: Infrastructure Adapters (Driven)
+
+### `core/infrastructure/fitbit_client`
+
+- Implement `HttpFitbitOAuthClient` and `HttpFitbitDataClient`.
+- Use `reqwest` with appropriate headers.
+- Map HTTP errors to `FitbitUpstreamError`:
+  - 401 → `Unauthorized`
+  - 429 → `RateLimited { retry_after }`
+  - 400 with `"invalid_grant"` → `InvalidGrant`
+
+- Call `.as_str()` on tokens **only** immediately before building the `Authorization` header.
+
+### `lifestats-persistence`
+
+1. **Migrations**
+   - Add columns to `integrations`:
+     - `access_token TEXT`
+     - `refresh_token TEXT`
+     - `expires_at_epoch_seconds INTEGER`
+     - `scopes TEXT` (sorted, space-separated)
+     - `last_sync_at TEXT`
+     - `canonical_tags TEXT`
+
+   - Constraints:
+     - `UNIQUE(source_name)`
+     - `UNIQUE(statistic_id, date)` on `logging_data`
+     - `UNIQUE(canonical_tags)` on `statistics`
+
+   - Index: `CREATE INDEX idx_integrations_source_name ON integrations(source_name);`
+
+2. **Implement `SqliteTokenStore`**
+   - Read/write `FitbitTokenData`.
+   - Always sort scopes when reading.
+
+3. **Implement `TagQueryableStatisticRepository`**
+   - Extend `SqliteStatisticRepository` to support tag lookups by `canonical_fingerprint`.
+
+4. **UPSERT Guarantee**
+
+   ```sql
+   INSERT INTO logging_data (statistic_id, date, value)
+   VALUES (?1, ?2, ?3)
+   ON CONFLICT(statistic_id, date)
+   DO UPDATE SET value = excluded.value;
+   ```
+
+### `core/infrastructure/system_clock`
+
+Implement `SystemClock`:
+
+```rust
+pub struct SystemClock;
+impl Clock for SystemClock {
+    fn now_utc(&self) -> DateTime<Utc> { chrono::Utc::now() }
+}
+```
+
+---
+
+## Phase 4: Driving Adapter (Web API)
+
+### `lifestats-web-api`
+
+1. **OAuth Flow**
+   - `GET /integrations/fitbit/auth/begin`
+     - Generate `state` + `pkce_verifier`.
+     - Store `{state, pkce_verifier, user_id, expires_at}` in a `moka` cache with 5-min TTL.
+     - **Consume-on-read**: remove the entry once validated.
+
+   - `GET /integrations/fitbit/auth/callback`
+     - Validate `state` in cache (must belong to current user).
+     - Atomically consume entry (get-and-delete). If missing → `400 Bad Request`.
+     - Exchange code for token via `FitbitOAuthApi`.
+     - Save token via `TokenStorePort`.
+
+2. **Sync Endpoint**
+   - `POST /integrations/fitbit/sync`
+     - Validate `since/until`.
+     - Execute `SyncFitbitDataCommand`.
+     - Return `204 No Content` on success.
+
+3. **Error Mapping**
+   - `InvalidGrant` → `401`
+   - `RateLimited` → `429` + `Retry-After` header
+   - `PreconditionFailed` → `412`
+
+---
+
+## Phase 5: Composition & Provisioning
+
+### `lifestats-bootstrap`
+
+1. **FitbitBundleFactory**
+   - Create statistics tagged:
+     - `{source="fitbit", metric="steps"}`
+     - `{source="fitbit", metric="sleep_duration"}`
+     - `{source="fitbit", metric="fell_asleep_time"}`
+     - `{source="fitbit", metric="wake_up_time"}`
+
+   - Fail provisioning if a statistic with identical canonical tags already exists.
+
+2. **Build Services**
+   - Read:
+     - `FITBIT_CLIENT_ID`
+     - `FITBIT_CLIENT_SECRET`
+     - `FITBIT_REDIRECT_URI`
+     - `TIMEZONE`
+     - `TOKEN_EXPIRY_SKEW`
+     - `MAX_CONCURRENCY`
+
+   - Instantiate:
+     - `HttpFitbitOAuthClient`
+     - `HttpFitbitDataClient`
+     - `SqliteTokenStore`
+     - `SystemClock`
+
+   - Register `FitbitBundleFactory`.
+
+---
+
+## Phase 6: Testing & Validation
+
+- **Unit Tests (`fitbit_client`):**
+  - Verify HTTP → `FitbitUpstreamError` mapping.
+
+- **Integration Tests (`lifestats-application`):**
+  - `401 Unauthorized` → refresh → retry once.
+  - `429 RateLimited` → respect `Retry-After`.
+  - Missing scopes → actionable error.
+  - Sync same day twice → identical DB state (idempotency).
+  - Token expires mid-range → only one refresh total.
+  - **Property Tests:** sleep attribution around DST transitions.
+  - **Property Tests:** `TagSet` canonicalization merges `"A"="x"` and `"a"="x "` identically.
+
+- **E2E Tests (`lifestats-web-api`):**
+  - Full OAuth2 flow via mock Fitbit endpoints.
+  - `/sync` endpoint executes command end-to-end and updates DB.
+
+---
+
+## Phase 7: Deprecation of Legacy Logger
+
+### `logger_applications/fitbit_logger`
+
+1. Replace `main.rs` with a thin client:
+
+   ```rust
+   reqwest::Client::new()
+       .post("http://localhost:PORT/integrations/fitbit/sync")
+       .json(&SyncFitbitDataCommand { since, until })
+       .send()
+       .await?;
+   ```
+
+2. Delete all legacy OAuth, caching, and persistence logic.
+3. Add a comment noting deprecation; remove the crate entirely after one stable release once telemetry confirms full adoption.
+
+---
+
+## Optional Enhancements
+
+- **Feature Flag:** `INTEGRATION_FITBIT=on/off` for safe rollout.
+- **Operational Metrics:** Counters (`sync.success`, `sync.failure`), histograms (`fitbit.latency`), gauge (`token.expires_in_seconds`).
+- **Secure Storage:** Consider OS keyring integration for refresh tokens behind `TokenStorePort`.
