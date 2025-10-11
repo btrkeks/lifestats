@@ -39,6 +39,10 @@ where
             "/statistics/{id}/log_time_frame/{date}",
             post(statistics::log_time_frame),
         )
+        .route(
+            "/statistics/{id}/time_spans/total",
+            get(statistics::get_time_spans_total),
+        )
         // Goal management endpoints
         .route(
             "/statistics/{id}/goals/default",

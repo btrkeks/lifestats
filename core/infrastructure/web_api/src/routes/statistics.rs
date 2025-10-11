@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -10,6 +10,7 @@ use lifestats_core::{
     shared::ids::StatisticId, statistic::ports::statistic_repository::StatisticRepository,
 };
 use plot_domain::plot::{renderer::PlotRenderer, repository::PlotRepository};
+use serde::Deserialize;
 use std::str::FromStr;
 use validator::Validate;
 
@@ -445,4 +446,54 @@ where
 
     // Return 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DateRangeParams {
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+}
+
+/// GET /statistics/:id/time_spans/total - Get total duration for a TimeSpans statistic in a date range
+pub async fn get_time_spans_total<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+    Query(params): Query<DateRangeParams>,
+) -> Result<Json<crate::dto::time_spans::TimeSpansTotalResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    P: PlotRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::use_cases::queries::get_time_spans_total::{
+        GetTimeSpansTotalQuery, GetTimeSpansTotalQueryHandler,
+    };
+    use lifestats_core::shared::date_range::DateRange;
+
+    let date_range = DateRange::new(params.start_date, params.end_date)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
+
+    let handler = GetTimeSpansTotalQueryHandler::new(app_state.statistic_repository.clone());
+
+    let result = handler
+        .handle(GetTimeSpansTotalQuery {
+            statistic_id: StatisticId(statistic_id),
+            date_range,
+        })
+        .map_err(|e| {
+            if e.to_string().contains("not a TimeSpans type") {
+                ApiError::BadRequest(e.to_string())
+            } else if e.to_string().contains("not found") {
+                ApiError::NotFound(e.to_string())
+            } else {
+                ApiError::InternalError(format!("Failed to get time spans total: {}", e))
+            }
+        })?;
+
+    Ok(Json(crate::dto::time_spans::TimeSpansTotalResponse::from(
+        result,
+    )))
 }

@@ -7,6 +7,7 @@ pub mod get_plot_data;
 pub mod get_statistic_by_id;
 pub mod get_streak;
 pub mod get_time_spans_metadata;
+pub mod get_time_spans_total;
 
 pub use get_all_metadata::{GetAllMetadataQuery, GetAllMetadataQueryHandler};
 pub use get_all_statistics::{GetAllStatisticsQuery, GetAllStatisticsQueryHandler};
@@ -17,3 +18,4 @@ pub use get_plot_data::{GetPlotDataQuery, GetPlotDataQueryHandler};
 pub use get_statistic_by_id::{GetStatisticByIdQuery, GetStatisticByIdQueryHandler};
 pub use get_streak::{GetStreakQuery, GetStreakQueryHandler};
 pub use get_time_spans_metadata::{GetTimeSpansMetadataQuery, GetTimeSpansMetadataQueryHandler};
+pub use get_time_spans_total::{GetTimeSpansTotalQuery, GetTimeSpansTotalQueryHandler};
