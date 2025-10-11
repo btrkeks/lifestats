@@ -1,5 +1,5 @@
 [package]
-name = "StopwatchLogger"
+name = "lifestats-stopwatch-logger"
 version = "0.1.0"
 edition = "2021"
 
