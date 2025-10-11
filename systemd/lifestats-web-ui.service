@@ -1,0 +1,31 @@
+[Unit]
+Description=LifeStats Web UI (Next.js Frontend)
+Documentation=https://github.com/btrkeks/lifestats
+After=network-online.target lifestats-web-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/src/lifestats/ui/web-ui
+ExecStart=/usr/bin/npm start
+
+# Environment variables
+Environment=NODE_ENV=production
+Environment=NEXT_PUBLIC_API_URL=http://localhost:3000
+Environment=PORT=3001
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lifestats-web-ui
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+# Security hardening (optional)
+User=daniel
+Group=daniel
+
+[Install]
+WantedBy=multi-user.target
