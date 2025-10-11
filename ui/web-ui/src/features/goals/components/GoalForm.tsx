@@ -68,15 +68,18 @@ export function GoalForm({
       switch (statisticType) {
         case 'IntegerAmount':
         case 'Summing':
-          return { target: 0, is_at_least: true };
+          return { target: 0, is_at_least: true } as Record<string, unknown>;
         case 'Habit':
-          return { occurred: true };
+          return { occurred: true } as Record<string, unknown>;
         case 'PointInTime':
-          return { deadline: '12:00:00' };
+          return { deadline: '12:00:00' } as Record<string, unknown>;
         case 'TimeSpans':
-          return { target: [{ start: '09:00', end: '17:00' }], efficiency: 80 };
+          return {
+            target: [{ start: '09:00', end: '17:00' }],
+            efficiency: 80,
+          } as Record<string, unknown>;
         default:
-          return {};
+          return {} as Record<string, unknown>;
       }
     }
 
@@ -87,7 +90,8 @@ export function GoalForm({
       if (typeof maybeStringTarget === 'string') {
         try {
           const parsedTarget = JSON.parse(maybeStringTarget);
-          return { ...(data as Record<string, unknown>), target: parsedTarget };
+          const baseData = data as unknown as Record<string, unknown>;
+          return { ...baseData, target: parsedTarget };
         } catch (error) {
           console.warn('Failed to parse TimeSpans target JSON', error);
           return data as unknown as Record<string, unknown>;
@@ -98,7 +102,7 @@ export function GoalForm({
     }
 
     // Extract data from existing goal
-    return existingGoal.goal_data.data;
+    return existingGoal.goal_data.data as unknown as Record<string, unknown>;
   };
 
   const {
@@ -114,7 +118,7 @@ export function GoalForm({
   });
 
   const onFormSubmit = (data: Record<string, unknown>) => {
-    const payload = { ...data };
+    const payload = { ...data } as Record<string, unknown>;
 
     if (statisticType === 'TimeSpans' && Array.isArray(payload.target)) {
       payload.target = JSON.stringify(payload.target);

@@ -6,9 +6,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { STATISTIC_TYPE_DEFINITIONS } from '@/lib/constants';
 import { CreateStatisticForm } from '@/features/statistics/components/CreateStatisticForm';
 import { createStatistic, getLoggableStatistics } from '@/lib/api';
-import type { CreateStatisticRequest, StatisticMetadata } from '@/types';
+import type { CreateStatisticRequest, StatisticMetadata, StatisticType } from '@/types';
 
-const DERIVED_TYPES = new Set(['Summing', 'TimeDifference'] as const);
+const DERIVED_TYPES = new Set<StatisticType>(['Summing', 'TimeDifference']);
 
 export default function CreateStatisticPage() {
   const params = useParams<{ type: string }>();

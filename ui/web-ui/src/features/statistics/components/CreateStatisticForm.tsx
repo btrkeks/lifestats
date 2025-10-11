@@ -13,7 +13,7 @@ import type {
 const formSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   category: z.string().min(1, 'Category is required'),
-  source_statistic_ids: z.array(z.number()).default([]),
+  source_statistic_ids: z.array(z.number()),
 });
 
 type FormValues = z.infer<typeof formSchema>;
