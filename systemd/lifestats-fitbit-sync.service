@@ -1,0 +1,31 @@
+[Unit]
+Description=LifeStats Fitbit Data Sync
+Documentation=https://github.com/yourusername/lifestats
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Calculate yesterday's date for syncing
+# Fitbit data is typically finalized the day after
+ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "yesterday" +%%Y-%%m-%%d); \
+  curl -X POST http://localhost:3000/integrations/fitbit/sync \
+    -H "Content-Type: application/json" \
+    -d "{\"since\": \"$YESTERDAY\", \"until\": \"$YESTERDAY\"}" \
+    --fail --silent --show-error'
+
+# Optional: Set the user if you want to run as a specific user
+# User=your-username
+# Group=your-group
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lifestats-fitbit-sync
+
+# Restart policy for failures
+# Restart=on-failure
+# RestartSec=5m
+
+[Install]
+WantedBy=multi-user.target
