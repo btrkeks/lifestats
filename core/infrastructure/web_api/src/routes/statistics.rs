@@ -50,6 +50,34 @@ where
     Ok(Json(response))
 }
 
+/// GET /statistics/loggable - Get statistics eligible to be logged directly
+pub async fn get_loggable_statistics<R, P, Rend, E, I>(
+    State(app_state): State<AppState<R, P, Rend, E, I>>,
+) -> Result<Json<Vec<StatisticMetadataResponse>>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    P: PlotRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::use_cases::queries::get_loggable_metadata::{
+        GetLoggableMetadataQuery, GetLoggableMetadataQueryHandler,
+    };
+
+    let handler = GetLoggableMetadataQueryHandler::new(app_state.statistic_repository.clone());
+    let statistics = handler
+        .handle(GetLoggableMetadataQuery)
+        .map_err(ApiError::from)?;
+
+    let response: Vec<StatisticMetadataResponse> = statistics
+        .iter()
+        .map(StatisticMetadataResponse::from)
+        .collect();
+    Ok(Json(response))
+}
+
 /// GET /statistics/:id - Get a single statistic's metadata
 pub async fn get_statistic<R, P, Rend, E, I>(
     State(app_state): State<AppState<R, P, Rend, E, I>>,

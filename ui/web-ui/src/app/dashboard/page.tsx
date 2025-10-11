@@ -29,11 +29,19 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">Statistics Dashboard</h1>
-          <p className="text-gray-600 mt-2">
-            Manage goals for all your statistics in one place
-          </p>
+        <header className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900">Statistics Dashboard</h1>
+            <p className="text-gray-600 mt-2">
+              Manage goals for all your statistics in one place
+            </p>
+          </div>
+          <Link
+            href="/statistics/new"
+            className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white shadow-sm transition hover:bg-blue-700"
+          >
+            + Create Statistic
+          </Link>
         </header>
 
         {isLoading && (

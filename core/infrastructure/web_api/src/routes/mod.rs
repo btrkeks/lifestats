@@ -31,6 +31,10 @@ where
             get(statistics::get_all_statistics).post(statistics::create_statistic),
         )
         .route(
+            "/statistics/loggable",
+            get(statistics::get_loggable_statistics),
+        )
+        .route(
             "/statistics/{id}",
             get(statistics::get_statistic).delete(statistics::delete_statistic),
         )
