@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use axum::{extract::Query, http::StatusCode, Extension, Json};
+use axum::{
+    extract::{rejection::JsonRejection, Query},
+    http::StatusCode,
+    Extension, Json,
+};
 use lifestats_application::{
     integrations::fitbit::ports::{FitbitOAuthApi, TokenStorePort},
     use_cases::commands::sync_fitbit_data::{SyncFitbitDataCommand, SyncFitbitDataCommandHandler},
@@ -149,13 +153,38 @@ pub async fn auth_callback_handler(
 /// 1. Validates the date range
 /// 2. Executes the sync command
 /// 3. Returns 204 No Content on success
-#[tracing::instrument(skip_all, fields(since = %request.since, until = %request.until))]
+#[tracing::instrument(skip_all)]
 pub async fn sync_handler(
     Extension(sync_handler): Extension<Arc<SyncFitbitDataCommandHandler>>,
-    Json(request): Json<SyncRequestDto>,
+    json_result: Result<Json<SyncRequestDto>, JsonRejection>,
 ) -> Result<StatusCode, ApiError> {
+    // Handle JSON deserialization errors with detailed logging
+    let Json(request) = json_result.map_err(|rejection| {
+        tracing::error!(
+            error = %rejection,
+            status = ?rejection.status(),
+            body = ?rejection.body_text(),
+            "Failed to deserialize sync request JSON"
+        );
+        ApiError::BadRequest(format!(
+            "Invalid request format: {}. Expected JSON with 'since' and 'until' fields in YYYY-MM-DD format.",
+            rejection.body_text()
+        ))
+    })?;
+
+    tracing::info!(
+        since = %request.since,
+        until = %request.until,
+        "Received Fitbit sync request"
+    );
+
     // Validate date range
     if request.since > request.until {
+        tracing::warn!(
+            since = %request.since,
+            until = %request.until,
+            "Invalid date range: since is after until"
+        );
         return Err(ApiError::BadRequest(
             "since must be on or before until".to_string(),
         ));
