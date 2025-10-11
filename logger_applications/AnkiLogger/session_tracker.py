@@ -182,6 +182,7 @@ class SessionTracker:
 
         self.timer_manager.cancel_timer()
         self._log_time_frame()
+        self._log_backlog()
 
         # Reset state
         self.is_running = False
