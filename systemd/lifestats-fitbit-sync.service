@@ -6,12 +6,12 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-# Calculate yesterday's date for syncing
+# Calculate today's date for syncing
 # Fitbit data is typically finalized the day after
-ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "yesterday" +%%Y-%%m-%%d); \
+ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "today" +%%Y-%%m-%%d); \
   curl -X POST http://localhost:3000/integrations/fitbit/sync \
     -H "Content-Type: application/json" \
-    -d "{\"since\": \"$YESTERDAY\", \"until\": \"$YESTERDAY\"}" \
+    -d "{\\"since\\": \\"$YESTERDAY\\", \\"until\\": \\"$YESTERDAY\\"}" \
     --fail --silent --show-error'
 
 # Optional: Set the user if you want to run as a specific user
