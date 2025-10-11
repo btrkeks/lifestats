@@ -60,13 +60,16 @@ async fn main() -> Result<()> {
         app.statistic_repository.clone(),
         Arc::new(RealTimeProvider),
         HeartbeatConfig {
-            idle_timeout: chrono::Duration::days(1),
-            flush_interval: chrono::Duration::minutes(1),
+            idle_timeout: chrono::Duration::minutes(1),
+            flush_interval: chrono::Duration::seconds(10),
         },
     );
 
-    // Step 4: Connect to MIDI port and get event receiver
-    let mut midi_rx = midi_adapter.connect(port_index)?;
+    // Subscribe to session updates (start/stop events)
+    let mut update_rx = session.subscribe_to_updates();
+
+    // Step 4: Connect to MIDI port and create session
+    let mut midi_session = midi_adapter.connect(port_index)?;
 
     // Step 5: Setup Ctrl+C handler
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
@@ -78,13 +81,16 @@ async fn main() -> Result<()> {
     // Display session header
     ui.show_session_header(statistic.name(), selected_port_name);
 
-    // Main event loop: listen for MIDI events and Ctrl+C
+    // Main event loop: listen for MIDI events, session updates, and Ctrl+C
     loop {
         select! {
-            Some(midi_event) = midi_rx.recv() => {
+            Some(midi_event) = midi_session.recv() => {
                 info!("Received MIDI event: {:?}", midi_event);
                 session.beat();
                 ui.show_beat_message();
+            }
+            Some(update) = update_rx.recv() => {
+                ui.show_session_update(&update);
             }
             Some(_) = shutdown_rx.recv() => {
                 info!("Shutdown signal received");

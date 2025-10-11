@@ -1,5 +1,5 @@
 use anyhow::Result;
-use lifestats_application::StatisticMetadata;
+use lifestats_application::{use_cases::HeartbeatUpdate, StatisticMetadata};
 use std::io::{self, Write};
 
 /// Terminal-based user interface for the MIDI logger
@@ -108,12 +108,27 @@ impl TerminalUI {
 
     /// Display a message when a MIDI beat is detected
     pub fn show_beat_message(&self) {
-        println!("Beat detected!");
+        // Don't show anything for now
     }
 
     /// Display shutdown message
     pub fn show_shutdown_message(&self) {
         println!("\nShutting down and saving session...");
+    }
+
+    /// Display session update (started/stopped/duration changed)
+    pub fn show_session_update(&self, update: &HeartbeatUpdate) {
+        match update {
+            HeartbeatUpdate::Started => {
+                println!("▶ Logging session started");
+            }
+            HeartbeatUpdate::Stopped => {
+                println!("■ Logging session ended (idle timeout)");
+            }
+            HeartbeatUpdate::DurationChanged(_) => {
+                // Don't show duration updates for now
+            }
+        }
     }
 }
 
