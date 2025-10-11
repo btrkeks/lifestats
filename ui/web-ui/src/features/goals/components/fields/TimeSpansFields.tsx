@@ -33,13 +33,13 @@ export function TimeSpansFields({ control, register, errors }: TimeSpansFieldsPr
             <input
               type="time"
               {...register(`target.${index}.start`)}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border text-black"
             />
             <span>to</span>
             <input
               type="time"
               {...register(`target.${index}.end`)}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border text-black"
             />
             <button
               type="button"
@@ -73,7 +73,7 @@ export function TimeSpansFields({ control, register, errors }: TimeSpansFieldsPr
           min="0"
           max="100"
           {...register('efficiency', { valueAsNumber: true })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border text-black placeholder:text-black"
           placeholder="e.g., 85"
         />
         {errors.efficiency && (

@@ -24,7 +24,7 @@ export function PointInTimeFields({ register, errors }: PointInTimeFieldsProps) 
         {...register('deadline', {
           required: 'Deadline is required',
         })}
-        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border text-black"
       />
       {errors.deadline && (
         <p className="mt-1 text-sm text-red-600">{String(errors.deadline.message)}</p>

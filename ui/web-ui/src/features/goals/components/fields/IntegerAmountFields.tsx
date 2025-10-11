@@ -25,7 +25,7 @@ export function IntegerAmountFields({ register, errors }: IntegerAmountFieldsPro
             required: 'Target value is required',
             valueAsNumber: true,
           })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border text-black placeholder:text-black"
           placeholder="e.g., 100"
         />
         {errors.target && (

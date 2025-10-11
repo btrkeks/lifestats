@@ -52,7 +52,7 @@ export function DefaultGoalEditor({ statisticId }: DefaultGoalEditorProps) {
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4">
+      <h2 className="text-2xl font-bold mb-4 text-black">
         Default Goal - {statistic.name} ({statistic.statistic_type})
       </h2>
 
