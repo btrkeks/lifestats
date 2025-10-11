@@ -20,7 +20,7 @@ export function HabitFields({ register, errors }: HabitFieldsProps) {
         {...register('occurred')}
         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
       />
-      <label htmlFor="occurred" className="ml-2 block text-sm text-gray-700">
+      <label htmlFor="occurred" className="ml-2 block text-sm text-black">
         Goal: Habit Occurred
       </label>
       {errors.occurred && (

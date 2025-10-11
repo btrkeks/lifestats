@@ -1,5 +1,6 @@
 use crate::shared::percentage::Percentage;
 use crate::shared::time_frame_list::TimeFrameList;
+use crate::statistic::error::DomainError;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
 use serde::{Deserialize, Serialize};
 
@@ -10,11 +11,14 @@ pub struct TimeSpansGoal {
 }
 
 impl TimeSpansGoal {
-    pub fn new(target_frames: TimeFrameList, efficiency: Percentage) -> Self {
-        Self {
+    /// Creates a new `TimeSpansGoal`, ensuring the encapsulated types stay validated.
+    pub fn new(target_frames: TimeFrameList, efficiency: Percentage) -> Result<Self, DomainError> {
+        // The dependent value objects already validate their own invariants. This method exists
+        // to make future cross-field validation straightforward without changing callers again.
+        Ok(Self {
             target: target_frames,
             efficiency,
-        }
+        })
     }
 
     pub fn target(&self) -> &TimeFrameList {

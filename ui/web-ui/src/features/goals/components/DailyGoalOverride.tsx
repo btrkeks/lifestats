@@ -42,7 +42,7 @@ export function DailyGoalOverride({ statisticId }: DailyGoalOverrideProps) {
   };
 
   if (isLoadingStatistic) {
-    return <div className="p-4 text-gray-600">Loading statistic...</div>;
+    return <div className="p-4 text-black">Loading statistic...</div>;
   }
 
   if (!statistic) {
@@ -56,7 +56,7 @@ export function DailyGoalOverride({ statisticId }: DailyGoalOverrideProps) {
       </h2>
 
       <div className="mb-6">
-        <label htmlFor="date" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="date" className="block text-sm font-medium text-black">
           Select Date
         </label>
         <input
@@ -68,7 +68,7 @@ export function DailyGoalOverride({ statisticId }: DailyGoalOverrideProps) {
         />
       </div>
 
-      {isLoadingGoal && <div className="p-4 text-gray-600">Loading goal...</div>}
+      {isLoadingGoal && <div className="p-4 text-black">Loading goal...</div>}
 
       {!isLoadingGoal && (
         <GoalForm

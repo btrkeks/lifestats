@@ -15,7 +15,7 @@ export function IntegerAmountFields({ register, errors }: IntegerAmountFieldsPro
   return (
     <>
       <div>
-        <label htmlFor="target" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="target" className="block text-sm font-medium text-black">
           Target Value
         </label>
         <input
@@ -40,7 +40,7 @@ export function IntegerAmountFields({ register, errors }: IntegerAmountFieldsPro
           {...register('is_at_least')}
           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
         />
-        <label htmlFor="is_at_least" className="ml-2 block text-sm text-gray-700">
+        <label htmlFor="is_at_least" className="ml-2 block text-sm text-black">
           Is At Least (vs. At Most)
         </label>
       </div>

@@ -14,7 +14,7 @@ interface PointInTimeFieldsProps {
 export function PointInTimeFields({ register, errors }: PointInTimeFieldsProps) {
   return (
     <div>
-      <label htmlFor="deadline" className="block text-sm font-medium text-gray-700">
+      <label htmlFor="deadline" className="block text-sm font-medium text-black">
         Deadline Time
       </label>
       <input
@@ -29,7 +29,7 @@ export function PointInTimeFields({ register, errors }: PointInTimeFieldsProps) 
       {errors.deadline && (
         <p className="mt-1 text-sm text-red-600">{String(errors.deadline.message)}</p>
       )}
-      <p className="mt-1 text-xs text-gray-500">Format: HH:MM:SS</p>
+      <p className="mt-1 text-xs text-black">Format: HH:MM:SS</p>
     </div>
   );
 }

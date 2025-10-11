@@ -27,8 +27,23 @@ export const pointInTimeGoalSchema = z.object({
 
 // Schema for TimeSpans goals
 export const timeSpansGoalSchema = z.object({
-  target: z.unknown(), // Complex nested structure
-  efficiency: z.coerce.number().min(0).max(100).optional(),
+  target: z
+    .array(
+      z.object({
+        start: z
+          .string()
+          .regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Start time must be HH:MM or HH:MM:SS'),
+        end: z
+          .string()
+          .regex(/^\d{2}:\d{2}(:\d{2})?$/, 'End time must be HH:MM or HH:MM:SS'),
+      })
+    )
+    .min(1, 'At least one time frame is required.'),
+  efficiency: z
+    .coerce
+    .number()
+    .min(0, 'Efficiency cannot be negative.')
+    .max(100, 'Efficiency cannot exceed 100.'),
 });
 
 // Schema for TimeDifference goals
@@ -93,30 +108,26 @@ export function parseGoalData(statisticType: StatisticType, rawData: Record<stri
  * Converts strongly-typed goal data back to the backend's expected format
  * (all values as strings in a Record<string, string>).
  */
-export function serializeGoalData(goalData: {
-  target?: number;
-  is_at_least?: boolean;
-  occurred?: boolean;
-  deadline?: string;
-  efficiency?: number;
-}): Record<string, string> {
+export function serializeGoalData(goalData: Record<string, unknown>): Record<string, string> {
   const result: Record<string, string> = {};
 
-  if (goalData.target !== undefined) {
-    result.target = String(goalData.target);
-  }
-  if (goalData.is_at_least !== undefined) {
-    result.is_at_least = String(goalData.is_at_least);
-  }
-  if (goalData.occurred !== undefined) {
-    result.occurred = String(goalData.occurred);
-  }
-  if (goalData.deadline !== undefined) {
-    result.deadline = goalData.deadline;
-  }
-  if (goalData.efficiency !== undefined) {
-    result.efficiency = String(goalData.efficiency);
-  }
+  Object.entries(goalData).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+
+    if (typeof value === 'string') {
+      result[key] = value;
+      return;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      result[key] = String(value);
+      return;
+    }
+
+    result[key] = JSON.stringify(value);
+  });
 
   return result;
 }

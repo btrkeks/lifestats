@@ -28,6 +28,11 @@ export async function getAllStatistics(): Promise<StatisticMetadata[]> {
   return response.data;
 }
 
+export async function getLoggableStatistics(): Promise<StatisticMetadata[]> {
+  const response = await api.get('/statistics/loggable');
+  return response.data;
+}
+
 export async function getStatistic(id: number): Promise<StatisticMetadata> {
   const response = await api.get(`/statistics/${id}`);
   return response.data;

@@ -86,7 +86,8 @@ where
             }
 
             (AnyStatistic::TimeSpans(s), GoalPayload::TimeSpans { target, efficiency }) => {
-                let goal = TimeSpansGoal::new(target, efficiency);
+                let goal =
+                    TimeSpansGoal::new(target, efficiency).map_err(ApplicationError::Domain)?;
                 s.set_new_default_goal(goal.clone(), start_date)
                     .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?;
                 serde_json::to_value(&goal)

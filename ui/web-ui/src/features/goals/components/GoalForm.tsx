@@ -3,11 +3,17 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { StatisticType, GoalResponse } from '@/types';
-import { IntegerAmountFields, HabitFields, PointInTimeFields } from './fields';
+import {
+  IntegerAmountFields,
+  HabitFields,
+  PointInTimeFields,
+  TimeSpansFields,
+} from './fields';
 import {
   integerAmountGoalSchema,
   habitGoalSchema,
   pointInTimeGoalSchema,
+  timeSpansGoalSchema,
   serializeGoalData,
 } from '@/lib/schemas';
 
@@ -47,8 +53,10 @@ export function GoalForm({
         return habitGoalSchema;
       case 'PointInTime':
         return pointInTimeGoalSchema;
+      case 'TimeSpans':
+        return timeSpansGoalSchema;
       default:
-        // For types we haven't implemented yet (TimeSpans, TimeDifference)
+        // For types we haven't implemented yet (e.g., TimeDifference)
         return integerAmountGoalSchema;
     }
   };
@@ -65,9 +73,28 @@ export function GoalForm({
           return { occurred: true };
         case 'PointInTime':
           return { deadline: '12:00:00' };
+        case 'TimeSpans':
+          return { target: [{ start: '09:00', end: '17:00' }], efficiency: 80 };
         default:
           return {};
       }
+    }
+
+    if (statisticType === 'TimeSpans' && existingGoal.goal_data.type === 'TimeSpans') {
+      const data = existingGoal.goal_data.data;
+      const maybeStringTarget = data.target as unknown;
+
+      if (typeof maybeStringTarget === 'string') {
+        try {
+          const parsedTarget = JSON.parse(maybeStringTarget);
+          return { ...(data as Record<string, unknown>), target: parsedTarget };
+        } catch (error) {
+          console.warn('Failed to parse TimeSpans target JSON', error);
+          return data as unknown as Record<string, unknown>;
+        }
+      }
+
+      return data as unknown as Record<string, unknown>;
     }
 
     // Extract data from existing goal
@@ -77,6 +104,7 @@ export function GoalForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useForm<Record<string, any>>({
@@ -86,8 +114,14 @@ export function GoalForm({
   });
 
   const onFormSubmit = (data: Record<string, unknown>) => {
+    const payload = { ...data };
+
+    if (statisticType === 'TimeSpans' && Array.isArray(payload.target)) {
+      payload.target = JSON.stringify(payload.target);
+    }
+
     // Serialize to backend format (all strings)
-    const serialized = serializeGoalData(data);
+    const serialized = serializeGoalData(payload);
     onSubmit(serialized);
   };
 
@@ -103,9 +137,7 @@ export function GoalForm({
         return <PointInTimeFields register={register} errors={errors} />;
       case 'TimeSpans':
         return (
-          <div className="p-4 bg-yellow-50 rounded text-sm text-yellow-800">
-            TimeSpans goal editing not yet implemented
-          </div>
+          <TimeSpansFields register={register} errors={errors} control={control} />
         );
       case 'TimeDifference':
         return (

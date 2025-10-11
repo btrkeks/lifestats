@@ -3,20 +3,6 @@
 version = 4
 
 [[package]]
-name = "StopwatchLogger"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "crossterm",
- "env_logger",
- "lifestats-application",
- "lifestats-bootstrap",
- "log",
- "tokio",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1742,6 +1728,20 @@ dependencies = [
  "plot-domain",
  "plotters",
  "serde_json",
+]
+
+[[package]]
+name = "lifestats-stopwatch-logger"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "crossterm",
+ "env_logger",
+ "lifestats-application",
+ "lifestats-bootstrap",
+ "log",
+ "tokio",
 ]
 
 [[package]]

@@ -41,8 +41,8 @@ export interface PointInTimeGoalData {
 }
 
 export interface TimeSpansGoalData {
-  target: unknown; // TimeFrameList structure - will be JSON
-  efficiency?: number; // 0 to 100
+  target: { start: string; end: string }[];
+  efficiency: number; // 0 to 100
 }
 
 export interface SecondsAmountGoalData {

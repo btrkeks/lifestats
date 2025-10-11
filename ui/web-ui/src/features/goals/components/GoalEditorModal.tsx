@@ -25,7 +25,7 @@ export function GoalEditorModal({ statistic, onClose }: GoalEditorModalProps) {
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{statistic.name}</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-black mt-1">
               {statistic.category} • {statistic.statistic_type}
             </p>
           </div>
