@@ -23,9 +23,5 @@ SyslogIdentifier=lifestats-web-ui
 Restart=on-failure
 RestartSec=10s
 
-# Security hardening (optional)
-User=daniel
-Group=daniel
-
 [Install]
 WantedBy=multi-user.target
