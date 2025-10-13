@@ -56,6 +56,7 @@ export default defineConfig(({ mode }) => ({
       manifest: generateManifest,
       watchFilePaths: ['package.json', 'manifest.json'],
       additionalInputs: ['src/block.html', 'src/welcome.html', 'src/offscreen.html'],
+      skipManifestValidation: true,  // Skip online schema validation to avoid network errors
     }),
     copy({
       targets: [

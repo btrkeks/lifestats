@@ -3,7 +3,7 @@ import { endOfMonth, endOfWeek, startOfMonth, startOfWeek, subMonths } from 'dat
 import startOfToday from 'date-fns/startOfToday';
 
 export function todayLocalDate() {
-  return new Date().toLocaleDateString('en-US');
+  return new Date().toISOString().split('T')[0];
 }
 
 export function getToday(): number {

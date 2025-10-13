@@ -30,7 +30,7 @@
     "offscreen"
   ],
     "host_permissions": [
-      "http://localhost:8000/"
+      "http://localhost:3000/"
   ],
   "offline_enabled": true,
   "background": {

@@ -15,15 +15,16 @@ export class Tab implements ISerializable<Tab> {
 
   private async sendLocalDbRequest(): Promise<void> {
     try {
-      const response = await fetch('http://localhost:8000/api/log', {
+      const statisticId = 16;
+      const date = todayLocalDate();
+      const response = await fetch(`http://localhost:3000/statistics/${statisticId}/log/${date}`, {
         method : 'POST',
         headers : {
           'Content-Type' : 'application/json',
         },
 	body: JSON.stringify({
-	  statistic_id: 16,
-	  update_policy: 'sum', 
-	  value: `${Tab.LOG_INTERVAL_SEC}s`
+	  update_policy: 'sum',
+	  value: `${Tab.LOG_INTERVAL_SEC}`
 	}),
       });
 
