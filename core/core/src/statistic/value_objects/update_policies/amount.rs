@@ -3,7 +3,7 @@ use std::ops::Add;
 use strum_macros::{Display, EnumString};
 
 #[derive(Debug, Clone, Copy, EnumString, Display, Default, Eq, PartialEq)]
-#[strum(serialize_all = "lowercase")]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum AmountUpdatePolicy {
     #[default]
     Sum,

@@ -2,7 +2,7 @@ use crate::statistic::value_objects::update_policies::update_policy_trait::Updat
 use strum_macros::{Display, EnumString};
 
 #[derive(Debug, Clone, Copy, EnumString, Display, Default)]
-#[strum(serialize_all = "lowercase")]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum FixedValueUpdatePolicy {
     #[default]
     Ignore,
