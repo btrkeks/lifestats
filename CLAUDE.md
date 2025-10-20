@@ -327,6 +327,7 @@ rustc-wrapper = "sccache"
 - `docs/ARCHITECTURE.md` – detailed architecture diagrams
 - `docs/statistics.md` – statistic type behaviors
 - `docs/IDEAS.md` – design ideas and future explorations
+- `docs/COMMIT_CONVENTIONS.md` – git commit message format and conventions
 - `README.md` – comprehensive project documentation
 - `lifestats-bootstrap/src/lib.rs` – dependency injection patterns
 - `core/application/src/use_cases/commands/log_value/handler.rs` – canonical command handler example
