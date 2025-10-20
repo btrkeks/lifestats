@@ -1,0 +1,67 @@
+{
+  "activities": [{
+    "logId": 2947269799916188072,
+    "activityId": 90009,
+    "activityParentId": 90009,
+    "activityParentName": "Run",
+    "name": "Run",
+    "description": "Running - 5 mph (12 min/mile)",
+    "calories": 216,
+    "distance": 2.26965,
+    "steps": 2549,
+    "duration": 1007000,
+    "lastModified": "2025-10-13T05:58:13.596Z",
+    "startTime": "07:41",
+    "isFavorite": false,
+    "hasActiveZoneMinutes": true,
+    "startDate": "2025-10-13",
+    "hasStartTime": true
+  }],
+  "summary": {
+    "caloriesOut": 1092,
+    "activityCalories": 384,
+    "caloriesBMR": 728,
+    "activeScore": -1,
+    "steps": 2996,
+    "floors": 11,
+    "elevation": 33.528,
+    "sedentaryMinutes": 185,
+    "lightlyActiveMinutes": 17,
+    "fairlyActiveMinutes": 14,
+    "veryActiveMinutes": 19,
+    "distances": [{
+      "activity": "total",
+      "distance": 2.642582
+    }, {
+      "activity": "tracker",
+      "distance": 2.6302
+    }, {
+      "activity": "sedentaryActive",
+      "distance": 0.02193
+    }, {
+      "activity": "lightlyActive",
+      "distance": 0.0465
+    }, {
+      "activity": "moderatelyActive",
+      "distance": 0.313652
+    }, {
+      "activity": "veryActive",
+      "distance": 2.2605
+    }, {
+      "activity": "loggedActivities",
+      "distance": 2.26965
+    }, {
+      "activity": "Run",
+      "distance": 2.26965
+    }],
+    "marginalCalories": 316,
+    "heartRateZones": []
+  },
+  "goals": {
+    "caloriesOut": 2545,
+    "steps": 8000,
+    "distance": 8.05,
+    "floors": 10,
+    "activeMinutes": 30
+  }
+}

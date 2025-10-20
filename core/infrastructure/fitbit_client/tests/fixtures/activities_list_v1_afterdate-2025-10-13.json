@@ -1,0 +1,114 @@
+{
+  "pagination": {
+    "afterDate": "2025-10-13",
+    "limit": 5,
+    "next": "",
+    "offset": 0,
+    "previous": "",
+    "sort": "asc"
+  },
+  "activities": [
+    {
+      "logId": 2947269799916188072,
+      "activityTypeId": 90009,
+      "activityName": "Run",
+      "calories": 216,
+      "distance": 2.26965,
+      "steps": 2549,
+      "speed": 8.85237269772481,
+      "pace": 406.67063203577646,
+      "duration": 1007000,
+      "activeDuration": 923000,
+      "activityLevel": [
+        {
+          "minutes": 0,
+          "name": "sedentary"
+        },
+        {
+          "minutes": 0,
+          "name": "lightly"
+        },
+        {
+          "minutes": 0,
+          "name": "fairly"
+        },
+        {
+          "minutes": 15,
+          "name": "very"
+        }
+      ],
+      "distanceUnit": "Kilometer",
+      "source": {
+        "type": "tracker",
+        "name": "Google Pixel Watch 2",
+        "id": "751FEEE64541",
+        "url": "https://www.fitbit.com/",
+        "trackerFeatures": [
+          "DISTANCE",
+          "STEPS",
+          "GPS",
+          "PACE",
+          "ELEVATION",
+          "CALORIES",
+          "HEARTRATE",
+          "VO2_MAX"
+        ]
+      },
+      "logType": "tracker",
+      "manualValuesSpecified": {
+        "calories": false,
+        "distance": false,
+        "steps": false
+      },
+      "intervalWorkoutData": {
+        "intervalSummaries": [],
+        "numRepeats": 0
+      },
+      "heartRateZones": [],
+      "activeZoneMinutes": {
+        "totalMinutes": 31,
+        "minutesInHeartRateZones": [
+          {
+            "minutes": 0,
+            "zoneName": "Out of Range",
+            "order": 0,
+            "type": "OUT_OF_ZONE",
+            "minuteMultiplier": 0
+          },
+          {
+            "minutes": 1,
+            "zoneName": "Fat Burn",
+            "order": 1,
+            "type": "FAT_BURN",
+            "minuteMultiplier": 1
+          },
+          {
+            "minutes": 13,
+            "zoneName": "Cardio",
+            "order": 2,
+            "type": "CARDIO",
+            "minuteMultiplier": 2
+          },
+          {
+            "minutes": 2,
+            "zoneName": "Peak",
+            "order": 3,
+            "type": "PEAK",
+            "minuteMultiplier": 2
+          }
+        ]
+      },
+      "inProgress": false,
+      "caloriesLink": "https://api.fitbit.com/1/user/-/activities/calories/date/2025-10-13/2025-10-13/1min/time/7:41/7:58.json",
+      "tcxLink": "https://api.fitbit.com/1/user/-/activities/2947269799916188072.tcx",
+      "lastModified": "2025-10-13T05:58:13.596Z",
+      "startTime": "2025-10-13T07:41:13.000+02:00",
+      "originalStartTime": "2025-10-13T07:41:13.000+02:00",
+      "originalDuration": 1007000,
+      "elevationGain": 29.87,
+      "hasActiveZoneMinutes": true,
+      "hasGps": true,
+      "cl": 39.48448689202031
+    }
+  ]
+}

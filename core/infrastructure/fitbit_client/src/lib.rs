@@ -658,4 +658,85 @@ mod tests {
         let duration = parse_retry_after_header(&header);
         assert!(duration.is_none());
     }
+
+    // ========================================================================
+    // API Contract Tests
+    // ========================================================================
+    // These tests protect against Fitbit API schema changes.
+    // Fixtures are real API responses captured from production.
+    // If these fail, Fitbit changed their API and we need to update our types.
+
+    #[test]
+    fn deserializes_real_activity_response_v1() {
+        // Real response captured from Fitbit API on 2025-10-13
+        // Endpoint: GET /1/user/-/activities/date/{date}.json
+        let response = include_str!("../tests/fixtures/activity_v1_2025-10-13.json");
+
+        // This should never fail unless Fitbit breaks their API contract
+        let result = serde_json::from_str::<ActivitySummaryEnvelope>(response);
+        assert!(
+            result.is_ok(),
+            "Failed to deserialize real Fitbit activity response: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn extracts_expected_fields_from_real_activity_response() {
+        // Real response captured from Fitbit API on 2025-10-13
+        let response = include_str!("../tests/fixtures/activity_v1_2025-10-13.json");
+        let envelope: ActivitySummaryEnvelope =
+            serde_json::from_str(response).expect("Should deserialize real API response");
+        let data = envelope.into_activity_data();
+
+        // Verify extraction logic works with actual production data
+        // These values match the summary section of the captured response
+        assert_eq!(data.steps, Some(2996), "steps field extraction failed");
+        assert_eq!(
+            data.calories_out,
+            Some(1092),
+            "caloriesOut field extraction failed"
+        );
+
+        // Active minutes = lightlyActiveMinutes (17) + fairlyActiveMinutes (14) + veryActiveMinutes (19) = 50
+        assert_eq!(
+            data.active_minutes,
+            Some(50),
+            "active minutes aggregation failed"
+        );
+
+        // Heart rate zones were empty in this response, so cardio/peak should be 0
+        assert_eq!(
+            data.cardio_minutes,
+            Some(0),
+            "cardio minutes should be 0 when heartRateZones is empty"
+        );
+        assert_eq!(
+            data.peak_minutes,
+            Some(0),
+            "peak minutes should be 0 when heartRateZones is empty"
+        );
+    }
+
+    #[test]
+    fn real_response_ignores_extra_fields_gracefully() {
+        // This test verifies we handle extra fields that we don't deserialize
+        // The real response contains: activities array, distances array, goals, etc.
+        // Our types intentionally ignore these to reduce coupling
+        let response = include_str!("../tests/fixtures/activity_v1_2025-10-13.json");
+
+        let result = serde_json::from_str::<ActivitySummaryEnvelope>(response);
+        assert!(
+            result.is_ok(),
+            "Should gracefully ignore extra fields in Fitbit response"
+        );
+
+        // Verify we still extract the fields we care about
+        let envelope = result.unwrap();
+        let data = envelope.into_activity_data();
+        assert!(
+            data.steps.is_some(),
+            "Should extract steps despite extra fields"
+        );
+    }
 }
