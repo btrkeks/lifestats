@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=%h/.local/share/src/lifestats/core/infrastructure/web_api
 ExecStart=%h/.local/bin/lifestats-web-api
-Environment=DATABASE_URL="/home/daniel/.local/share/src/lifestats/test_data/test_snapshot.db" diesel migration run
+Environment=DATABASE_URL="/home/daniel/.local/share/src/lifestats/test_data/test_snapshot.db"
 
 
 [Install]
