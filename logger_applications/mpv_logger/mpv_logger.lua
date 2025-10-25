@@ -1,7 +1,8 @@
 -- Configuration
 local options = {
-    endpoint = "http://localhost:3000/statistics/24/log",
-    update_interval = 1,  -- in seconds
+    api_endpoint = "http://localhost:3000/sessions",
+    statistic_id = 24,
+    heartbeat_interval = 1,  -- in seconds
     target_directory = "/home/daniel/main/日本語/聞き取り練習"
 }
 
@@ -9,38 +10,39 @@ local options = {
 local utils = require 'mp.utils'
 local msg = require 'mp.msg'
 
--- Timer for periodic updates
-local update_timer = nil
+-- Timer for periodic heartbeats
+local heartbeat_timer = nil
+
+-- Track session state
+local session_active = false
 
 -- Function to check if the current file is in the target directory
 local function is_target_file()
     local path = mp.get_property("path")
     if not path then return false end
-    
+
     -- Convert both paths to absolute paths for comparison
     local abs_path = utils.join_path(utils.getcwd(), path)
     return string.match(abs_path, "^" .. options.target_directory)
 end
 
-local function ping_logger()
-    -- Only send request if we're playing a file from the target directory
-    if not is_target_file() then return end
-
-    -- Get today's date in YYYY-MM-DD format
-    local date = os.date("%Y-%m-%d")
-
-    -- Prepare the curl command
+-- Helper to execute curl request and return HTTP status code
+local function http_request(method, endpoint, body)
     local curl_cmd = {
         "curl",
         "-s",  -- silent mode
-        "-X", "POST",
+        "-X", method,
         "-H", "Content-Type: application/json",
-        "-d", '{"value": "1"}',
-        "-w", "\n%{http_code}",  -- capture HTTP status code
-        options.endpoint .. "/" .. date
+        "-w", "%{http_code}",  -- capture HTTP status code
+        endpoint
     }
 
-    -- Execute the curl command asynchronously
+    -- Add body if provided
+    if body then
+        table.insert(curl_cmd, "-d")
+        table.insert(curl_cmd, body)
+    end
+
     local process_info = utils.subprocess({
         args = curl_cmd,
         playback_only = false,
@@ -48,48 +50,87 @@ local function ping_logger()
         capture_stderr = true,
     })
 
-    -- Log the request
-    if process_info.status == 0 then
-        msg.debug("📤 ping sent: " .. date)
+    -- Extract HTTP status code from stdout (last 3 chars)
+    local output = process_info.stdout or ""
+    local status_code = tonumber(output:sub(-3))
+
+    return process_info.status == 0, status_code
+end
+
+-- Start a new heartbeat session
+local function start_session()
+    if session_active then return end
+
+    local endpoint = options.api_endpoint .. "/" .. options.statistic_id .. "/start"
+    local success, http_code = http_request("POST", endpoint, '{"idle_timeout_seconds": 3600, "flush_interval_seconds": 60}')
+
+    if success and http_code == 201 then
+        session_active = true
+        msg.debug("✅ Session started (HTTP " .. http_code .. ")")
     else
-        msg.warn("❌ ping failed: HTTP error or connection issue")
+        msg.warn("❌ Failed to start session (HTTP " .. (http_code or "?") .. ")")
     end
 end
 
-local function end_logger()
-    -- Only send request if we're playing a file from the target directory
-    if not is_target_file() then return end
+-- Send a heartbeat to keep session alive
+local function send_heartbeat()
+    if not session_active or not is_target_file() then return end
 
-    msg.info("⏹️  logging stopped")
-    mp.osd_message("Stopped logging", 1)
-end
+    local endpoint = options.api_endpoint .. "/" .. options.statistic_id .. "/beat"
+    local success, http_code = http_request("POST", endpoint)
 
--- Function to start the update timer
-local function start_timer()
-    if update_timer then
-        update_timer:kill()
+    if success and http_code == 204 then
+        msg.debug("💓 Heartbeat sent")
+    else
+        msg.warn("❌ Failed to send heartbeat (HTTP " .. (http_code or "?") .. ")")
+        session_active = false
     end
-    update_timer = mp.add_periodic_timer(options.update_interval, ping_logger)
 end
 
--- Function to stop the update timer
-local function stop_timer()
-    if update_timer then
-        update_timer:kill()
-        update_timer = nil
+-- Stop the heartbeat session
+local function stop_session()
+    if not session_active then return end
+
+    local endpoint = options.api_endpoint .. "/" .. options.statistic_id .. "/stop"
+    local success, http_code = http_request("POST", endpoint)
+
+    if success and http_code == 204 then
+        session_active = false
+        msg.debug("⏹️  Session stopped (HTTP " .. http_code .. ")")
+    else
+        msg.warn("❌ Failed to stop session (HTTP " .. (http_code or "?") .. ")")
+        session_active = false
+    end
+end
+
+-- Function to start the heartbeat timer
+local function start_heartbeat_timer()
+    if heartbeat_timer then
+        heartbeat_timer:kill()
+    end
+    heartbeat_timer = mp.add_periodic_timer(options.heartbeat_interval, send_heartbeat)
+end
+
+-- Function to stop the heartbeat timer
+local function stop_heartbeat_timer()
+    if heartbeat_timer then
+        heartbeat_timer:kill()
+        heartbeat_timer = nil
     end
 end
 
 local function on_video_start()
     local filename = mp.get_property("filename")
     msg.info("▶️  logging started: " .. (filename or "unknown"))
-	ping_logger()
-	start_timer()
+    start_session()
+    start_heartbeat_timer()
 end
 
 local function on_video_end()
-	end_logger()
-        stop_timer()
+    msg.info("⏹️  logging stopped")
+    mp.osd_message("Stopped logging", 1)
+    stop_heartbeat_timer()
+    stop_session()
 end
 
 -- Register event handlers
