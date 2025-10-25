@@ -1,6 +1,6 @@
 -- Configuration
 local options = {
-    endpoint = "http://localhost:8000/api/heartbeatlogger/24",
+    endpoint = "http://localhost:3000/statistics/24/log",
     update_interval = 1,  -- in seconds
     target_directory = "/home/daniel/main/日本語/聞き取り練習"
 }
@@ -25,15 +25,19 @@ end
 local function ping_logger()
     -- Only send request if we're playing a file from the target directory
     if not is_target_file() then return end
-    
+
+    -- Get today's date in YYYY-MM-DD format
+    local date = os.date("%Y-%m-%d")
+
     -- Prepare the curl command
     local curl_cmd = {
         "curl",
         "-X", "POST",
         "-H", "Content-Type: application/json",
-        options.endpoint .. "/ping"
+        "-d", '{"value": "1"}',
+        options.endpoint .. "/" .. date
     }
-    
+
     -- Execute the curl command asynchronously
     local process_info = utils.subprocess({
         args = curl_cmd,
@@ -46,22 +50,6 @@ end
 local function end_logger()
     -- Only send request if we're playing a file from the target directory
     if not is_target_file() then return end
-    
-    -- Prepare the curl command
-    local curl_cmd = {
-        "curl",
-        "-X", "POST",
-        "-H", "Content-Type: application/json",
-        options.endpoint .. "/stop"
-    }
-    
-    -- Execute the curl command asynchronously
-    local process_info = utils.subprocess({
-        args = curl_cmd,
-        playback_only = false,
-        capture_stdout = true,
-        capture_stderr = true,
-    })
 
     mp.osd_message("Stopped logging", 1)
 end
