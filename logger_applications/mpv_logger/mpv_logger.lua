@@ -32,9 +32,11 @@ local function ping_logger()
     -- Prepare the curl command
     local curl_cmd = {
         "curl",
+        "-s",  -- silent mode
         "-X", "POST",
         "-H", "Content-Type: application/json",
         "-d", '{"value": "1"}',
+        "-w", "\n%{http_code}",  -- capture HTTP status code
         options.endpoint .. "/" .. date
     }
 
@@ -45,12 +47,20 @@ local function ping_logger()
         capture_stdout = true,
         capture_stderr = true,
     })
+
+    -- Log the request
+    if process_info.status == 0 then
+        msg.debug("📤 ping sent: " .. date)
+    else
+        msg.warn("❌ ping failed: HTTP error or connection issue")
+    end
 end
 
 local function end_logger()
     -- Only send request if we're playing a file from the target directory
     if not is_target_file() then return end
 
+    msg.info("⏹️  logging stopped")
     mp.osd_message("Stopped logging", 1)
 end
 
@@ -71,6 +81,8 @@ local function stop_timer()
 end
 
 local function on_video_start()
+    local filename = mp.get_property("filename")
+    msg.info("▶️  logging started: " .. (filename or "unknown"))
 	ping_logger()
 	start_timer()
 end
@@ -92,9 +104,11 @@ mp.observe_property("pause", "bool", function(name, value)
 end)
 
 mp.register_event("file-loaded", function()
+    local path = mp.get_property("path") or "unknown"
     if is_target_file() then
 	on_video_start()
     else
+        msg.debug("⏭️  skipped (not target): " .. path)
 	on_video_end()
     end
 end)
@@ -104,4 +118,4 @@ mp.register_event("end-file", function()
 end)
 
 -- Log plugin initialization
-msg.info("Lifestats logger initialized")
+msg.info("✨ Lifestats logger initialized (monitoring: " .. options.target_directory .. ")")
