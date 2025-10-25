@@ -9,9 +9,10 @@ lifestats-application = { path = "../../core/application" }
 lifestats-bootstrap = { path = "../../lifestats-bootstrap" }
 
 # External
-crossterm = "0.28.1"
+crossterm = "0.29.0"
 anyhow = "1.0.89"
 chrono = "0.4.38"
-tokio = { version = "1.42.0", features = ["full"] }
-log = "0.4.22"
+tokio = { version = "1.48.0", features = ["full"] }
+log = "0.4.28"
 env_logger = "0.11.6"
+zbus = "5.12.0"

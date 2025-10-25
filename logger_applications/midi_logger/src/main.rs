@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
                 session.beat();
                 ui.show_beat_message();
             }
-            Some(update) = update_rx.recv() => {
+            Ok(update) = update_rx.recv() => {
                 ui.show_session_update(&update);
             }
             Some(_) = shutdown_rx.recv() => {

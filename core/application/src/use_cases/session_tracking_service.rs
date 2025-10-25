@@ -19,7 +19,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{mpsc, Arc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc as tmpsc;
+use tokio::sync::broadcast;
 
 // =================================================================================================
 //  Time Provider Abstraction
@@ -66,7 +66,7 @@ impl Default for HeartbeatConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum HeartbeatUpdate {
     DurationChanged(chrono::Duration),
     Stopped,
@@ -257,7 +257,7 @@ pub struct HeartbeatSession<
     config: Arc<HeartbeatConfig>,
     heart_tx: Option<Sender<HeartMessage>>,
     heart_thread_handle: Option<JoinHandle<()>>,
-    update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
+    update_broadcast: broadcast::Sender<HeartbeatUpdate>,
     total_duration_manager: Arc<TotalDurationManager>,
 }
 
@@ -270,6 +270,10 @@ impl<R: StatisticRepository + Send + Sync + 'static, TP: TimeProvider + 'static>
         time_provider: Arc<TP>,
         config: HeartbeatConfig,
     ) -> Self {
+        // Create broadcast channel for multiple subscribers
+        // Buffer size of 32 should be sufficient for typical use cases
+        let (update_broadcast, _) = broadcast::channel(32);
+
         HeartbeatSession {
             statistic_id,
             repository,
@@ -277,7 +281,7 @@ impl<R: StatisticRepository + Send + Sync + 'static, TP: TimeProvider + 'static>
             config: Arc::new(config),
             heart_tx: None,
             heart_thread_handle: None,
-            update_tx: None,
+            update_broadcast,
             total_duration_manager: Arc::new(TotalDurationManager::new()),
         }
     }
@@ -319,10 +323,12 @@ impl<R: StatisticRepository + Send + Sync + 'static, TP: TimeProvider + 'static>
 
     // --- Observing ---
 
-    pub fn subscribe_to_updates(&mut self) -> tmpsc::Receiver<HeartbeatUpdate> {
-        let (tx, rx) = tmpsc::channel(32);
-        self.update_tx = Some(tx);
-        rx
+    /// Subscribe to heartbeat updates.
+    ///
+    /// Multiple subscribers are supported - each subscriber gets their own independent
+    /// receiver and will receive all updates.
+    pub fn subscribe_to_updates(&self) -> broadcast::Receiver<HeartbeatUpdate> {
+        self.update_broadcast.subscribe()
     }
 
     // --- Internal ---
@@ -335,7 +341,7 @@ impl<R: StatisticRepository + Send + Sync + 'static, TP: TimeProvider + 'static>
         let repository = Arc::clone(&self.repository);
         let time_provider = Arc::clone(&self.time_provider);
         let config = Arc::clone(&self.config);
-        let update_tx = self.update_tx.clone();
+        let update_broadcast = self.update_broadcast.clone();
         let total_time_manager = Arc::clone(&self.total_duration_manager);
 
         self.heart_thread_handle = Some(thread::spawn(move || {
@@ -344,7 +350,7 @@ impl<R: StatisticRepository + Send + Sync + 'static, TP: TimeProvider + 'static>
                 repository,
                 time_provider,
                 config,
-                update_tx,
+                update_broadcast,
                 total_time_manager,
             );
             heart.run(receiver);
@@ -374,7 +380,7 @@ pub struct Heart<R: StatisticRepository + Send + Sync, TP: TimeProvider> {
     repository: Arc<R>,
     time_provider: Arc<TP>,
     config: Arc<HeartbeatConfig>,
-    update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
+    update_broadcast: broadcast::Sender<HeartbeatUpdate>,
     total_duration_manager: Arc<TotalDurationManager>,
 }
 
@@ -384,7 +390,7 @@ impl<R: StatisticRepository + Send + Sync, TP: TimeProvider> Heart<R, TP> {
         repository: Arc<R>,
         time_provider: Arc<TP>,
         config: Arc<HeartbeatConfig>,
-        update_tx: Option<tmpsc::Sender<HeartbeatUpdate>>,
+        update_broadcast: broadcast::Sender<HeartbeatUpdate>,
         total_duration_manager: Arc<TotalDurationManager>,
     ) -> Self {
         Self {
@@ -392,7 +398,7 @@ impl<R: StatisticRepository + Send + Sync, TP: TimeProvider> Heart<R, TP> {
             repository,
             time_provider,
             config,
-            update_tx,
+            update_broadcast,
             total_duration_manager,
         }
     }
@@ -507,21 +513,18 @@ impl<R: StatisticRepository + Send + Sync, TP: TimeProvider> Heart<R, TP> {
     }
 
     fn emit_start_event(&self) {
-        if let Some(tx) = &self.update_tx {
-            let _ = tx.try_send(HeartbeatUpdate::Started);
-        }
+        // Using send instead of try_send - if no subscribers, the message is dropped
+        let _ = self.update_broadcast.send(HeartbeatUpdate::Started);
     }
 
     fn emit_stop_event(&self) {
-        if let Some(tx) = &self.update_tx {
-            let _ = tx.try_send(HeartbeatUpdate::Stopped);
-        }
+        let _ = self.update_broadcast.send(HeartbeatUpdate::Stopped);
     }
 
     pub fn emit_duration_update(&mut self, current_duration: chrono::Duration) {
-        if let Some(tx) = &self.update_tx {
-            let _ = tx.try_send(HeartbeatUpdate::DurationChanged(current_duration));
-        }
+        let _ = self
+            .update_broadcast
+            .send(HeartbeatUpdate::DurationChanged(current_duration));
     }
 }
 

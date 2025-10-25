@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use crate::cqrs::{Query, QueryHandler};
+use crate::dto::{StatisticSummary, StatisticType};
 use crate::error::ApplicationResult;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
 /// Query object to retrieve only statistics that can be logged directly by the user.
 pub struct GetLoggableMetadataQuery;
 
 impl Query for GetLoggableMetadataQuery {
-    type Result = Vec<StatisticMetadata>;
+    type Result = Vec<StatisticSummary>;
 }
 
 /// Handler responsible for filtering statistics to only loggable variants.
@@ -35,26 +35,23 @@ impl<R> QueryHandler<GetLoggableMetadataQuery> for GetLoggableMetadataQueryHandl
 where
     R: StatisticRepository + Send + Sync + 'static,
 {
-    fn handle(
-        &self,
-        _query: GetLoggableMetadataQuery,
-    ) -> ApplicationResult<Vec<StatisticMetadata>> {
-        const LOGGABLE_TYPES: [&str; 4] = ["IntegerAmount", "Habit", "PointInTime", "TimeSpans"];
+    fn handle(&self, _query: GetLoggableMetadataQuery) -> ApplicationResult<Vec<StatisticSummary>> {
+        const LOGGABLE_TYPES: [StatisticType; 4] = [
+            StatisticType::IntegerAmount,
+            StatisticType::Habit,
+            StatisticType::PointInTime,
+            StatisticType::TimeSpans,
+        ];
 
         let statistics = self.statistic_repository.find_all_metadata()?;
 
-        let metadata = statistics
-            .into_iter()
-            .map(|stat| stat.get_metadata().clone())
-            .filter(|metadata| {
-                metadata
-                    .get_tag("statistic_type")
-                    .map(|tag| LOGGABLE_TYPES.contains(&tag.as_str()))
-                    .unwrap_or(false)
-            })
+        let summaries = statistics
+            .iter()
+            .map(StatisticSummary::from)
+            .filter(|summary| LOGGABLE_TYPES.contains(&summary.statistic_type))
             .collect();
 
-        Ok(metadata)
+        Ok(summaries)
     }
 }
 
@@ -70,16 +67,14 @@ mod tests {
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
     #[test]
-    fn returns_only_loggable_metadata() {
+    fn returns_only_loggable_summaries() {
         let mut repository = MockStatisticRepository::new();
         let today = Local::now().date_naive();
 
         let loggable_metadata =
-            StatisticMetadata::new(StatisticId(1), "fitness".into(), "Push Ups".into())
-                .with_tag("statistic_type".into(), "IntegerAmount".into());
+            StatisticMetadata::new(StatisticId(1), "fitness".into(), "Push Ups".into());
         let derived_metadata =
-            StatisticMetadata::new(StatisticId(2), "fitness".into(), "Total Time".into())
-                .with_tag("statistic_type".into(), "Summing".into());
+            StatisticMetadata::new(StatisticId(2), "fitness".into(), "Total Time".into());
 
         let loggable_stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             loggable_metadata.clone(),
@@ -102,6 +97,7 @@ mod tests {
         let result = handler.handle(GetLoggableMetadataQuery).unwrap();
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].id(), loggable_metadata.id());
+        assert_eq!(result[0].metadata.id(), loggable_metadata.id());
+        assert_eq!(result[0].statistic_type, StatisticType::IntegerAmount);
     }
 }

@@ -1,6 +1,7 @@
 pub mod goals;
 pub mod integrations;
 pub mod plots;
+pub mod sessions;
 pub mod statistics;
 
 use axum::{
@@ -63,6 +64,24 @@ where
         // Plot endpoints
         .route("/plots/{id}/image", get(plots::get_plot_image))
         .route("/plots/{id}/data", get(plots::get_plot_data))
+        // Session endpoints
+        .route("/sessions", get(sessions::list_sessions))
+        .route(
+            "/sessions/{statistic_id}/start",
+            post(sessions::start_session),
+        )
+        .route(
+            "/sessions/{statistic_id}/beat",
+            post(sessions::send_heartbeat),
+        )
+        .route(
+            "/sessions/{statistic_id}/stop",
+            post(sessions::stop_session),
+        )
+        .route(
+            "/sessions/{statistic_id}",
+            get(sessions::get_session_status),
+        )
         // Integration endpoints
         .route(
             "/integrations/{source}",

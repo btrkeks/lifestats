@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
         app.event_publisher,
         app.renderer,
         app.integration_service,
+        app.session_manager,
     );
 
     // Load Fitbit configuration from environment

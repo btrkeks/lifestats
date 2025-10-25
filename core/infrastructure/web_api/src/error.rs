@@ -14,6 +14,7 @@ pub enum ApiError {
     BadRequest(String),
     Unauthorized(String),
     ValidationError(String),
+    Conflict(String),
     InternalError(String),
     InternalServerError(anyhow::Error),
     BadGateway(String),
@@ -34,6 +35,9 @@ impl IntoResponse for ApiError {
             }
             ApiError::Unauthorized(msg) => {
                 (StatusCode::UNAUTHORIZED, Json(json!({ "error": msg }))).into_response()
+            }
+            ApiError::Conflict(msg) => {
+                (StatusCode::CONFLICT, Json(json!({ "error": msg }))).into_response()
             }
             ApiError::InternalError(msg) => {
                 tracing::error!("Internal error: {}", msg);
@@ -83,6 +87,25 @@ impl From<anyhow::Error> for ApiError {
 impl From<validator::ValidationErrors> for ApiError {
     fn from(errors: validator::ValidationErrors) -> Self {
         ApiError::ValidationError(errors.to_string())
+    }
+}
+
+impl From<lifestats_application::SessionError> for ApiError {
+    fn from(err: lifestats_application::SessionError) -> Self {
+        use lifestats_application::SessionError;
+
+        match err {
+            SessionError::SessionAlreadyExists(id) => {
+                ApiError::Conflict(format!("Session already running for statistic {}", id.0))
+            }
+            SessionError::SessionNotFound(id) => {
+                ApiError::NotFound(format!("No active session for statistic {}", id.0))
+            }
+            SessionError::StatisticNotFound(id) => {
+                ApiError::NotFound(format!("Statistic {} not found", id.0))
+            }
+            SessionError::InvalidConfiguration(msg) => ApiError::BadRequest(msg),
+        }
     }
 }
 

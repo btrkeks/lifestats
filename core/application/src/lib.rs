@@ -6,6 +6,7 @@ pub mod shared;
 pub mod statistic;
 pub mod use_cases;
 
+pub use use_cases::session_manager::{SessionError, SessionManager, SessionStatus};
 pub use use_cases::session_tracking_service::{
     HeartbeatConfig, HeartbeatSession, HeartbeatUpdate, RealTimeProvider, TimeProvider,
 };

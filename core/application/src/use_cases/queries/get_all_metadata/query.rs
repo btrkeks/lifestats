@@ -1,9 +1,9 @@
 use crate::cqrs::Query;
-use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+use crate::dto::StatisticSummary;
 
-/// Query object to retrieve all statistic metadata entries.
+/// Query object to retrieve all statistic metadata entries with type information.
 pub struct GetAllMetadataQuery;
 
 impl Query for GetAllMetadataQuery {
-    type Result = Vec<StatisticMetadata>;
+    type Result = Vec<StatisticSummary>;
 }

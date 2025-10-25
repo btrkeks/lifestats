@@ -100,6 +100,12 @@ impl From<&StatisticMetadata> for StatisticMetadataResponse {
     }
 }
 
+impl From<&lifestats_application::dto::StatisticSummary> for StatisticMetadataResponse {
+    fn from(summary: &lifestats_application::dto::StatisticSummary) -> Self {
+        Self::from_metadata_and_type(&summary.metadata, summary.statistic_type.as_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -12,6 +12,7 @@ use lifestats_application::use_cases::{
     commands::sync_fitbit_data::SyncFitbitDataCommandHandler,
     integration::{AnkiBundleFactory, BundleFactory, FitbitBundleFactory, IntegrationService},
 };
+use lifestats_application::SessionManager;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_fitbit_client::{HttpFitbitDataClient, HttpFitbitOAuthClient};
 use lifestats_persistence::{
@@ -41,6 +42,9 @@ pub struct Application {
     pub event_publisher: Arc<NoOpEventPublisher>,
     pub renderer: Arc<PlottersRenderer>,
     pub integration_service: Arc<IntegrationService>,
+
+    // Session management
+    pub session_manager: Arc<SessionManager<SqliteStatisticRepository>>,
 
     // Fitbit integration components
     pub fitbit_oauth_api: Arc<dyn FitbitOAuthApi>,
@@ -130,6 +134,9 @@ pub fn build_services() -> Result<Application> {
         enabled_metrics,
     ));
 
+    // Instantiate session manager for heartbeat session tracking
+    let session_manager = Arc::new(SessionManager::new(Arc::clone(&statistic_repo)));
+
     // 3. Return the container with both repositories (for web_api) and services (for logger apps)
     Ok(Application {
         statistic_repository: statistic_repo,
@@ -137,6 +144,7 @@ pub fn build_services() -> Result<Application> {
         event_publisher: publisher,
         renderer,
         integration_service,
+        session_manager,
         fitbit_oauth_api,
         fitbit_data_api,
         fitbit_token_store,

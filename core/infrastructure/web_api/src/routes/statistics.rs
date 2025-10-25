@@ -39,11 +39,11 @@ where
     };
 
     let handler = GetAllMetadataQueryHandler::new(app_state.statistic_repository.clone());
-    let statistics = handler
+    let summaries = handler
         .handle(GetAllMetadataQuery)
         .map_err(ApiError::from)?;
 
-    let response: Vec<StatisticMetadataResponse> = statistics
+    let response: Vec<StatisticMetadataResponse> = summaries
         .iter()
         .map(StatisticMetadataResponse::from)
         .collect();
@@ -67,11 +67,11 @@ where
     };
 
     let handler = GetLoggableMetadataQueryHandler::new(app_state.statistic_repository.clone());
-    let statistics = handler
+    let summaries = handler
         .handle(GetLoggableMetadataQuery)
         .map_err(ApiError::from)?;
 
-    let response: Vec<StatisticMetadataResponse> = statistics
+    let response: Vec<StatisticMetadataResponse> = summaries
         .iter()
         .map(StatisticMetadataResponse::from)
         .collect();
@@ -100,11 +100,11 @@ where
     };
 
     let handler = GetMetadataQueryHandler::new(app_state.statistic_repository.clone());
-    let metadata = handler
+    let summary = handler
         .handle(query)
         .map_err(|e| ApiError::InternalError(format!("Failed to get statistic: {}", e)))?;
 
-    let response = StatisticMetadataResponse::from(&metadata);
+    let response = StatisticMetadataResponse::from(&summary);
     Ok(Json(response))
 }
 

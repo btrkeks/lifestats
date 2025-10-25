@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
+use lifestats_application::SessionManager;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
 use plot_domain::plot::repository::PlotRepository;
@@ -24,6 +25,8 @@ where
     pub event_publisher: Arc<E>,
     pub renderer: Arc<Rend>,
     pub integration_service: Arc<I>,
+    // Session management
+    pub session_manager: Arc<SessionManager<R>>,
 }
 
 impl<R, P, Rend, E, I> Clone for AppState<R, P, Rend, E, I>
@@ -41,6 +44,7 @@ where
             event_publisher: Arc::clone(&self.event_publisher),
             renderer: Arc::clone(&self.renderer),
             integration_service: Arc::clone(&self.integration_service),
+            session_manager: Arc::clone(&self.session_manager),
         }
     }
 }
@@ -59,6 +63,7 @@ where
         event_publisher: Arc<E>,
         renderer: Arc<Rend>,
         integration_service: Arc<I>,
+        session_manager: Arc<SessionManager<R>>,
     ) -> Self {
         Self {
             statistic_repository,
@@ -66,6 +71,7 @@ where
             event_publisher,
             renderer,
             integration_service,
+            session_manager,
         }
     }
 }

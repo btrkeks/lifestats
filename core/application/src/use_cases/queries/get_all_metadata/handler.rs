@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::cqrs::QueryHandler;
+use crate::dto::StatisticSummary;
 use crate::error::ApplicationResult;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
 use super::query::GetAllMetadataQuery;
 
@@ -28,12 +28,9 @@ impl<R> QueryHandler<GetAllMetadataQuery> for GetAllMetadataQueryHandler<R>
 where
     R: StatisticRepository + Send + Sync + 'static,
 {
-    fn handle(&self, _query: GetAllMetadataQuery) -> ApplicationResult<Vec<StatisticMetadata>> {
+    fn handle(&self, _query: GetAllMetadataQuery) -> ApplicationResult<Vec<StatisticSummary>> {
         let statistics = self.repository.find_all_metadata()?;
-        Ok(statistics
-            .into_iter()
-            .map(|stat| stat.get_metadata().clone())
-            .collect())
+        Ok(statistics.iter().map(StatisticSummary::from).collect())
     }
 }
 
@@ -47,7 +44,7 @@ mod tests {
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 
     #[test]
-    fn test_get_all_metadata_returns_metadata() {
+    fn test_get_all_metadata_returns_summary_with_type() {
         let mut repo = MockStatisticRepository::new();
         let metadata = vec![AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata::new(
@@ -66,6 +63,10 @@ mod tests {
         let handler = GetAllMetadataQueryHandler::new(Arc::new(repo));
         let result = handler.handle(GetAllMetadataQuery).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].name(), "name");
+        assert_eq!(result[0].metadata.name(), "name");
+        assert_eq!(
+            result[0].statistic_type,
+            crate::dto::StatisticType::IntegerAmount
+        );
     }
 }
