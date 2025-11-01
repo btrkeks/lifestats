@@ -27,12 +27,6 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting lifestats-web-api");
 
-    if let Ok(database_url) = std::env::var("DATABASE_URL") {
-        tracing::info!("Using database: {}", database_url);
-    } else {
-        tracing::warn!("DATABASE_URL not set");
-    }
-
     let app = build_services()?;
 
     // Build lean AppState with only globally shared dependencies
