@@ -12,6 +12,8 @@ use lifestats_bootstrap::build_services;
 use state::AppState;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
+use crate::integrations::fitbit::config::FitbitConfig;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
@@ -43,26 +45,8 @@ async fn main() -> Result<()> {
         app.session_manager,
     );
 
-    // Load Fitbit configuration from environment
-    let fitbit_client_id =
-        std::env::var("FITBIT_CLIENT_ID").unwrap_or_else(|_| "dummy_client_id".to_string());
-    let fitbit_client_secret =
-        std::env::var("FITBIT_CLIENT_SECRET").unwrap_or_else(|_| "dummy_secret".to_string());
-    let fitbit_redirect_uri = std::env::var("FITBIT_REDIRECT_URI")
-        .unwrap_or_else(|_| "http://localhost:3000/integrations/fitbit/auth/callback".to_string());
-    let fitbit_scopes = std::env::var("FITBIT_SCOPES")
-        .unwrap_or_else(|_| "activity sleep".to_string())
-        .split_whitespace()
-        .map(String::from)
-        .collect();
-
-    let fitbit_config = Arc::new(crate::integrations::fitbit::config::FitbitConfig::new(
-        fitbit_client_id,
-        fitbit_client_secret,
-        fitbit_redirect_uri,
-        fitbit_scopes,
-    ));
-
+    // Load Fitbit configuration
+    let fitbit_config = load_fitbit_config();
     let fitbit_state_cache =
         Arc::new(crate::integrations::fitbit::state_cache::OAuthStateCache::new());
 
@@ -84,4 +68,26 @@ async fn main() -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn load_fitbit_config() -> Arc<FitbitConfig> {
+    // Load Fitbit configuration from environment
+    let fitbit_client_id =
+        std::env::var("FITBIT_CLIENT_ID").unwrap_or_else(|_| "dummy_client_id".to_string());
+    let fitbit_client_secret =
+        std::env::var("FITBIT_CLIENT_SECRET").unwrap_or_else(|_| "dummy_secret".to_string());
+    let fitbit_redirect_uri = std::env::var("FITBIT_REDIRECT_URI")
+        .unwrap_or_else(|_| "http://localhost:3000/integrations/fitbit/auth/callback".to_string());
+    let fitbit_scopes = std::env::var("FITBIT_SCOPES")
+        .unwrap_or_else(|_| "activity sleep".to_string())
+        .split_whitespace()
+        .map(String::from)
+        .collect();
+
+    return Arc::new(FitbitConfig::new(
+        fitbit_client_id,
+        fitbit_client_secret,
+        fitbit_redirect_uri,
+        fitbit_scopes,
+    ));
 }
