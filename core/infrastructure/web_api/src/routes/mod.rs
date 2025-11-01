@@ -1,3 +1,4 @@
+pub mod daily_summary;
 pub mod goals;
 pub mod integrations;
 pub mod plots;
@@ -99,6 +100,11 @@ where
         .route(
             "/integrations/fitbit/sync",
             post(crate::integrations::fitbit::handlers::sync_handler),
+        )
+        // Daily Summary endpoint
+        .route(
+            "/daily_summary/{date}",
+            get(daily_summary::get_daily_summary),
         )
         .with_state(app_state)
 }

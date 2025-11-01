@@ -1,6 +1,8 @@
 pub mod get_all_metadata;
 pub mod get_all_statistics;
+pub mod get_all_timeline_events;
 pub mod get_daily_goal;
+pub mod get_daily_summary;
 pub mod get_default_goal;
 pub mod get_loggable_metadata;
 pub mod get_metadata;
@@ -12,7 +14,9 @@ pub mod get_time_spans_total;
 
 pub use get_all_metadata::{GetAllMetadataQuery, GetAllMetadataQueryHandler};
 pub use get_all_statistics::{GetAllStatisticsQuery, GetAllStatisticsQueryHandler};
+pub use get_all_timeline_events::{GetAllTimelineEventsQuery, GetAllTimelineEventsQueryHandler};
 pub use get_daily_goal::{GetDailyGoalQuery, GetDailyGoalQueryHandler};
+pub use get_daily_summary::{GetDailySummaryQuery, GetDailySummaryQueryHandler};
 pub use get_default_goal::{GetDefaultGoalQuery, GetDefaultGoalQueryHandler};
 pub use get_loggable_metadata::{GetLoggableMetadataQuery, GetLoggableMetadataQueryHandler};
 pub use get_metadata::{GetMetadataQuery, GetMetadataQueryHandler};

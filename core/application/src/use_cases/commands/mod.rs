@@ -1,3 +1,4 @@
+pub mod calculate_allocation_percentages;
 pub mod create_statistic;
 pub mod delete_daily_goal;
 pub mod delete_default_goal;
@@ -7,6 +8,9 @@ pub mod set_daily_goal;
 pub mod set_default_goal;
 pub mod sync_fitbit_data;
 
+pub use calculate_allocation_percentages::{
+    CalculatePercentagesCommand, CalculatePercentagesCommandHandler,
+};
 pub use create_statistic::{
     CreateStatisticCommand, CreateStatisticCommandHandler, StatisticTypeDto,
     StatisticTypeParseError,
