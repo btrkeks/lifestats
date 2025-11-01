@@ -47,13 +47,9 @@ where
     // Build HeartbeatConfig from request (use defaults for None values)
     let config =
         if payload.idle_timeout_seconds.is_some() || payload.flush_interval_seconds.is_some() {
-            let idle_timeout = payload.idle_timeout_seconds.unwrap_or(60).max(1).min(86400); // Clamp between 1s and 1 day
+            let idle_timeout = payload.idle_timeout_seconds.unwrap_or(60).clamp(1, 86400); // Clamp between 1s and 1 day
 
-            let flush_interval = payload
-                .flush_interval_seconds
-                .unwrap_or(60)
-                .max(1)
-                .min(86400);
+            let flush_interval = payload.flush_interval_seconds.unwrap_or(60).clamp(1, 86400);
 
             Some(lifestats_application::HeartbeatConfig {
                 idle_timeout: chrono::Duration::seconds(idle_timeout),

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct TagSet(BTreeMap<String, String>);
 
 impl TagSet {
@@ -25,12 +25,6 @@ impl TagSet {
             .map(|(key, value)| format!("{key}={value}"))
             .collect::<Vec<_>>()
             .join(";")
-    }
-}
-
-impl Default for TagSet {
-    fn default() -> Self {
-        Self(BTreeMap::new())
     }
 }
 

@@ -119,7 +119,7 @@ impl SyncFitbitDataCommandHandler {
     #[instrument(skip_all, fields(run_id = tracing::field::Empty))]
     pub async fn handle(&self, command: SyncFitbitDataCommand) -> ApplicationResult<()> {
         let sync_run_id = Uuid::new_v4();
-        Span::current().record("run_id", &sync_run_id.to_string().as_str());
+        Span::current().record("run_id", sync_run_id.to_string().as_str());
         self.validate_range(&command)?;
 
         let enabled_metrics: Vec<FitbitMetric> = self.enabled_metrics.iter().cloned().collect();
@@ -479,7 +479,7 @@ impl SyncFitbitDataCommandHandler {
                 .await
                 {
                     Ok(Ok(data)) => Ok(FitbitFetchedData::Sleep(data)),
-                    Ok(Err(error)) => Err(error.into()),
+                    Ok(Err(error)) => Err(error),
                     Err(_) => Err(ApplicationError::FitbitSyncFailed(
                         FitbitUpstreamError::UpstreamServiceError(anyhow!(
                             "Fitbit request timed out"
@@ -497,7 +497,7 @@ impl SyncFitbitDataCommandHandler {
                 .await
                 {
                     Ok(Ok(data)) => Ok(FitbitFetchedData::Activity(data)),
-                    Ok(Err(error)) => Err(error.into()),
+                    Ok(Err(error)) => Err(error),
                     Err(_) => Err(ApplicationError::FitbitSyncFailed(
                         FitbitUpstreamError::UpstreamServiceError(anyhow!(
                             "Fitbit request timed out"

@@ -78,10 +78,10 @@ fn load_fitbit_config() -> Arc<FitbitConfig> {
         .map(String::from)
         .collect();
 
-    return Arc::new(FitbitConfig::new(
+    Arc::new(FitbitConfig::new(
         fitbit_client_id,
         fitbit_client_secret,
         fitbit_redirect_uri,
         fitbit_scopes,
-    ));
+    ))
 }

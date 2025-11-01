@@ -108,7 +108,7 @@ impl DBusStatePublisher {
                         .await?;
 
                     StopwatchDBusService::state_changed(
-                        &iface_ref.signal_emitter(),
+                        iface_ref.signal_emitter(),
                         &self.statistic_name,
                         is_running,
                         elapsed_seconds,
