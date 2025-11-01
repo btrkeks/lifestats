@@ -4,6 +4,7 @@ use events::event_port::{Event, EventPublisher};
 use lifestats_application::use_cases::integration::{
     AnkiBundleFactory, BundleFactory, IntegrationService,
 };
+use lifestats_application::SessionManager;
 use lifestats_core::shared::ids::{PlotId, StatisticId};
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
@@ -84,12 +85,15 @@ pub fn mock_app_state(
         factories,
     ));
 
+    let session_manager = Arc::new(SessionManager::new(mock_repo.clone()));
+
     AppState::new(
         mock_repo,
         plot_repository,
         publisher,
         renderer,
         integration_service,
+        session_manager,
     )
 }
 

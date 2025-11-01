@@ -2,6 +2,7 @@ mod helpers;
 
 use axum_test::TestServer;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
+use lifestats_application::SessionManager;
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_web_api::routes::create_router;
 use lifestats_web_api::state::AppState;
@@ -43,12 +44,15 @@ fn mock_app_state_with_integrations(
     let plot_repository = Arc::new(MockPlotRepo::new());
     let renderer = Arc::new(MockPlotRend::new());
 
+    let session_manager = Arc::new(SessionManager::new(mock_repo.clone()));
+
     AppState::new(
         mock_repo,
         plot_repository,
         publisher,
         renderer,
         mock_integration_service,
+        session_manager,
     )
 }
 

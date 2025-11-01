@@ -8,6 +8,7 @@ use diesel_migrations::MigrationHarness;
 use lifestats_application::use_cases::integration::{
     AnkiBundleFactory, BundleFactory, IntegrationService,
 };
+use lifestats_application::SessionManager;
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
@@ -80,7 +81,16 @@ async fn test_log_and_get_e2e() -> Result<()> {
         factories,
     ));
 
-    let app_state = AppState::new(repo, plot_repo, publisher, renderer, integration_service);
+    let session_manager = Arc::new(SessionManager::new(repo.clone()));
+
+    let app_state = AppState::new(
+        repo,
+        plot_repo,
+        publisher,
+        renderer,
+        integration_service,
+        session_manager,
+    );
 
     // ========================================================================
     // 4. START SERVER: Spawn axum server on a random free port
