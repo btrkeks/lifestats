@@ -202,6 +202,12 @@ web_api/
 | `GET` | `/integrations/fitbit/auth/callback` | OAuth callback handler |
 | `POST` | `/integrations/fitbit/sync` | Sync Fitbit data |
 
+### Daily Summary
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/daily_summary/{date}` | Get daily summary for a specific date |
+
 ## Request/Response DTOs
 
 ### Creating a Statistic
@@ -288,6 +294,46 @@ web_api/
 - Value ranges from 0-255 (or null when no goals exist in the range)
 - Only days with goals contribute to the score
 - Supports over-achievement (percentages > 100)
+
+### Getting Daily Summary
+
+**Request:** `GET /daily_summary/{date}`
+
+**Example:** `GET /daily_summary/2025-01-15`
+
+**Response:** `200 OK`
+
+```json
+{
+  "date": "2025-01-15",
+  "category_percentages": {
+    "Fitness": 75.5,
+    "Study": 42.0,
+    "Sleep": 100.0
+  },
+  "timeline_events": [
+    {
+      "timeframe": {
+        "start": "09:30",
+        "end": "11:45"
+      },
+      "label": "Deep Work"
+    },
+    {
+      "timeframe": {
+        "start": "14:00",
+        "end": "15:30"
+      },
+      "label": "Exercise"
+    }
+  ]
+}
+```
+
+**Notes:**
+- `category_percentages`: Percentage of goal achievement for each category (0-100+)
+- `timeline_events`: Time-based activities that occurred during the day
+- Returns empty arrays/objects if no data exists for the date
 
 ## Error Handling
 
