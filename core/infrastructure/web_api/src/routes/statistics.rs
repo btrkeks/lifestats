@@ -23,12 +23,11 @@ use crate::{
 };
 
 /// GET /statistics - Get all statistics metadata
-pub async fn get_all_statistics<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn get_all_statistics<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
 ) -> Result<Json<Vec<StatisticMetadataResponse>>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -51,12 +50,11 @@ where
 }
 
 /// GET /statistics/loggable - Get statistics eligible to be logged directly
-pub async fn get_loggable_statistics<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn get_loggable_statistics<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
 ) -> Result<Json<Vec<StatisticMetadataResponse>>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -79,13 +77,12 @@ where
 }
 
 /// GET /statistics/:id - Get a single statistic's metadata
-pub async fn get_statistic<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn get_statistic<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
 ) -> Result<Json<StatisticMetadataResponse>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -109,14 +106,13 @@ where
 }
 
 /// POST /statistics/:id/log/:date - Log a value for a statistic on a specific date
-pub async fn log_value<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn log_value<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
     Json(payload): Json<LogValueRequest>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -288,14 +284,13 @@ where
 }
 
 /// POST /statistics/:id/log_time_frame/:date - Log a time frame for a TimeSpans statistic
-pub async fn log_time_frame<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn log_time_frame<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
     Json(payload): Json<LogTimeFrameRequest>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -393,13 +388,12 @@ where
 }
 
 /// POST /statistics - Create a new statistic
-pub async fn create_statistic<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn create_statistic<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Json(payload): Json<CreateStatisticRequest>,
 ) -> Result<(StatusCode, Json<StatisticMetadataResponse>), ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -445,13 +439,12 @@ where
 }
 
 /// DELETE /statistics/:id - Delete a statistic
-pub async fn delete_statistic<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn delete_statistic<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -483,14 +476,13 @@ pub struct DateRangeParams {
 }
 
 /// GET /statistics/:id/time_spans/total - Get total duration for a TimeSpans statistic in a date range
-pub async fn get_time_spans_total<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn get_time_spans_total<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
     Query(params): Query<DateRangeParams>,
 ) -> Result<Json<crate::dto::time_spans::TimeSpansTotalResponse>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -524,4 +516,67 @@ where
     Ok(Json(crate::dto::time_spans::TimeSpansTotalResponse::from(
         result,
     )))
+}
+
+/// GET /statistics/:id/consistency - Get consistency score for a statistic
+pub async fn get_consistency_score<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+    Query(params): Query<crate::dto::consistency::ConsistencyParams>,
+) -> Result<Json<crate::dto::consistency::ConsistencyScoreResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::services::DefaultDailyAchievementEvaluator;
+    use lifestats_application::use_cases::queries::get_consistency_score::{
+        GetConsistencyScoreQuery, GetConsistencyScoreQueryHandler,
+    };
+    use std::sync::Arc;
+
+    // Validate query parameters
+    params.validate()?;
+
+    // Instantiate dependencies on-demand
+    let clock = Arc::new(lifestats_system_clock::SystemClock);
+    let evaluator = Arc::new(DefaultDailyAchievementEvaluator::new(
+        app_state.statistic_repository.clone(),
+    ));
+
+    let handler = GetConsistencyScoreQueryHandler::new(
+        app_state.statistic_repository.clone(),
+        clock,
+        evaluator,
+    );
+
+    let result = handler
+        .handle(GetConsistencyScoreQuery {
+            statistic_id: StatisticId(statistic_id),
+            days: params.days,
+        })
+        .map_err(|e| {
+            if e.to_string().contains("not found") {
+                ApiError::NotFound(e.to_string())
+            } else {
+                ApiError::InternalError(format!("Failed to get consistency score: {}", e))
+            }
+        })?;
+
+    // Calculate percentage with round-half-up
+    let consistency_score_percent: u8 = if result.days_with_goal == 0 {
+        0
+    } else {
+        let numerator = result.days_achieved * 100 + result.days_with_goal / 2;
+        ((numerator / result.days_with_goal).min(100)) as u8
+    };
+
+    Ok(Json(crate::dto::consistency::ConsistencyScoreResponse {
+        statistic_id,
+        days_evaluated: result.days_with_goal,
+        days_achieved: result.days_achieved,
+        consistency_score_percent,
+    }))
 }

@@ -12,6 +12,7 @@ lifestats-bootstrap = { path = "../../../lifestats-bootstrap" }
 # The concrete persistence implementation needed at the composition root
 lifestats-persistence = { path = "../persistence", features = ["testing"] }
 lifestats-plotting = { path = "../plotting" }
+lifestats-system-clock = { path = "../system_clock" }
 events = { path = "../../../events/event_impl/" }
 
 # Web Framework

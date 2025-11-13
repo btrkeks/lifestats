@@ -527,7 +527,6 @@ pub async fn handler<R, P, Rend, E, I>(
 ) -> Result<Json<ResponseDto>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,

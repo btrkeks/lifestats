@@ -34,14 +34,13 @@ pub struct ProvisionBundleResponse {
 /// Provisions a bundle of statistics for a given integration source.
 /// This endpoint is idempotent: calling it multiple times with the same
 /// source and context will return the same statistic IDs.
-pub async fn provision_integration<R, P, Rend, E, I>(
-    State(state): State<AppState<R, P, Rend, E, I>>,
+pub async fn provision_integration<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
     Path(source): Path<String>,
     Json(request): Json<ProvisionBundleRequest>,
 ) -> Result<Json<ProvisionBundleResponse>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,

@@ -225,6 +225,8 @@ Routes defined in `core/infrastructure/web_api/src/routes/`.
 
 ## Adding New Features
 
+**Documentation Maintenance**: When making changes to the web API (routes, DTOs, error handling, etc.), always update `core/infrastructure/web_api/README.md` to keep the documentation in sync with the code.
+
 ### Adding a New Statistic Type
 
 1. Add type to `core/core/src/statistic/types/{logable,derived}_statistics/`
@@ -276,6 +278,7 @@ Routes defined in `core/infrastructure/web_api/src/routes/`.
 2. Register route in `routes::create_router`
 3. Add integration test
 4. Handler should instantiate command/query handlers on-demand
+5. **Update `core/infrastructure/web_api/README.md`** to document the new route in the API Routes Reference section
 
 ## Testing Strategy
 

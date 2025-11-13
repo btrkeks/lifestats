@@ -2,8 +2,10 @@ pub mod cqrs;
 pub mod dto;
 pub mod error;
 pub mod integrations;
+pub mod services;
 pub mod shared;
 pub mod statistic;
+pub mod time;
 pub mod use_cases;
 
 pub use use_cases::session_manager::{SessionError, SessionManager, SessionStatus};

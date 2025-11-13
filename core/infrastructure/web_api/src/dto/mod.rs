@@ -1,3 +1,4 @@
+pub mod consistency;
 pub mod goal;
 pub mod plot;
 pub mod session;

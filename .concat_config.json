@@ -1,0 +1,22 @@
+{
+  "_description": "Minimal context for consistency score feature implementation",
+  "_task": "Calculate percentage of days where goals were achieved over N-day period, expose via API",
+  "project_roots": [
+    "./core/core/",
+    "./core/plot-domain/",
+    "./core/application/",
+    "./core/infrastructure/web_api/",
+    "./README.md"
+  ],
+  "extensions": [".rs"],
+  "exclude_dirs": [
+    "target",
+    ".git",
+    "node_modules",
+    "vendor",
+    "__pycache__",
+    "logger_applications",
+    "ui"
+  ],
+  "output_file": "project_context.txt"
+}

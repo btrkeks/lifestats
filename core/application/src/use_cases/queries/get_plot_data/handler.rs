@@ -1,41 +1,45 @@
 use std::sync::Arc;
 
 use crate::cqrs::QueryHandler;
-use crate::dto::{PlotDataResult, PlotPointDto};
 use crate::error::ApplicationResult;
+use crate::services::plot_data_builder::{
+    json_value_to_drawable_data, json_value_to_drawable_goal, percentage_to_color,
+};
 use anyhow::anyhow;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_core::statistic::value_objects::goals::goal_trait::Goal;
-use plot_domain::plot::repository::PlotRepository;
+use plot_domain::plot::axis::YAxis;
+use plot_domain::plot::data::{DataPoint, PlotData};
 
 use super::query::GetPlotDataQuery;
 
-/// Handler for GetPlotDataQuery
+/// Handler for GetPlotDataQuery (Stateless Plotting)
 ///
-/// This handler returns PURE DATA without any presentation logic.
-/// It computes goal achievement percentages (business logic) but does NOT:
-/// - Convert percentages to colors (presentation)
-/// - Convert JSON to DrawableData (presentation)
-/// - Apply any rendering transformations (presentation)
-pub struct GetPlotDataQueryHandler<S, P>
+/// This handler builds a complete PlotData domain object on-the-fly without
+/// requiring any stored plot configuration. It:
+/// - Fetches log values and goals from the repository
+/// - Computes goal achievement percentages (business logic)
+/// - Converts JSON values to DrawableData/DrawableGoal (using application services)
+/// - Calculates colors based on goal achievement (business logic)
+/// - Computes the Y-axis configuration (domain logic)
+/// - Returns a fully-populated PlotData ready for rendering
+///
+/// This replaces the old stateful approach that required PlotRepository.
+pub struct GetPlotDataQueryHandler<S>
 where
     S: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
 {
     statistic_repository: Arc<S>,
-    plot_repository: Arc<P>,
 }
 
-impl<S, P> GetPlotDataQueryHandler<S, P>
+impl<S> GetPlotDataQueryHandler<S>
 where
     S: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
 {
-    pub fn new(statistic_repository: Arc<S>, plot_repository: Arc<P>) -> Self {
+    pub fn new(statistic_repository: Arc<S>) -> Self {
         Self {
             statistic_repository,
-            plot_repository,
         }
     }
 
@@ -100,42 +104,32 @@ where
     }
 }
 
-impl<S, P> QueryHandler<GetPlotDataQuery> for GetPlotDataQueryHandler<S, P>
+impl<S> QueryHandler<GetPlotDataQuery> for GetPlotDataQueryHandler<S>
 where
     S: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
 {
-    fn handle(&self, query: GetPlotDataQuery) -> ApplicationResult<PlotDataResult> {
-        // 1. Load the plot specification
-        let plot_spec = self
-            .plot_repository
-            .find_by_id(query.plot_id)?
-            .ok_or_else(|| anyhow!("Plot not found: {}", query.plot_id))?;
-
-        // 2. Extract the statistic ID
-        let statistic_id = plot_spec.statistic_id;
-
-        // 3. Load statistic metadata
+    fn handle(&self, query: GetPlotDataQuery) -> ApplicationResult<PlotData> {
+        // 1. Load statistic metadata
         let statistic = self
             .statistic_repository
-            .find_metadata_by_id(statistic_id)?;
+            .find_metadata_by_id(query.statistic_id)?;
 
-        // 4. Load log values and per-day goals for the date range
+        // 2. Load log values and per-day goals for the date range
         let log_values = self
             .statistic_repository
-            .find_log_values_in_range(statistic_id, query.date_range)?;
+            .find_log_values_in_range(query.statistic_id, query.date_range)?;
 
         let daily_goals = self
             .statistic_repository
-            .find_goals_in_range(statistic_id, query.date_range)?;
+            .find_goals_in_range(query.statistic_id, query.date_range)?;
 
-        // 5. Create a map of dates to goal values for efficient lookup
+        // 3. Create a map of dates to goal values for efficient lookup
         let daily_goal_map: std::collections::HashMap<_, _> = daily_goals
             .into_iter()
             .map(|g| (g.date, g.value.clone()))
             .collect();
 
-        // 6. Get the default goal and the date it's valid from
+        // 4. Get the default goal and the date it's valid from
         let default_goal_valid_since = statistic.get_default_goal_valid_since();
         let default_goal_json = statistic.get_default_goal().and_then(|any_goal| {
             use lifestats_core::statistic::any_statistic::AnyGoal;
@@ -148,8 +142,8 @@ where
             }
         });
 
-        // 7. Convert log values to PlotPointDto (pure data, no rendering)
-        let points: ApplicationResult<Vec<PlotPointDto>> = log_values
+        // 5. Convert log values to DataPoints with DrawableData and colors
+        let data_points: ApplicationResult<Vec<DataPoint>> = log_values
             .into_iter()
             .map(|log| {
                 // Determine the correct goal for this date
@@ -165,24 +159,41 @@ where
                 let percentage =
                     self.evaluate_goal_achievement(&statistic, &log.value, goal_for_day)?;
 
-                // Create the plot point with RAW data (no colors, no drawable types)
-                Ok(PlotPointDto::new(
+                // Calculate color based on goal achievement
+                let color = percentage_to_color(percentage);
+
+                // Convert JSON value to DrawableData
+                let drawable_value = json_value_to_drawable_data(&statistic, &log.value)?;
+
+                // Convert JSON goal to DrawableGoal (if present)
+                let drawable_goal = goal_for_day
+                    .map(|g| json_value_to_drawable_goal(&statistic, g))
+                    .transpose()?;
+
+                // Create the data point with all typed, renderer-ready data
+                Ok(DataPoint::new(
                     log.date,
-                    log.value,             // Raw JSON value
-                    goal_for_day.cloned(), // Raw JSON goal
-                    percentage,            // Computed percentage
+                    drawable_value,
+                    color,
+                    drawable_goal,
                 ))
             })
             .collect();
 
-        let points = points?;
+        let data_points = data_points?;
 
-        // 8. Return pure data result
-        Ok(PlotDataResult {
-            title: plot_spec.title.clone(),
-            points,
-            date_range: query.date_range,
-        })
+        // 6. Calculate Y-axis from data points
+        let y_axis = YAxis::from_data_points(&data_points, query.plot_type)?;
+
+        // 7. Build and return complete PlotData
+        let title = format!("{}", statistic.get_metadata().name());
+        Ok(PlotData::new(
+            title,
+            data_points,
+            query.date_range,
+            query.plot_type,
+            y_axis,
+        ))
     }
 }
 
@@ -192,37 +203,24 @@ mod tests {
     use chrono::NaiveDate;
     use lifestats_core::shared::date_range::DateRange;
     use lifestats_core::shared::dated_value::DatedValue;
-    use lifestats_core::shared::ids::{PlotId, StatisticId};
+    use lifestats_core::shared::ids::StatisticId;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
-    use plot_domain::plot::repository::MockPlotRepository;
-    use plot_domain::plot::specification::{PlotSpecification, PlotType};
+    use plot_domain::plot::data::DrawableData;
+    use plot_domain::plot::specification::PlotType;
     use serde_json::json;
 
     #[test]
-    fn test_get_plot_data_returns_pure_data() {
+    fn test_get_plot_data_returns_complete_plot_data() {
         // Arrange
         let mut stat_repo = MockStatisticRepository::new();
-        let mut plot_repo = MockPlotRepository::new();
 
-        let plot_id = PlotId::from(1);
         let stat_id = StatisticId::from(42);
         let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
         let end = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
         let date_range = DateRange::new(start, end).unwrap();
-
-        // Configure plot repository
-        let plot_spec = PlotSpecification::new(
-            plot_id,
-            "Test Plot".to_string(),
-            stat_id,
-            PlotType::LineChart,
-        );
-        plot_repo
-            .expect_find_by_id()
-            .returning(move |_| Ok(Some(plot_spec.clone())));
 
         // Create a test statistic with default goal
         let default_goal = AmountGoal::new(10, true);
@@ -244,7 +242,7 @@ mod tests {
             .returning(|_, _| {
                 Ok(vec![DatedValue::new(
                     NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                    json!(15), // Achieves goal of 10
+                    json!(15), // Achieves goal of 10 (150%)
                 )])
             });
 
@@ -252,9 +250,10 @@ mod tests {
             .expect_find_goals_in_range()
             .returning(|_, _| Ok(vec![]));
 
-        let handler = GetPlotDataQueryHandler::new(Arc::new(stat_repo), Arc::new(plot_repo));
+        let handler = GetPlotDataQueryHandler::new(Arc::new(stat_repo));
         let query = GetPlotDataQuery {
-            plot_id,
+            statistic_id: stat_id,
+            plot_type: PlotType::LineChart,
             date_range,
         };
 
@@ -264,14 +263,87 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let plot_data = result.unwrap();
-        assert_eq!(plot_data.title, "Test Plot");
+
+        // Verify title is the statistic name
+        assert_eq!(plot_data.title, "Test Stat");
+
+        // Verify we have data points
         assert_eq!(plot_data.points.len(), 1);
 
-        // Verify the point contains RAW data (not colors or drawable types)
+        // Verify the point contains DrawableData (not raw JSON)
         let point = &plot_data.points[0];
-        assert_eq!(point.value, json!(15));
-        assert!(point.percentage_achieved.is_some());
-        // The percentage should be > 100% since 15 > 10
-        assert!(point.percentage_achieved.unwrap().as_num() >= 100);
+        match &point.value {
+            DrawableData::Integer(val) => {
+                assert_eq!(*val, 15);
+            }
+            _ => panic!("Expected Integer DrawableData"),
+        }
+
+        // Verify color is gold (150% achievement)
+        assert_eq!(point.color, [255, 215, 0]); // Gold
+
+        // Verify plot type
+        assert_eq!(plot_data.plot_type, PlotType::LineChart);
+
+        // Verify Y-axis was calculated
+        // With value 15 and goal 10, axis should include both
+        match plot_data.y_axis {
+            YAxis::Integer { min, max } => {
+                assert!(min <= 10, "Min should be <= 10");
+                assert!(max >= 15, "Max should be >= 15");
+            }
+            _ => panic!("Expected Integer YAxis"),
+        }
+    }
+
+    #[test]
+    fn test_get_plot_data_with_no_data() {
+        // Arrange
+        let mut stat_repo = MockStatisticRepository::new();
+
+        let stat_id = StatisticId::from(42);
+        let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        let date_range = DateRange::new(start, end).unwrap();
+
+        // Create a test statistic without data
+        let test_stat = lifestats_core::statistic::any_statistic::AnyStatistic::IntegerAmount(
+            IntegerAmountStatistic::new(
+                StatisticMetadata::new(stat_id, "Test Category".into(), "Empty Stat".into()),
+                None,
+                start,
+            ),
+        );
+
+        stat_repo
+            .expect_find_metadata_by_id()
+            .returning(move |_| Ok(test_stat.clone()));
+
+        // No log values
+        stat_repo
+            .expect_find_log_values_in_range()
+            .returning(|_, _| Ok(vec![]));
+
+        stat_repo
+            .expect_find_goals_in_range()
+            .returning(|_, _| Ok(vec![]));
+
+        let handler = GetPlotDataQueryHandler::new(Arc::new(stat_repo));
+        let query = GetPlotDataQuery {
+            statistic_id: stat_id,
+            plot_type: PlotType::BarChart,
+            date_range,
+        };
+
+        // Act
+        let result = handler.handle(query);
+
+        // Assert - should succeed with empty data points
+        assert!(result.is_ok());
+        let plot_data = result.unwrap();
+        assert_eq!(plot_data.points.len(), 0);
+
+        // Y-axis should have default range for empty data
+        assert_eq!(plot_data.y_axis, YAxis::Integer { min: 0, max: 100 });
     }
 }

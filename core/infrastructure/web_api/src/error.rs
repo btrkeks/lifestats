@@ -30,9 +30,14 @@ impl IntoResponse for ApiError {
             ApiError::NotFound(msg) => {
                 (StatusCode::NOT_FOUND, Json(json!({ "error": msg }))).into_response()
             }
-            ApiError::BadRequest(msg) | ApiError::ValidationError(msg) => {
+            ApiError::BadRequest(msg) => {
                 (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response()
             }
+            ApiError::ValidationError(msg) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({ "error": msg })),
+            )
+                .into_response(),
             ApiError::Unauthorized(msg) => {
                 (StatusCode::UNAUTHORIZED, Json(json!({ "error": msg }))).into_response()
             }
@@ -176,7 +181,7 @@ mod tests {
         let error = ApiError::ValidationError("Invalid input".to_string());
         let response = error.into_response();
 
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await

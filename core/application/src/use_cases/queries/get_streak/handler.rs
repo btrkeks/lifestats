@@ -1,158 +1,86 @@
-use std::any::Any;
 use std::sync::Arc;
 
 use crate::cqrs::QueryHandler;
 use crate::error::ApplicationResult;
-use chrono::{Duration, Local, NaiveDate};
-use lifestats_core::shared::seconds::Seconds;
-use lifestats_core::shared::time_frame_list::TimeFrameList;
-use lifestats_core::statistic::any_statistic::{AnyGoal, AnyStatistic, StreakDayResult};
+use crate::services::DailyAchievementEvaluator;
+use crate::time::Clock;
+use chrono::Days;
+use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
-use lifestats_core::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
-use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
-use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 
 use super::query::GetStreakQuery;
 
 /// Handler for GetStreakQuery
 ///
-/// This handler contains complex business logic for streak computation:
-/// - Iterates backwards through dates from today
-/// - Evaluates goal achievement for each day
-/// - Counts consecutive days where goals were met
-/// - Handles default goals vs daily goal overrides
-pub struct GetStreakQueryHandler<R>
+/// Refactored to use DailyAchievementEvaluator for efficient bulk evaluation.
+/// - Uses Clock abstraction for deterministic testing
+/// - Delegates to evaluator for bulk data fetching (no N+1 queries)
+/// - Iterates newest → oldest, counting consecutive achieved days
+/// - Skips days with no goal (preserving original semantics)
+pub struct GetStreakQueryHandler<R, C, E>
 where
     R: StatisticRepository + Send + Sync + 'static,
+    C: Clock + Send + Sync + 'static,
+    E: DailyAchievementEvaluator + Send + Sync + 'static,
 {
     repository: Arc<R>,
+    clock: Arc<C>,
+    evaluator: Arc<E>,
 }
 
-impl<R> GetStreakQueryHandler<R>
+impl<R, C, E> GetStreakQueryHandler<R, C, E>
 where
     R: StatisticRepository + Send + Sync + 'static,
+    C: Clock + Send + Sync + 'static,
+    E: DailyAchievementEvaluator + Send + Sync + 'static,
 {
-    pub fn new(repository: Arc<R>) -> Self {
-        Self { repository }
-    }
-
-    /// Generic helper to compute streak for any statistic type
-    fn compute_streak_for<LogValue, GoalType>(
-        &self,
-        statistic_id: lifestats_core::shared::ids::StatisticId,
-        statistic: &AnyStatistic,
-        default_goal: Option<GoalType>,
-        default_goal_valid_since: NaiveDate,
-    ) -> anyhow::Result<u32>
-    where
-        LogValue: serde::de::DeserializeOwned + 'static,
-        GoalType: serde::de::DeserializeOwned + Clone + 'static,
-    {
-        const MAX_LOOKBACK_DAYS: usize = 90;
-        let mut streak: u32 = 0;
-        let today = Local::now().date_naive();
-
-        for offset in 0..MAX_LOOKBACK_DAYS {
-            let date_to_check = today - Duration::days(offset as i64);
-
-            let log_value_json = self
-                .repository
-                .find_log_value(statistic_id, date_to_check)?;
-            let log_value: Option<LogValue> = log_value_json
-                .map(|v| serde_json::from_value(v))
-                .transpose()?;
-
-            let goal_json = self.repository.find_goal(statistic_id, date_to_check)?;
-            let mut goal: Option<GoalType> =
-                goal_json.map(|v| serde_json::from_value(v)).transpose()?;
-
-            if goal.is_none() && date_to_check >= default_goal_valid_since {
-                goal = default_goal.clone();
-            }
-
-            let result = statistic.evaluate_streak_for_day(
-                log_value.as_ref().map(|value| value as &dyn Any),
-                goal.as_ref().map(|goal| goal as &dyn Any),
-            )?;
-
-            match result {
-                StreakDayResult::Achieved => streak += 1,
-                StreakDayResult::Missed => break,
-                StreakDayResult::NoGoalContinue => continue,
-            }
+    pub fn new(repository: Arc<R>, clock: Arc<C>, evaluator: Arc<E>) -> Self {
+        Self {
+            repository,
+            clock,
+            evaluator,
         }
-
-        Ok(streak)
     }
 }
 
-impl<R> QueryHandler<GetStreakQuery> for GetStreakQueryHandler<R>
+impl<R, C, E> QueryHandler<GetStreakQuery> for GetStreakQueryHandler<R, C, E>
 where
     R: StatisticRepository + Send + Sync + 'static,
+    C: Clock + Send + Sync + 'static,
+    E: DailyAchievementEvaluator + Send + Sync + 'static,
 {
     fn handle(&self, query: GetStreakQuery) -> ApplicationResult<u32> {
-        let statistic = self.repository.find_metadata_by_id(query.statistic_id)?;
-        let default_goal_valid_since = statistic.get_default_goal_valid_since();
+        const MAX_LOOKBACK_DAYS: u32 = 90;
 
-        let streak = match &statistic {
-            AnyStatistic::Habit(_) => self.compute_streak_for::<bool, HabitGoal>(
-                query.statistic_id,
-                &statistic,
-                statistic.get_default_goal().and_then(|goal| match goal {
-                    AnyGoal::Habit(goal) => Some(goal),
-                    _ => None,
-                }),
-                default_goal_valid_since,
-            )?,
-            AnyStatistic::IntegerAmount(_) => self.compute_streak_for::<i64, AmountGoal<i64>>(
-                query.statistic_id,
-                &statistic,
-                statistic.get_default_goal().and_then(|goal| match goal {
-                    AnyGoal::IntegerAmount(goal) => Some(goal),
-                    _ => None,
-                }),
-                default_goal_valid_since,
-            )?,
-            AnyStatistic::PointInTime(_) => self
-                .compute_streak_for::<chrono::NaiveDateTime, FinishedInTimeGoal>(
-                    query.statistic_id,
-                    &statistic,
-                    statistic.get_default_goal().and_then(|goal| match goal {
-                        AnyGoal::FinishedInTime(goal) => Some(goal),
-                        _ => None,
-                    }),
-                    default_goal_valid_since,
-                )?,
-            AnyStatistic::TimeSpans(_) => self.compute_streak_for::<TimeFrameList, TimeSpansGoal>(
-                query.statistic_id,
-                &statistic,
-                statistic.get_default_goal().and_then(|goal| match goal {
-                    AnyGoal::TimeSpans(goal) => Some(goal),
-                    _ => None,
-                }),
-                default_goal_valid_since,
-            )?,
-            AnyStatistic::Summing(_) => self.compute_streak_for::<Seconds, AmountGoal<Seconds>>(
-                query.statistic_id,
-                &statistic,
-                statistic.get_default_goal().and_then(|goal| match goal {
-                    AnyGoal::SecondsAmount(goal) => Some(goal),
-                    _ => None,
-                }),
-                default_goal_valid_since,
-            )?,
-            AnyStatistic::TimeDifference(_) => self
-                .compute_streak_for::<Seconds, AmountGoal<Seconds>>(
-                    query.statistic_id,
-                    &statistic,
-                    statistic.get_default_goal().and_then(|goal| match goal {
-                        AnyGoal::SecondsAmount(goal) => Some(goal),
-                        _ => None,
-                    }),
-                    default_goal_valid_since,
-                )?,
-        };
+        // Get today and calculate the lookback range
+        let today = self.clock.today();
+        let start = today
+            .checked_sub_days(Days::new((MAX_LOOKBACK_DAYS - 1) as u64))
+            .unwrap_or(today);
+        let range = DateRange::new(start, today)?;
+
+        // Fetch statistic metadata
+        let stat = self.repository.find_metadata_by_id(query.statistic_id)?;
+
+        // Bulk evaluate all days in the range
+        let daily_evals = self.evaluator.eval_range(&stat, range)?;
+
+        // Count streak: iterate newest → oldest, stop at first miss
+        let mut streak: u32 = 0;
+        for day_eval in daily_evals.iter().rev() {
+            // Iterate in reverse (newest first)
+            if !day_eval.has_goal {
+                // Skip days with no goal (preserve original semantics)
+                continue;
+            }
+
+            if day_eval.achieved {
+                streak += 1;
+            } else {
+                // First missed day - break the streak
+                break;
+            }
+        }
 
         Ok(streak)
     }
@@ -161,25 +89,39 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
+    use chrono::NaiveDate;
     use lifestats_core::shared::ids::StatisticId;
+    use lifestats_core::statistic::any_statistic::AnyStatistic;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
+    use crate::services::{DayEval, MockDailyAchievementEvaluator};
+    use crate::time::Clock;
+
+    struct StubClock {
+        fixed_date: NaiveDate,
+    }
+
+    impl Clock for StubClock {
+        fn now_utc(&self) -> chrono::DateTime<chrono::Utc> {
+            self.fixed_date.and_hms_opt(12, 0, 0).unwrap().and_utc()
+        }
+
+        fn today(&self) -> NaiveDate {
+            self.fixed_date
+        }
+    }
+
     #[test]
-    fn test_get_streak_handler_compiles_and_runs() {
-        // This is a smoke test to verify the handler compiles and can execute
-        // The actual streak computation logic is complex and tested in the domain layer
+    fn test_get_streak_with_no_goals() {
+        let today = NaiveDate::from_ymd_opt(2025, 1, 10).unwrap();
+        let stat_id = StatisticId(1);
 
         let mut repo = MockStatisticRepository::new();
-        let stat_id = StatisticId(1);
-        let today = Local::now().date_naive();
-
-        // Create statistic without default goal (streak will be 0)
         let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
             StatisticMetadata::new(stat_id, "test".into(), "test_stat".into()),
-            None, // No default goal
+            None,
             today,
         ));
 
@@ -187,21 +129,132 @@ mod tests {
             .times(1)
             .return_once(move |_| Ok(stat));
 
-        // Mock repository methods (will return NoGoalContinue for all days)
-        repo.expect_find_log_value().returning(|_, _| Ok(None));
-        repo.expect_find_goal().returning(|_, _| Ok(None));
+        let mut evaluator = MockDailyAchievementEvaluator::new();
+        evaluator.expect_eval_range().times(1).returning(|_, _| {
+            // Return 3 days with no goals
+            Ok(vec![
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 8).unwrap(),
+                    has_goal: false,
+                    achieved: false,
+                },
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 9).unwrap(),
+                    has_goal: false,
+                    achieved: false,
+                },
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
+                    has_goal: false,
+                    achieved: false,
+                },
+            ])
+        });
 
-        let handler = GetStreakQueryHandler::new(Arc::new(repo));
-        let query = GetStreakQuery {
+        let clock = Arc::new(StubClock { fixed_date: today });
+        let handler = GetStreakQueryHandler::new(Arc::new(repo), clock, Arc::new(evaluator));
+
+        let result = handler.handle(GetStreakQuery {
             statistic_id: stat_id,
-        };
+        });
 
-        // Act
-        let result = handler.handle(query);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0); // No goals = 0 streak
+    }
 
-        // Assert - just verify it doesn't error
-        assert!(result.is_ok(), "Handler should execute without error");
-        // Streak will be 0 since there's no goal
-        assert_eq!(result.unwrap(), 0);
+    #[test]
+    fn test_get_streak_all_achieved() {
+        let today = NaiveDate::from_ymd_opt(2025, 1, 10).unwrap();
+        let stat_id = StatisticId(1);
+
+        let mut repo = MockStatisticRepository::new();
+        let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            StatisticMetadata::new(stat_id, "test".into(), "test_stat".into()),
+            None,
+            today,
+        ));
+
+        repo.expect_find_metadata_by_id()
+            .times(1)
+            .return_once(move |_| Ok(stat));
+
+        let mut evaluator = MockDailyAchievementEvaluator::new();
+        evaluator.expect_eval_range().times(1).returning(|_, _| {
+            Ok(vec![
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 8).unwrap(),
+                    has_goal: true,
+                    achieved: true,
+                },
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 9).unwrap(),
+                    has_goal: true,
+                    achieved: true,
+                },
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
+                    has_goal: true,
+                    achieved: true,
+                },
+            ])
+        });
+
+        let clock = Arc::new(StubClock { fixed_date: today });
+        let handler = GetStreakQueryHandler::new(Arc::new(repo), clock, Arc::new(evaluator));
+
+        let result = handler.handle(GetStreakQuery {
+            statistic_id: stat_id,
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3); // All 3 days achieved
+    }
+
+    #[test]
+    fn test_get_streak_breaks_on_first_miss() {
+        let today = NaiveDate::from_ymd_opt(2025, 1, 10).unwrap();
+        let stat_id = StatisticId(1);
+
+        let mut repo = MockStatisticRepository::new();
+        let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            StatisticMetadata::new(stat_id, "test".into(), "test_stat".into()),
+            None,
+            today,
+        ));
+
+        repo.expect_find_metadata_by_id()
+            .times(1)
+            .return_once(move |_| Ok(stat));
+
+        let mut evaluator = MockDailyAchievementEvaluator::new();
+        evaluator.expect_eval_range().times(1).returning(|_, _| {
+            Ok(vec![
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 8).unwrap(),
+                    has_goal: true,
+                    achieved: true,
+                },
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 9).unwrap(),
+                    has_goal: true,
+                    achieved: false, // Missed day
+                },
+                DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
+                    has_goal: true,
+                    achieved: true,
+                },
+            ])
+        });
+
+        let clock = Arc::new(StubClock { fixed_date: today });
+        let handler = GetStreakQueryHandler::new(Arc::new(repo), clock, Arc::new(evaluator));
+
+        let result = handler.handle(GetStreakQuery {
+            statistic_id: stat_id,
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1); // Only most recent day (Jan 10) counts
     }
 }

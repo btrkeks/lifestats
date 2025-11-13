@@ -5,147 +5,231 @@ use axum::{
     Json,
 };
 use chrono::NaiveDate;
-use lifestats_application::use_cases::integration::IntegrationServiceTrait;
-use lifestats_core::shared::date_range::DateRange;
-use lifestats_core::shared::ids::PlotId;
-use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-use plot_domain::plot::renderer::PlotRenderer;
-use plot_domain::plot::repository::PlotRepository;
-use serde::Deserialize;
-
-use crate::{dto::plot::PlotDataResponse, error::ApiError, state::AppState};
 use events::event_port::EventPublisher;
-use plot_domain::plot::renderer::RenderConfig;
+use lifestats_application::cqrs::QueryHandler;
+use lifestats_application::use_cases::integration::IntegrationServiceTrait;
+use lifestats_application::use_cases::queries::get_plot_data::{
+    GetPlotDataQuery, GetPlotDataQueryHandler,
+};
+use lifestats_core::shared::date_range::DateRange;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
+use plot_domain::plot::specification::PlotType;
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+use crate::{error::ApiError, state::AppState};
+
+// ============================================================================
+// Request/Response DTOs
+// ============================================================================
 
 #[derive(Debug, Deserialize)]
 pub struct PlotImageQuery {
-    pub start_date: Option<String>,
-    pub end_date: Option<String>,
+    pub plot_type: String,
+    pub date_from: String,
+    pub date_to: String,
     pub width: Option<u32>,
     pub height: Option<u32>,
 }
 
-/// GET /plots/:id/image
-/// Returns a rendered plot image as PNG
-pub async fn get_plot_image<R, P, Rend, E, I>(
-    State(state): State<AppState<R, P, Rend, E, I>>,
-    Path(id): Path<u32>,
+#[derive(Debug, Deserialize)]
+pub struct PlotDataQuery {
+    pub plot_type: String,
+    pub date_from: String,
+    pub date_to: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlotDataResponse {
+    pub title: String,
+    pub plot_type: String,
+    pub date_range: DateRangeDto,
+    pub points: Vec<DataPointDto>,
+    pub y_axis: YAxisDto,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DateRangeDto {
+    pub start: String,
+    pub end: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DataPointDto {
+    pub date: String,
+    pub value: String, // Serialized DrawableData
+    pub color: [u8; 3],
+    pub goal: Option<String>, // Serialized DrawableGoal
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+pub enum YAxisDto {
+    Integer { min: i64, max: i64 },
+    Time { min: String, max: String },
+}
+
+// ============================================================================
+// New Stateless Plot Routes
+// ============================================================================
+
+/// GET /statistics/:id/plot/image
+/// Generates and returns a plot image on-the-fly without stored configuration
+pub async fn get_statistic_plot_image<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
     Query(params): Query<PlotImageQuery>,
 ) -> Result<impl IntoResponse, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    use crate::helpers;
-    use lifestats_application::cqrs::QueryHandler;
-    use lifestats_application::use_cases::queries::get_plot_data::{
-        GetPlotDataQuery, GetPlotDataQueryHandler,
-    };
-    use plot_domain::plot::axis::YAxis;
-    use plot_domain::plot::data::{DataPoint, PlotData};
+    // 1. Parse and validate inputs
+    let statistic_id = lifestats_core::shared::ids::StatisticId(statistic_id);
 
-    let plot_id = PlotId(id);
+    let plot_type = parse_plot_type(&params.plot_type)?;
 
-    // Parse date range or use defaults
-    let start = params
-        .start_date
-        .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
-        .unwrap_or_else(|| {
-            // Default to last 14 days
-            chrono::Local::now().date_naive() - chrono::Duration::days(14)
-        });
+    let date_from = NaiveDate::parse_from_str(&params.date_from, "%Y-%m-%d").map_err(|e| {
+        ApiError::BadRequest(format!(
+            "Invalid date_from format: {}. Expected YYYY-MM-DD",
+            e
+        ))
+    })?;
 
-    let end = params
-        .end_date
-        .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
-        .unwrap_or_else(|| chrono::Local::now().date_naive());
+    let date_to = NaiveDate::parse_from_str(&params.date_to, "%Y-%m-%d").map_err(|e| {
+        ApiError::BadRequest(format!(
+            "Invalid date_to format: {}. Expected YYYY-MM-DD",
+            e
+        ))
+    })?;
 
-    let date_range = DateRange::new(start, end)
+    let date_range = DateRange::new(date_from, date_to)
         .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
 
-    // Create render config from query params or use defaults
-    let config = RenderConfig {
-        width: params.width.unwrap_or(800),
-        height: params.height.unwrap_or(600),
-    };
-
-    // 1. Get plot specification to determine plot type
-    let plot_spec = state
-        .plot_repository
-        .find_by_id(plot_id)
-        .map_err(|e| ApiError::InternalError(format!("Failed to load plot spec: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound(format!("Plot {} not found", plot_id.0)))?;
-
-    // 2. Execute GetPlotDataQuery for pure data
+    // 2. Build and execute GetPlotDataQuery
     let query = GetPlotDataQuery {
-        plot_id,
+        statistic_id,
+        plot_type,
         date_range,
     };
 
-    let handler = GetPlotDataQueryHandler::new(
-        state.statistic_repository.clone(),
-        state.plot_repository.clone(),
-    );
+    let handler = GetPlotDataQueryHandler::new(state.statistic_repository.clone());
+    let plot_data = handler.handle(query).map_err(|e| {
+        if e.to_string().contains("not found") {
+            ApiError::NotFound(format!("Statistic {} not found", statistic_id.0))
+        } else {
+            ApiError::InternalError(format!("Failed to generate plot data: {}", e))
+        }
+    })?;
 
-    let plot_data_result = handler
-        .handle(query)
-        .map_err(|e| ApiError::InternalError(format!("Failed to get plot data: {}", e)))?;
+    // 3. Build RenderConfig
+    let width = params.width.unwrap_or(800);
+    let height = params.height.unwrap_or(600);
+    let render_config = RenderConfig { width, height };
 
-    // 3. Load statistic metadata for transformations
-    let statistic = state
-        .statistic_repository
-        .find_metadata_by_id(plot_spec.statistic_id)
-        .map_err(|e| ApiError::InternalError(format!("Failed to load statistic: {}", e)))?;
-
-    // 4. Transform PlotPointDto to DataPoint (apply presentation logic)
-    let data_points: Vec<DataPoint> = plot_data_result
-        .points
-        .iter()
-        .filter_map(|point| {
-            // Convert value to DrawableData
-            let drawable_value =
-                helpers::json_to_drawable_data(&statistic, &point.value, plot_spec.plot_type)
-                    .ok()?;
-
-            // Convert percentage to color
-            let color = helpers::percentage_to_color(point.percentage_achieved);
-
-            // Convert goal to DrawableGoal (if present)
-            let drawable_goal = point
-                .goal
-                .as_ref()
-                .and_then(|g| helpers::json_to_drawable_goal(&statistic, g).ok());
-
-            Some(DataPoint::new(
-                point.date,
-                drawable_value,
-                color,
-                drawable_goal,
-            ))
-        })
-        .collect();
-
-    // 5. Calculate Y-axis from transformed data
-    let y_axis = YAxis::from_data_points(&data_points, plot_spec.plot_type)
-        .map_err(|e| ApiError::InternalError(format!("Failed to calculate Y-axis: {}", e)))?;
-
-    // 6. Build PlotData
-    let plot_data = PlotData::new(
-        plot_spec.title.clone(),
-        data_points,
-        date_range,
-        plot_spec.plot_type,
-        y_axis,
-    );
-
-    // 7. Render (renderer is an infrastructure component, safe for adapter to depend on)
+    // 4. Render the plot
     let png_bytes = state
         .renderer
-        .render(&plot_data, &config)
+        .render(&plot_data, &render_config)
         .map_err(|e| ApiError::InternalError(format!("Failed to render plot: {}", e)))?;
+
+    // 5. Return PNG image
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "image/png")],
+        png_bytes,
+    ))
+}
+
+/// GET /statistics/:id/plot/data
+/// Returns plot data as JSON without rendering an image
+pub async fn get_statistic_plot_data<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+    Query(params): Query<PlotDataQuery>,
+) -> Result<Json<PlotDataResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    // 1. Parse and validate inputs
+    let statistic_id = lifestats_core::shared::ids::StatisticId(statistic_id);
+
+    let plot_type = parse_plot_type(&params.plot_type)?;
+
+    let date_from = NaiveDate::parse_from_str(&params.date_from, "%Y-%m-%d").map_err(|e| {
+        ApiError::BadRequest(format!(
+            "Invalid date_from format: {}. Expected YYYY-MM-DD",
+            e
+        ))
+    })?;
+
+    let date_to = NaiveDate::parse_from_str(&params.date_to, "%Y-%m-%d").map_err(|e| {
+        ApiError::BadRequest(format!(
+            "Invalid date_to format: {}. Expected YYYY-MM-DD",
+            e
+        ))
+    })?;
+
+    let date_range = DateRange::new(date_from, date_to)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
+
+    // 2. Build and execute GetPlotDataQuery
+    let query = GetPlotDataQuery {
+        statistic_id,
+        plot_type,
+        date_range,
+    };
+
+    let handler = GetPlotDataQueryHandler::new(state.statistic_repository.clone());
+    let plot_data = handler.handle(query).map_err(|e| {
+        if e.to_string().contains("not found") {
+            ApiError::NotFound(format!("Statistic {} not found", statistic_id.0))
+        } else {
+            ApiError::InternalError(format!("Failed to generate plot data: {}", e))
+        }
+    })?;
+
+    // 3. Convert PlotData to DTO
+    let response = plot_data_to_dto(plot_data);
+
+    Ok(Json(response))
+}
+
+/// GET /plots/timeline/:date
+/// Returns a rendered timeline plot for a specific date showing all timeline events
+pub async fn get_daily_timeline_plot<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+    Path(date_str): Path<String>,
+) -> Result<impl IntoResponse, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::use_cases::queries::get_daily_timeline_plot::{
+        GetDailyTimelinePlotQuery, GetDailyTimelinePlotQueryHandler,
+    };
+
+    // Parse the date from path parameter
+    let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").map_err(|e| {
+        ApiError::BadRequest(format!("Invalid date format: {}. Expected YYYY-MM-DD", e))
+    })?;
+
+    // Instantiate handler with repository dependency
+    let handler = GetDailyTimelinePlotQueryHandler::new(state.statistic_repository.clone());
+
+    // Execute the query
+    let query = GetDailyTimelinePlotQuery { date };
+    let png_bytes = handler
+        .handle(query)
+        .map_err(|e| ApiError::InternalError(format!("Failed to generate timeline plot: {}", e)))?;
 
     // Return the PNG image with appropriate headers
     Ok((
@@ -155,119 +239,79 @@ where
     ))
 }
 
-/// GET /plots/:id/data
-/// Returns plot data as JSON (data points, axis config, etc.)
-pub async fn get_plot_data<R, P, Rend, E, I>(
-    State(state): State<AppState<R, P, Rend, E, I>>,
-    Path(id): Path<u32>,
-    Query(params): Query<PlotImageQuery>,
-) -> Result<Json<PlotDataResponse>, ApiError>
-where
-    R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
-    Rend: PlotRenderer + 'static,
-    E: EventPublisher + 'static,
-    I: IntegrationServiceTrait + 'static,
-{
-    use crate::dto::plot::DataPointResponse;
-    use crate::helpers;
-    use lifestats_application::cqrs::QueryHandler;
-    use lifestats_application::use_cases::queries::get_plot_data::{
-        GetPlotDataQuery, GetPlotDataQueryHandler,
-    };
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+fn parse_plot_type(plot_type_str: &str) -> Result<PlotType, ApiError> {
+    match plot_type_str.to_lowercase().as_str() {
+        "bar_chart" | "bar" => Ok(PlotType::BarChart),
+        "line_chart" | "line" => Ok(PlotType::LineChart),
+        "scatter" => Ok(PlotType::Scatter),
+        "time_frames" | "timeframes" => Ok(PlotType::TimeFrames),
+        "circular_progress" | "circular" => Ok(PlotType::CircularProgress),
+        _ => Err(ApiError::BadRequest(format!(
+            "Invalid plot_type '{}'. Valid values: bar_chart, line_chart, scatter, time_frames, circular_progress",
+            plot_type_str
+        ))),
+    }
+}
+
+fn plot_data_to_dto(plot_data: plot_domain::plot::data::PlotData) -> PlotDataResponse {
     use plot_domain::plot::axis::YAxis;
-    use plot_domain::plot::data::DataPoint;
+    use plot_domain::plot::data::{DrawableData, DrawableGoal};
 
-    let plot_id = PlotId(id);
-
-    // Parse date range or use defaults
-    let start = params
-        .start_date
-        .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
-        .unwrap_or_else(|| {
-            // Default to last 14 days
-            chrono::Local::now().date_naive() - chrono::Duration::days(14)
-        });
-
-    let end = params
-        .end_date
-        .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
-        .unwrap_or_else(|| chrono::Local::now().date_naive());
-
-    let date_range = DateRange::new(start, end)
-        .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
-
-    // 1. Get plot specification to determine plot type
-    let plot_spec = state
-        .plot_repository
-        .find_by_id(plot_id)
-        .map_err(|e| ApiError::InternalError(format!("Failed to load plot spec: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound(format!("Plot {} not found", plot_id.0)))?;
-
-    // 2. Create and execute GetPlotDataQuery for pure data
-    let query = GetPlotDataQuery {
-        plot_id,
-        date_range,
-    };
-
-    let handler = GetPlotDataQueryHandler::new(
-        state.statistic_repository.clone(),
-        state.plot_repository.clone(),
-    );
-
-    let plot_data_result = handler
-        .handle(query)
-        .map_err(|e| ApiError::InternalError(format!("Failed to get plot data: {}", e)))?;
-
-    // 3. Load statistic metadata for transformations
-    let statistic = state
-        .statistic_repository
-        .find_metadata_by_id(plot_spec.statistic_id)
-        .map_err(|e| ApiError::InternalError(format!("Failed to load statistic: {}", e)))?;
-
-    // 4. Transform PlotPointDto to DataPoint (apply presentation logic)
-    let data_points: Vec<DataPoint> = plot_data_result
+    let points: Vec<DataPointDto> = plot_data
         .points
-        .iter()
-        .filter_map(|point| {
-            // Convert value to DrawableData
-            let drawable_value =
-                helpers::json_to_drawable_data(&statistic, &point.value, plot_spec.plot_type)
-                    .ok()?;
+        .into_iter()
+        .map(|point| {
+            let value_str = match point.value {
+                DrawableData::Integer(i) => format!("{}", i),
+                DrawableData::TimeFrames(tf) => {
+                    serde_json::to_string(&tf).unwrap_or_else(|_| "[]".to_string())
+                }
+            };
 
-            // Convert percentage to color
-            let color = helpers::percentage_to_color(point.percentage_achieved);
+            let goal_str = point.goal.map(|g| match g {
+                DrawableGoal::Integer(i) => format!("{}", i),
+                DrawableGoal::TimeFrames(tf) => {
+                    serde_json::to_string(&tf).unwrap_or_else(|_| "[]".to_string())
+                }
+            });
 
-            // Convert goal to DrawableGoal (if present)
-            let drawable_goal = point
-                .goal
-                .as_ref()
-                .and_then(|g| helpers::json_to_drawable_goal(&statistic, g).ok());
-
-            Some(DataPoint::new(
-                point.date,
-                drawable_value,
-                color,
-                drawable_goal,
-            ))
+            DataPointDto {
+                date: point.date.format("%Y-%m-%d").to_string(),
+                value: value_str,
+                color: point.color,
+                goal: goal_str,
+            }
         })
         .collect();
 
-    // 5. Calculate Y-axis from the transformed data points
-    let y_axis = YAxis::from_data_points(&data_points, plot_spec.plot_type)
-        .map_err(|e| ApiError::InternalError(format!("Failed to calculate Y-axis: {}", e)))?;
-
-    // 6. Build the response DTO
-    let response = PlotDataResponse {
-        title: plot_data_result.title,
-        points: data_points
-            .into_iter()
-            .map(DataPointResponse::from)
-            .collect(),
-        date_range: plot_data_result.date_range.into(),
-        plot_type: plot_spec.plot_type,
-        y_axis: y_axis.into(),
+    let y_axis_dto = match plot_data.y_axis {
+        YAxis::Integer { min, max } => YAxisDto::Integer { min, max },
+        YAxis::Time { min, max } => YAxisDto::Time {
+            min: min.format("%H:%M:%S").to_string(),
+            max: max.format("%H:%M:%S").to_string(),
+        },
     };
 
-    Ok(Json(response))
+    let plot_type_str = match plot_data.plot_type {
+        PlotType::BarChart => "bar_chart",
+        PlotType::LineChart => "line_chart",
+        PlotType::Scatter => "scatter",
+        PlotType::TimeFrames => "time_frames",
+        PlotType::CircularProgress => "circular_progress",
+    };
+
+    PlotDataResponse {
+        title: plot_data.title,
+        plot_type: plot_type_str.to_string(),
+        date_range: DateRangeDto {
+            start: plot_data.date_range.start().format("%Y-%m-%d").to_string(),
+            end: plot_data.date_range.end().format("%Y-%m-%d").to_string(),
+        },
+        points,
+        y_axis: y_axis_dto,
+    }
 }

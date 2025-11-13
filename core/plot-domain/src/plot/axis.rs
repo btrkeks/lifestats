@@ -259,4 +259,43 @@ mod tests {
             _ => panic!("Expected Integer axis"),
         }
     }
+
+    #[test]
+    fn test_integer_axis_with_outliers() {
+        // Test that outliers are handled correctly with appropriate padding
+        let points = vec![
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                DrawableData::Integer(10),
+                [0, 255, 0],
+                None,
+            ),
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
+                DrawableData::Integer(15),
+                [0, 255, 0],
+                None,
+            ),
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
+                DrawableData::Integer(1000), // Outlier
+                [0, 255, 0],
+                None,
+            ),
+        ];
+
+        let axis = YAxis::from_data_points(&points, PlotType::LineChart).unwrap();
+
+        match axis {
+            YAxis::Integer { min, max } => {
+                // Should include all values with padding
+                assert!(min < 10, "Min should be below the lowest value");
+                assert!(max > 1000, "Max should be above the outlier");
+                // Range is 990, so padding should be ~99 (10%)
+                let padding = (990.0 * 0.1) as i64;
+                assert!(max - 1000 >= padding / 2);
+            }
+            _ => panic!("Expected Integer axis"),
+        }
+    }
 }

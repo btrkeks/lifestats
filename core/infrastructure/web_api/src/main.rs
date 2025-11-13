@@ -30,9 +30,9 @@ async fn main() -> Result<()> {
     let app = build_services()?;
 
     // Build lean AppState with only globally shared dependencies
+    // Note: PlotRepository removed - plotting is now stateless
     let app_state = AppState::new(
         app.statistic_repository,
-        app.plot_repository,
         app.event_publisher,
         app.renderer,
         app.integration_service,

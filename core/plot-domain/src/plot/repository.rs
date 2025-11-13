@@ -3,7 +3,26 @@ use lifestats_core::shared::ids::{PlotId, StatisticId};
 use lifestats_core::statistic::ports::error::RepositoryError;
 
 /// Port (trait) for persisting plot configurations
-/// This keeps the domain independent of specific database implementations
+///
+/// # ⚠️ DEPRECATION NOTICE
+/// **This trait will be removed in Phase 4 of the plotting refactor.**
+///
+/// The plotting system no longer requires storing plot configurations. The new
+/// stateless architecture generates plots on-the-fly without needing a plot repository.
+///
+/// **Migration Guide:**
+/// - Old approach: Store PlotSpecification in database → load via PlotRepository
+/// - New approach: Accept parameters directly (statistic_id, plot_type, date_range)
+///
+/// **Impact:**
+/// - The `plots` database table will be dropped
+/// - `SqlitePlotRepository` implementation will be removed
+/// - Application layer will no longer depend on this trait
+///
+/// See the TODO.md file for complete refactoring details.
+///
+/// **Note:** Rust does not support deprecating traits, so this is documented only.
+/// All usages should be migrated to the new stateless plotting approach.
 #[cfg_attr(feature = "testing", mockall::automock)]
 pub trait PlotRepository: Send + Sync {
     /// Finds a plot specification by its ID

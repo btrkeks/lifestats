@@ -159,10 +159,6 @@ pub trait TokenStorePort: Send + Sync {
     async fn last_sync_at(&self, source: &str) -> ApplicationResult<Option<DateTime<Utc>>>;
 }
 
-pub trait Clock: Send + Sync {
-    fn now_utc(&self) -> DateTime<Utc>;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

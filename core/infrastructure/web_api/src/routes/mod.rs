@@ -13,15 +13,13 @@ use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
-use plot_domain::plot::repository::PlotRepository;
 
 use crate::state::AppState;
 
 /// Create and configure the application router with all routes
-pub fn create_router<R, P, Rend, E, I>(app_state: AppState<R, P, Rend, E, I>) -> Router
+pub fn create_router<R, Rend, E, I>(app_state: AppState<R, Rend, E, I>) -> Router
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -49,6 +47,10 @@ where
             "/statistics/{id}/time_spans/total",
             get(statistics::get_time_spans_total),
         )
+        .route(
+            "/statistics/{id}/consistency",
+            get(statistics::get_consistency_score),
+        )
         // Goal management endpoints
         .route(
             "/statistics/{id}/goals/default",
@@ -62,9 +64,20 @@ where
                 .put(goals::set_daily_goal)
                 .delete(goals::delete_daily_goal),
         )
-        // Plot endpoints
-        .route("/plots/{id}/image", get(plots::get_plot_image))
-        .route("/plots/{id}/data", get(plots::get_plot_data))
+        // Plot endpoints (stateless)
+        .route(
+            "/statistics/{id}/plot/image",
+            get(plots::get_statistic_plot_image),
+        )
+        .route(
+            "/statistics/{id}/plot/data",
+            get(plots::get_statistic_plot_data),
+        )
+        // Timeline plot endpoint
+        .route(
+            "/plots/timeline/{date}",
+            get(plots::get_daily_timeline_plot),
+        )
         // Session endpoints
         .route("/sessions", get(sessions::list_sessions))
         .route(

@@ -5,9 +5,10 @@ use anyhow::Result;
 use chrono_tz::Tz;
 use events::event_port::{Event, EventPublisher};
 use lifestats_application::integrations::fitbit::ports::{
-    Clock, FitbitDataApi, FitbitMetric, FitbitOAuthApi, TokenStorePort,
+    FitbitDataApi, FitbitMetric, FitbitOAuthApi, TokenStorePort,
 };
 use lifestats_application::statistic::ports::TagQueryableStatisticRepository;
+use lifestats_application::time::Clock;
 use lifestats_application::use_cases::{
     commands::sync_fitbit_data::SyncFitbitDataCommandHandler,
     integration::{AnkiBundleFactory, BundleFactory, FitbitBundleFactory, IntegrationService},
@@ -17,7 +18,6 @@ use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_fitbit_client::{HttpFitbitDataClient, HttpFitbitOAuthClient};
 use lifestats_persistence::{
     pool::get_database_pool, repository::SqliteStatisticRepository, token_store::SqliteTokenStore,
-    SqlitePlotRepository,
 };
 use lifestats_plotting::PlottersRenderer;
 use lifestats_system_clock::SystemClock;
@@ -38,7 +38,6 @@ impl EventPublisher for NoOpEventPublisher {
 pub struct Application {
     // Direct infrastructure access for web_api
     pub statistic_repository: Arc<SqliteStatisticRepository>,
-    pub plot_repository: Arc<SqlitePlotRepository>,
     pub event_publisher: Arc<NoOpEventPublisher>,
     pub renderer: Arc<PlottersRenderer>,
     pub integration_service: Arc<IntegrationService>,
@@ -61,7 +60,6 @@ pub fn build_services() -> Result<Application> {
     // 1. Instantiate concrete infrastructure adapters
     let pool = get_database_pool();
     let statistic_repo = Arc::new(SqliteStatisticRepository::new(Arc::clone(&pool)));
-    let plot_repo = Arc::new(SqlitePlotRepository::new(Arc::clone(&pool)));
     let renderer = Arc::new(PlottersRenderer::new());
     let publisher = Arc::new(NoOpEventPublisher);
 
@@ -137,10 +135,9 @@ pub fn build_services() -> Result<Application> {
     // Instantiate session manager for heartbeat session tracking
     let session_manager = Arc::new(SessionManager::new(Arc::clone(&statistic_repo)));
 
-    // 3. Return the container with both repositories (for web_api) and services (for logger apps)
+    // 3. Return the container with repositories (for web_api) and services (for logger apps)
     Ok(Application {
         statistic_repository: statistic_repo,
-        plot_repository: plot_repo,
         event_publisher: publisher,
         renderer,
         integration_service,

@@ -7,6 +7,7 @@ edition = "2021"
 # Internal: Domain crates
 lifestats-core = { path = "../core" }
 plot-domain = { path = "../plot-domain" }
+lifestats-plotting = { path = "../infrastructure/plotting" }
 
 events = { path = "../../events/event_impl/" }
 

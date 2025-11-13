@@ -19,13 +19,12 @@ use crate::{
 };
 
 /// GET /statistics/:id/goals/default - Get the default goal for a statistic
-pub async fn get_default_goal<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn get_default_goal<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
 ) -> Result<Json<Option<GoalResponse>>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -48,14 +47,13 @@ where
 }
 
 /// PUT /statistics/:id/goals/default - Set the default goal for a statistic
-pub async fn set_default_goal<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn set_default_goal<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
     Json(payload): Json<SetGoalRequest>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -206,13 +204,12 @@ where
 }
 
 /// DELETE /statistics/:id/goals/default - Delete the default goal for a statistic
-pub async fn delete_default_goal<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn delete_default_goal<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -239,13 +236,13 @@ where
 }
 
 /// GET /statistics/:id/goals/:date - Get a goal for a specific date
-pub async fn get_daily_goal<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn get_daily_goal<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
 ) -> Result<Json<Option<GoalResponse>>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
+
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -269,14 +266,13 @@ where
 }
 
 /// PUT /statistics/:id/goals/:date - Set a goal for a specific date
-pub async fn set_daily_goal<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn set_daily_goal<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
     Json(payload): Json<SetGoalRequest>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -427,13 +423,13 @@ where
 }
 
 /// DELETE /statistics/:id/goals/:date - Delete a goal for a specific date
-pub async fn delete_daily_goal<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn delete_daily_goal<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
+
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,

@@ -27,14 +27,13 @@ use crate::{
 /// Only one active session per statistic is allowed.
 ///
 /// Returns the initial session status with elapsed time 0.
-pub async fn start_session<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn start_session<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
     Json(payload): Json<StartSessionRequest>,
 ) -> Result<(StatusCode, Json<SessionStatusResponse>), ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -82,13 +81,12 @@ where
 ///
 /// Records a heartbeat for an active session, extending the idle timeout.
 /// Creates the session on first call if it doesn't exist.
-pub async fn send_heartbeat<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn send_heartbeat<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -106,13 +104,12 @@ where
 /// POST /sessions/:statistic_id/stop - Stop a session
 ///
 /// Stops an active session and finalizes any pending time frames.
-pub async fn stop_session<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn stop_session<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
 ) -> Result<StatusCode, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -131,13 +128,12 @@ where
 ///
 /// Returns the current status of a session, including whether it's running
 /// and total elapsed time.
-pub async fn get_session_status<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn get_session_status<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
 ) -> Result<Json<SessionStatusResponse>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
@@ -166,12 +162,11 @@ where
 /// GET /sessions - List all active sessions
 ///
 /// Returns a list of all currently running heartbeat sessions.
-pub async fn list_sessions<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn list_sessions<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
 ) -> Result<Json<Vec<SessionStatusResponse>>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-    P: PlotRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,

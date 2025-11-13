@@ -5,7 +5,7 @@ use lifestats_application::use_cases::integration::{
     AnkiBundleFactory, BundleFactory, IntegrationService,
 };
 use lifestats_application::SessionManager;
-use lifestats_core::shared::ids::{PlotId, StatisticId};
+use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::{
@@ -17,8 +17,6 @@ use lifestats_web_api::state::AppState;
 use mockall::mock;
 use plot_domain::plot::data::PlotData;
 use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
-use plot_domain::plot::repository::PlotRepository;
-use plot_domain::plot::specification::PlotSpecification;
 use std::sync::Arc;
 
 /// Simple no-op event publisher for testing
@@ -35,23 +33,7 @@ impl EventPublisher for NoOpEventPublisher {
     }
 }
 
-// Mock plot repository and renderer for tests
-mock! {
-    pub PlotRepo {}
-
-    impl Clone for PlotRepo {
-        fn clone(&self) -> Self;
-    }
-
-    impl PlotRepository for PlotRepo {
-        fn find_by_id(&self, id: PlotId) -> Result<Option<PlotSpecification>, RepositoryError>;
-        fn find_all(&self) -> Result<Vec<PlotSpecification>, RepositoryError>;
-        fn find_by_statistic_id(&self, statistic_id: StatisticId) -> Result<Vec<PlotSpecification>, RepositoryError>;
-        fn save(&self, plot_spec: &PlotSpecification) -> Result<(), RepositoryError>;
-        fn delete(&self, id: PlotId) -> Result<(), RepositoryError>;
-    }
-}
-
+// Mock plot renderer for tests
 mock! {
     pub PlotRend {}
 
@@ -68,15 +50,8 @@ mock! {
 #[allow(dead_code)]
 pub fn mock_app_state(
     mock_repo: Arc<MockStatisticRepository>,
-) -> AppState<
-    MockStatisticRepository,
-    MockPlotRepo,
-    MockPlotRend,
-    NoOpEventPublisher,
-    IntegrationService,
-> {
+) -> AppState<MockStatisticRepository, MockPlotRend, NoOpEventPublisher, IntegrationService> {
     let publisher = Arc::new(NoOpEventPublisher);
-    let plot_repository = Arc::new(MockPlotRepo::new());
     let renderer = Arc::new(MockPlotRend::new());
 
     let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
@@ -89,7 +64,6 @@ pub fn mock_app_state(
 
     AppState::new(
         mock_repo,
-        plot_repository,
         publisher,
         renderer,
         integration_service,

@@ -13,7 +13,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use mockall::mock;
 
-use crate::helpers::{MockPlotRend, MockPlotRepo, NoOpEventPublisher};
+use crate::helpers::{MockPlotRend, NoOpEventPublisher};
 use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
 
 // Create a mock for IntegrationServiceTrait
@@ -33,22 +33,14 @@ mock! {
 fn mock_app_state_with_integrations(
     mock_repo: Arc<MockStatisticRepository>,
     mock_integration_service: Arc<MockIntegrationSvc>,
-) -> AppState<
-    MockStatisticRepository,
-    MockPlotRepo,
-    MockPlotRend,
-    NoOpEventPublisher,
-    MockIntegrationSvc,
-> {
+) -> AppState<MockStatisticRepository, MockPlotRend, NoOpEventPublisher, MockIntegrationSvc> {
     let publisher = Arc::new(NoOpEventPublisher);
-    let plot_repository = Arc::new(MockPlotRepo::new());
     let renderer = Arc::new(MockPlotRend::new());
 
     let session_manager = Arc::new(SessionManager::new(mock_repo.clone()));
 
     AppState::new(
         mock_repo,
-        plot_repository,
         publisher,
         renderer,
         mock_integration_service,

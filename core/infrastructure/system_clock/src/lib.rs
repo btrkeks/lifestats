@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use lifestats_application::integrations::fitbit::ports::Clock;
+use lifestats_application::time::Clock;
 
 pub struct SystemClock;
 

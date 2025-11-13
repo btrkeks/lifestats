@@ -1,6 +1,6 @@
 # LifeStats
 
-LifeStats is a personal observability platform for tracking daily habits and wellness metrics. It is built in Rust using **Ports & Adapters (Hexagonal) Architecture** to ensure a clean separation between core business logic and external concerns (persistence, HTTP, plotting, etc.). This repository is currently mid-refactor (see `refactor` branch) and is geared toward developers, not yet end-users.
+LifeStats is a personal observability platform for tracking daily habits and performance metrics. It is built in Rust using **Ports & Adapters (Hexagonal) Architecture** to ensure a clean separation between core business logic and external concerns (persistence, HTTP, plotting, etc.). This repository is currently mid-refactor (see `refactor` branch) and is geared toward developers, not yet end-users.
 
 **Status:** Active development; architecture stabilization in progress.
 
@@ -56,6 +56,7 @@ lifestats/
 ```
 
 **Workspace members** (actively maintained):
+
 - `core/core` (domain)
 - `core/application`
 - `core/infrastructure/{persistence,plotting,web_api}`
@@ -86,6 +87,7 @@ cargo build
 ```
 
 Release build:
+
 ```bash
 cargo build --release
 ```
@@ -108,11 +110,11 @@ The HTTP server (`web_api`) will automatically run migrations on startup if `DAT
 
 **Environment Variables:**
 
-| Variable          | Purpose                                   | Default/Required |
-|-------------------|-------------------------------------------|------------------|
-| `DATABASE_URL`    | Path to SQLite DB for live usage         | Required for live|
-| `COMPAT_DB_URL`   | Snapshot DB for compatibility tests       | Required for compat test |
-| `RUST_LOG`        | Log level (tracing-subscriber)            | `info,web_api=debug,tower_http=debug` |
+| Variable        | Purpose                             | Default/Required                      |
+| --------------- | ----------------------------------- | ------------------------------------- |
+| `DATABASE_URL`  | Path to SQLite DB for live usage    | Required for live                     |
+| `COMPAT_DB_URL` | Snapshot DB for compatibility tests | Required for compat test              |
+| `RUST_LOG`      | Log level (tracing-subscriber)      | `info,web_api=debug,tower_http=debug` |
 
 ### 3. Run Tests
 
@@ -136,6 +138,7 @@ cargo run -p lifestats-web-api
 The server binds to `0.0.0.0:3000`.
 
 **Available routes:**
+
 - `GET /statistics` – list all statistics
 - `POST /statistics/:id/log/:date` – log a value for a statistic on a given date
 - `POST /statistics/:id/log_time_frame/:date` – log a time frame
@@ -143,6 +146,7 @@ The server binds to `0.0.0.0:3000`.
 - `POST /integrations/provision` – provision integration (e.g., Anki bundles)
 
 Example (requires a running server):
+
 ```bash
 curl http://localhost:3000/statistics
 ```
@@ -175,12 +179,14 @@ cargo test -p lifestats-persistence
 ### Shared Target Directory
 
 Builds use `/tmp/cargo-target-shared` (see `.cargo/config.toml`). To change:
+
 ```toml
 [build]
 target-dir = "./target"  # Use local target dir instead
 ```
 
 If `sccache` is unavailable, remove or comment out:
+
 ```toml
 rustc-wrapper = "sccache"
 ```
@@ -194,6 +200,7 @@ The domain is defined in `core/core` and has **zero external dependencies**.
 ### Statistic Types
 
 **Logable Statistics** (accept direct input):
+
 - `TimeSpans` – tracks intervals (start/end times)
 - `IntegerAmount` – numeric counts
 - `Habit` – boolean occurrences
@@ -202,6 +209,7 @@ The domain is defined in `core/core` and has **zero external dependencies**.
 Each implements the `Logable` trait with pure methods like `calculate_new_log_value`.
 
 **Derived Statistics** (computed from other statistics):
+
 - `SummingStatistic` – aggregates multiple `TimeSpans`
 - `TimeDifference` – delta between two `PointInTime` stats
 
@@ -315,22 +323,8 @@ The `logger_applications/` directory contains legacy loggers (excluded from the 
 
 ---
 
-## Contributing
-
-This project is in active refactor. Contribution guidelines are not yet formalized. For architectural questions, see `CLAUDE.md` and `docs/ARCHITECTURE.md`.
-
-**Development branch:** `refactor`
-**Main branch:** `main`
-
----
-
 ## Further Reading
 
-- [`CLAUDE.md`](CLAUDE.md) – guidance for Claude Code when working with this repository
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – detailed architecture diagrams and layer descriptions
 - [`docs/statistics.md`](docs/statistics.md) – statistic types and their behaviors
 - [`docs/IDEAS.md`](docs/IDEAS.md) – design ideas and future explorations
-
----
-
-**Note:** This README reflects the current state of the `refactor` branch and is derived directly from the codebase. Some logger applications and UI components are legacy or WIP and may not be fully functional.

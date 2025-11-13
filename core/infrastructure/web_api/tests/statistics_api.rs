@@ -155,8 +155,8 @@ async fn test_log_value_validation_failure() {
         .json(&payload)
         .await;
 
-    // Assert status code
-    assert_eq!(response.status_code(), 400);
+    // Assert status code (422 for validation errors)
+    assert_eq!(response.status_code(), 422);
 
     // Assert error response contains validation message
     let body: serde_json::Value = response.json();
