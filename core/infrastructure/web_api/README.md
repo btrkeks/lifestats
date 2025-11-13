@@ -171,6 +171,8 @@ web_api/
 | `POST` | `/statistics/{id}/log/{date}` | Log a value for a statistic on a date |
 | `POST` | `/statistics/{id}/log_time_frame/{date}` | Log a time frame for TimeSpans |
 | `GET` | `/statistics/{id}/time_spans/total` | Get total duration for date range |
+| `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
+| `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
 
 ### Goals
 
@@ -264,6 +266,28 @@ web_api/
 ```
 
 **Response:** `204 No Content`
+
+### Getting Statistic Score
+
+**Request:** `GET /statistics/{id}/score?start=2025-01-01&end=2025-01-31`
+
+**Response:** `200 OK`
+
+```json
+{
+  "statistic_id": 1,
+  "start_date": "2025-01-01",
+  "end_date": "2025-01-31",
+  "mean_percentage_achieved": 85,
+  "days_with_goal": 25
+}
+```
+
+**Notes:**
+- `mean_percentage_achieved` is the arithmetic mean of daily goal achievement percentages
+- Value ranges from 0-255 (or null when no goals exist in the range)
+- Only days with goals contribute to the score
+- Supports over-achievement (percentages > 100)
 
 ## Error Handling
 

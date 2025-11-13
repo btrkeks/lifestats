@@ -5,7 +5,7 @@
     "./core/core/",
     "./core/plot-domain/",
     "./core/application/",
-    "./core/infrastructure/web_api/",
+    "./core/infrastructure/plotting/",
     "./README.md"
   ],
   "extensions": [".rs"],
@@ -15,7 +15,8 @@
     "node_modules",
     "vendor",
     "__pycache__",
-    "logger_applications",
+    "dist",
+    "assets",
     "ui"
   ],
   "output_file": "project_context.txt"

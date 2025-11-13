@@ -1,393 +1,409 @@
-# TODO: Refactor Plotting to a Stateless, On-the-Fly Model
+# TODO – Statistic Score (Mean Daily Goal Achievement)
 
-## 🎯 Objective
-
-Refactor the plotting subsystem from a stateful, pre-configured model to a **stateless, on-the-fly generation** model.
-
-- Eliminate stored plot configurations (`PlotSpecification`, `PlotRepository`, `plots` table).
-- Treat rendering as an external concern behind a `PlotRenderer` port.
-- Let the application assemble a complete `PlotData` domain object per request.
-- Offer both **rendered images** and **raw plot data** via HTTP in a clean, testable architecture.
-
-## 🏛️ Guiding Principles
-
-- **Ports & Adapters (Hexagonal Architecture)**
-  - `plot-domain` defines _what_ a plot is and the `PlotRenderer` port.
-  - `lifestats-plotting` implements the port using a concrete library (e.g., `plotters`).
-  - `lifestats-application` orchestrates data fetching and `PlotData` assembly.
-  - `lifestats-web-api` translates HTTP ↔ application ↔ renderer.
-
-- **Dependency Inversion**
-  - Application and web layers depend on `plot-domain` abstractions, not on `lifestats-plotting`.
-
-- **Single Responsibility**
-  - Each crate owns one clear concern:
-    - `plot-domain`: renderer-agnostic plot concepts.
-    - `lifestats-application`: use case logic to build `PlotData`.
-    - `lifestats-plotting`: `PlotData` → image bytes.
-    - `lifestats-web-api`: HTTP routing, validation, and response formatting.
-
-- **Pragmatism**
-  - Prefer incremental, test-backed changes over big-bang rewrites.
-  - Avoid premature generalization; keep abstractions as simple as possible.
+Goal: Add an application-layer function/use-case that computes a “score” for a statistic
+over an arbitrary date range, defined as the **mean of `percentage_achieved` per day**.
+This should reuse existing goal/achievement logic and stay aligned with Ports & Adapters.
 
 ---
 
-## Phase 1: Solidify the Domain Layer (`plot-domain`)
+## 1. Clarify semantics (design notes)
 
-Goal: Ensure the domain describes plots in a complete, renderer-agnostic way and exposes a clean port for rendering.
+- **Score definition**
+  - For each calendar day in the given `DateRange`:
+    - If the statistic has a goal (daily or default, valid on that date):
+      - Take the `percentage_achieved` returned by the goal logic for that day
+        (including handling of “no log value” via `Goal::get_percentage_achieved(None)`).
+      - Include this percentage in the average.
+    - If the statistic has **no goal** on that day:
+      - Exclude the day entirely from the average (do not treat it as 0%).
+  - The final “score” is the **arithmetic mean** of these daily percentages.
+    - If there are **no days with a goal** in the range, the score is `None`.
 
-### 1. Refine the Central `PlotData` Domain Object
+- **Supported statistics**
+  - Score is only defined for statistics that support goals (e.g. Habit, IntegerAmount,
+    FinishedInTime, TimeSpans, SecondsAmount).
+  - For derived statistics where goals are not meaningful, the daily evaluator should
+    produce `percentage_achieved = None` and the score will be `None`.
 
-- **Action**
-  - Review and refine `plot-domain::plot::data::PlotData` so it contains all information needed to describe a plot:
-    - Plot metadata: `title`, optional `subtitle`, `PlotType`, etc.
-    - Series data: a vector of `DataPoint`s, each with at least:
-      - `date` (or time index),
-      - raw value(s),
-      - goal-related value(s),
-      - computed `Percentage` of goal, if applicable,
-      - any additional labels/flags needed for rendering.
-    - Axis configuration: `YAxis` and (if needed) `XAxis` or other axes.
-  - Verify `PlotData` does **not** reference rendering library types.
+Keep this behavior documented in code comments and tests so future changes don’t
+accidentally shift semantics.
 
-- **Guidelines**
-  - Keep `PlotData` purely semantic: “what to draw”, not “how to draw it”.
-  - Ensure it’s stable enough that multiple frontends or renderers can reuse it.
+---
 
-### 2. Clarify and Restrict `RenderConfig`
+## 2. Application Services: Extend `DailyAchievementEvaluator`
 
-- **Action**
-  - Define or refine `RenderConfig` in `plot-domain::plot::renderer`:
-    - Include **semantic knobs** only, e.g.:
-      - theme (e.g. `Theme::Light | Theme::Dark`),
-      - whether to show goal lines, markers, grid, etc.,
-      - high-level size categories if needed (e.g. `Small | Medium | Large`).
-  - Avoid leaking low-level rendering details into the domain:
-    - Do **not** include concrete pixel dimensions, font names, or library-specific types in `RenderConfig`.
+**Objective:** Reuse the existing bulk evaluation pipeline and enrich it with
+per-day percentages so multiple use cases (streak, consistency, score) can share logic.
 
-- **Rationale**
-  - Keeps `plot-domain` independent from any specific plotting library.
-  - Makes it easy to swap `lifestats-plotting` implementation later.
+### 2.1 Extend `DayEval` to carry percentages
 
-### 3. Define the `PlotRenderer` Port
+- [ ] In `core/application/src/services/daily_achievement_evaluator.rs`, extend
+      the `DayEval` struct to include the daily percentage:
 
-- **Action**
-  - In `core/plot-domain/src/plot/renderer.rs`, define the port:
+  ```rust
+  use lifestats_core::shared::percentage::Percentage;
+
+  #[derive(Debug, Clone, PartialEq, Eq)]
+  pub struct DayEval {
+      pub date: NaiveDate,
+      /// Whether this day had any applicable goal (default or daily)
+      pub has_goal: bool,
+      /// Whether the goal was achieved (typically percentage >= 100)
+      pub achieved: bool,
+      /// Computed goal achievement percentage for this day.
+      /// - `Some(p)` when there is a goal (and we can evaluate it)
+      /// - `None` when there is no goal or the statistic type does not support goals
+      pub percentage_achieved: Option<Percentage>,
+  }
+  ```
+
+* [ ] Update all sites that construct `DayEval` (especially tests) to provide
+      `percentage_achieved`. For the existing use cases (streak, consistency):
+  - When `has_goal == false`, use `percentage_achieved: None`.
+  - When `has_goal == true`, you can set a sensible percentage for the scenario
+    (e.g. `Some(Percentage::from(true))` for “achieved”, `Some(Percentage::from(false))`
+    for “not achieved”) unless the test explicitly cares about concrete values.
+
+### 2.2 Compute `percentage_achieved` in the default implementation
+
+- [ ] In `DefaultDailyAchievementEvaluator`, inside the main per-day evaluation loop:
+  - Where you currently decide if a day is “achieved” or not, also compute and store
+    the underlying percentage:
 
     ```rust
-    pub trait PlotRenderer: Send + Sync {
-        fn render(
-            &self,
-            data: &PlotData,
-            config: &RenderConfig,
-        ) -> anyhow::Result<Vec<u8>>; // PNG bytes for now
+    let percentage = goal_obj.get_percentage_achieved(log_value_opt);
+    let achieved = percentage.as_num() >= 100;
+    ```
+
+  - For days **with a goal**, set:
+
+    ```rust
+    DayEval {
+        date,
+        has_goal: true,
+        achieved,
+        percentage_achieved: Some(percentage),
     }
     ```
 
-  - Make the trait public and ensure `PlotData` / `RenderConfig` are also public and live in the domain.
+  - For days **without any goal**, set:
 
-- **Optional Future Evolution**
-  - Consider later generalization (if needed) to support multiple output formats (e.g. PNG, SVG) with a `RenderedPlot` enum or an associated type. For now, keep it simple (`Vec<u8>`).
+    ```rust
+    DayEval {
+        date,
+        has_goal: false,
+        achieved: false,
+        percentage_achieved: None,
+    }
+    ```
 
-### 4. Axis Calculation & Edge Cases
+- [ ] Ensure all statistic types that currently participate in goal evaluation
+      map to a `Percentage` via `Goal::get_percentage_achieved` and that derived
+      or unsupported types leave `percentage_achieved` as `None`.
 
-- **Action**
-  - Finalize `plot_domain::plot::axis::YAxis::from_data_points`:
-    - It should compute sensible min/max, padding, and tick marks based on provided `DataPoint`s.
-  - Define behaviour for **edge cases**:
-    - **No data points**: e.g. decide to:
-      - return a default “empty” axis + empty `PlotData`, or
-      - surface a domain-level error that the application can propagate.
-    - All values equal / very small range: ensure axis still renders meaningfully.
+- [ ] Add a couple of focused unit tests at the `DefaultDailyAchievementEvaluator`
+      level to assert:
+  - A day with a goal and a log value yields a `Some(Percentage)` with the expected value.
+  - A day with a goal and **no** log value still yields a `Some(Percentage)` that matches
+    the goal’s semantics for “not logged”.
+  - A day with **no goal** yields `percentage_achieved == None`.
 
-- **Tests**
-  - Add unit tests in `plot-domain`:
-    - empty data list,
-    - strictly increasing / decreasing data,
-    - all-equivalent values,
-    - data with outliers.
+This ensures the new field is correctly wired before we depend on it elsewhere.
 
 ---
 
-## Phase 2: Application Logic (`lifestats-application`)
+## 3. Application Services: Pure score calculator
 
-Goal: Provide a cohesive use case that turns statistics + logs + goals into a full `PlotData` object, independent of any rendering concerns.
+**Objective:** Keep the aggregation logic (mean of daily percentages) as a small,
+testable function that can be reused.
 
-### 5. Define the `GetPlotDataQuery`
+- [ ] Add a new module `core/application/src/services/statistic_score_calculator.rs`
+      with a small, pure function:
 
-- **Action**
-  - In `core/application/src/use_cases/queries/get_plot_data/`:
-    - Create a module `mod.rs` (or similar) with:
+  ```rust
+  use crate::services::daily_achievement_evaluator::DayEval;
+  use lifestats_core::shared::percentage::Percentage;
 
-      ```rust
-      pub struct GetPlotDataQuery {
-          pub statistic_id: StatisticId,
-          pub plot_type: PlotType,     // a domain enum, not a raw string
-          pub date_range: DateRange,   // strongly-typed range
+  /// Computes the mean percentage achieved over all days with a goal.
+  ///
+  /// - Only `DayEval` entries with `percentage_achieved = Some(_)` are counted.
+  /// - Returns `None` if there are no such days (no goals in range).
+  pub fn compute_mean_percentage(evals: &[DayEval]) -> Option<Percentage> {
+      let mut total: u32 = 0;
+      let mut count: u32 = 0;
+
+      for eval in evals {
+          if let Some(p) = eval.percentage_achieved {
+              total += p.as_num() as u32;
+              count += 1;
+          }
       }
 
-      pub type GetPlotDataResult = PlotData;
-      ```
+      if count == 0 {
+          return None;
+      }
 
-    - Reuse domain types where possible (`StatisticId`, `PlotType`, `DateRange`).
+      // Integer mean with simple half-up rounding.
+      let mean = (total + count / 2) / count;
+      Some(Percentage::new(mean as u8))
+  }
+  ```
 
-- **Rationale**
-  - Formalizes the contract for “asking the application for plot data”.
-  - Keeps the application layer return type rich and domain-centric.
+- [ ] Write unit tests for `compute_mean_percentage`:
+  - Empty slice → `None`.
+  - All `percentage_achieved == None` → `None`.
+  - Single entry → returns that percentage.
+  - Multiple entries with varying percentages to verify averaging and rounding behavior.
 
-### 6. Implement `GetPlotDataQueryHandler`
-
-- **Action**
-  - Implement a handler struct (e.g. `GetPlotDataQueryHandler`) that depends on:
-    - `StatisticRepository` (port),
-    - any necessary clock / time service if date ranges need “today” or similar.
-
-  - Handler steps:
-    1. **Fetch Data**
-       - Use `StatisticRepository` to load the `AnyStatistic` entity and all raw log and goal values (`serde_json::Value`) for the given `statistic_id` and `date_range`.
-    2. **Transform Raw Values**
-       - For each raw log/goal entry:
-         - Use `AnyStatistic` domain methods to compute:
-           - typed values,
-           - goal achievement `Percentage` (if applicable).
-         - Convert `serde_json::Value` into appropriate `DrawableData` / `DrawableGoal` enums.
-           - Keep this conversion in the application layer (not in adapters).
-    3. **Build Data Points**
-       - Create `plot_domain::plot::data::DataPoint` instances from:
-         - date,
-         - computed values,
-         - goal information,
-         - any additional flags/labels.
-    4. **Calculate Axis**
-       - Call `YAxis::from_data_points(&data_points)` to compute the axis.
-    5. **Assemble and Return**
-       - Construct the final `PlotData` (title, type, data points, axis) and return it.
-
-- **Edge Case Behaviour**
-  - Decide and implement behaviour for:
-    - No logs or goals in `date_range`.
-    - Logs without goals, goals without logs.
-    - Unsupported `PlotType` for the given `AnyStatistic` (surface a clear domain/application error).
-  - Make these behaviours explicit in the handler’s tests.
-
-- **Tests**
-  - Add unit tests for `GetPlotDataQueryHandler`:
-    - “Happy path”: logs + goals + valid range.
-    - Empty range → empty plot or error (as decided).
-    - Mismatched logs/goals.
-    - Unsupported plot type for a statistic.
+- [ ] Re-export `compute_mean_percentage` from `crate::services` if that’s the existing
+      pattern for other helpers.
 
 ---
 
-## Phase 3: Implement and Integrate Adapters
+## 4. Use Case: `GetStatisticScoreQuery`
 
-### 3a: Plotting Adapter (`lifestats-plotting`)
+**Objective:** Express “calculate score for statistic in date range” as a proper
+application-level query that depends on ports/services, not on infrastructure.
 
-### 7. Implement `PlottersRenderer` Adapter
+### 4.1 Define query + result types
 
-- **Action**
-  - In the `lifestats-plotting` crate:
-    - Implement a `PlottersRenderer` struct that holds any necessary configuration (e.g. default sizes, fonts).
-    - Implement `plot_domain::plot::renderer::PlotRenderer` for `PlottersRenderer`:
-      - Adapt existing `plotters` logic to take `&PlotData` + `&RenderConfig`.
-      - Render to a PNG buffer (`Vec<u8>`).
+- [ ] Create new module: `core/application/src/use_cases/queries/get_statistic_score/query.rs`:
 
-- **Dependency Direction**
-  - Ensure crate dependencies are one-way:
-    - `lifestats-plotting` depends on `plot-domain`.
-    - `plot-domain` **must not** depend on `lifestats-plotting`.
+  ```rust
+  use crate::cqrs::Query;
+  use chrono::NaiveDate;
+  use lifestats_core::shared::date_range::DateRange;
+  use lifestats_core::shared::ids::StatisticId;
+  use lifestats_core::shared::percentage::Percentage;
 
-### 8. Add Golden Tests for Rendering
+  /// Query to compute the mean daily goal achievement percentage for a statistic
+  /// over a given date range.
+  pub struct GetStatisticScoreQuery {
+      pub statistic_id: StatisticId,
+      pub date_range: DateRange,
+  }
 
-- **Action**
-  - Add tests in `lifestats-plotting`:
-    - Use a small, deterministic `PlotData` to render a plot.
-    - Compare the output (or a hash of it) against a checked-in “golden” baseline.
-  - Consider minor tolerances if the underlying library might change pixel-perfect output slightly.
+  /// Result of a statistic score query.
+  ///
+  /// - `mean_percentage_achieved` is `None` if there were no days with a goal in the range.
+  #[derive(Debug, Clone, PartialEq, Eq)]
+  pub struct StatisticScoreResult {
+      pub statistic_id: StatisticId,
+      pub start_date: NaiveDate,
+      pub end_date: NaiveDate,
+      pub mean_percentage_achieved: Option<Percentage>,
+      /// Number of days in the range that had a goal and contributed to the score
+      pub days_with_goal: u32,
+  }
 
-- **Rationale**
-  - Provides a strong safety net against accidental visual regressions.
-  - Makes renderer refactors safer.
+  impl Query for GetStatisticScoreQuery {
+      type Result = StatisticScoreResult;
+  }
+  ```
+
+### 4.2 Implement the query handler
+
+- [ ] Add handler module: `core/application/src/use_cases/queries/get_statistic_score/handler.rs`:
+
+  ```rust
+  use std::sync::Arc;
+
+  use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+
+  use crate::cqrs::QueryHandler;
+  use crate::error::ApplicationResult;
+  use crate::services::{compute_mean_percentage, DailyAchievementEvaluator};
+
+  use super::query::{GetStatisticScoreQuery, StatisticScoreResult};
+
+  /// Handler for GetStatisticScoreQuery.
+  ///
+  /// Responsibilities:
+  /// - Delegate per-day evaluation to DailyAchievementEvaluator
+  /// - Aggregate daily percentages via compute_mean_percentage
+  /// - Return a simple, application-level result struct
+  pub struct GetStatisticScoreQueryHandler<R, E>
+  where
+      R: StatisticRepository + Send + Sync + 'static,
+      E: DailyAchievementEvaluator + Send + Sync + 'static,
+  {
+      repository: Arc<R>,
+      evaluator: Arc<E>,
+  }
+
+  impl<R, E> GetStatisticScoreQueryHandler<R, E>
+  where
+      R: StatisticRepository + Send + Sync + 'static,
+      E: DailyAchievementEvaluator + Send + Sync + 'static,
+  {
+      pub fn new(repository: Arc<R>, evaluator: Arc<E>) -> Self {
+          Self { repository, evaluator }
+      }
+  }
+
+  impl<R, E> QueryHandler<GetStatisticScoreQuery> for GetStatisticScoreQueryHandler<R, E>
+  where
+      R: StatisticRepository + Send + Sync + 'static,
+      E: DailyAchievementEvaluator + Send + Sync + 'static,
+  {
+      fn handle(&self, query: GetStatisticScoreQuery) -> ApplicationResult<StatisticScoreResult> {
+          // Ensure statistic exists; lets us fail fast for invalid IDs
+          let _statistic = self
+              .repository
+              .find_metadata_by_id(query.statistic_id)?;
+
+          // Bulk-evaluate goal achievement for the full date range
+          let evals = self.evaluator.eval_range(
+              self.repository.as_ref(),
+              query.statistic_id,
+              query.date_range,
+          )?;
+
+          // Aggregate percentages
+          let mean_percentage = compute_mean_percentage(&evals);
+
+          let days_with_goal = evals
+              .iter()
+              .filter(|e| e.percentage_achieved.is_some())
+              .count() as u32;
+
+          Ok(StatisticScoreResult {
+              statistic_id: query.statistic_id,
+              start_date: query.date_range.start(),
+              end_date: query.date_range.end(),
+              mean_percentage_achieved: mean_percentage,
+              days_with_goal,
+          })
+      }
+  }
+  ```
+
+  > Note: `eval_range` signature above should match the existing `DailyAchievementEvaluator`
+  > trait. Adjust parameter ordering as needed to match the actual trait definition.
+
+### 4.3 Wire the use case into the public query module
+
+- [ ] In `core/application/src/use_cases/queries/get_statistic_score/mod.rs`:
+
+  ```rust
+  mod handler;
+  mod query;
+
+  pub use handler::GetStatisticScoreQueryHandler;
+  pub use query::{GetStatisticScoreQuery, StatisticScoreResult};
+  ```
+
+- [ ] Register the new module in `core/application/src/use_cases/queries/mod.rs`:
+
+  ```rust
+  pub mod get_statistic_score;
+
+  pub use get_statistic_score::{
+      GetStatisticScoreQuery,
+      GetStatisticScoreQueryHandler,
+      StatisticScoreResult,
+  };
+  ```
 
 ---
 
-### 3b: Web Adapter (`lifestats-web-api`)
+## 5. Adapters: Web API Endpoint (optional but recommended)
 
-### 9. Update `AppState` for Renderer Injection
+**Objective:** Expose the statistic score via HTTP without leaking application internals.
 
-- **Action**
-  - In `lifestats-web-api/src/state.rs`:
-    - Remove `plot_repository: Arc<P>` from `AppState`.
-    - Add `renderer: Arc<Rend>` where `Rend: PlotRenderer + 'static`.
-    - Update `AppState::new` and all call sites (e.g. `main.rs`, tests) to:
-      - Construct and inject a concrete `PlottersRenderer` instance at startup.
+### 5.1 Define an API DTO
 
-- **Rationale**
-  - Applies dependency injection at the web layer.
-  - Makes it easy to swap out the renderer for testing or future alternatives.
+- [ ] In `core/infrastructure/web_api/src/dto` (or the existing statistics DTO module),
+      add a response type for the score, using primitives suitable for JSON:
 
-### 10. Implement Stateless Plot Endpoints
+  ```rust
+  use serde::Serialize;
 
-- **Action**
-  - In `lifestats-web-api/src/routes/plots.rs` and `routes/mod.rs`:
-    - Add and register:
-      - `GET /statistics/:id/plot/image`
-      - `GET /statistics/:id/plot/data`
+  #[derive(Debug, Serialize)]
+  pub struct StatisticScoreResponse {
+      pub statistic_id: u32,
+      pub start_date: String, // "YYYY-MM-DD"
+      pub end_date: String,   // "YYYY-MM-DD"
+      /// Mean percentage as an integer 0-255 (or 0-100 depending on your conventions),
+      /// or null when no goals exist in the range.
+      pub mean_percentage_achieved: Option<u8>,
+      pub days_with_goal: u32,
+  }
+  ```
 
-- **Request Parameters**
-  - Define a typed parameter struct for query/path parameters, e.g.:
+### 5.2 Implement the route handler
 
-    ```rust
-    pub struct PlotRequestParams {
-        pub statistic_id: StatisticId,
-        pub plot_type: PlotType,      // parsed from query as a string enum
-        pub date_from: Date,         // from query
-        pub date_to: Date,           // from query
-    }
+- [ ] In `core/infrastructure/web_api/src/routes/statistics.rs` (or equivalent file
+      where other statistic routes live), add:
+  - A GET route like:
+
+    ```text
+    GET /statistics/:id/score?start=YYYY-MM-DD&end=YYYY-MM-DD
     ```
 
-  - Perform input validation:
-    - Invalid `plot_type` → 400 Bad Request.
-    - `date_from > date_to` → 400 Bad Request.
-    - Enforce a maximum allowed date range window if needed (to avoid huge responses).
+  - Handler responsibilities:
+    - Parse `id` into `StatisticId`.
+    - Parse `start` / `end` query params into `NaiveDate`, then into a `DateRange`.
+    - Build and execute `GetStatisticScoreQuery` via the application layer.
+    - Map `StatisticScoreResult` → `StatisticScoreResponse`.
+      - Convert `StatisticId` to `u32`.
+      - Convert `NaiveDate` to `String`.
+      - Convert `Option<Percentage>` to `Option<u8>` using `as_num()`.
 
-- **Guideline**
-  - Prefer using Axum's `Path<...>` and `Query<...>` extractors directly in handler signatures to parse request parameters, rather than creating an intermediate PlotRequestParams struct, to leverage the framework's built-in validation and reduce boilerplate.
+  - Return `400 Bad Request` for invalid dates or invalid ranges, and `500 Internal Error`
+    for unexpected application errors (following the existing `ApiError` pattern).
 
-### 11. Implement `/image` Handler Logic
+### 5.3 Add route wiring tests
 
-- **Action**
-  - `GET /statistics/:id/plot/image` handler steps:
-    1. Parse and validate inputs into `PlotRequestParams`.
-    2. Map to `GetPlotDataQuery`.
-    3. Execute `GetPlotDataQuery` via the application service.
-    4. Call `renderer.render(&plot_data, &render_config)` to get `Vec<u8>`.
-    5. Return the bytes with `Content-Type: image/png`.
-
-- **Error Handling**
-  - Map errors to HTTP responses:
-    - Not found statistic → 404.
-    - Validation / unsupported plot type → 400.
-    - Rendering/internal errors → 500 (with internal logging).
-
-### 12. Implement `/data` Handler Logic
-
-- **Action**
-  - `GET /statistics/:id/plot/data` handler steps:
-    1. Parse and validate inputs (same as `/image`).
-    2. Execute `GetPlotDataQuery` to get `PlotData`.
-    3. Map `PlotData` into a dedicated DTO `PlotDataResponse`:
-       - Use simple API-friendly shapes (e.g. arrays of primitives, simple enums).
-       - Avoid exposing internal-only fields or domain-only concepts directly.
-    4. Return JSON response with appropriate status code.
-
-- **Rationale**
-  - DTO layer decouples API shape from internal `PlotData`.
-  - Makes `PlotData` refactors possible without breaking clients.
-
-### 13. API Integration Tests
-
-- **Action**
-  - Add integration tests in `lifestats-web-api` for:
-    - Successful `/image` call (e.g. returns 200 with non-empty PNG bytes).
-    - Successful `/data` call (checks JSON structure and some values).
-    - Invalid parameters (bad plot_type, invalid date range) → 400.
-    - Non-existent statistic → 404.
+- [ ] Add an integration-ish test using the existing `mock_app_state` helper (if available)
+      to verify:
+  - Valid request returns 200 with correctly shaped JSON.
+  - A range with no goals returns `mean_percentage_achieved: null` and `days_with_goal: 0`.
+  - Invalid date format is rejected with a helpful error message.
 
 ---
 
-## Phase 4: Cleanup, Deprecation & Migration
+## 6. Tests & Quality Gates
 
-Goal: Remove the old stateful plotting model and align persistence and API with the new stateless design.
+### 6.1 Update existing tests
 
-### 14. Deprecate and Remove `PlotSpecification` & `PlotRepository`
+- [ ] Update tests for `GetConsistencyScoreQueryHandler` and `GetStreakQueryHandler`
+      that construct `DayEval` so they compile with the new `percentage_achieved` field.
+  - For tests that do not care about the percentage, set it to a simple value:
+    `Some(Percentage::from(eval.achieved))` or `None` depending on the semantics.
 
-- **Action**
-  - Delete:
-    - `core/plot-domain/src/plot/specification.rs`.
-    - `core/plot-domain/src/plot/repository.rs`.
-    - `SqlitePlotRepository` implementation in `core/infrastructure/persistence`.
-  - Remove any references from `AppState`, services, or tests.
+### 6.2 New tests for the score feature
 
-- **Optional Transitional Step**
-  - Before removal, mark these types as deprecated (Rust `#[deprecated]`) and ensure no remaining usages.
+- [ ] Add unit tests for `compute_mean_percentage` (see section 3).
+- [ ] Add unit tests for `GetStatisticScoreQueryHandler`:
+  - Use `MockStatisticRepository` and a test double for `DailyAchievementEvaluator`.
+  - Scenarios:
+    - No goals in range → `mean_percentage_achieved: None`, `days_with_goal: 0`.
+    - Mixed percentages across days (e.g. 50%, 100%, 150%) → verify mean and rounding.
+    - Non-existent statistic ID → handler propagates repository error.
 
-### 15. Drop the `plots` Table
+### 6.3 Optional: High-level regression tests
 
-- **Action**
-  - Add a new database migration:
-    - Drop the `plots` table and any related indices/constraints.
-  - Confirm there is no remaining code that references this table.
+- [ ] Once the HTTP endpoint exists, add a higher-level test (possibly in the
+      web API crate’s test suite) that:
+  - Sets up a small in-memory/stateless scenario with:
+    - One statistic
+    - A couple of goals and log values
 
-- **Rationale**
-  - Aligns the database schema with the stateless plotting model.
-  - Simplifies persistence and reduces cognitive load.
-
-### 16. Remove Old Plot API Routes
-
-- **Action**
-  - In `lifestats-web-api/src/routes/plots.rs` and `routes/mod.rs`:
-    - Remove old handlers and routes (e.g. `/plots/:id/image` or similar).
-  - Ensure there are no stray references in OpenAPI docs or API clients.
-
-- **Optional Deprecation Strategy**
-  - If external clients exist:
-    - Temporarily keep old routes returning 301/307 redirects or deprecation warnings.
-    - Log usage to gauge when it’s safe to fully remove.
-
-### 17. Update Tests to Use New Endpoints
-
-- **Action**
-  - Find and update any E2E or integration tests that used old plot endpoints:
-    - Migrate them to use `GET /statistics/:id/plot/image`.
-    - Migrate them to use `GET /statistics/:id/plot/data`.
+  - Calls the HTTP endpoint
+  - Asserts on the numeric score and day counts.
 
 ---
 
-## Phase 5: Cross-Cutting Concerns & Documentation
+## 7. Documentation / Developer Notes (optional)
 
-### 18. Error Mapping and Logging
+- [ ] Add a short section to the project’s architecture or README docs describing:
+  - What “statistic score” means (mean daily percentage over goal days).
+  - That it is an **application-level metric**, not a domain invariant.
+  - How it relates to other metrics:
+    - **Consistency score** = percentage of days achieved.
+    - **Statistic score** = average quality of achievement per day (can capture
+      over-achievement via percentages > 100).
 
-- **Action**
-  - Standardize how errors travel from:
-    - `PlotRenderer` → application → web API.
-  - Ensure:
-    - Client-visible responses are clean and not leaking internal details.
-    - Detailed error context is logged at the appropriate level (e.g., warn/error).
-
-### 19. Performance & Observability
-
-- **Action**
-  - Measure:
-    - Latency for typical `/image` and `/data` requests for realistic date ranges.
-  - If needed:
-    - Plan caching strategies (HTTP caching, application-level memoization) in a separate iteration.
-  - Add basic metrics:
-    - Count of plot requests, error rates, average render times.
-
-### 20. Documentation & Changelog
-
-- **Action**
-  - Update architecture docs (e.g. `docs/ARCHITECTURE.md` or equivalent):
-    - Describe the stateless plotting flow and `PlotRenderer` port.
-    - Document the new endpoints and expected inputs/outputs.
-  - Update API docs / OpenAPI spec (if you have one) for:
-    - `/statistics/:id/plot/image`
-    - `/statistics/:id/plot/data`
-  - Add a changelog entry:
-    - Note removal of stored plot configurations and the `plots` table.
-    - Announce the new stateless plot API routes.
-
----
-
-## Phase 6: Cleanup Checklist
-
-Before closing this refactor, verify:
-
-- [ ] No remaining references to `PlotSpecification` / `PlotRepository` / `SqlitePlotRepository`.
-- [ ] No code references the `plots` table.
-- [ ] All plot-related tests pass and target the new endpoints and model.
-- [ ] `plot-domain` does not depend on `lifestats-plotting` or other infrastructure crates.
-- [ ] Web API composes `PlotRenderer` only via the port (trait), not via concrete types.
-- [ ] Documentation and API specs are up to date.
+This will help future contributors understand why the feature lives in the application
+layer and why it reuses `DailyAchievementEvaluator` instead of re-querying the database.

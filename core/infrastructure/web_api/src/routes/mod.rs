@@ -51,6 +51,10 @@ where
             "/statistics/{id}/consistency",
             get(statistics::get_consistency_score),
         )
+        .route(
+            "/statistics/{id}/score",
+            get(statistics::get_statistic_score),
+        )
         // Goal management endpoints
         .route(
             "/statistics/{id}/goals/default",

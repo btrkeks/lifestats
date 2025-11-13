@@ -91,6 +91,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use lifestats_core::shared::ids::StatisticId;
+    use lifestats_core::shared::percentage::Percentage;
     use lifestats_core::statistic::any_statistic::AnyStatistic;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
@@ -137,16 +138,19 @@ mod tests {
                     date: NaiveDate::from_ymd_opt(2025, 1, 8).unwrap(),
                     has_goal: false,
                     achieved: false,
+                    percentage_achieved: None,
                 },
                 DayEval {
                     date: NaiveDate::from_ymd_opt(2025, 1, 9).unwrap(),
                     has_goal: false,
                     achieved: false,
+                    percentage_achieved: None,
                 },
                 DayEval {
                     date: NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
                     has_goal: false,
                     achieved: false,
+                    percentage_achieved: None,
                 },
             ])
         });
@@ -185,16 +189,19 @@ mod tests {
                     date: NaiveDate::from_ymd_opt(2025, 1, 8).unwrap(),
                     has_goal: true,
                     achieved: true,
+                    percentage_achieved: Some(Percentage::from(true)),
                 },
                 DayEval {
                     date: NaiveDate::from_ymd_opt(2025, 1, 9).unwrap(),
                     has_goal: true,
                     achieved: true,
+                    percentage_achieved: Some(Percentage::from(true)),
                 },
                 DayEval {
                     date: NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
                     has_goal: true,
                     achieved: true,
+                    percentage_achieved: Some(Percentage::from(true)),
                 },
             ])
         });
@@ -233,16 +240,19 @@ mod tests {
                     date: NaiveDate::from_ymd_opt(2025, 1, 8).unwrap(),
                     has_goal: true,
                     achieved: true,
+                    percentage_achieved: Some(Percentage::from(true)),
                 },
                 DayEval {
                     date: NaiveDate::from_ymd_opt(2025, 1, 9).unwrap(),
                     has_goal: true,
                     achieved: false, // Missed day
+                    percentage_achieved: Some(Percentage::from(false)),
                 },
                 DayEval {
                     date: NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
                     has_goal: true,
                     achieved: true,
+                    percentage_achieved: Some(Percentage::from(true)),
                 },
             ])
         });

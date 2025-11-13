@@ -1,15 +1,16 @@
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{Days, NaiveDate};
 use lifestats_core::shared::date_range::DateRange;
+use lifestats_core::shared::percentage::Percentage;
 use lifestats_core::shared::seconds::Seconds;
 use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
-use lifestats_core::statistic::any_statistic::{AnyGoal, AnyStatistic, StreakDayResult};
+use lifestats_core::statistic::any_statistic::{AnyGoal, AnyStatistic};
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
 use lifestats_core::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
+use lifestats_core::statistic::value_objects::goals::goal_trait::Goal;
 use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 
@@ -19,9 +20,14 @@ use crate::error::ApplicationResult;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DayEval {
     pub date: NaiveDate,
+    /// Whether this day had any applicable goal (default or daily)
     pub has_goal: bool,
-    /// Only meaningful when has_goal == true
+    /// Whether the goal was achieved (typically percentage >= 100)
     pub achieved: bool,
+    /// Computed goal achievement percentage for this day.
+    /// - `Some(p)` when there is a goal (and we can evaluate it)
+    /// - `None` when there is no goal or the statistic type does not support goals
+    pub percentage_achieved: Option<Percentage>,
 }
 
 /// Trait for evaluating daily achievement across a date range.
@@ -63,7 +69,7 @@ where
     ) -> ApplicationResult<Vec<DayEval>>
     where
         LogValue: serde::de::DeserializeOwned + 'static,
-        GoalType: serde::de::DeserializeOwned + Clone + 'static,
+        GoalType: serde::de::DeserializeOwned + Clone + Goal<LogValue = LogValue> + 'static,
     {
         let stat_id = stat.get_metadata().id();
 
@@ -110,22 +116,24 @@ where
                     date,
                     has_goal: false,
                     achieved: false,
+                    percentage_achieved: None,
                 });
                 continue;
             }
 
             // Evaluate using domain logic
             let log_value = log_map.get(&date);
-            let streak_result = stat.evaluate_streak_for_day(
-                log_value.map(|v| v as &dyn Any),
-                goal.as_ref().map(|g| g as &dyn Any),
-            )?;
+            let goal_ref = goal.as_ref().unwrap();
 
-            let achieved = matches!(streak_result, StreakDayResult::Achieved);
+            // Compute percentage using Goal trait method
+            let percentage = goal_ref.get_percentage_achieved(log_value);
+            let achieved = percentage.as_num() >= 100;
+
             result.push(DayEval {
                 date,
                 has_goal: true,
                 achieved,
+                percentage_achieved: Some(percentage),
             });
         }
 
@@ -199,22 +207,24 @@ where
                     date,
                     has_goal: false,
                     achieved: false,
+                    percentage_achieved: None,
                 });
                 continue;
             }
 
             // Evaluate using domain logic
             let log_value = merged_log_map.get(&date);
-            let streak_result = stat.evaluate_streak_for_day(
-                log_value.map(|v| v as &dyn Any),
-                goal.as_ref().map(|g| g as &dyn Any),
-            )?;
+            let goal_ref = goal.as_ref().unwrap();
 
-            let achieved = matches!(streak_result, StreakDayResult::Achieved);
+            // Compute percentage using Goal trait method
+            let percentage = goal_ref.get_percentage_achieved(log_value);
+            let achieved = percentage.as_num() >= 100;
+
             result.push(DayEval {
                 date,
                 has_goal: true,
                 achieved,
+                percentage_achieved: Some(percentage),
             });
         }
 
@@ -309,7 +319,7 @@ where
                     AnyGoal::FinishedInTime(goal) => Some(goal),
                     _ => None,
                 });
-                self.eval_range_typed::<chrono::NaiveDateTime, FinishedInTimeGoal>(
+                self.eval_range_typed::<chrono::NaiveTime, FinishedInTimeGoal>(
                     stat,
                     range,
                     goal,

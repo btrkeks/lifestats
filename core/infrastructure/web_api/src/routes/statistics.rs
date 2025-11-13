@@ -580,3 +580,76 @@ where
         consistency_score_percent,
     }))
 }
+
+/// GET /statistics/:id/score - Get mean goal achievement score for a statistic over a date range
+pub async fn get_statistic_score<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+    Query(params): Query<crate::dto::statistic_score::StatisticScoreParams>,
+) -> Result<Json<crate::dto::statistic_score::StatisticScoreResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use chrono::NaiveDate;
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::services::DefaultDailyAchievementEvaluator;
+    use lifestats_application::use_cases::queries::get_statistic_score::{
+        GetStatisticScoreQuery, GetStatisticScoreQueryHandler,
+    };
+    use lifestats_core::shared::date_range::DateRange;
+    use std::sync::Arc;
+
+    // Validate query parameters
+    params.validate()?;
+
+    // Parse dates
+    let start_date = NaiveDate::parse_from_str(&params.start, "%Y-%m-%d").map_err(|_| {
+        ApiError::BadRequest(format!(
+            "Invalid start date format: '{}'. Expected YYYY-MM-DD",
+            params.start
+        ))
+    })?;
+
+    let end_date = NaiveDate::parse_from_str(&params.end, "%Y-%m-%d").map_err(|_| {
+        ApiError::BadRequest(format!(
+            "Invalid end date format: '{}'. Expected YYYY-MM-DD",
+            params.end
+        ))
+    })?;
+
+    // Create date range
+    let date_range = DateRange::new(start_date, end_date)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
+
+    // Instantiate dependencies on-demand
+    let evaluator = Arc::new(DefaultDailyAchievementEvaluator::new(
+        app_state.statistic_repository.clone(),
+    ));
+
+    let handler =
+        GetStatisticScoreQueryHandler::new(app_state.statistic_repository.clone(), evaluator);
+
+    let result = handler
+        .handle(GetStatisticScoreQuery {
+            statistic_id: StatisticId(statistic_id),
+            date_range,
+        })
+        .map_err(|e| {
+            if e.to_string().contains("not found") {
+                ApiError::NotFound(e.to_string())
+            } else {
+                ApiError::InternalError(format!("Failed to get statistic score: {}", e))
+            }
+        })?;
+
+    Ok(Json(crate::dto::statistic_score::StatisticScoreResponse {
+        statistic_id,
+        start_date: result.start_date.format("%Y-%m-%d").to_string(),
+        end_date: result.end_date.format("%Y-%m-%d").to_string(),
+        mean_percentage_achieved: result.mean_percentage_achieved.map(|p| p.as_num()),
+        days_with_goal: result.days_with_goal,
+    }))
+}
