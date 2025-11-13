@@ -6,7 +6,7 @@ use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
 use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 use plot_domain::plot::data::{DrawableData, DrawableGoal};
-use plot_domain::plot::specification::PlotType;
+use plot_domain::plot::plot_type::PlotType;
 use serde_json::Value;
 
 /// Maps goal achievement percentage to an RGB color tuple

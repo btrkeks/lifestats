@@ -13,7 +13,7 @@ use lifestats_application::{
     },
 };
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-use plot_domain::plot::{renderer::PlotRenderer, repository::PlotRepository};
+use plot_domain::plot::renderer::PlotRenderer;
 
 use crate::{error::ApiError, state::AppState};
 

@@ -187,8 +187,9 @@ web_api/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/plots/{id}/image` | Get plot image (PNG) |
-| `GET` | `/plots/{id}/data` | Get plot data (JSON) |
+| `GET` | `/statistics/{id}/plot/image` | Get plot image (PNG) - stateless on-the-fly generation |
+| `GET` | `/statistics/{id}/plot/data` | Get plot data (JSON) - stateless on-the-fly generation |
+| `GET` | `/plots/timeline/{date}` | Get timeline plot for specific date |
 
 ### Integrations
 

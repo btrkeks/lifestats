@@ -1,5 +1,5 @@
 use crate::plot::data::{DataPoint, DrawableData, DrawableGoal};
-use crate::plot::specification::PlotType;
+use crate::plot::plot_type::PlotType;
 use chrono::NaiveTime;
 
 /// Represents a configured Y-axis with type and range

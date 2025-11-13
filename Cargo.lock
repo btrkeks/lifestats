@@ -1902,7 +1902,6 @@ dependencies = [
  "lifestats-application",
  "lifestats-core",
  "once_cell",
- "plot-domain",
  "serde",
  "serde_json",
  "tokio",

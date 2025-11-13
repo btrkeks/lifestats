@@ -2,7 +2,7 @@ use crate::cqrs::Query;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::ids::StatisticId;
 use plot_domain::plot::data::PlotData;
-use plot_domain::plot::specification::PlotType;
+use plot_domain::plot::plot_type::PlotType;
 
 /// Query to retrieve plot data for stateless plotting
 ///

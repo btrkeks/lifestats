@@ -3,8 +3,8 @@ use chrono::Timelike;
 use image::{ImageBuffer, Rgb};
 use plot_domain::plot::axis::YAxis;
 use plot_domain::plot::data::{DrawableData, DrawableGoal, PlotData};
+use plot_domain::plot::plot_type::PlotType;
 use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
-use plot_domain::plot::specification::PlotType;
 use plotters::prelude::*;
 
 use crate::common::{

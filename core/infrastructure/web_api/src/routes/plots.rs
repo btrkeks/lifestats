@@ -13,10 +13,9 @@ use lifestats_application::use_cases::queries::get_plot_data::{
 };
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::plot_type::PlotType;
 use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
-use plot_domain::plot::specification::PlotType;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 
 use crate::{error::ApiError, state::AppState};
 
@@ -27,8 +26,8 @@ use crate::{error::ApiError, state::AppState};
 #[derive(Debug, Deserialize)]
 pub struct PlotImageQuery {
     pub plot_type: String,
-    pub date_from: String,
-    pub date_to: String,
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
     pub width: Option<u32>,
     pub height: Option<u32>,
 }
@@ -74,7 +73,7 @@ pub enum YAxisDto {
 // New Stateless Plot Routes
 // ============================================================================
 
-/// GET /statistics/:id/plot/image
+/// GET /statistics/{id}/plot/image
 /// Generates and returns a plot image on-the-fly without stored configuration
 pub async fn get_statistic_plot_image<R, Rend, E, I>(
     State(state): State<AppState<R, Rend, E, I>>,
@@ -92,19 +91,27 @@ where
 
     let plot_type = parse_plot_type(&params.plot_type)?;
 
-    let date_from = NaiveDate::parse_from_str(&params.date_from, "%Y-%m-%d").map_err(|e| {
-        ApiError::BadRequest(format!(
-            "Invalid date_from format: {}. Expected YYYY-MM-DD",
-            e
-        ))
-    })?;
+    let date_to = if let Some(ref dt) = params.date_to {
+        NaiveDate::parse_from_str(dt, "%Y-%m-%d").map_err(|e| {
+            ApiError::BadRequest(format!(
+                "Invalid date_to format: {}. Expected YYYY-MM-DD",
+                e
+            ))
+        })?
+    } else {
+        chrono::Local::now().date_naive()
+    };
 
-    let date_to = NaiveDate::parse_from_str(&params.date_to, "%Y-%m-%d").map_err(|e| {
-        ApiError::BadRequest(format!(
-            "Invalid date_to format: {}. Expected YYYY-MM-DD",
-            e
-        ))
-    })?;
+    let date_from = if let Some(ref df) = params.date_from {
+        NaiveDate::parse_from_str(df, "%Y-%m-%d").map_err(|e| {
+            ApiError::BadRequest(format!(
+                "Invalid date_from format: {}. Expected YYYY-MM-DD",
+                e
+            ))
+        })?
+    } else {
+        date_to - chrono::Duration::days(14)
+    };
 
     let date_range = DateRange::new(date_from, date_to)
         .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;

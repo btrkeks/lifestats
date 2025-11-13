@@ -12,7 +12,7 @@ use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-use plot_domain::plot::{renderer::PlotRenderer, repository::PlotRepository};
+use plot_domain::plot::renderer::PlotRenderer;
 use validator::Validate;
 
 use crate::{

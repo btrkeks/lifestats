@@ -1,5 +1,5 @@
 use crate::plot::axis::YAxis;
-use crate::plot::specification::PlotType;
+use crate::plot::plot_type::PlotType;
 use chrono::NaiveDate;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::time_frame_list::TimeFrameList;

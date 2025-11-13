@@ -9,7 +9,6 @@ use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
-use plot_domain::plot::repository::PlotRepository;
 
 use crate::{error::ApiError, state::AppState};
 

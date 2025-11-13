@@ -3,7 +3,7 @@ use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
 use plot_domain::plot::axis::YAxis;
 use plot_domain::plot::data::{DataPoint, DrawableData, DrawableGoal, PlotData};
-use plot_domain::plot::specification::PlotType;
+use plot_domain::plot::plot_type::PlotType;
 use serde::{Deserialize, Serialize};
 
 /// Response DTO for plot data

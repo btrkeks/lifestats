@@ -142,7 +142,9 @@ The server binds to `0.0.0.0:3000`.
 - `GET /statistics` – list all statistics
 - `POST /statistics/:id/log/:date` – log a value for a statistic on a given date
 - `POST /statistics/:id/log_time_frame/:date` – log a time frame
-- `GET /plots/:id/image` – retrieve plot image for a statistic
+- `GET /statistics/:id/plot/image` – retrieve plot image for a statistic (stateless on-the-fly generation)
+- `GET /statistics/:id/plot/data` – retrieve plot data as JSON (stateless on-the-fly generation)
+- `GET /plots/timeline/:date` – retrieve timeline plot for specific date
 - `POST /integrations/provision` – provision integration (e.g., Anki bundles)
 
 Example (requires a running server):

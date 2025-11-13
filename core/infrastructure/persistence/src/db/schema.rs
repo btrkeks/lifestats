@@ -37,17 +37,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    plots (id) {
-        id -> Integer,
-        statistic_id -> Integer,
-        title -> Text,
-        width -> Integer,
-        height -> Integer,
-        plot_type -> Text,
-    }
-}
-
-diesel::table! {
     statistics (id) {
         id -> Integer,
         name -> Text,
@@ -61,13 +50,11 @@ diesel::table! {
 
 diesel::joinable!(default_goals -> statistics (statistic_id));
 diesel::joinable!(goals -> statistics (statistic_id));
-diesel::joinable!(plots -> statistics (statistic_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     default_goals,
     goals,
     integrations,
     logging_data,
-    plots,
     statistics,
 );

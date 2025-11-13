@@ -209,7 +209,7 @@ mod tests {
     use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use plot_domain::plot::data::DrawableData;
-    use plot_domain::plot::specification::PlotType;
+    use plot_domain::plot::plot_type::PlotType;
     use serde_json::json;
 
     #[test]

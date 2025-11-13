@@ -217,7 +217,9 @@ Server binds to `0.0.0.0:3000` (see `core/infrastructure/web_api/src/main.rs`):
 - `GET /statistics` – list all statistics
 - `POST /statistics/:id/log/:date` – log a value
 - `POST /statistics/:id/log_time_frame/:date` – log a time frame
-- `GET /plots/:id/image` – retrieve plot image
+- `GET /statistics/:id/plot/image` – retrieve plot image (stateless on-the-fly generation)
+- `GET /statistics/:id/plot/data` – retrieve plot data as JSON (stateless on-the-fly generation)
+- `GET /plots/timeline/:date` – retrieve timeline plot for specific date
 - `POST /integrations/provision` – provision integration (e.g., Anki bundles)
 - Fitbit integration routes (OAuth flow)
 

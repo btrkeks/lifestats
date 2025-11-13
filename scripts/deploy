@@ -6,8 +6,10 @@
 
 set -e # Exit on error
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 DEST_DIR="$HOME/.local/bin"
+
+echo "Project root: ${PROJECT_ROOT}"
 
 # Stop services before deploying
 echo "Stopping systemd services..."
