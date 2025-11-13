@@ -41,8 +41,8 @@ mkdir -p "$DEST_DIR"
 # Format: "binary_name_in_target:installed_name"
 BINARIES=(
   "lifestats-web-api:lifestats-web-api"
-  "lifestats-stopwatch-logger:lifestats-stopwatch-logger"
-  "midi_logger:lifestats-midi-logger"
+  "lifestats-stopwatch-logger:lifestats-stopwatch-logger-bin"
+  "midi_logger:lifestats-midi-logger-bin"
 )
 
 # Check which binaries were actually built
