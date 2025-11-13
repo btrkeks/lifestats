@@ -86,13 +86,13 @@ pub fn json_value_to_drawable_goal(
     match statistic {
         AnyStatistic::Habit(_) => {
             // Habit goals are boolean (true = should be done)
-            // Extract the "value" field from the HabitGoal JSON structure
+            // Extract the "target" field from the HabitGoal JSON structure
             let goal_value = value
-                .get("value")
+                .get("target")
                 .and_then(|v| v.as_bool())
                 .ok_or_else(|| {
                     anyhow!(
-                        "Expected boolean 'value' field in HabitGoal, got: {}",
+                        "Expected boolean 'target' field in HabitGoal, got: {}",
                         value
                     )
                 })?;
@@ -112,23 +112,26 @@ pub fn json_value_to_drawable_goal(
             Ok(DrawableGoal::Integer(goal_value))
         }
         AnyStatistic::PointInTime(_) => {
-            // PointInTime goals have a "value" field with the target time
-            let time_str = value.get("value").and_then(|v| v.as_str()).ok_or_else(|| {
-                anyhow!(
-                    "Expected string 'value' field in FinishedInTimeGoal, got: {}",
-                    value
-                )
-            })?;
+            // PointInTime goals have a "target" field with the target time
+            let time_str = value
+                .get("target")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Expected string 'target' field in FinishedInTimeGoal, got: {}",
+                        value
+                    )
+                })?;
             let naive_time = chrono::NaiveTime::parse_from_str(time_str, "%H:%M:%S")
                 .map_err(|e| anyhow!("Failed to parse goal time '{}': {}", time_str, e))?;
             let seconds_from_midnight = naive_time.num_seconds_from_midnight() as i64;
             Ok(DrawableGoal::Integer(seconds_from_midnight))
         }
         AnyStatistic::TimeSpans(_) => {
-            // TimeSpans goals have a "value" field with the target duration as TimeFrameList
+            // TimeSpans goals have a "target" field with the target duration as TimeFrameList
             let time_frame_list = value
-                .get("value")
-                .ok_or_else(|| anyhow!("Expected 'value' field in TimeSpansGoal, got: {}", value))
+                .get("target")
+                .ok_or_else(|| anyhow!("Expected 'target' field in TimeSpansGoal, got: {}", value))
                 .and_then(|v| {
                     serde_json::from_value::<TimeFrameList>(v.clone())
                         .map_err(|e| anyhow!("Failed to parse TimeFrameList from goal: {}", e))
@@ -265,8 +268,8 @@ mod tests {
             chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         ));
 
-        // HabitGoal JSON structure has a "value" field with boolean
-        let goal_json = json!({"value": true});
+        // HabitGoal JSON structure has a "target" field with boolean
+        let goal_json = json!({"target": true});
         let result = json_value_to_drawable_goal(&stat, &goal_json).unwrap();
         assert_eq!(result, DrawableGoal::Integer(1));
     }
