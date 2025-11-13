@@ -273,10 +273,11 @@ fn plot_data_to_dto(plot_data: plot_domain::plot::data::PlotData) -> PlotDataRes
         .into_iter()
         .map(|point| {
             let value_str = match point.value {
-                DrawableData::Integer(i) => format!("{}", i),
-                DrawableData::TimeFrames(tf) => {
+                Some(DrawableData::Integer(i)) => format!("{}", i),
+                Some(DrawableData::TimeFrames(tf)) => {
                     serde_json::to_string(&tf).unwrap_or_else(|_| "[]".to_string())
                 }
+                None => "null".to_string(),
             };
 
             let goal_str = point.goal.map(|g| match g {

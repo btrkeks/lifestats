@@ -66,7 +66,7 @@ impl PlottersRenderer {
 
         // Draw bars using DrawableData and pre-calculated colors with helper function
         for point in &data.points {
-            if let DrawableData::Integer(value) = &point.value {
+            if let Some(DrawableData::Integer(value)) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
                 chart.draw_series([get_bar(point.date, 0, *value, 2, &color.to_rgba())])?;
@@ -151,7 +151,7 @@ impl PlottersRenderer {
             .points
             .iter()
             .filter_map(|point| {
-                if let DrawableData::Integer(v) = &point.value {
+                if let Some(DrawableData::Integer(v)) = &point.value {
                     Some((SegmentValue::CenterOf(point.date), *v))
                 } else {
                     None
@@ -165,7 +165,7 @@ impl PlottersRenderer {
 
         // Draw points with pre-calculated colors
         for point in &data.points {
-            if let DrawableData::Integer(value) = &point.value {
+            if let Some(DrawableData::Integer(value)) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
                 chart.draw_series([Circle::new(
@@ -251,7 +251,7 @@ impl PlottersRenderer {
 
         // Draw horizontal lines for each data point (old scatter plot style)
         for point in &data.points {
-            if let DrawableData::Integer(value) = &point.value {
+            if let Some(DrawableData::Integer(value)) = &point.value {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
                 chart.draw_series([get_horizontal_line(point.date, *value, color.to_rgba())])?;
@@ -346,7 +346,7 @@ impl PlottersRenderer {
         // Draw bars for each data point's time frames
         for point in &data.points {
             // Use pattern matching on DrawableData - type-safe!
-            if let DrawableData::TimeFrames(time_frame_list) = &point.value {
+            if let Some(DrawableData::TimeFrames(time_frame_list)) = &point.value {
                 for time_frame in time_frame_list.iter() {
                     let start_seconds = time_frame.get_start().num_seconds_from_midnight() as i64;
                     let end_seconds = time_frame.get_end().num_seconds_from_midnight() as i64;
@@ -473,13 +473,13 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                DrawableData::Integer(10),
+                Some(DrawableData::Integer(10)),
                 [0, 255, 0],
                 None,
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-                DrawableData::Integer(20),
+                Some(DrawableData::Integer(20)),
                 [0, 255, 0],
                 None,
             ),
@@ -529,13 +529,13 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                DrawableData::TimeFrames(time_frame_list.clone()),
+                Some(DrawableData::TimeFrames(time_frame_list.clone())),
                 [0, 255, 0],
                 Some(DrawableGoal::TimeFrames(goal_time_frames.clone())),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
-                DrawableData::TimeFrames(time_frame_list.clone()),
+                Some(DrawableData::TimeFrames(time_frame_list.clone())),
                 [0, 255, 0],
                 Some(DrawableGoal::TimeFrames(goal_time_frames)),
             ),

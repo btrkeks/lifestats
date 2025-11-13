@@ -1,409 +1,433 @@
-# TODO – Statistic Score (Mean Daily Goal Achievement)
+# TODO: Show goals on days without logged data
 
-Goal: Add an application-layer function/use-case that computes a “score” for a statistic
-over an arbitrary date range, defined as the **mean of `percentage_achieved` per day**.
-This should reuse existing goal/achievement logic and stay aligned with Ports & Adapters.
+The goal of this change is:
 
----
+> **Goals should be visible in plots on all days where a goal is active, even if no data was logged on that day.**
 
-## 1. Clarify semantics (design notes)
+Architecturally, we want:
 
-- **Score definition**
-  - For each calendar day in the given `DateRange`:
-    - If the statistic has a goal (daily or default, valid on that date):
-      - Take the `percentage_achieved` returned by the goal logic for that day
-        (including handling of “no log value” via `Goal::get_percentage_achieved(None)`).
-      - Include this percentage in the average.
-    - If the statistic has **no goal** on that day:
-      - Exclude the day entirely from the average (do not treat it as 0%).
-  - The final “score” is the **arithmetic mean** of these daily percentages.
-    - If there are **no days with a goal** in the range, the score is `None`.
-
-- **Supported statistics**
-  - Score is only defined for statistics that support goals (e.g. Habit, IntegerAmount,
-    FinishedInTime, TimeSpans, SecondsAmount).
-  - For derived statistics where goals are not meaningful, the daily evaluator should
-    produce `percentage_achieved = None` and the score will be `None`.
-
-Keep this behavior documented in code comments and tests so future changes don’t
-accidentally shift semantics.
+- The _application layer_ to merge logs + goals over the date range.
+- The _plot-domain_ to explicitly represent “no value logged”.
+- The _renderers_ to draw goal lines whenever a goal exists, independent of logged data.
 
 ---
 
-## 2. Application Services: Extend `DailyAchievementEvaluator`
+## 0. High-level behavior to implement
 
-**Objective:** Reuse the existing bulk evaluation pipeline and enrich it with
-per-day percentages so multiple use cases (streak, consistency, score) can share logic.
+- Iterate over every day in the requested `DateRange`.
+- For each date, look up:
+  - an optional log value
+  - an optional daily goal
+  - a default goal (if active on that day)
+- Create a `DataPoint` for any day that has **either** a log or a goal.
+- Allow `DataPoint` to represent “no logged value”.
+- Let axis calculation include both values _and_ goals.
+- Let renderers:
+  - draw bars/lines only for days with a value
+  - draw goal lines on all days with a goal
 
-### 2.1 Extend `DayEval` to carry percentages
+---
 
-- [ ] In `core/application/src/services/daily_achievement_evaluator.rs`, extend
-      the `DayEval` struct to include the daily percentage:
+## 1. Domain Model: `plot-domain` crate
 
-  ```rust
-  use lifestats_core::shared::percentage::Percentage;
+### 1.1 Make `DataPoint` value optional
 
-  #[derive(Debug, Clone, PartialEq, Eq)]
-  pub struct DayEval {
-      pub date: NaiveDate,
-      /// Whether this day had any applicable goal (default or daily)
-      pub has_goal: bool,
-      /// Whether the goal was achieved (typically percentage >= 100)
-      pub achieved: bool,
-      /// Computed goal achievement percentage for this day.
-      /// - `Some(p)` when there is a goal (and we can evaluate it)
-      /// - `None` when there is no goal or the statistic type does not support goals
-      pub percentage_achieved: Option<Percentage>,
-  }
-  ```
-
-* [ ] Update all sites that construct `DayEval` (especially tests) to provide
-      `percentage_achieved`. For the existing use cases (streak, consistency):
-  - When `has_goal == false`, use `percentage_achieved: None`.
-  - When `has_goal == true`, you can set a sensible percentage for the scenario
-    (e.g. `Some(Percentage::from(true))` for “achieved”, `Some(Percentage::from(false))`
-    for “not achieved”) unless the test explicitly cares about concrete values.
-
-### 2.2 Compute `percentage_achieved` in the default implementation
-
-- [ ] In `DefaultDailyAchievementEvaluator`, inside the main per-day evaluation loop:
-  - Where you currently decide if a day is “achieved” or not, also compute and store
-    the underlying percentage:
+- [ ] **Change `DataPoint` to model missing values explicitly**
+  - In the `plot-domain` crate (where `DataPoint` is defined), update:
 
     ```rust
-    let percentage = goal_obj.get_percentage_achieved(log_value_opt);
-    let achieved = percentage.as_num() >= 100;
-    ```
-
-  - For days **with a goal**, set:
-
-    ```rust
-    DayEval {
-        date,
-        has_goal: true,
-        achieved,
-        percentage_achieved: Some(percentage),
+    pub struct DataPoint {
+        pub date: NaiveDate,
+        pub value: DrawableData,
+        pub color: [u8; 3],
+        pub goal: Option<DrawableGoal>,
     }
     ```
 
-  - For days **without any goal**, set:
+    to:
 
     ```rust
-    DayEval {
-        date,
-        has_goal: false,
-        achieved: false,
-        percentage_achieved: None,
+    pub struct DataPoint {
+        pub date: NaiveDate,
+        pub value: Option<DrawableData>,
+        pub color: [u8; 3],
+        pub goal: Option<DrawableGoal>,
+    }
+
+    impl DataPoint {
+        pub fn new(
+            date: NaiveDate,
+            value: Option<DrawableData>,
+            color: [u8; 3],
+            goal: Option<DrawableGoal>,
+        ) -> Self {
+            Self { date, value, color, goal }
+        }
     }
     ```
 
-- [ ] Ensure all statistic types that currently participate in goal evaluation
-      map to a `Percentage` via `Goal::get_percentage_achieved` and that derived
-      or unsupported types leave `percentage_achieved` as `None`.
+- [ ] **Update any helper constructors / builders**
+  - Search for all `DataPoint::new(` callsites and update them to pass `Some(drawable_value)` or `None` as appropriate.
+  - The only place that should pass `None` will be the application-layer code for “goal but no log”.
 
-- [ ] Add a couple of focused unit tests at the `DefaultDailyAchievementEvaluator`
-      level to assert:
-  - A day with a goal and a log value yields a `Some(Percentage)` with the expected value.
-  - A day with a goal and **no** log value still yields a `Some(Percentage)` that matches
-    the goal’s semantics for “not logged”.
-  - A day with **no goal** yields `percentage_achieved == None`.
+### 1.2 Keep `PlotData` stable
 
-This ensures the new field is correctly wired before we depend on it elsewhere.
+- [ ] **Verify `PlotData` semantics**
+  - Confirm that `PlotData` is still:
 
----
-
-## 3. Application Services: Pure score calculator
-
-**Objective:** Keep the aggregation logic (mean of daily percentages) as a small,
-testable function that can be reused.
-
-- [ ] Add a new module `core/application/src/services/statistic_score_calculator.rs`
-      with a small, pure function:
-
-  ```rust
-  use crate::services::daily_achievement_evaluator::DayEval;
-  use lifestats_core::shared::percentage::Percentage;
-
-  /// Computes the mean percentage achieved over all days with a goal.
-  ///
-  /// - Only `DayEval` entries with `percentage_achieved = Some(_)` are counted.
-  /// - Returns `None` if there are no such days (no goals in range).
-  pub fn compute_mean_percentage(evals: &[DayEval]) -> Option<Percentage> {
-      let mut total: u32 = 0;
-      let mut count: u32 = 0;
-
-      for eval in evals {
-          if let Some(p) = eval.percentage_achieved {
-              total += p.as_num() as u32;
-              count += 1;
-          }
-      }
-
-      if count == 0 {
-          return None;
-      }
-
-      // Integer mean with simple half-up rounding.
-      let mean = (total + count / 2) / count;
-      Some(Percentage::new(mean as u8))
-  }
-  ```
-
-- [ ] Write unit tests for `compute_mean_percentage`:
-  - Empty slice → `None`.
-  - All `percentage_achieved == None` → `None`.
-  - Single entry → returns that percentage.
-  - Multiple entries with varying percentages to verify averaging and rounding behavior.
-
-- [ ] Re-export `compute_mean_percentage` from `crate::services` if that’s the existing
-      pattern for other helpers.
-
----
-
-## 4. Use Case: `GetStatisticScoreQuery`
-
-**Objective:** Express “calculate score for statistic in date range” as a proper
-application-level query that depends on ports/services, not on infrastructure.
-
-### 4.1 Define query + result types
-
-- [ ] Create new module: `core/application/src/use_cases/queries/get_statistic_score/query.rs`:
-
-  ```rust
-  use crate::cqrs::Query;
-  use chrono::NaiveDate;
-  use lifestats_core::shared::date_range::DateRange;
-  use lifestats_core::shared::ids::StatisticId;
-  use lifestats_core::shared::percentage::Percentage;
-
-  /// Query to compute the mean daily goal achievement percentage for a statistic
-  /// over a given date range.
-  pub struct GetStatisticScoreQuery {
-      pub statistic_id: StatisticId,
-      pub date_range: DateRange,
-  }
-
-  /// Result of a statistic score query.
-  ///
-  /// - `mean_percentage_achieved` is `None` if there were no days with a goal in the range.
-  #[derive(Debug, Clone, PartialEq, Eq)]
-  pub struct StatisticScoreResult {
-      pub statistic_id: StatisticId,
-      pub start_date: NaiveDate,
-      pub end_date: NaiveDate,
-      pub mean_percentage_achieved: Option<Percentage>,
-      /// Number of days in the range that had a goal and contributed to the score
-      pub days_with_goal: u32,
-  }
-
-  impl Query for GetStatisticScoreQuery {
-      type Result = StatisticScoreResult;
-  }
-  ```
-
-### 4.2 Implement the query handler
-
-- [ ] Add handler module: `core/application/src/use_cases/queries/get_statistic_score/handler.rs`:
-
-  ```rust
-  use std::sync::Arc;
-
-  use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-
-  use crate::cqrs::QueryHandler;
-  use crate::error::ApplicationResult;
-  use crate::services::{compute_mean_percentage, DailyAchievementEvaluator};
-
-  use super::query::{GetStatisticScoreQuery, StatisticScoreResult};
-
-  /// Handler for GetStatisticScoreQuery.
-  ///
-  /// Responsibilities:
-  /// - Delegate per-day evaluation to DailyAchievementEvaluator
-  /// - Aggregate daily percentages via compute_mean_percentage
-  /// - Return a simple, application-level result struct
-  pub struct GetStatisticScoreQueryHandler<R, E>
-  where
-      R: StatisticRepository + Send + Sync + 'static,
-      E: DailyAchievementEvaluator + Send + Sync + 'static,
-  {
-      repository: Arc<R>,
-      evaluator: Arc<E>,
-  }
-
-  impl<R, E> GetStatisticScoreQueryHandler<R, E>
-  where
-      R: StatisticRepository + Send + Sync + 'static,
-      E: DailyAchievementEvaluator + Send + Sync + 'static,
-  {
-      pub fn new(repository: Arc<R>, evaluator: Arc<E>) -> Self {
-          Self { repository, evaluator }
-      }
-  }
-
-  impl<R, E> QueryHandler<GetStatisticScoreQuery> for GetStatisticScoreQueryHandler<R, E>
-  where
-      R: StatisticRepository + Send + Sync + 'static,
-      E: DailyAchievementEvaluator + Send + Sync + 'static,
-  {
-      fn handle(&self, query: GetStatisticScoreQuery) -> ApplicationResult<StatisticScoreResult> {
-          // Ensure statistic exists; lets us fail fast for invalid IDs
-          let _statistic = self
-              .repository
-              .find_metadata_by_id(query.statistic_id)?;
-
-          // Bulk-evaluate goal achievement for the full date range
-          let evals = self.evaluator.eval_range(
-              self.repository.as_ref(),
-              query.statistic_id,
-              query.date_range,
-          )?;
-
-          // Aggregate percentages
-          let mean_percentage = compute_mean_percentage(&evals);
-
-          let days_with_goal = evals
-              .iter()
-              .filter(|e| e.percentage_achieved.is_some())
-              .count() as u32;
-
-          Ok(StatisticScoreResult {
-              statistic_id: query.statistic_id,
-              start_date: query.date_range.start(),
-              end_date: query.date_range.end(),
-              mean_percentage_achieved: mean_percentage,
-              days_with_goal,
-          })
-      }
-  }
-  ```
-
-  > Note: `eval_range` signature above should match the existing `DailyAchievementEvaluator`
-  > trait. Adjust parameter ordering as needed to match the actual trait definition.
-
-### 4.3 Wire the use case into the public query module
-
-- [ ] In `core/application/src/use_cases/queries/get_statistic_score/mod.rs`:
-
-  ```rust
-  mod handler;
-  mod query;
-
-  pub use handler::GetStatisticScoreQueryHandler;
-  pub use query::{GetStatisticScoreQuery, StatisticScoreResult};
-  ```
-
-- [ ] Register the new module in `core/application/src/use_cases/queries/mod.rs`:
-
-  ```rust
-  pub mod get_statistic_score;
-
-  pub use get_statistic_score::{
-      GetStatisticScoreQuery,
-      GetStatisticScoreQueryHandler,
-      StatisticScoreResult,
-  };
-  ```
-
----
-
-## 5. Adapters: Web API Endpoint (optional but recommended)
-
-**Objective:** Expose the statistic score via HTTP without leaking application internals.
-
-### 5.1 Define an API DTO
-
-- [ ] In `core/infrastructure/web_api/src/dto` (or the existing statistics DTO module),
-      add a response type for the score, using primitives suitable for JSON:
-
-  ```rust
-  use serde::Serialize;
-
-  #[derive(Debug, Serialize)]
-  pub struct StatisticScoreResponse {
-      pub statistic_id: u32,
-      pub start_date: String, // "YYYY-MM-DD"
-      pub end_date: String,   // "YYYY-MM-DD"
-      /// Mean percentage as an integer 0-255 (or 0-100 depending on your conventions),
-      /// or null when no goals exist in the range.
-      pub mean_percentage_achieved: Option<u8>,
-      pub days_with_goal: u32,
-  }
-  ```
-
-### 5.2 Implement the route handler
-
-- [ ] In `core/infrastructure/web_api/src/routes/statistics.rs` (or equivalent file
-      where other statistic routes live), add:
-  - A GET route like:
-
-    ```text
-    GET /statistics/:id/score?start=YYYY-MM-DD&end=YYYY-MM-DD
+    ```rust
+    pub struct PlotData {
+        pub title: String,
+        pub points: Vec<DataPoint>,
+        pub date_range: DateRange,
+        pub plot_type: PlotType,
+        pub y_axis: YAxis,
+    }
     ```
 
-  - Handler responsibilities:
-    - Parse `id` into `StatisticId`.
-    - Parse `start` / `end` query params into `NaiveDate`, then into a `DateRange`.
-    - Build and execute `GetStatisticScoreQuery` via the application layer.
-    - Map `StatisticScoreResult` → `StatisticScoreResponse`.
-      - Convert `StatisticId` to `u32`.
-      - Convert `NaiveDate` to `String`.
-      - Convert `Option<Percentage>` to `Option<u8>` using `as_num()`.
-
-  - Return `400 Bad Request` for invalid dates or invalid ranges, and `500 Internal Error`
-    for unexpected application errors (following the existing `ApiError` pattern).
-
-### 5.3 Add route wiring tests
-
-- [ ] Add an integration-ish test using the existing `mock_app_state` helper (if available)
-      to verify:
-  - Valid request returns 200 with correctly shaped JSON.
-  - A range with no goals returns `mean_percentage_achieved: null` and `days_with_goal: 0`.
-  - Invalid date format is rejected with a helpful error message.
+  - No change required here; the only difference is the meaning of each `DataPoint.value`.
 
 ---
 
-## 6. Tests & Quality Gates
+## 2. Application Layer: building `PlotData`
 
-### 6.1 Update existing tests
+> This is the heart of the change: we stop iterating “over logs” and start iterating “over dates”, joining in logs + goals per day.
 
-- [ ] Update tests for `GetConsistencyScoreQueryHandler` and `GetStreakQueryHandler`
-      that construct `DayEval` so they compile with the new `percentage_achieved` field.
-  - For tests that do not care about the percentage, set it to a simple value:
-    `Some(Percentage::from(eval.achieved))` or `None` depending on the semantics.
+### 2.1 Refactor `evaluate_goal_achievement` to accept optional log values
 
-### 6.2 New tests for the score feature
+- [ ] **Change signature to accept `Option<&Value>`**
+  - In the application service that computes `PlotData` (e.g. `GetPlotDataQueryHandler`), update:
 
-- [ ] Add unit tests for `compute_mean_percentage` (see section 3).
-- [ ] Add unit tests for `GetStatisticScoreQueryHandler`:
-  - Use `MockStatisticRepository` and a test double for `DailyAchievementEvaluator`.
-  - Scenarios:
-    - No goals in range → `mean_percentage_achieved: None`, `days_with_goal: 0`.
-    - Mixed percentages across days (e.g. 50%, 100%, 150%) → verify mean and rounding.
-    - Non-existent statistic ID → handler propagates repository error.
+    ```rust
+    fn evaluate_goal_achievement(
+        &self,
+        statistic: &AnyStatistic,
+        log_value: &serde_json::Value,
+        goal_value: Option<&serde_json::Value>,
+    ) -> ApplicationResult<Option<Percentage>>
+    ```
 
-### 6.3 Optional: High-level regression tests
+    to:
 
-- [ ] Once the HTTP endpoint exists, add a higher-level test (possibly in the
-      web API crate’s test suite) that:
-  - Sets up a small in-memory/stateless scenario with:
-    - One statistic
-    - A couple of goals and log values
+    ```rust
+    fn evaluate_goal_achievement(
+        &self,
+        statistic: &AnyStatistic,
+        log_value: Option<&serde_json::Value>,
+        goal_value: Option<&serde_json::Value>,
+    ) -> ApplicationResult<Option<Percentage>>
+    ```
 
-  - Calls the HTTP endpoint
-  - Asserts on the numeric score and day counts.
+- [ ] **Honor `Goal::get_percentage_achieved` semantics**
+  - Inside the function, for each `AnyStatistic` variant:
+    - Parse `goal_value` into the appropriate goal type (`HabitGoal`, `AmountGoal<_>`, `FinishedInTimeGoal`, `TimeSpansGoal`).
+    - Parse `log_value` into the appropriate Rust type **only when `Some(..)`**.
+    - Call the goal’s `get_percentage_achieved(value: Option<&T>)`.
+  - Return:
+    - `Ok(None)` if there is no goal for that day.
+    - `Ok(Some(percentage))` otherwise (even if `log_value` was `None`).
+
+  This keeps all “what does missing data mean” logic inside the goal types, not the renderer.
+
+### 2.2 Build a `date -> log` map and `date -> goal` map
+
+- [ ] **Create `log_map` for quick lookup**
+  - From `find_log_values_in_range`, build:
+
+    ```rust
+    let mut log_map: HashMap<NaiveDate, serde_json::Value> = HashMap::new();
+    for log in log_values {
+        log_map.insert(log.date, log.value);
+    }
+    ```
+
+- [ ] **Reuse/keep `daily_goal_map` and `default_goal_json`**
+  - Keep (or create, if missing) a `HashMap<NaiveDate, serde_json::Value>` for explicit daily goals retrieved via `find_goals_in_range`.
+  - Keep `default_goal_json: Option<serde_json::Value>` and `default_goal_valid_since: NaiveDate` as today.
+
+### 2.3 Iterate over dates in the `DateRange`
+
+- [ ] **Introduce a helper iterator over the date range**
+  - If not already present, create a small utility to iterate over all days in a `DateRange`:
+
+    ```rust
+    fn dates_in_range(range: &DateRange) -> impl Iterator<Item = NaiveDate> {
+        let mut current = range.start;
+        std::iter::from_fn(move || {
+            if current > range.end {
+                None
+            } else {
+                let d = current;
+                current = current.succ_opt().unwrap();
+                Some(d)
+            }
+        })
+    }
+    ```
+
+  - Keep this helper private to the application layer (or wherever it fits best) to avoid polluting domain objects with infrastructural helpers.
+
+- [ ] **Replace “iterate logs” with “iterate range”**
+  - Replace the current `log_values.into_iter().map(|log| ...)` with:
+
+    ```rust
+    let mut data_points = Vec::new();
+
+    for date in dates_in_range(&query.date_range) {
+        let log_value_json = log_map.get(&date);
+        let goal_value_json = daily_goal_map
+            .get(&date)
+            .or_else(|| {
+                if date >= default_goal_valid_since {
+                    default_goal_json.as_ref()
+                } else {
+                    None
+                }
+            });
+
+        // Skip days with neither log nor goal
+        if log_value_json.is_none() && goal_value_json.is_none() {
+            continue;
+        }
+
+        let percentage = self
+            .evaluate_goal_achievement(&statistic, log_value_json, goal_value_json)?;
+
+        let color = percentage_to_color(percentage);
+
+        let drawable_value = log_value_json
+            .map(|v| json_value_to_drawable_data(&statistic, v))
+            .transpose()?;
+
+        let drawable_goal = goal_value_json
+            .map(|g| json_value_to_drawable_goal(&statistic, g))
+            .transpose()?;
+
+        data_points.push(DataPoint::new(date, drawable_value, color, drawable_goal));
+    }
+    ```
+
+- [ ] **Keep the `PlotData` creation logic unchanged**
+  - After constructing `data_points`, continue to:
+
+    ```rust
+    let y_axis = YAxis::from_data_points(&data_points, query.plot_type)?;
+    Ok(PlotData::new(title, data_points, query.date_range, query.plot_type, y_axis))
+    ```
+
+  - This preserves the existing separation: application builds `PlotData`, renderer stays dumb.
 
 ---
 
-## 7. Documentation / Developer Notes (optional)
+## 3. Y-Axis / Plot Domain Logic
 
-- [ ] Add a short section to the project’s architecture or README docs describing:
-  - What “statistic score” means (mean daily percentage over goal days).
-  - That it is an **application-level metric**, not a domain invariant.
-  - How it relates to other metrics:
-    - **Consistency score** = percentage of days achieved.
-    - **Statistic score** = average quality of achievement per day (can capture
-      over-achievement via percentages > 100).
+> The axis has to be derived from both values _and_ goals, but now values are optional.
 
-This will help future contributors understand why the feature lives in the application
-layer and why it reuses `DailyAchievementEvaluator` instead of re-querying the database.
+### 3.1 Update axis calculations to handle `Option<DrawableData>`
+
+- [ ] **Integer axis**
+  - In `YAxis::calculate_integer_axis` (or equivalent), update value access:
+
+    ```rust
+    for point in points {
+        if let DrawableData::Integer(val) = &point.value {
+            values.push(*val);
+        }
+        if let Some(DrawableGoal::Integer(val)) = &point.goal {
+            values.push(*val);
+        }
+    }
+    ```
+
+    to:
+
+    ```rust
+    for point in points {
+        if let Some(DrawableData::Integer(val)) = &point.value {
+            values.push(*val);
+        }
+        if let Some(DrawableGoal::Integer(val)) = &point.goal {
+            values.push(*val);
+        }
+    }
+    ```
+
+- [ ] **Time-based / TimeFrames axis**
+  - Apply the same pattern for `DrawableData::TimeFrames` and `DrawableGoal::TimeFrames`.
+  - Only include real values (`Some`) in the collected list; always include goals.
+
+### 3.2 Re-run / adjust axis tests
+
+- [ ] **Update any tests that assume `value` is non-optional**
+  - Fix compilation errors by wrapping sample values in `Some(..)`.
+  - Add at least one test where:
+    - Some `DataPoint`s have `value = None` and a goal, and
+    - The axis still includes the goal values correctly.
+
+---
+
+## 4. Adapters: Plot Renderers
+
+> Renderers should never need to know “why” a value is missing—only that it is `None`.
+
+### 4.1 Common principles
+
+- For **bars/lines/markers**, only draw if `point.value.is_some()`.
+- For **goal lines**, continue to rely only on `point.goal`.
+- Never synthesize dummy values for missing data in the renderer.
+
+### 4.2 Bar chart renderer
+
+- [ ] **Guard drawing by `value.is_some()`**
+  - In the bar renderer loop:
+
+    ```rust
+    for point in &data.points {
+        if let DrawableData::Integer(value) = &point.value {
+            // draw bar
+        }
+    }
+    ```
+
+    becomes:
+
+    ```rust
+    for point in &data.points {
+        if let Some(DrawableData::Integer(value)) = &point.value {
+            // draw bar using value
+        }
+    }
+    ```
+
+- [ ] **Leave goal-line drawing logic unchanged**
+  - Keep the loop that draws goal lines by iterating over `point.goal` as-is; it will now see goal-only days too.
+
+### 4.3 Line chart renderer
+
+- [ ] **Build line series only from points with values**
+  - When constructing the `(x, y)` pairs for the line:
+
+    ```rust
+    let line_data: Vec<_> = data
+        .points
+        .iter()
+        .filter_map(|point| {
+            if let DrawableData::Integer(v) = &point.value {
+                Some((SegmentValue::CenterOf(point.date), *v))
+            } else {
+                None
+            }
+        })
+        .collect();
+    ```
+
+    → update to handle `Option`:
+
+    ```rust
+    let line_data: Vec<_> = data
+        .points
+        .iter()
+        .filter_map(|point| {
+            if let Some(DrawableData::Integer(v)) = &point.value {
+                Some((SegmentValue::CenterOf(point.date), *v))
+            } else {
+                None
+            }
+        })
+        .collect();
+    ```
+
+- [ ] **Horizontal markers, etc.**
+  - Any additional series that depend on the logged value must also pattern-match on `Some(DrawableData::…)`.
+
+- [ ] **Keep goal lines independent**
+  - Leave the goal-line loop as-is; it only cares about `point.goal`.
+
+### 4.4 TimeFrames renderer
+
+- [ ] **Only draw spans when `value` exists**
+  - Update:
+
+    ```rust
+    if let DrawableData::TimeFrames(list) = &point.value {
+        // draw spans
+    }
+    ```
+
+    to:
+
+    ```rust
+    if let Some(DrawableData::TimeFrames(list)) = &point.value {
+        // draw spans
+    }
+    ```
+
+- [ ] **Draw TimeFrames goals regardless of `value`**
+  - Leave goal drawing loop intact; it will now draw goal spans on goal-only days.
+
+---
+
+## 5. Tests
+
+> These tests pin the new behavior and guard against regressions.
+
+### 5.1 Application-level tests for `GetPlotDataQueryHandler`
+
+- [ ] **Test: goal-only day still has a `DataPoint`**
+  - Scenario:
+    - IntegerAmount statistic.
+    - Default goal = `10`, valid from start date.
+    - Date range: 2 days.
+    - Log only on day 1.
+  - Expectations:
+    - `plot_data.points.len() == 2`.
+    - Day 1: `value = Some(DrawableData::Integer(..))`, `goal = Some(DrawableGoal::Integer(10))`.
+    - Day 2: `value = None`, `goal = Some(DrawableGoal::Integer(10))`.
+
+- [ ] **Test: no log + no goal → no `DataPoint`**
+  - Confirm that if there are neither logs nor any goal in the date range, `plot_data.points` is empty (preserves existing behavior).
+
+- [ ] **Test: `evaluate_goal_achievement` handles `None`**
+  - For each relevant statistic type:
+    - Call `evaluate_goal_achievement(stat, None, Some(goal_json))`.
+    - Assert:
+      - No panic.
+      - The returned `Percentage` matches the semantics of the relevant `Goal` implementation.
+
+### 5.2 Axis tests
+
+- [ ] **Test: axis includes goal-only days**
+  - Build `DataPoint`s with:
+    - Some points: `value = None`, `goal = Some(..)`.
+    - Some points: `value = Some(..)`, `goal = None`.
+  - Assert:
+    - Axis min/max include both actual values and goal values, ignoring days that have neither.
+
+### 5.3 Renderer smoke tests
+
+- [ ] **Bar / line / TimeFrames renderer with goal-only points**
+  - Build a small `PlotData` where:
+    - One day has `value = Some(..), goal = Some(..)`.
+    - One day has `value = None, goal = Some(..)`.
+  - Pass it to each renderer (bar, line, timeframes).
+  - Assert:
+    - Rendering succeeds (no panic / error).
+    - Output is created (basic smoke test).
+
+---
+
+## 6. Cleanup & Documentation
+
+- [ ] **Code comments**
+  - Add a short comment near `DataPoint.value: Option<DrawableData>` explaining:
+
+    > `None` means “no logged value for this day”; a `DataPoint` may still exist if there is a goal or percentage/color to display.
+
+- [ ] **Developer docs / README**
+  - Add a brief note in any internal docs describing the new semantics:
+    - Plots now show goals even on days without logged data.
+    - The application service is responsible for merging logs + goals per date; renderers stay dumb.
+
+---
+
+By completing these steps, we preserve the Hexagonal/Ports & Adapters structure, keep the plotting domain honest about missing data, and ensure the UI behavior (“goals are visible even when you did nothing”) matches the domain semantics.

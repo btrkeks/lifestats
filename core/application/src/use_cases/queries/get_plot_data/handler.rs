@@ -47,10 +47,11 @@ where
     ///
     /// This is business logic - determining if a goal was achieved.
     /// It returns a percentage, NOT a color.
+    /// Accepts optional log_value to support goal-only days.
     fn evaluate_goal_achievement(
         &self,
         statistic: &AnyStatistic,
-        log_value: &serde_json::Value,
+        log_value: Option<&serde_json::Value>,
         goal_value: Option<&serde_json::Value>,
     ) -> ApplicationResult<Option<lifestats_core::shared::percentage::Percentage>> {
         use lifestats_core::statistic::value_objects::goals::{
@@ -66,35 +67,45 @@ where
         match statistic {
             AnyStatistic::Habit(_) => {
                 let value = log_value
-                    .as_bool()
+                    .and_then(|v| v.as_bool())
                     .ok_or_else(|| anyhow!("Expected bool for Habit statistic"))?;
                 let goal_obj = serde_json::from_value::<HabitGoal>(goal.clone())
                     .map_err(|e| anyhow!("Failed to parse HabitGoal: {}", e))?;
                 Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
             }
             AnyStatistic::IntegerAmount(_) => {
-                let value = log_value
-                    .as_i64()
-                    .ok_or_else(|| anyhow!("Expected i64 for IntegerAmount statistic"))?;
+                let parsed_value = log_value.and_then(|v| v.as_i64());
                 let goal_obj = serde_json::from_value::<AmountGoal<i64>>(goal.clone())
                     .map_err(|e| anyhow!("Failed to parse AmountGoal<i64>: {}", e))?;
-                Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
+                Ok(Some(
+                    goal_obj.get_percentage_achieved(parsed_value.as_ref()),
+                ))
             }
             AnyStatistic::PointInTime(_) => {
-                let value = serde_json::from_value::<chrono::NaiveTime>(log_value.clone())
+                let parsed_value = log_value
+                    .map(|v| serde_json::from_value::<chrono::NaiveTime>(v.clone()))
+                    .transpose()
                     .map_err(|e| anyhow!("Failed to parse NaiveTime: {}", e))?;
                 let goal_obj = serde_json::from_value::<FinishedInTimeGoal>(goal.clone())
                     .map_err(|e| anyhow!("Failed to parse FinishedInTimeGoal: {}", e))?;
-                Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
+                Ok(Some(
+                    goal_obj.get_percentage_achieved(parsed_value.as_ref()),
+                ))
             }
             AnyStatistic::TimeSpans(_) => {
-                let value = serde_json::from_value::<
-                    lifestats_core::shared::time_frame_list::TimeFrameList,
-                >(log_value.clone())
-                .map_err(|e| anyhow!("Failed to parse TimeFrameList: {}", e))?;
+                let parsed_value = log_value
+                    .map(|v| {
+                        serde_json::from_value::<
+                            lifestats_core::shared::time_frame_list::TimeFrameList,
+                        >(v.clone())
+                    })
+                    .transpose()
+                    .map_err(|e| anyhow!("Failed to parse TimeFrameList: {}", e))?;
                 let goal_obj = serde_json::from_value::<TimeSpansGoal>(goal.clone())
                     .map_err(|e| anyhow!("Failed to parse TimeSpansGoal: {}", e))?;
-                Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
+                Ok(Some(
+                    goal_obj.get_percentage_achieved(parsed_value.as_ref()),
+                ))
             }
             AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
                 // These use Seconds - skip for now as they're derived statistics
@@ -142,51 +153,68 @@ where
             }
         });
 
-        // 5. Convert log values to DataPoints with DrawableData and colors
-        let data_points: ApplicationResult<Vec<DataPoint>> = log_values
+        // 5. Build a map of dates to log values for efficient lookup
+        let log_map: std::collections::HashMap<_, _> = log_values
             .into_iter()
-            .map(|log| {
-                // Determine the correct goal for this date
-                let goal_for_day = daily_goal_map.get(&log.date).or_else(|| {
-                    if log.date >= default_goal_valid_since {
-                        default_goal_json.as_ref()
-                    } else {
-                        None
-                    }
-                });
-
-                // Compute percentage achieved (business logic)
-                let percentage =
-                    self.evaluate_goal_achievement(&statistic, &log.value, goal_for_day)?;
-
-                // Calculate color based on goal achievement
-                let color = percentage_to_color(percentage);
-
-                // Convert JSON value to DrawableData
-                let drawable_value = json_value_to_drawable_data(&statistic, &log.value)?;
-
-                // Convert JSON goal to DrawableGoal (if present)
-                let drawable_goal = goal_for_day
-                    .map(|g| json_value_to_drawable_goal(&statistic, g))
-                    .transpose()?;
-
-                // Create the data point with all typed, renderer-ready data
-                Ok(DataPoint::new(
-                    log.date,
-                    drawable_value,
-                    color,
-                    drawable_goal,
-                ))
-            })
+            .map(|log| (log.date, log.value))
             .collect();
 
-        let data_points = data_points?;
+        // 6. Iterate over all dates in the range, creating DataPoints for days with logs or goals
+        let mut data_points = Vec::new();
 
-        // 6. Calculate Y-axis from data points
+        let mut current = query.date_range.start();
+        while current <= query.date_range.end() {
+            // Look up log value for this date
+            let log_value_json = log_map.get(&current);
+
+            // Determine the correct goal for this date
+            let goal_for_day = daily_goal_map.get(&current).or_else(|| {
+                if current >= default_goal_valid_since {
+                    default_goal_json.as_ref()
+                } else {
+                    None
+                }
+            });
+
+            // Skip days with neither log nor goal
+            if log_value_json.is_none() && goal_for_day.is_none() {
+                current = current.succ_opt().ok_or_else(|| anyhow!("Date overflow"))?;
+                continue;
+            }
+
+            // Compute percentage achieved (business logic)
+            let percentage =
+                self.evaluate_goal_achievement(&statistic, log_value_json, goal_for_day)?;
+
+            // Calculate color based on goal achievement
+            let color = percentage_to_color(percentage);
+
+            // Convert JSON value to DrawableData (if present)
+            let drawable_value = log_value_json
+                .map(|v| json_value_to_drawable_data(&statistic, v))
+                .transpose()?;
+
+            // Convert JSON goal to DrawableGoal (if present)
+            let drawable_goal = goal_for_day
+                .map(|g| json_value_to_drawable_goal(&statistic, g))
+                .transpose()?;
+
+            // Create the data point with all typed, renderer-ready data
+            data_points.push(DataPoint::new(
+                current,
+                drawable_value,
+                color,
+                drawable_goal,
+            ));
+
+            current = current.succ_opt().ok_or_else(|| anyhow!("Date overflow"))?;
+        }
+
+        // 7. Calculate Y-axis from data points
         let y_axis = YAxis::from_data_points(&data_points, query.plot_type)?;
 
-        // 7. Build and return complete PlotData
-        let title = format!("{}", statistic.get_metadata().name());
+        // 8. Build and return complete PlotData
+        let title = statistic.get_metadata().name().to_string();
         Ok(PlotData::new(
             title,
             data_points,
@@ -267,20 +295,29 @@ mod tests {
         // Verify title is the statistic name
         assert_eq!(plot_data.title, "Test Stat");
 
-        // Verify we have data points
-        assert_eq!(plot_data.points.len(), 1);
+        // Verify we have data points for both days (day with log + day with goal only)
+        assert_eq!(plot_data.points.len(), 2);
 
-        // Verify the point contains DrawableData (not raw JSON)
-        let point = &plot_data.points[0];
-        match &point.value {
-            DrawableData::Integer(val) => {
+        // Verify first point (2025-1-1) has both value and goal
+        let point1 = &plot_data.points[0];
+        assert_eq!(point1.date, NaiveDate::from_ymd_opt(2025, 1, 1).unwrap());
+        match &point1.value {
+            Some(DrawableData::Integer(val)) => {
                 assert_eq!(*val, 15);
             }
-            _ => panic!("Expected Integer DrawableData"),
+            _ => panic!("Expected Some(Integer DrawableData)"),
         }
-
         // Verify color is gold (150% achievement)
-        assert_eq!(point.color, [255, 215, 0]); // Gold
+        assert_eq!(point1.color, [255, 215, 0]); // Gold
+
+        // Verify second point (2025-1-2) has goal but no value
+        let point2 = &plot_data.points[1];
+        assert_eq!(point2.date, NaiveDate::from_ymd_opt(2025, 1, 2).unwrap());
+        assert!(
+            point2.value.is_none(),
+            "Second day should have no logged value"
+        );
+        assert!(point2.goal.is_some(), "Second day should have a goal");
 
         // Verify plot type
         assert_eq!(plot_data.plot_type, PlotType::LineChart);

@@ -32,7 +32,7 @@ impl From<PlotData> for PlotDataResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DataPointResponse {
     pub date: NaiveDate,
-    pub value: DrawableDataResponse,
+    pub value: Option<DrawableDataResponse>,
     pub color: [u8; 3],
     pub goal: Option<DrawableGoalResponse>,
 }
@@ -41,7 +41,7 @@ impl From<DataPoint> for DataPointResponse {
     fn from(point: DataPoint) -> Self {
         Self {
             date: point.date,
-            value: point.value.into(),
+            value: point.value.map(Into::into),
             color: point.color,
             goal: point.goal.map(Into::into),
         }

@@ -32,7 +32,7 @@ impl YAxis {
         // Collect all numeric values from both value and goal fields
         for point in points {
             // Use pattern matching on DrawableData enum - type-safe!
-            if let DrawableData::Integer(val) = &point.value {
+            if let Some(DrawableData::Integer(val)) = &point.value {
                 values.push(*val);
             }
 
@@ -66,7 +66,7 @@ impl YAxis {
         // Collect all start and end times from TimeFrameLists
         for point in points {
             // Use pattern matching on DrawableData enum - type-safe!
-            if let DrawableData::TimeFrames(time_frame_list) = &point.value {
+            if let Some(DrawableData::TimeFrames(time_frame_list)) = &point.value {
                 if let Some(start) = time_frame_list.start_time() {
                     all_times.push(start);
                 }
@@ -114,19 +114,19 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                DrawableData::Integer(10),
+                Some(DrawableData::Integer(10)),
                 [0, 255, 0],
                 Some(DrawableGoal::Integer(20)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
-                DrawableData::Integer(30),
+                Some(DrawableData::Integer(30)),
                 [0, 255, 0],
                 Some(DrawableGoal::Integer(40)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
-                DrawableData::Integer(50),
+                Some(DrawableData::Integer(50)),
                 [0, 255, 0],
                 None,
             ),
@@ -163,7 +163,7 @@ mod tests {
 
         let points = vec![DataPoint::new(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            DrawableData::TimeFrames(time_frame_list),
+            Some(DrawableData::TimeFrames(time_frame_list)),
             [0, 255, 0],
             None,
         )];
@@ -199,7 +199,7 @@ mod tests {
 
         let points = vec![DataPoint::new(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            DrawableData::Integer(75),
+            Some(DrawableData::Integer(75)),
             [0, 255, 0],
             Some(DrawableGoal::Integer(100)),
         )];
@@ -215,13 +215,13 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                DrawableData::Integer(10),
+                Some(DrawableData::Integer(10)),
                 [0, 255, 0],
                 None,
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
-                DrawableData::Integer(20),
+                Some(DrawableData::Integer(20)),
                 [0, 255, 0],
                 None,
             ),
@@ -242,7 +242,7 @@ mod tests {
     fn test_integer_axis_single_value() {
         let points = vec![DataPoint::new(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            DrawableData::Integer(42),
+            Some(DrawableData::Integer(42)),
             [0, 255, 0],
             None,
         )];
@@ -266,19 +266,19 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                DrawableData::Integer(10),
+                Some(DrawableData::Integer(10)),
                 [0, 255, 0],
                 None,
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
-                DrawableData::Integer(15),
+                Some(DrawableData::Integer(15)),
                 [0, 255, 0],
                 None,
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
-                DrawableData::Integer(1000), // Outlier
+                Some(DrawableData::Integer(1000)), // Outlier
                 [0, 255, 0],
                 None,
             ),

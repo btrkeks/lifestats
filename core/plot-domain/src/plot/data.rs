@@ -41,13 +41,14 @@ pub enum DrawableGoal {
 ///
 /// # Fields
 /// * `date` - The date this data point represents
-/// * `value` - The actual data value (Integer or TimeFrames)
+/// * `value` - The actual data value (Integer or TimeFrames). `None` means no value was
+///   logged for this day; a `DataPoint` may still exist if there is a goal to display.
 /// * `color` - RGB color for rendering this point (typically goal-achievement based)
 /// * `goal` - Optional goal value for comparison/visualization
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataPoint {
     pub date: NaiveDate,
-    pub value: DrawableData,
+    pub value: Option<DrawableData>,
     pub color: [u8; 3],
     pub goal: Option<DrawableGoal>,
 }
@@ -55,7 +56,7 @@ pub struct DataPoint {
 impl DataPoint {
     pub fn new(
         date: NaiveDate,
-        value: DrawableData,
+        value: Option<DrawableData>,
         color: [u8; 3],
         goal: Option<DrawableGoal>,
     ) -> Self {
