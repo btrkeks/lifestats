@@ -69,6 +69,7 @@ async fn test_provision_anki_bundle_contract() {
             map.insert("time_spent".to_string(), StatisticId(38));
             map.insert("disruptions".to_string(), StatisticId(39));
             map.insert("backlog".to_string(), StatisticId(40));
+            map.insert("finished_time".to_string(), StatisticId(41));
             Ok(map)
         });
 
@@ -97,11 +98,13 @@ async fn test_provision_anki_bundle_contract() {
     assert_eq!(body["time_spent_id"], 38);
     assert_eq!(body["disruptions_id"], 39);
     assert_eq!(body["backlog_id"], 40);
+    assert_eq!(body["finished_time_id"], 41);
 
     // Also assert that the old, incorrect keys are NOT present
     assert!(body.get("time_spent").is_none());
     assert!(body.get("disruptions").is_none());
     assert!(body.get("backlog").is_none());
+    assert!(body.get("finished_time").is_none());
 }
 
 #[tokio::test]

@@ -3,6 +3,7 @@ from aqt import mw
 
 
 def deck_is_finished(deck_id: DeckId) -> bool:
+    """Check if a specific deck has no more cards due today."""
     if deck_id is None:
         return False
 
@@ -12,6 +13,26 @@ def deck_is_finished(deck_id: DeckId) -> bool:
         return True
     else:
         return False
+
+
+def all_cards_finished() -> bool:
+    """Check if ALL cards across ALL decks are finished for today.
+
+    This is the global "congratulations" state - when Anki would show
+    the congratulations screen because there are no more cards to review
+    across the entire collection.
+
+    Returns:
+        True if all cards are done, False otherwise
+    """
+    counts = list(mw.col.sched.counts())  # (new, learning, review) for current deck
+
+    # If the scheduler returns all zeros, it means no cards are due
+    # This works because Anki's scheduler considers all decks when in overview
+    if all(count == 0 for count in counts):
+        return True
+
+    return False
 
 
 def get_current_deck_id() -> DeckId:

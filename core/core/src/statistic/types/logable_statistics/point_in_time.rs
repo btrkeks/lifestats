@@ -7,12 +7,17 @@ use crate::statistic::value_objects::update_policies::fixed_value::FixedValueUpd
 use crate::statistic::value_objects::update_policies::update_policy_trait::UpdatePolicy;
 use chrono::{NaiveDate, NaiveTime, Timelike};
 
-/// A statistic that represents a point in time
+/// A statistic that represents a point in time during the day.
 ///
-/// Examples:
+/// Intended for tracking when specific events or milestones occur, such as:
 /// - Wake-up time
 /// - Time went to bed
 /// - Time workout finished
+/// - Time finished studying/daily tasks
+/// - Any other time-of-day event you want to track
+///
+/// This statistic type is designed to work with `FinishedInTimeGoal` to track
+/// whether you completed an activity before a deadline (e.g., "finished studying by 21:00")
 #[derive(Clone)]
 pub struct PointInTimeStatistic {
     // Metadata

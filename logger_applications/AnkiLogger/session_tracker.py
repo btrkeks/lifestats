@@ -8,14 +8,14 @@ from datetime import datetime, timedelta
 from threading import Timer
 from typing import Optional
 
+from anki.decks import DeckId
 from aqt import mw
 from aqt.utils import tooltip
-from anki.decks import DeckId
 
-from .logger_config import get_logger
 from .anki_utils import get_current_deck_id, get_deck_name, get_total_backlog_count
 from .api_client import ApiClient, ApiError, StatisticBundle
 from .config_manager import ConfigManager
+from .logger_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -60,7 +60,7 @@ class SessionTracker:
         api_client: ApiClient,
         config_manager: ConfigManager,
         idle_timeout_seconds: int = 60,
-        flush_interval_seconds: int = 120
+        flush_interval_seconds: int = 120,
     ) -> None:
         # Dependencies
         self.api_client = api_client
@@ -104,7 +104,9 @@ class SessionTracker:
             logger.warning(f"Could not get deck name for deck_id={deck_id}")
             return False
 
-        logger.info(f"Attempting to start session for deck '{deck_name}' (did={deck_id})")
+        logger.info(
+            f"Attempting to start session for deck '{deck_name}' (did={deck_id})"
+        )
 
         # Step 1: Check the cache via the simple ConfigManager
         bundle = self.config_manager.get_deck_bundle(deck_id)
@@ -113,12 +115,16 @@ class SessionTracker:
         if not bundle:
             # Don't retry a failed deck in the same session
             if deck_id in self._notified_errors:
-                logger.debug(f"Deck {deck_id} previously failed to provision this session")
+                logger.debug(
+                    f"Deck {deck_id} previously failed to provision this session"
+                )
                 return False
 
             try:
                 tooltip(f"Configuring '{deck_name}' with lifestats server...")
-                logger.info(f"Provisioning bundle for deck '{deck_name}' (did={deck_id})")
+                logger.info(
+                    f"Provisioning bundle for deck '{deck_name}' (did={deck_id})"
+                )
 
                 bundle = self.api_client.provision_anki_bundle(deck_id, deck_name)
 
@@ -133,7 +139,9 @@ class SessionTracker:
             except ApiError as e:
                 # Graceful failure
                 error_msg = f"Failed to configure '{deck_name}': Invalid response from server. Check logs."
-                logger.error(f"Failed to provision deck '{deck_name}': {e}", exc_info=True)
+                logger.error(
+                    f"Failed to provision deck '{deck_name}': {e}", exc_info=True
+                )
                 tooltip(error_msg, period=5000)
                 self._notified_errors.add(deck_id)
                 return False
@@ -198,7 +206,9 @@ class SessionTracker:
         if not self.is_running:
             current_deck_id = get_current_deck_id()
             if current_deck_id:
-                logger.debug(f"ping() called while not running for deck_id={current_deck_id}")
+                logger.debug(
+                    f"ping() called while not running for deck_id={current_deck_id}"
+                )
                 self._provision_and_start_session(current_deck_id)
         else:
             logger.debug(f"ping() called while running, updating last_ping time")
@@ -230,7 +240,7 @@ class SessionTracker:
                 date=date,
                 start_time=start_time_str,
                 end_time=end_time_str,
-                update_policy="updateendvalue"
+                update_policy="updateendvalue",
             )
         except Exception as e:
             logger.error(f"Failed to log time frame: {e}", exc_info=True)
@@ -244,14 +254,16 @@ class SessionTracker:
             return
 
         date = datetime.now().date()
-        logger.info(f"Logging disruption to statistic {self.active_bundle.disruptions_id}")
+        logger.info(
+            f"Logging disruption to statistic {self.active_bundle.disruptions_id}"
+        )
 
         try:
             self.api_client.log_statistic_value_async(
                 statistic_id=self.active_bundle.disruptions_id,
                 date=date,
                 value="1",
-                update_policy="sum"
+                update_policy="sum",
             )
         except Exception as e:
             logger.error(f"Failed to log disruption: {e}", exc_info=True)
@@ -277,10 +289,42 @@ class SessionTracker:
                 statistic_id=self.active_bundle.backlog_id,
                 date=date,
                 value=str(backlog_count),
-                update_policy="overwrite"
+                update_policy="overwrite",
             )
         except Exception as e:
             logger.error(f"Failed to log backlog: {e}", exc_info=True)
+
+    def log_finished_time(self):
+        """Logs the current time as the 'finished time' for the current deck.
+
+        This is called when all cards in the current deck are completed for the day.
+        Uses 'overwrite' policy so that multiple finishes in one day record the
+        last finish time.
+        """
+        logger.debug("Logging finished time")
+        if not self.active_bundle:
+            logger.warning("Cannot log finished time: no active bundle")
+            return
+
+        current_time = datetime.now()
+        time_str = current_time.strftime("%H:%M:%S")
+        date = current_time.date()
+
+        logger.info(
+            f"Logging finished time ({time_str}) "
+            f"to statistic {self.active_bundle.finished_time_id}"
+        )
+
+        try:
+            self.api_client.log_statistic_value_async(
+                statistic_id=self.active_bundle.finished_time_id,
+                date=date,
+                value=time_str,
+                update_policy="ignore",
+            )
+            logger.info(f"Successfully logged finished time: {time_str}")
+        except Exception as e:
+            logger.error(f"Failed to log finished time: {e}", exc_info=True)
 
     def _is_idle(self) -> bool:
         """Check if session should timeout due to user inactivity."""

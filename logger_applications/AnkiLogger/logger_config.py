@@ -16,14 +16,14 @@ LOG_FILE = os.path.join(ADDON_PATH, 'anki_logger.log')
 _configured = False
 
 
-def setup_logging(level=logging.DEBUG):
+def setup_logging(level=logging.WARNING):
     """Set up logging configuration for the AnkiLogger addon.
 
     Creates a rotating file handler that logs to anki_logger.log in the addon directory.
     The log file is limited to 5MB with 3 backup files.
 
     Args:
-        level: The logging level (default: DEBUG for comprehensive logging)
+        level: The logging level (default: WARNING - only warnings and errors)
     """
     global _configured
 
