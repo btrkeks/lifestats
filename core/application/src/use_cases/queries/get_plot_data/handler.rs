@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::cqrs::QueryHandler;
 use crate::error::ApplicationResult;
+use crate::services::goal_resolver::GoalResolver;
 use crate::services::plot_data_builder::{
     json_value_to_drawable_data, json_value_to_drawable_goal, percentage_to_color,
 };
@@ -125,41 +126,22 @@ where
             .statistic_repository
             .find_metadata_by_id(query.statistic_id)?;
 
-        // 2. Load log values and per-day goals for the date range
+        // 2. Load log values for the date range
         let log_values = self
             .statistic_repository
             .find_log_values_in_range(query.statistic_id, query.date_range)?;
 
-        let daily_goals = self
-            .statistic_repository
-            .find_goals_in_range(query.statistic_id, query.date_range)?;
+        // 3. Resolve goals for the range using GoalResolver
+        let goal_resolver = GoalResolver::new(self.statistic_repository.clone());
+        let goals = goal_resolver.resolve_goals_for_range(&statistic, query.date_range)?;
 
-        // 3. Create a map of dates to goal values for efficient lookup
-        let daily_goal_map: std::collections::HashMap<_, _> = daily_goals
-            .into_iter()
-            .map(|g| (g.date, g.value.clone()))
-            .collect();
-
-        // 4. Get the default goal and the date it's valid from
-        let default_goal_valid_since = statistic.get_default_goal_valid_since();
-        let default_goal_json = statistic.get_default_goal().and_then(|any_goal| {
-            use lifestats_core::statistic::any_statistic::AnyGoal;
-            match any_goal {
-                AnyGoal::Habit(g) => serde_json::to_value(g).ok(),
-                AnyGoal::IntegerAmount(g) => serde_json::to_value(g).ok(),
-                AnyGoal::FinishedInTime(g) => serde_json::to_value(g).ok(),
-                AnyGoal::TimeSpans(g) => serde_json::to_value(g).ok(),
-                AnyGoal::SecondsAmount(g) => serde_json::to_value(g).ok(),
-            }
-        });
-
-        // 5. Build a map of dates to log values for efficient lookup
+        // 4. Build a map of dates to log values for efficient lookup
         let log_map: std::collections::HashMap<_, _> = log_values
             .into_iter()
             .map(|log| (log.date, log.value))
             .collect();
 
-        // 6. Iterate over all dates in the range, creating DataPoints for days with logs or goals
+        // 5. Iterate over all dates in the range, creating DataPoints for days with logs or goals
         let mut data_points = Vec::new();
 
         let mut current = query.date_range.start();
@@ -167,14 +149,8 @@ where
             // Look up log value for this date
             let log_value_json = log_map.get(&current);
 
-            // Determine the correct goal for this date
-            let goal_for_day = daily_goal_map.get(&current).or_else(|| {
-                if current >= default_goal_valid_since {
-                    default_goal_json.as_ref()
-                } else {
-                    None
-                }
-            });
+            // Get resolved goal for this date
+            let goal_for_day = goals.get(&current).and_then(|opt| opt.as_ref());
 
             // Skip days with neither log nor goal
             if log_value_json.is_none() && goal_for_day.is_none() {
@@ -210,10 +186,10 @@ where
             current = current.succ_opt().ok_or_else(|| anyhow!("Date overflow"))?;
         }
 
-        // 7. Calculate Y-axis from data points
+        // 6. Calculate Y-axis from data points
         let y_axis = YAxis::from_data_points(&data_points, query.plot_type)?;
 
-        // 8. Build and return complete PlotData
+        // 7. Build and return complete PlotData
         let title = statistic.get_metadata().name().to_string();
         Ok(PlotData::new(
             title,
@@ -235,6 +211,7 @@ mod tests {
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+    use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use plot_domain::plot::data::DrawableData;
     use plot_domain::plot::plot_type::PlotType;

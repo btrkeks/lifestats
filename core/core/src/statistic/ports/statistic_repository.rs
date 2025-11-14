@@ -58,7 +58,7 @@ pub trait StatisticRepository {
         &self,
         id: StatisticId,
         range: DateRange,
-    ) -> Result<Vec<DatedValue<serde_json::Value>>, RepositoryError>;
+    ) -> Result<Vec<DatedValue<GoalQueryResult>>, RepositoryError>;
     fn find_default_goal(
         &self,
         id: StatisticId,

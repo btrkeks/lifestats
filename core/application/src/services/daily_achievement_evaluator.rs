@@ -15,6 +15,7 @@ use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
 
 use crate::error::ApplicationResult;
+use crate::services::goal_resolver::GoalResolver;
 
 /// Represents the evaluation result for a single day
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,23 +74,19 @@ where
     {
         let stat_id = stat.get_metadata().id();
 
-        // Bulk fetch data in 2 DB calls (metadata already provided)
+        // Bulk fetch log values
         let log_values = self.repo.find_log_values_in_range(stat_id, range)?;
-        let goals = self.repo.find_goals_in_range(stat_id, range)?;
 
-        // Build HashMaps for O(1) lookup
+        // Resolve goals using GoalResolver
+        let goal_resolver = GoalResolver::new(self.repo.clone());
+        let resolved_goals = goal_resolver.resolve_goals_for_range(stat, range)?;
+
+        // Build HashMap for log values O(1) lookup
         let mut log_map: HashMap<NaiveDate, LogValue> = HashMap::with_capacity(log_values.len());
         for dated_value in log_values {
             let value: LogValue = serde_json::from_value(dated_value.value)
                 .map_err(|e| anyhow::anyhow!("Failed to deserialize log value: {}", e))?;
             log_map.insert(dated_value.date, value);
-        }
-
-        let mut goal_map: HashMap<NaiveDate, GoalType> = HashMap::with_capacity(goals.len());
-        for dated_goal in goals {
-            let goal: GoalType = serde_json::from_value(dated_goal.value)
-                .map_err(|e| anyhow::anyhow!("Failed to deserialize goal: {}", e))?;
-            goal_map.insert(dated_goal.date, goal);
         }
 
         // Iterate through each day in the range
@@ -101,17 +98,19 @@ where
         for i in 0..num_days {
             let date = start.checked_add_days(Days::new(i)).unwrap_or(start);
 
-            // Resolve goal for this day
-            let goal = goal_map.get(&date).cloned().or_else(|| {
-                if date >= default_goal_valid_since {
-                    default_goal.clone()
-                } else {
-                    None
-                }
-            });
+            // Get resolved goal for this day (already handles default/override/suppression)
+            let goal_json = resolved_goals.get(&date).and_then(|opt| opt.as_ref());
+
+            let goal: Option<GoalType> = match goal_json {
+                Some(json) => Some(
+                    serde_json::from_value(json.clone())
+                        .map_err(|e| anyhow::anyhow!("Failed to deserialize goal: {}", e))?,
+                ),
+                None => None,
+            };
 
             if goal.is_none() {
-                // No goal for this day - skip it
+                // No goal for this day
                 result.push(DayEval {
                     date,
                     has_goal: false,
@@ -145,22 +144,17 @@ where
         &self,
         stat: &AnyStatistic,
         range: DateRange,
-        default_goal: Option<TimeSpansGoal>,
-        default_goal_valid_since: NaiveDate,
+        _default_goal: Option<TimeSpansGoal>,
+        _default_goal_valid_since: NaiveDate,
     ) -> ApplicationResult<Vec<DayEval>> {
         let stat_id = stat.get_metadata().id();
 
-        // Bulk fetch data
+        // Bulk fetch log values
         let log_values = self.repo.find_log_values_in_range(stat_id, range)?;
-        let goals = self.repo.find_goals_in_range(stat_id, range)?;
 
-        // Build goal map
-        let mut goal_map: HashMap<NaiveDate, TimeSpansGoal> = HashMap::with_capacity(goals.len());
-        for dated_goal in goals {
-            let goal: TimeSpansGoal = serde_json::from_value(dated_goal.value)
-                .map_err(|e| anyhow::anyhow!("Failed to deserialize TimeSpans goal: {}", e))?;
-            goal_map.insert(dated_goal.date, goal);
-        }
+        // Resolve goals using GoalResolver
+        let goal_resolver = GoalResolver::new(self.repo.clone());
+        let resolved_goals = goal_resolver.resolve_goals_for_range(stat, range)?;
 
         // Build log map with TimeFrameList merging
         // Group by date first, then merge frames within each day
@@ -192,17 +186,19 @@ where
         for i in 0..num_days {
             let date = start.checked_add_days(Days::new(i)).unwrap_or(start);
 
-            // Resolve goal for this day
-            let goal = goal_map.get(&date).cloned().or_else(|| {
-                if date >= default_goal_valid_since {
-                    default_goal.clone()
-                } else {
-                    None
-                }
-            });
+            // Get resolved goal for this day (already handles default/override/suppression)
+            let goal_json = resolved_goals.get(&date).and_then(|opt| opt.as_ref());
+
+            let goal: Option<TimeSpansGoal> =
+                match goal_json {
+                    Some(json) => Some(serde_json::from_value(json.clone()).map_err(|e| {
+                        anyhow::anyhow!("Failed to deserialize TimeSpans goal: {}", e)
+                    })?),
+                    None => None,
+                };
 
             if goal.is_none() {
-                // No goal for this day - skip it
+                // No goal for this day
                 result.push(DayEval {
                     date,
                     has_goal: false,

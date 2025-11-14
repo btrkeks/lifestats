@@ -409,7 +409,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         &self,
         id: StatisticId,
         range: DateRange,
-    ) -> Result<Vec<DatedValue<serde_json::Value>>, RepositoryError> {
+    ) -> Result<Vec<DatedValue<GoalQueryResult>>, RepositoryError> {
         let mut conn = self.connection()?;
         let rows = goals::table
             .filter(goals::statistic_id.eq(id.0 as i32))
@@ -421,17 +421,23 @@ impl StatisticRepository for SqliteStatisticRepository {
 
         let mut result = Vec::new();
         for row in rows {
-            if let Some(goal_str) = row.goal {
-                let date = row
-                    .date
-                    .parse::<NaiveDate>()
-                    .context(format!("failed to parse date: {}", row.date))
-                    .map_err(RepositoryError::OperationFailed)?;
-                let goal = serde_json::from_str(&goal_str)
-                    .context(format!("failed to parse goal JSON: {}", goal_str))
-                    .map_err(RepositoryError::OperationFailed)?;
-                result.push(DatedValue::new(date, goal));
-            }
+            let date = row
+                .date
+                .parse::<NaiveDate>()
+                .context(format!("failed to parse date: {}", row.date))
+                .map_err(RepositoryError::OperationFailed)?;
+
+            let query_result = match row.goal {
+                Some(goal_str) => {
+                    let goal = serde_json::from_str(&goal_str)
+                        .context(format!("failed to parse goal JSON: {}", goal_str))
+                        .map_err(RepositoryError::OperationFailed)?;
+                    GoalQueryResult::Goal(goal)
+                }
+                None => GoalQueryResult::Suppressed,
+            };
+
+            result.push(DatedValue::new(date, query_result));
         }
         Ok(result)
     }
