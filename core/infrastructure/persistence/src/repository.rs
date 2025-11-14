@@ -19,6 +19,7 @@ use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 
 use crate::db::mappers::{InsertStatisticDto, StatisticDto};
 use crate::db::models::{DefaultGoalRaw, GoalDataRaw, LoggingDataRaw};
@@ -342,7 +343,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         &self,
         id: StatisticId,
         date: NaiveDate,
-    ) -> Result<Option<serde_json::Value>, RepositoryError> {
+    ) -> Result<GoalQueryResult, RepositoryError> {
         let mut conn = self.connection()?;
         let row = goals::table
             .filter(goals::statistic_id.eq(id.0 as i32))
@@ -357,11 +358,11 @@ impl StatisticRepository for SqliteStatisticRepository {
                     let goal = serde_json::from_str(&goal_str)
                         .context(format!("failed to parse goal JSON: {}", goal_str))
                         .map_err(RepositoryError::OperationFailed)?;
-                    Ok(Some(goal))
+                    Ok(GoalQueryResult::Goal(goal))
                 }
-                None => Ok(None),
+                None => Ok(GoalQueryResult::Suppressed),
             },
-            None => Ok(None),
+            None => Ok(GoalQueryResult::NotSet),
         }
     }
 
@@ -373,33 +374,33 @@ impl StatisticRepository for SqliteStatisticRepository {
     ) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
 
-        if let Some(goal_value) = goal {
-            let goal_str = serde_json::to_string(&goal_value)
-                .context("failed to serialize goal to JSON")
-                .map_err(RepositoryError::OperationFailed)?;
+        // Build the record; goal: Some(..) = override, goal: None = suppressed
+        let record = match goal {
+            Some(goal_value) => {
+                let goal_str = serde_json::to_string(&goal_value)
+                    .context("failed to serialize goal to JSON")
+                    .map_err(RepositoryError::OperationFailed)?;
 
-            let record = GoalDataRaw {
+                GoalDataRaw {
+                    statistic_id: id.0 as i32,
+                    date: date.to_string(),
+                    goal: Some(goal_str),
+                }
+            }
+            None => GoalDataRaw {
                 statistic_id: id.0 as i32,
                 date: date.to_string(),
-                goal: Some(goal_str),
-            };
+                goal: None, // stored as NULL => "suppressed"
+            },
+        };
 
-            diesel::insert_into(goals::table)
-                .values(&record)
-                .on_conflict((goals::statistic_id, goals::date))
-                .do_update()
-                .set(&record)
-                .execute(&mut conn)
-                .map_err(diesel_to_repository_error)?;
-        } else {
-            diesel::delete(
-                goals::table
-                    .filter(goals::statistic_id.eq(id.0 as i32))
-                    .filter(goals::date.eq(date.to_string())),
-            )
+        diesel::insert_into(goals::table)
+            .values(&record)
+            .on_conflict((goals::statistic_id, goals::date))
+            .do_update()
+            .set(&record) // will set goal to Some(...) or NULL accordingly
             .execute(&mut conn)
             .map_err(diesel_to_repository_error)?;
-        }
 
         Ok(())
     }
@@ -479,6 +480,18 @@ impl StatisticRepository for SqliteStatisticRepository {
             .execute(&mut conn)
             .map_err(diesel_to_repository_error)?;
 
+        Ok(())
+    }
+
+    fn delete_goal(&self, id: StatisticId, date: NaiveDate) -> Result<(), RepositoryError> {
+        let mut conn = self.connection()?;
+        diesel::delete(
+            goals::table
+                .filter(goals::statistic_id.eq(id.0 as i32))
+                .filter(goals::date.eq(date.to_string())),
+        )
+        .execute(&mut conn)
+        .map_err(diesel_to_repository_error)?;
         Ok(())
     }
 }
@@ -666,8 +679,8 @@ mod tests {
             repo.save_goal(statistic_id, date, Some(goal.clone()))?;
 
             let fetched = repo.find_goal(statistic_id, date)?;
-            assert!(fetched.is_some());
-            let fetched_value = fetched.unwrap();
+            assert!(fetched.is_set());
+            let fetched_value = fetched.goal_data().unwrap();
             assert_eq!(fetched_value["target"], 100);
             assert_eq!(fetched_value["extra_data1"], "some_data");
             Ok(())
@@ -792,7 +805,7 @@ mod tests {
             let date = NaiveDate::from_ymd_opt(2024, 4, 2).unwrap();
             let goal = repo.find_goal(statistic_id, date)?;
 
-            assert!(goal.is_none());
+            assert!(matches!(goal, GoalQueryResult::NotSet));
             Ok(())
         }
 
@@ -856,8 +869,31 @@ mod tests {
 
             // Fetch and verify it was updated
             let goal = repo.find_goal(statistic_id, date)?;
-            assert!(goal.is_some());
-            assert_eq!(goal.unwrap()["target"], 20);
+            assert!(goal.is_set());
+            assert_eq!(goal.goal_data().unwrap()["target"], 20);
+            Ok(())
+        }
+
+        #[test]
+        fn delete_goal_removes_existing_goal() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+
+            let date = NaiveDate::from_ymd_opt(2024, 4, 5).unwrap();
+
+            // Save a goal
+            repo.save_goal(statistic_id, date, Some(serde_json::json!({"target": 15})))?;
+
+            // Verify it exists
+            let goal = repo.find_goal(statistic_id, date)?;
+            assert!(goal.is_set());
+
+            // Delete the goal
+            repo.delete_goal(statistic_id, date)?;
+
+            // Verify it's deleted
+            let fetched = repo.find_goal(statistic_id, date)?;
+            assert!(matches!(fetched, GoalQueryResult::NotSet));
             Ok(())
         }
     }

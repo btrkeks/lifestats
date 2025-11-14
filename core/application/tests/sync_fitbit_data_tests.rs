@@ -103,6 +103,7 @@ mock! {
         fn find_log_values_in_range(&self, id: StatisticId, range: lifestats_core::shared::date_range::DateRange) -> Result<Vec<lifestats_core::shared::dated_value::DatedValue<serde_json::Value>>, RepositoryError>;
         fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>, RepositoryError>;
         fn save_goal(&self, id: StatisticId, date: NaiveDate, goal: Option<serde_json::Value>) -> Result<(), RepositoryError>;
+        fn delete_goal(&self, id: StatisticId, date: NaiveDate) -> Result<(), RepositoryError>;
         fn find_goals_in_range(&self, id: StatisticId, range: lifestats_core::shared::date_range::DateRange) -> Result<Vec<lifestats_core::shared::dated_value::DatedValue<serde_json::Value>>, RepositoryError>;
         fn find_default_goal(&self, id: StatisticId) -> Result<Option<serde_json::Value>, RepositoryError>;
         fn save_default_goal(&self, id: StatisticId, goal: serde_json::Value) -> Result<(), RepositoryError>;

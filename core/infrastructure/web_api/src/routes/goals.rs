@@ -263,15 +263,21 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
+    use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
+
     let handler = GetDailyGoalQueryHandler::new(app_state.statistic_repository.clone());
-    let goal_json = handler
+    let goal_result = handler
         .handle(GetDailyGoalQuery {
             statistic_id: StatisticId(statistic_id),
             date,
         })
         .map_err(|e| ApiError::InternalError(format!("Failed to get goal: {}", e)))?;
 
-    let response = goal_json.map(|goal_data| GoalResponse { goal_data });
+    let response = match goal_result {
+        GoalQueryResult::Goal(goal_data) => Some(GoalResponse { goal_data }),
+        GoalQueryResult::Suppressed => None, // Suppressed goals return as if not set (404)
+        GoalQueryResult::NotSet => None,     // No override returns as if not set (404)
+    };
 
     Ok(Json(response))
 }

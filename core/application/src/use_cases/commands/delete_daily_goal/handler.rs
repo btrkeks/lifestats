@@ -36,7 +36,7 @@ where
 {
     fn handle(&self, command: DeleteDailyGoalCommand) -> ApplicationResult<()> {
         self.statistic_repository
-            .save_goal(command.statistic_id, command.date, None)?;
+            .delete_goal(command.statistic_id, command.date)?;
 
         self.event_publisher
             .publish_event_async(Event::GoalUpdated(command.statistic_id));
@@ -61,12 +61,10 @@ mod tests {
         let stat_id = StatisticId(8);
         let date = Local::now().date_naive();
 
-        repo.expect_save_goal()
+        repo.expect_delete_goal()
             .times(1)
-            .withf(move |id, saved_date, value| {
-                *id == stat_id && *saved_date == date && value.is_none()
-            })
-            .return_once(|_, _, _| Ok(()));
+            .withf(move |id, saved_date| *id == stat_id && *saved_date == date)
+            .return_once(|_, _| Ok(()));
 
         publisher
             .expect_publish_event_async()

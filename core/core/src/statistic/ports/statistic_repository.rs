@@ -3,6 +3,7 @@ use crate::shared::date_range::DateRange;
 use crate::shared::dated_value::DatedValue;
 use crate::shared::ids::StatisticId;
 use crate::statistic::any_statistic::AnyStatistic;
+use crate::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 use chrono::NaiveDate;
 use std::collections::HashMap;
 
@@ -45,7 +46,7 @@ pub trait StatisticRepository {
         &self,
         id: StatisticId,
         date: NaiveDate,
-    ) -> Result<Option<serde_json::Value>, RepositoryError>;
+    ) -> Result<GoalQueryResult, RepositoryError>;
     fn save_goal(
         &self,
         id: StatisticId,

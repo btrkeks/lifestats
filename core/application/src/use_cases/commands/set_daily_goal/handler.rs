@@ -11,7 +11,7 @@ use lifestats_core::statistic::value_objects::goals::{
     time_spans_goal::TimeSpansGoal,
 };
 
-use super::command::{GoalPayload, SetDailyGoalCommand};
+use super::command::{DailyGoalOverride, GoalPayload, SetDailyGoalCommand};
 
 /// Handler for SetDailyGoalCommand
 ///
@@ -202,10 +202,10 @@ mod tests {
         let command = SetDailyGoalCommand {
             statistic_id: stat_id,
             date: test_date,
-            override_kind: GoalPayload::IntegerAmount {
+            override_kind: DailyGoalOverride::Goal(GoalPayload::IntegerAmount {
                 target: 100,
                 is_at_least: true,
-            },
+            }),
         };
 
         // Act
@@ -245,7 +245,7 @@ mod tests {
         let command = SetDailyGoalCommand {
             statistic_id: stat_id,
             date: test_date,
-            override_kind: GoalPayload::Habit { occurred: true },
+            override_kind: DailyGoalOverride::Goal(GoalPayload::Habit { occurred: true }),
         };
 
         // Act
@@ -276,10 +276,10 @@ mod tests {
         let command = SetDailyGoalCommand {
             statistic_id: stat_id,
             date: test_date,
-            override_kind: GoalPayload::IntegerAmount {
+            override_kind: DailyGoalOverride::Goal(GoalPayload::IntegerAmount {
                 target: 100,
                 is_at_least: true,
-            },
+            }),
         };
 
         // Act
