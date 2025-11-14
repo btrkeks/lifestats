@@ -3,6 +3,7 @@ import type {
   StatisticMetadata,
   CreateStatisticRequest,
   SetGoalRequest,
+  SetDailyGoalRequest,
   GoalResponse,
   GoalResponseRaw,
   StatisticType,
@@ -132,9 +133,9 @@ export async function getDailyGoal(
 export async function setDailyGoal(
   statisticId: number,
   date: string, // YYYY-MM-DD format
-  goal: SetGoalRequest
+  request: SetDailyGoalRequest
 ): Promise<void> {
-  await api.put(`/statistics/${statisticId}/goals/${date}`, goal);
+  await api.put(`/statistics/${statisticId}/goals/${date}`, request);
 }
 
 export async function deleteDailyGoal(

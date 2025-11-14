@@ -1,14 +1,13 @@
 {
-  "_description": "Minimal context for consistency score feature implementation",
-  "_task": "Calculate percentage of days where goals were achieved over N-day period, expose via API",
+  "_description": "Expert review context: Rust API + Node.js web UI",
+  "_task": "Comprehensive review of ui/web-ui/ Node.js project and core Rust API integration points",
   "project_roots": [
     "./core/core/",
-    "./core/plot-domain/",
-    "./core/application/",
-    "./core/infrastructure/plotting/",
+    "./core/application/src/use_cases/commands/set_daily_goal/",
+    "./core/infrastructure/persistence/",
     "./README.md"
   ],
-  "extensions": [".rs"],
+  "extensions": [".rs", ".ts", ".tsx", ".js", ".jsx", ".json", ".mjs"],
   "exclude_dirs": [
     "target",
     ".git",
@@ -16,8 +15,9 @@
     "vendor",
     "__pycache__",
     "dist",
-    "assets",
-    "ui"
+    ".next",
+    "build",
+    ".vercel"
   ],
   "output_file": "project_context.txt"
 }

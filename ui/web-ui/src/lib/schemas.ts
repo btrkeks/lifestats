@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { StatisticType } from '@/types';
+import type { StatisticType, SetDailyGoalRequest } from '@/types';
 
 // ============================================================================
 // Zod Schemas for Goal Data Validation
@@ -130,4 +130,29 @@ export function serializeGoalData(goalData: Record<string, unknown>): Record<str
   });
 
   return result;
+}
+
+// ============================================================================
+// Daily Goal Request Builders
+// ============================================================================
+
+/**
+ * Creates a SetDailyGoalRequest for setting a concrete goal.
+ * Converts the goal data to the backend's expected format (all strings).
+ */
+export function createGoalRequest(goalData: Record<string, unknown>): SetDailyGoalRequest {
+  return {
+    kind: 'goal',
+    goal_data: serializeGoalData(goalData),
+  };
+}
+
+/**
+ * Creates a SetDailyGoalRequest for suppressing a goal on a specific date.
+ * When suppressed, the default goal will not apply to this date.
+ */
+export function createSuppressedRequest(): SetDailyGoalRequest {
+  return {
+    kind: 'suppressed',
+  };
 }

@@ -22,6 +22,7 @@ interface GoalFormProps {
   existingGoal?: GoalResponse | null;
   onSubmit: (goalData: Record<string, string>) => void;
   onDelete?: () => void;
+  onSuppress?: () => void;
   isSubmitting?: boolean;
   isDeleting?: boolean;
   submitLabel?: string;
@@ -38,6 +39,7 @@ export function GoalForm({
   existingGoal,
   onSubmit,
   onDelete,
+  onSuppress,
   isSubmitting = false,
   isDeleting = false,
   submitLabel = 'Set Goal',
@@ -182,13 +184,31 @@ export function GoalForm({
       <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
         {renderFields()}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className={`w-full px-4 py-2 bg-${submitColor}-600 text-white rounded-md hover:bg-${submitColor}-700 disabled:opacity-50`}
-        >
-          {isSubmitting ? 'Setting Goal...' : submitLabel}
-        </button>
+        <div className="flex gap-2">
+          {onSuppress && (
+            <button
+              type="button"
+              onClick={onSuppress}
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
+            >
+              Suppress Goal
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={
+              submitColor === 'green'
+                ? 'flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50'
+                : submitColor === 'blue'
+                  ? 'flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50'
+                  : 'flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50'
+            }
+          >
+            {isSubmitting ? 'Setting Goal...' : submitLabel}
+          </button>
+        </div>
       </form>
     </div>
   );

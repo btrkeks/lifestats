@@ -1,433 +1,361 @@
-# TODO: Show goals on days without logged data
+# TODO: Log “Anki finished cards time” via AnkiLogger (Option 1)
 
-The goal of this change is:
+## Feature Summary
 
-> **Goals should be visible in plots on all days where a goal is active, even if no data was logged on that day.**
+When Anki shows the **“congratulations”** screen (no more due cards for today),
+the AnkiLogger addon should log a **PointInTime** value into lifestats representing
+“the time I finished my Anki cards for the day”.
 
-Architecturally, we want:
+- This will be a **PointInTime statistic** using the existing
+  `PointInTimeStatistic` + `FinishedInTimeGoal` domain types.
+- It should be loggable via the existing `LogValueCommand` `PointInTime` payload
+  with a `FixedValueUpdatePolicy` of `Overwrite`.
+- The user can then set a **FinishedInTimeGoal** (deadline) using the existing goal
+  mechanisms (`SetDefaultGoal` / `SetDailyGoal`) and get streaks / plots for
+  "finished in time".
 
-- The _application layer_ to merge logs + goals over the date range.
-- The _plot-domain_ to explicitly represent “no value logged”.
-- The _renderers_ to draw goal lines whenever a goal exists, independent of logged data.
+Design choice for semantics (decided here, no extra code complexity):
 
----
+- We treat “finished time” as **the final time that day when Anki showed
+  “congratulations” for the collection as a whole** (not per deck).
+- Each new “congratulations” in the same day **overwrites** the previous value.
 
-## 0. High-level behavior to implement
-
-- Iterate over every day in the requested `DateRange`.
-- For each date, look up:
-  - an optional log value
-  - an optional daily goal
-  - a default goal (if active on that day)
-- Create a `DataPoint` for any day that has **either** a log or a goal.
-- Allow `DataPoint` to represent “no logged value”.
-- Let axis calculation include both values _and_ goals.
-- Let renderers:
-  - draw bars/lines only for days with a value
-  - draw goal lines on all days with a goal
+This matches the intuition: if you reach zero at 18:00, then later do more cards
+and only finish again at 23:30, the day counts as 23:30.
 
 ---
 
-## 1. Domain Model: `plot-domain` crate
+## Architectural Principles (applied here)
 
-### 1.1 Make `DataPoint` value optional
-
-- [ ] **Change `DataPoint` to model missing values explicitly**
-  - In the `plot-domain` crate (where `DataPoint` is defined), update:
-
-    ```rust
-    pub struct DataPoint {
-        pub date: NaiveDate,
-        pub value: DrawableData,
-        pub color: [u8; 3],
-        pub goal: Option<DrawableGoal>,
-    }
-    ```
-
-    to:
-
-    ```rust
-    pub struct DataPoint {
-        pub date: NaiveDate,
-        pub value: Option<DrawableData>,
-        pub color: [u8; 3],
-        pub goal: Option<DrawableGoal>,
-    }
-
-    impl DataPoint {
-        pub fn new(
-            date: NaiveDate,
-            value: Option<DrawableData>,
-            color: [u8; 3],
-            goal: Option<DrawableGoal>,
-        ) -> Self {
-            Self { date, value, color, goal }
-        }
-    }
-    ```
-
-- [ ] **Update any helper constructors / builders**
-  - Search for all `DataPoint::new(` callsites and update them to pass `Some(drawable_value)` or `None` as appropriate.
-  - The only place that should pass `None` will be the application-layer code for “goal but no log”.
-
-### 1.2 Keep `PlotData` stable
-
-- [ ] **Verify `PlotData` semantics**
-  - Confirm that `PlotData` is still:
-
-    ```rust
-    pub struct PlotData {
-        pub title: String,
-        pub points: Vec<DataPoint>,
-        pub date_range: DateRange,
-        pub plot_type: PlotType,
-        pub y_axis: YAxis,
-    }
-    ```
-
-  - No change required here; the only difference is the meaning of each `DataPoint.value`.
+- **Hexagonal / Ports & Adapters**
+  - Core domain already models PointInTime + FinishedInTime goals.
+  - We only add a new **integration bundle definition** and **adapter behavior**
+    (Anki addon + web API usage).
+- **Low coupling**
+  - Lifestats core does **not** know about Anki UI concepts like “congratulations”.
+  - The Anki addon translates that into a concrete log_value call.
+- **High cohesion**
+  - All Anki-specific metric metadata stays in the Anki integration bundle.
+  - All “when/how to log” lives in the addon.
+- **Reusability**
+  - FinishedInTime is reusable for other integrations (e.g., “done with workday”).
 
 ---
 
-## 2. Application Layer: building `PlotData`
+## 1. Domain Model (Rust, `core/core` crate)
 
-> This is the heart of the change: we stop iterating “over logs” and start iterating “over dates”, joining in logs + goals per day.
+No new domain types are required. The domain already supports what we need:
 
-### 2.1 Refactor `evaluate_goal_achievement` to accept optional log values
+- `PointInTimeStatistic` (log-able NaiveTime) with `FixedValueUpdatePolicy`.
+- Goals: `FinishedInTimeGoal` with `LogValue = NaiveTime`.
+- Setting default goals for point-in-time stats via `AnyStatistic::set_point_in_time_default_goal`.
 
-- [ ] **Change signature to accept `Option<&Value>`**
-  - In the application service that computes `PlotData` (e.g. `GetPlotDataQueryHandler`), update:
+### Tasks
 
-    ```rust
-    fn evaluate_goal_achievement(
-        &self,
-        statistic: &AnyStatistic,
-        log_value: &serde_json::Value,
-        goal_value: Option<&serde_json::Value>,
-    ) -> ApplicationResult<Option<Percentage>>
-    ```
+- [ ] **(Optional, tiny)** Add a short doc comment near `PointInTimeStatistic` making
+      explicit that it is intended for things like “wake-up time”, “finished
+      studying”, etc., which covers our use case. This is just for future
+      discoverability.
 
-    to:
-
-    ```rust
-    fn evaluate_goal_achievement(
-        &self,
-        statistic: &AnyStatistic,
-        log_value: Option<&serde_json::Value>,
-        goal_value: Option<&serde_json::Value>,
-    ) -> ApplicationResult<Option<Percentage>>
-    ```
-
-- [ ] **Honor `Goal::get_percentage_achieved` semantics**
-  - Inside the function, for each `AnyStatistic` variant:
-    - Parse `goal_value` into the appropriate goal type (`HabitGoal`, `AmountGoal<_>`, `FinishedInTimeGoal`, `TimeSpansGoal`).
-    - Parse `log_value` into the appropriate Rust type **only when `Some(..)`**.
-    - Call the goal’s `get_percentage_achieved(value: Option<&T>)`.
-  - Return:
-    - `Ok(None)` if there is no goal for that day.
-    - `Ok(Some(percentage))` otherwise (even if `log_value` was `None`).
-
-  This keeps all “what does missing data mean” logic inside the goal types, not the renderer.
-
-### 2.2 Build a `date -> log` map and `date -> goal` map
-
-- [ ] **Create `log_map` for quick lookup**
-  - From `find_log_values_in_range`, build:
-
-    ```rust
-    let mut log_map: HashMap<NaiveDate, serde_json::Value> = HashMap::new();
-    for log in log_values {
-        log_map.insert(log.date, log.value);
-    }
-    ```
-
-- [ ] **Reuse/keep `daily_goal_map` and `default_goal_json`**
-  - Keep (or create, if missing) a `HashMap<NaiveDate, serde_json::Value>` for explicit daily goals retrieved via `find_goals_in_range`.
-  - Keep `default_goal_json: Option<serde_json::Value>` and `default_goal_valid_since: NaiveDate` as today.
-
-### 2.3 Iterate over dates in the `DateRange`
-
-- [ ] **Introduce a helper iterator over the date range**
-  - If not already present, create a small utility to iterate over all days in a `DateRange`:
-
-    ```rust
-    fn dates_in_range(range: &DateRange) -> impl Iterator<Item = NaiveDate> {
-        let mut current = range.start;
-        std::iter::from_fn(move || {
-            if current > range.end {
-                None
-            } else {
-                let d = current;
-                current = current.succ_opt().unwrap();
-                Some(d)
-            }
-        })
-    }
-    ```
-
-  - Keep this helper private to the application layer (or wherever it fits best) to avoid polluting domain objects with infrastructural helpers.
-
-- [ ] **Replace “iterate logs” with “iterate range”**
-  - Replace the current `log_values.into_iter().map(|log| ...)` with:
-
-    ```rust
-    let mut data_points = Vec::new();
-
-    for date in dates_in_range(&query.date_range) {
-        let log_value_json = log_map.get(&date);
-        let goal_value_json = daily_goal_map
-            .get(&date)
-            .or_else(|| {
-                if date >= default_goal_valid_since {
-                    default_goal_json.as_ref()
-                } else {
-                    None
-                }
-            });
-
-        // Skip days with neither log nor goal
-        if log_value_json.is_none() && goal_value_json.is_none() {
-            continue;
-        }
-
-        let percentage = self
-            .evaluate_goal_achievement(&statistic, log_value_json, goal_value_json)?;
-
-        let color = percentage_to_color(percentage);
-
-        let drawable_value = log_value_json
-            .map(|v| json_value_to_drawable_data(&statistic, v))
-            .transpose()?;
-
-        let drawable_goal = goal_value_json
-            .map(|g| json_value_to_drawable_goal(&statistic, g))
-            .transpose()?;
-
-        data_points.push(DataPoint::new(date, drawable_value, color, drawable_goal));
-    }
-    ```
-
-- [ ] **Keep the `PlotData` creation logic unchanged**
-  - After constructing `data_points`, continue to:
-
-    ```rust
-    let y_axis = YAxis::from_data_points(&data_points, query.plot_type)?;
-    Ok(PlotData::new(title, data_points, query.date_range, query.plot_type, y_axis))
-    ```
-
-  - This preserves the existing separation: application builds `PlotData`, renderer stays dumb.
+No code changes beyond comments are strictly necessary in the domain.
 
 ---
 
-## 3. Y-Axis / Plot Domain Logic
+## 2. Application Layer: Anki Integration Bundle (Rust, `core/application`)
 
-> The axis has to be derived from both values _and_ goals, but now values are optional.
+Goal: Extend the **Anki integration bundle** with a new **global finished time**
+statistic that the addon can discover via tags.
 
-### 3.1 Update axis calculations to handle `Option<DrawableData>`
+We will follow the existing Fitbit/Anki integration patterns and keep all
+metadata/tagging decisions in one well-factored place.
 
-- [ ] **Integer axis**
-  - In `YAxis::calculate_integer_axis` (or equivalent), update value access:
+### 2.1. Define a new metric key for finished time
 
-    ```rust
-    for point in points {
-        if let DrawableData::Integer(val) = &point.value {
-            values.push(*val);
-        }
-        if let Some(DrawableGoal::Integer(val)) = &point.goal {
-            values.push(*val);
-        }
-    }
-    ```
+File: `core/application/src/integrations/anki/anki_bundle_factory.rs` (same file
+where `METRIC_BACKLOG`, `METRIC_TIME_SPENT`, etc. live). :contentReference[oaicite:7]{index=7}
 
-    to:
+- [ ] Add a new metric key constant:
 
-    ```rust
-    for point in points {
-        if let Some(DrawableData::Integer(val)) = &point.value {
-            values.push(*val);
-        }
-        if let Some(DrawableGoal::Integer(val)) = &point.goal {
-            values.push(*val);
-        }
-    }
-    ```
+  ```rust
+  pub const METRIC_FINISHED_TIME: &str = "finished_time";
+  ```
 
-- [ ] **Time-based / TimeFrames axis**
-  - Apply the same pattern for `DrawableData::TimeFrames` and `DrawableGoal::TimeFrames`.
-  - Only include real values (`Some`) in the collected list; always include goals.
+Keep naming consistent with `METRIC_BACKLOG`, `METRIC_TIME_SPENT`,
+`METRIC_DISRUPTIONS`.
 
-### 3.2 Re-run / adjust axis tests
+### 2.2. Create a PointInTime statistic for “Anki finished time”
 
-- [ ] **Update any tests that assume `value` is non-optional**
-  - Fix compilation errors by wrapping sample values in `Some(..)`.
-  - Add at least one test where:
-    - Some `DataPoint`s have `value = None` and a goal, and
-    - The axis still includes the goal values correctly.
+Still in `AnkiBundleFactory`:
 
----
+- [ ] Add a function or inline code block (mirroring the Fitbit wake/sleep
+      stats) that constructs a new `PointInTimeStatistic`:
 
-## 4. Adapters: Plot Renderers
+  ```rust
+  use lifestats_core::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;
+  use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+  use chrono::NaiveDate;
 
-> Renderers should never need to know “why” a value is missing—only that it is `None`.
+  fn build_finished_time_stat(
+      id: StatisticId,
+      today: NaiveDate,
+  ) -> AnyStatistic {
+      let metadata = StatisticMetadata::new(
+          id,
+          "Anki".to_string(),
+          "[Anki] Finished Time".to_string(),
+      )
+      .with_tag("source".to_string(), "anki".to_string())
+      .with_tag("metric".to_string(), METRIC_FINISHED_TIME.to_string());
+      // IMPORTANT: No deck_name tag -> global per Anki profile
+      // No default goal yet; user configures via goals API.
 
-### 4.1 Common principles
+      let stat = PointInTimeStatistic::new(metadata, None, today);
+      AnyStatistic::from_point_in_time(stat)
+  }
+  ```
 
-- For **bars/lines/markers**, only draw if `point.value.is_some()`.
-- For **goal lines**, continue to rely only on `point.goal`.
-- Never synthesize dummy values for missing data in the renderer.
+  Notes / rationale:
+  - We **omit `deck_name`** to clearly signal that this metric is global,
+    per Anki profile, matching how the “congratulations” screen works.
+  - Category `"Anki"` keeps compatibility with other Anki metrics; name
+    `[Anki] Finished Time` is human-friendly.
+  - We attach `source=anki` + `metric=finished_time` tags so that adapters
+    (Anki addon / web API clients) can reliably discover this stat via tags,
+    same pattern as Fitbit.
+  - No default `FinishedInTimeGoal` is set here to avoid hardcoding a deadline
+    in the integration.
 
-### 4.2 Bar chart renderer
+### 2.3. Include the new stat in the Anki bundle
 
-- [ ] **Guard drawing by `value.is_some()`**
-  - In the bar renderer loop:
+Where `AnkiBundleFactory` currently builds its list of `ProvisionedStatistic`s,
+extend it with the new global stat.
 
-    ```rust
-    for point in &data.points {
-        if let DrawableData::Integer(value) = &point.value {
-            // draw bar
-        }
-    }
-    ```
+- [ ] Generate an ID for the new statistic using the same mechanism used for
+      existing Anki stats (likely `id_provider.next()` or similar).
+- [ ] Call `build_finished_time_stat` with that ID and the provisioning date.
+- [ ] Add a `ProvisionedStatistic` entry with:
 
-    becomes:
+  ```rust
+  ProvisionedStatistic::new(
+      METRIC_FINISHED_TIME,
+      finished_time_statistic_any, // AnyStatistic from helper above
+  )
+  ```
 
-    ```rust
-    for point in &data.points {
-        if let Some(DrawableData::Integer(value)) = &point.value {
-            // draw bar using value
-        }
-    }
-    ```
+  Follow the existing pattern; keep the creation logic cohesive, e.g.:
+  - Group all Anki stats creation together.
+  - Avoid inlining long builders; use small helpers like `build_finished_time_stat`
+    for readability and testability.
 
-- [ ] **Leave goal-line drawing logic unchanged**
-  - Keep the loop that draws goal lines by iterating over `point.goal` as-is; it will now see goal-only days too.
+### 2.4. Tests for Anki bundle metadata
 
-### 4.3 Line chart renderer
+Add or extend tests in the Anki integration test module:
 
-- [ ] **Build line series only from points with values**
-  - When constructing the `(x, y)` pairs for the line:
+- [ ] Add a test that provisions an Anki bundle and asserts:
+  - There is **exactly one** statistic with `metric=finished_time` and `source=anki`.
+  - It has no `deck_name` tag (global).
+  - It is of type `PointInTime` when passed through the application’s
+    `StatisticSummary` mapping.
 
-    ```rust
-    let line_data: Vec<_> = data
-        .points
-        .iter()
-        .filter_map(|point| {
-            if let DrawableData::Integer(v) = &point.value {
-                Some((SegmentValue::CenterOf(point.date), *v))
-            } else {
-                None
-            }
-        })
-        .collect();
-    ```
-
-    → update to handle `Option`:
-
-    ```rust
-    let line_data: Vec<_> = data
-        .points
-        .iter()
-        .filter_map(|point| {
-            if let Some(DrawableData::Integer(v)) = &point.value {
-                Some((SegmentValue::CenterOf(point.date), *v))
-            } else {
-                None
-            }
-        })
-        .collect();
-    ```
-
-- [ ] **Horizontal markers, etc.**
-  - Any additional series that depend on the logged value must also pattern-match on `Some(DrawableData::…)`.
-
-- [ ] **Keep goal lines independent**
-  - Leave the goal-line loop as-is; it only cares about `point.goal`.
-
-### 4.4 TimeFrames renderer
-
-- [ ] **Only draw spans when `value` exists**
-  - Update:
-
-    ```rust
-    if let DrawableData::TimeFrames(list) = &point.value {
-        // draw spans
-    }
-    ```
-
-    to:
-
-    ```rust
-    if let Some(DrawableData::TimeFrames(list)) = &point.value {
-        // draw spans
-    }
-    ```
-
-- [ ] **Draw TimeFrames goals regardless of `value`**
-  - Leave goal drawing loop intact; it will now draw goal spans on goal-only days.
+  This helps enforce the contract that the addon will rely on.
 
 ---
 
-## 5. Tests
+## 3. Application Layer: Goals API (Rust, `core/application`)
 
-> These tests pin the new behavior and guard against regressions.
+We want the user to be able to set a “finish by HH:MM” goal for this stat using
+existing mechanisms (`SetDefaultGoalCommand` / `SetDailyGoalCommand`) which
+already support `FinishedInTimeGoal`.
 
-### 5.1 Application-level tests for `GetPlotDataQueryHandler`
+### 3.1. Confirm support for FinishedInTime goals in commands
 
-- [ ] **Test: goal-only day still has a `DataPoint`**
-  - Scenario:
-    - IntegerAmount statistic.
-    - Default goal = `10`, valid from start date.
-    - Date range: 2 days.
-    - Log only on day 1.
-  - Expectations:
-    - `plot_data.points.len() == 2`.
-    - Day 1: `value = Some(DrawableData::Integer(..))`, `goal = Some(DrawableGoal::Integer(10))`.
-    - Day 2: `value = None`, `goal = Some(DrawableGoal::Integer(10))`.
+- [ ] Verify the `SetDefaultGoal` and `SetDailyGoal` command handlers already
+      handle `AnyStatistic::PointInTime` by creating `FinishedInTimeGoal`.
+      (They do, but add a short test that specifically covers the PointInTime path.)
 
-- [ ] **Test: no log + no goal → no `DataPoint`**
-  - Confirm that if there are neither logs nor any goal in the date range, `plot_data.points` is empty (preserves existing behavior).
+- [ ] Add tests (if missing) to ensure:
+  - Passing a `FinishedInTime` goal payload to a non-PointInTime stat fails
+    with a clear error.
+  - Passing a `FinishedInTime` payload to the finished_time statistic works
+    and stores a `FinishedInTimeGoal`.
 
-- [ ] **Test: `evaluate_goal_achievement` handles `None`**
-  - For each relevant statistic type:
-    - Call `evaluate_goal_achievement(stat, None, Some(goal_json))`.
-    - Assert:
-      - No panic.
-      - The returned `Percentage` matches the semantics of the relevant `Goal` implementation.
-
-### 5.2 Axis tests
-
-- [ ] **Test: axis includes goal-only days**
-  - Build `DataPoint`s with:
-    - Some points: `value = None`, `goal = Some(..)`.
-    - Some points: `value = Some(..)`, `goal = None`.
-  - Assert:
-    - Axis min/max include both actual values and goal values, ignoring days that have neither.
-
-### 5.3 Renderer smoke tests
-
-- [ ] **Bar / line / TimeFrames renderer with goal-only points**
-  - Build a small `PlotData` where:
-    - One day has `value = Some(..), goal = Some(..)`.
-    - One day has `value = None, goal = Some(..)`.
-  - Pass it to each renderer (bar, line, timeframes).
-  - Assert:
-    - Rendering succeeds (no panic / error).
-    - Output is created (basic smoke test).
+No behavior change, just coverage to protect the feature we’re about to rely on.
 
 ---
 
-## 6. Cleanup & Documentation
+## 4. Web API Adapter (Rust, `web_api` crate)
 
-- [ ] **Code comments**
-  - Add a short comment near `DataPoint.value: Option<DrawableData>` explaining:
+Goal: Make it easy for the Anki addon to:
 
-    > `None` means “no logged value for this day”; a `DataPoint` may still exist if there is a goal or percentage/color to display.
+1. Find the `finished_time` statistic.
+2. Log a PointInTime value for today with `Overwrite` semantics.
+3. Optionally configure the deadline goal.
 
-- [ ] **Developer docs / README**
-  - Add a brief note in any internal docs describing the new semantics:
-    - Plots now show goals even on days without logged data.
-    - The application service is responsible for merging logs + goals per date; renderers stay dumb.
+Assume we follow the existing pattern: the web API parses request JSON into
+strongly-typed `LogValueCommand` / `SetDefaultGoalCommand` using DTOs.
+
+### 4.1. Statistic discovery endpoint (if not already present)
+
+If there is not yet a convenient endpoint for finding stats by tags:
+
+- [ ] Introduce an endpoint (e.g. `GET /statistics/search`) that accepts `tags`
+      as query parameters (`?source=anki&metric=finished_time`) and returns the
+      single matching statistic (or an error if 0/ >1).
+- [ ] Internally, this delegates to `StatisticRepository::find_by_tags`.
+- [ ] Ensure it returns the application-layer `StatisticSummary` DTO, which
+      already carries the `StatisticType` (`PointInTime`).
+
+### 4.2. Log value endpoint for PointInTime
+
+There should already be a generic “log value” endpoint; we just need to ensure
+it plays nicely with PointInTime.
+
+- [ ] Confirm/extend the request DTO so that, when the statistic type is
+      `PointInTime`, the payload can be:
+
+  ```json
+  {
+    "value": "HH:MM:SS",
+    "update_policy": "overwrite" // optional, defaults to "ignore" otherwise
+  }
+  ```
+
+- [ ] Adapter logic must parse:
+  - `"value"` into `chrono::NaiveTime`.
+  - `"update_policy"` into `FixedValueUpdatePolicy` (default to `Overwrite`
+    for this specific addon’s usage; generic API can still default to `Ignore`).
+
+- [ ] Ensure that the API calls the `LogValueCommandHandler` with a
+      `LogValuePayload::PointInTime { value, update_policy }`.
+
+### 4.3. Optional: goal configuration endpoint ergonomics
+
+- [ ] If not already ergonomic, add a small helper endpoint for setting a
+      `FinishedInTime` default goal by time-of-day, e.g.:
+
+  ```json
+  {
+    "statistic_id": "<id>",
+    "goal_type": "FinishedInTime",
+    "deadline": "21:30:00"
+  }
+  ```
+
+  which maps to `SetDefaultGoalCommand` with `GoalPayload::FinishedInTime`.
+
+This lets the Anki addon (or you via a UI) set the preferred deadline once,
+instead of hardcoding anything in the integration.
 
 ---
 
-By completing these steps, we preserve the Hexagonal/Ports & Adapters structure, keep the plotting domain honest about missing data, and ensure the UI behavior (“goals are visible even when you did nothing”) matches the domain semantics.
+## 5. AnkiLogger Addon (Python / Anki side)
+
+This is the **primary adapter** that implements the user behavior: “when I see
+the congratulations screen, log my finished time”.
+
+### 5.1. Discover the finished_time statistic ID
+
+In the addon initialization / config sync logic:
+
+- [ ] Call the lifestats API endpoint to search for the statistic with tags:
+  - `source=anki`
+  - `metric=finished_time`
+
+- [ ] Cache the returned `statistic_id` in the addon’s config, alongside any
+      already stored IDs for backlog/time_spent/disruptions (if such mapping
+      already exists).
+- [ ] Handle error cases gracefully:
+  - If 0 stats found: show a clear error in addon config that Anki integration
+    was not provisioned.
+  - If >1 stats found: log a warning; the addon can either pick the first or
+    refuse to operate (I’d recommend refuse, with a good error message).
+
+### 5.2. Hook into the “congratulations” event
+
+In the Anki addon code:
+
+- [ ] Use the appropriate Anki hook / signal that fires when the user has
+      completed all due cards for the day and Anki shows the congratulations
+      screen (this already exists – reuse the same mechanism that triggers
+      existing logging to lifestats if present).
+- [ ] In that hook:
+  - Get **current local date & time**.
+  - Build a request to the lifestats web API’s `log_value` endpoint:
+    - `statistic_id`: ID discovered above.
+    - `date`: today’s date (as NaiveDate string).
+    - `value`: current time (HH:MM:SS) as NaiveTime.
+    - `update_policy`: `"overwrite"` (we want last finish time of the day).
+
+- [ ] Fire the request asynchronously / in a background thread so it doesn’t
+      block the Anki UI (respect existing patterns in the addon).
+
+### 5.3. Prevent logging across days / timezones
+
+To keep semantics clean:
+
+- [ ] Ensure the date you send to lifestats is the **local calendar date**
+      according to the user’s system, not UTC. This is consistent with other
+      stats (time_spent, etc.).
+- [ ] If a request is retried or delayed, it should still log under the date of
+      the **actual finishing day** (which you can compute at the moment the
+      event fires, not when the HTTP call eventually succeeds).
+
+### 5.4. Optional: first-run goal convenience
+
+Optionally, the addon can offer a quick wizard:
+
+- [ ] If the finished_time statistic exists but has no default goal yet, ask the
+      user (once) for a preferred “finish by” time (e.g., 21:00).
+- [ ] Call the goal configuration endpoint to set a `FinishedInTimeGoal` as
+      default for that statistic.
+
+This keeps goal configuration user-driven but convenient, and still outside the
+core domain.
+
+---
+
+## 6. Testing & Quality
+
+### 6.1. Rust side (core/application + web_api)
+
+- [ ] **Unit tests** in Anki integration:
+  - Provision bundle and assert metadata & tags for the finished_time stat.
+
+- [ ] **Integration tests** for web API:
+  - Logging a PointInTime value:
+    - Request with `"value": "20:15:00", "update_policy": "overwrite"`.
+    - See that repository receives a `serde_json` NaiveTime and that
+      `LogValueCommandHandler` persists it.
+
+  - Setting a `FinishedInTime` goal:
+    - Request with a `deadline` time.
+    - Confirm a `FinishedInTimeGoal` serialized as JSON is persisted and used
+      by `GetPlotData` when evaluating goal achievement.
+
+### 6.2. Python / Anki side
+
+- [ ] **Unit-ish tests** (where possible) for:
+  - Function that constructs the HTTP payload and URL.
+  - Function that chooses the correct statistic ID from a list of stats (by tags).
+
+- [ ] **Manual QA checklist**:
+  - Start the day with due cards, finish them:
+    - Verify that the finished_time stat has a value for today.
+
+  - Finish cards twice in a day:
+    - Verify the **latter** time is stored (overwrite behavior).
+
+  - Set a FinishedInTime goal (e.g. 21:00):
+    - Verify that plot/streak queries show achievement when finishing earlier
+      and miss when finishing later.
+
+---
+
+## 7. Migration / Rollout
+
+- [ ] Provision the Anki integration bundle for your user so the new
+      `finished_time` stat exists before shipping the updated addon.
+- [ ] Add a short changelog entry and help text describing:
+  - What “Finished Time” measures.
+  - How to set a deadline goal.
+  - That multiple finishes per day are collapsed to the last one.

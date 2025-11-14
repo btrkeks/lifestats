@@ -52,6 +52,7 @@ pub trait StatisticRepository {
         date: NaiveDate,
         goal: Option<serde_json::Value>,
     ) -> Result<(), RepositoryError>;
+    fn delete_goal(&self, id: StatisticId, date: NaiveDate) -> Result<(), RepositoryError>;
     fn find_goals_in_range(
         &self,
         id: StatisticId,

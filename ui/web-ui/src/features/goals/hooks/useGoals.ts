@@ -8,7 +8,7 @@ import {
   deleteDailyGoal,
   getStatistic,
 } from "@/lib/api";
-import type { SetGoalRequest, StatisticType } from "@/types";
+import type { SetGoalRequest, SetDailyGoalRequest, StatisticType } from "@/types";
 
 // ============================================================================
 // Statistic Hooks
@@ -83,7 +83,7 @@ export function useSetDailyGoal(statisticId: number, date: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (goal: SetGoalRequest) => setDailyGoal(statisticId, date, goal),
+    mutationFn: (request: SetDailyGoalRequest) => setDailyGoal(statisticId, date, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["goal", statisticId, date] });
     },

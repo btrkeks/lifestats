@@ -11,8 +11,15 @@ use validator::Validate;
 /// - TimeSpans: {"target": "[{\"start\":\"09:00:00\",\"end\":\"17:00:00\"}]", "efficiency": "80"}
 /// - Summing/TimeDifference: {"target": "3600", "is_at_least": "true"}
 #[derive(Debug, Deserialize, Validate)]
-pub struct SetGoalRequest {
+pub struct SetDefaultGoalRequest {
     pub goal_data: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SetDailyGoalRequest {
+    Goal { goal_data: HashMap<String, String> },
+    Suppressed,
 }
 
 /// Response DTO for goal data
@@ -28,7 +35,7 @@ mod tests {
     #[test]
     fn test_set_goal_request_deserialization() {
         let json = r#"{"goal_data": {"target": "100", "is_at_least": "true"}}"#;
-        let req: SetGoalRequest = serde_json::from_str(json).unwrap();
+        let req: SetDefaultGoalRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.goal_data.get("target").unwrap(), "100");
     }
 }

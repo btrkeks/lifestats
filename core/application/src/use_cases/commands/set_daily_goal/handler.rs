@@ -39,6 +39,31 @@ where
     }
 }
 
+fn suppress_goal_for_day<R>(
+    repository: &Arc<R>,
+    statistic_id: lifestats_core::shared::ids::StatisticId,
+    date: chrono::NaiveDate,
+) -> ApplicationResult<()>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+{
+    repository.save_goal(statistic_id, date, None)?;
+    Ok(())
+}
+
+fn store_goal<R>(
+    repository: &Arc<R>,
+    statistic_id: lifestats_core::shared::ids::StatisticId,
+    date: chrono::NaiveDate,
+    goal_json: serde_json::Value,
+) -> ApplicationResult<()>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+{
+    repository.save_goal(statistic_id, date, Some(goal_json))?;
+    Ok(())
+}
+
 impl<R, E> CommandHandler<SetDailyGoalCommand> for SetDailyGoalCommandHandler<R, E>
 where
     R: StatisticRepository + Send + Sync + 'static,
@@ -48,76 +73,86 @@ where
         // 1. Fetch the statistic to verify it exists and get its type
         let statistic = self.repository.find_metadata_by_id(command.statistic_id)?;
 
-        // 2. Create the typed goal object and serialize to JSON
-        let goal_json = match (&statistic, command.goal) {
-            (
-                AnyStatistic::IntegerAmount(_),
-                GoalPayload::IntegerAmount {
-                    target,
-                    is_at_least,
-                },
-            ) => {
-                let goal = AmountGoal::new(target, is_at_least);
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
+        match command.override_kind {
+            super::command::DailyGoalOverride::Goal(goal_payload) => {
+                let goal_json = parse_goal_payload_to_json(goal_payload, statistic)?;
+                store_goal(
+                    &self.repository,
+                    command.statistic_id,
+                    command.date,
+                    goal_json,
+                )?;
             }
-
-            (AnyStatistic::Habit(_), GoalPayload::Habit { occurred }) => {
-                let goal = HabitGoal::new(occurred);
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
+            super::command::DailyGoalOverride::Suppressed => {
+                suppress_goal_for_day(&self.repository, command.statistic_id, command.date)?;
             }
+        }
 
-            (AnyStatistic::PointInTime(_), GoalPayload::FinishedInTime { deadline }) => {
-                let goal = FinishedInTimeGoal::new(deadline);
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            (AnyStatistic::TimeSpans(_), GoalPayload::TimeSpans { target, efficiency }) => {
-                let goal =
-                    TimeSpansGoal::new(target, efficiency).map_err(ApplicationError::Domain)?;
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            (
-                AnyStatistic::Summing(_),
-                GoalPayload::SecondsAmount {
-                    target,
-                    is_at_least,
-                },
-            )
-            | (
-                AnyStatistic::TimeDifference(_),
-                GoalPayload::SecondsAmount {
-                    target,
-                    is_at_least,
-                },
-            ) => {
-                let goal = AmountGoal::new(target, is_at_least);
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            // Mismatched types
-            _ => {
-                return Err(ApplicationError::Infrastructure(anyhow!(
-                    "Goal type does not match statistic type"
-                )));
-            }
-        };
-
-        // 3. Save the goal
-        self.repository
-            .save_goal(command.statistic_id, command.date, Some(goal_json))?;
-
-        // 4. Publish event
+        // Publish event
         self.event_publisher
             .publish_event_async(Event::GoalUpdated(command.statistic_id));
 
         Ok(())
     }
+}
+
+fn parse_goal_payload_to_json(
+    goal_payload: GoalPayload,
+    statistic: AnyStatistic,
+) -> Result<serde_json::Value, ApplicationError> {
+    let goal_json = match (&statistic, goal_payload) {
+        (
+            AnyStatistic::IntegerAmount(_),
+            GoalPayload::IntegerAmount {
+                target,
+                is_at_least,
+            },
+        ) => {
+            let goal = AmountGoal::new(target, is_at_least);
+            serde_json::to_value(&goal).map_err(|e| ApplicationError::Infrastructure(e.into()))?
+        }
+
+        (AnyStatistic::Habit(_), GoalPayload::Habit { occurred }) => {
+            let goal = HabitGoal::new(occurred);
+            serde_json::to_value(&goal).map_err(|e| ApplicationError::Infrastructure(e.into()))?
+        }
+
+        (AnyStatistic::PointInTime(_), GoalPayload::FinishedInTime { deadline }) => {
+            let goal = FinishedInTimeGoal::new(deadline);
+            serde_json::to_value(&goal).map_err(|e| ApplicationError::Infrastructure(e.into()))?
+        }
+
+        (AnyStatistic::TimeSpans(_), GoalPayload::TimeSpans { target, efficiency }) => {
+            let goal = TimeSpansGoal::new(target, efficiency).map_err(ApplicationError::Domain)?;
+            serde_json::to_value(&goal).map_err(|e| ApplicationError::Infrastructure(e.into()))?
+        }
+
+        (
+            AnyStatistic::Summing(_),
+            GoalPayload::SecondsAmount {
+                target,
+                is_at_least,
+            },
+        )
+        | (
+            AnyStatistic::TimeDifference(_),
+            GoalPayload::SecondsAmount {
+                target,
+                is_at_least,
+            },
+        ) => {
+            let goal = AmountGoal::new(target, is_at_least);
+            serde_json::to_value(&goal).map_err(|e| ApplicationError::Infrastructure(e.into()))?
+        }
+
+        // Mismatched types
+        _ => {
+            return Err(ApplicationError::Infrastructure(anyhow!(
+                "Goal type does not match statistic type"
+            )));
+        }
+    };
+    Ok(goal_json)
 }
 
 #[cfg(test)]
@@ -167,7 +202,7 @@ mod tests {
         let command = SetDailyGoalCommand {
             statistic_id: stat_id,
             date: test_date,
-            goal: GoalPayload::IntegerAmount {
+            override_kind: GoalPayload::IntegerAmount {
                 target: 100,
                 is_at_least: true,
             },
@@ -210,7 +245,7 @@ mod tests {
         let command = SetDailyGoalCommand {
             statistic_id: stat_id,
             date: test_date,
-            goal: GoalPayload::Habit { occurred: true },
+            override_kind: GoalPayload::Habit { occurred: true },
         };
 
         // Act
@@ -241,7 +276,7 @@ mod tests {
         let command = SetDailyGoalCommand {
             statistic_id: stat_id,
             date: test_date,
-            goal: GoalPayload::IntegerAmount {
+            override_kind: GoalPayload::IntegerAmount {
                 target: 100,
                 is_at_least: true,
             },

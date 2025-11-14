@@ -74,7 +74,18 @@ export interface GoalResponse {
   goal_data: GoalData;
 }
 
-// Request to set a goal (must match backend string format)
+// Request to set a default goal (must match backend string format)
 export interface SetGoalRequest {
   goal_data: Record<string, string>;
+}
+
+// Discriminated union for setting daily goals
+// Matches backend SetDailyGoalRequest enum with serde tag "kind"
+export type SetDailyGoalRequest =
+  | { kind: 'goal'; goal_data: Record<string, string> }
+  | { kind: 'suppressed' };
+
+// Response that may indicate suppressed goal
+export interface GoalResponseWithSuppress extends GoalResponse {
+  suppressed?: true; // Present and true if goal is suppressed
 }

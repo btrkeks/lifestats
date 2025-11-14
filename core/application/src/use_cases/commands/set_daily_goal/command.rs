@@ -4,6 +4,7 @@ use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::shared::percentage::Percentage;
 use lifestats_core::shared::seconds::Seconds;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
+use lifestats_core::statistic::value_objects::goals::goal_trait::Goal;
 
 /// Strongly-typed goal payload
 ///
@@ -31,11 +32,16 @@ pub enum GoalPayload {
     },
 }
 
+pub enum DailyGoalOverride {
+    Goal(GoalPayload), // concrete daily goal
+    Suppressed,        // explicitly “no goal for this day”
+}
+
 /// Command to set a goal for a specific date
 pub struct SetDailyGoalCommand {
     pub statistic_id: StatisticId,
     pub date: NaiveDate,
-    pub goal: GoalPayload,
+    pub override_kind: DailyGoalOverride,
 }
 
 impl Command for SetDailyGoalCommand {
