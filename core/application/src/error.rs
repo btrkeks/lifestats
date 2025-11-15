@@ -22,6 +22,10 @@ pub enum ApplicationError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    /// Insufficient data to perform the requested analysis (maps to 400 Bad Request)
+    #[error("Insufficient data: {0}")]
+    InsufficientData(String),
+
     /// Fitbit upstream interaction failed (maps to 502 Bad Gateway)
     #[error("Fitbit sync failed: {0}")]
     FitbitSyncFailed(FitbitUpstreamError),

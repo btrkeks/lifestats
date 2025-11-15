@@ -55,6 +55,10 @@ where
             "/statistics/{id}/score",
             get(statistics::get_statistic_score),
         )
+        .route(
+            "/statistics/{id}/performance",
+            get(statistics::get_goal_performance),
+        )
         // Goal management endpoints
         .route(
             "/statistics/{id}/goals/default",

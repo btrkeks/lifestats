@@ -159,6 +159,11 @@ web_api/
 
 ## API Routes Reference
 
+**General Notes:**
+- All date parameters use the format `YYYY-MM-DD` (e.g., `2025-01-31`)
+- Date ranges are **inclusive on both ends** `[start_date, end_date]` unless otherwise specified
+- Time parameters use 24-hour format `HH:MM` (e.g., `14:30`)
+
 ### Statistics
 
 | Method | Path | Description |
@@ -173,6 +178,7 @@ web_api/
 | `GET` | `/statistics/{id}/time_spans/total` | Get total duration for date range |
 | `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
 | `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
+| `GET` | `/statistics/{id}/performance` | Get goal performance analysis with trend over date range |
 
 ### Goals
 
@@ -294,6 +300,75 @@ web_api/
 - Value ranges from 0-255 (or null when no goals exist in the range)
 - Only days with goals contribute to the score
 - Supports over-achievement (percentages > 100)
+
+### Getting Goal Performance Analysis
+
+**Request:** `GET /statistics/{id}/performance?start_date=2025-01-01&end_date=2025-01-31`
+
+**Response:** `200 OK`
+
+```json
+{
+  "overall_score": 87,
+  "trend": {
+    "direction": "improving",
+    "strength": 0.64
+  }
+}
+```
+
+**Trend Variants:**
+
+```json
+// Improving performance
+{
+  "overall_score": 87,
+  "trend": {
+    "direction": "improving",
+    "strength": 0.64  // 0.0 to 1.0, higher = stronger trend
+  }
+}
+
+// Declining performance
+{
+  "overall_score": 65,
+  "trend": {
+    "direction": "declining",
+    "strength": 0.42
+  }
+}
+
+// Stable performance
+{
+  "overall_score": 80,
+  "trend": {
+    "direction": "stable"
+  }
+}
+
+// Insufficient data for trend analysis
+{
+  "overall_score": 75,
+  "trend": {
+    "direction": "insufficient_data"
+  }
+}
+```
+
+**Notes:**
+- **Date range is inclusive on both ends:** `[start_date, end_date]`
+  - Example: `start_date=2025-01-01&end_date=2025-01-31` includes all 31 days
+- `overall_score`: Average goal achievement percentage across the date range (0-100)
+- `trend`: Calculated using Exponentially Weighted Moving Averages (EWMA)
+  - Fast EWMA (3-day span) vs Slow EWMA (7-day span)
+  - Requires minimum **14 data points** for trend calculation
+  - If fewer than 14 points, returns `direction: "insufficient_data"`
+  - `strength` field only present for `improving` and `declining` trends
+  - Stability threshold: 1.0 percentage point (differences within this are `stable`)
+- **Days without goals or with suppressed goals are treated as 100% achievement** for performance analysis
+- Returns `400 Bad Request` if no data exists in the range
+- Returns `404 Not Found` if statistic doesn't exist
+- Returns `400 Bad Request` for invalid date formats or `start_date > end_date`
 
 ### Getting Daily Summary
 

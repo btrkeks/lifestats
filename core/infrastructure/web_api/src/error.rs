@@ -136,6 +136,9 @@ impl From<lifestats_application::error::ApplicationError> for ApiError {
             // Invalid input from user → 400 Bad Request
             ApplicationError::InvalidInput(msg) => ApiError::BadRequest(msg),
 
+            // Insufficient data for analysis → 400 Bad Request
+            ApplicationError::InsufficientData(msg) => ApiError::BadRequest(msg),
+
             // Repository NotFound → 404 Not Found
             ApplicationError::Repository(RepositoryError::NotFound) => {
                 ApiError::NotFound("The requested resource was not found.".to_string())

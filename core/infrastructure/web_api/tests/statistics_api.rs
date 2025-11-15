@@ -199,3 +199,66 @@ async fn test_log_value_statistic_not_found() {
     let body: serde_json::Value = response.json();
     assert_eq!(body["error"], "The requested resource was not found.");
 }
+
+// ============================================================================
+// GET /statistics/:id/performance Tests
+// ============================================================================
+//
+// Note: Detailed business logic testing is covered by unit tests in the
+// application layer. These integration tests verify basic endpoint functionality.
+
+#[tokio::test]
+async fn test_get_goal_performance_statistic_not_found() {
+    // Create mock repository
+    let mut mock_repo = MockStatisticRepository::new();
+
+    // Set expectation: find_metadata_by_id returns NotFound
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(|_| Err(RepositoryError::NotFound));
+
+    // Create app state and router
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+
+    // Create test server
+    let server = TestServer::new(app).unwrap();
+
+    // Send request
+    let response = server
+        .get("/statistics/999/performance?start_date=2025-01-01&end_date=2025-01-31")
+        .await;
+
+    // Assert status code
+    assert_eq!(response.status_code(), 404);
+
+    // Assert error response
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["error"], "The requested resource was not found.");
+}
+
+#[tokio::test]
+async fn test_get_goal_performance_invalid_date_format() {
+    // Create mock repository (no expectations needed - validation fails first)
+    let mock_repo = MockStatisticRepository::new();
+
+    // Create app state and router
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+
+    // Create test server
+    let server = TestServer::new(app).unwrap();
+
+    // Send request with invalid date format
+    let response = server
+        .get("/statistics/1/performance?start_date=2025-13-01&end_date=2025-01-31")
+        .await;
+
+    // Assert status code
+    assert_eq!(response.status_code(), 400);
+
+    // Assert error response contains validation message
+    let body: serde_json::Value = response.json();
+    assert!(body["error"].as_str().unwrap().contains("Invalid"));
+}

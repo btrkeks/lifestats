@@ -653,3 +653,70 @@ where
         days_with_goal: result.days_with_goal,
     }))
 }
+
+/// GET /statistics/:id/performance - Get goal performance analysis with trend over a date range
+pub async fn get_goal_performance<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+    Query(params): Query<crate::dto::goal_performance::GoalPerformanceParams>,
+) -> Result<Json<lifestats_application::dto::GoalPerformanceDto>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use chrono::NaiveDate;
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::services::{
+        DefaultDailyAchievementEvaluator, GoalPerformanceAnalyzer,
+    };
+    use lifestats_application::use_cases::queries::get_goal_performance::{
+        GetGoalPerformanceQuery, GetGoalPerformanceQueryHandler,
+    };
+    use lifestats_core::shared::date_range::DateRange;
+    use std::sync::Arc;
+
+    // Validate query parameters
+    params.validate()?;
+
+    // Parse dates
+    let start_date = NaiveDate::parse_from_str(&params.start_date, "%Y-%m-%d").map_err(|_| {
+        ApiError::BadRequest(format!(
+            "Invalid start_date format: '{}'. Expected YYYY-MM-DD",
+            params.start_date
+        ))
+    })?;
+
+    let end_date = NaiveDate::parse_from_str(&params.end_date, "%Y-%m-%d").map_err(|_| {
+        ApiError::BadRequest(format!(
+            "Invalid end_date format: '{}'. Expected YYYY-MM-DD",
+            params.end_date
+        ))
+    })?;
+
+    // Create date range
+    let date_range = DateRange::new(start_date, end_date)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
+
+    // Instantiate dependencies on-demand
+    let evaluator = Arc::new(DefaultDailyAchievementEvaluator::new(
+        app_state.statistic_repository.clone(),
+    ));
+
+    let analyzer = Arc::new(GoalPerformanceAnalyzer::new(
+        evaluator,
+        app_state.statistic_repository.clone(),
+    ));
+
+    let handler = GetGoalPerformanceQueryHandler::new(analyzer);
+
+    let result = handler
+        .handle(GetGoalPerformanceQuery {
+            statistic_id: StatisticId(statistic_id),
+            date_range,
+        })
+        .map_err(ApiError::from)?;
+
+    Ok(Json(result))
+}

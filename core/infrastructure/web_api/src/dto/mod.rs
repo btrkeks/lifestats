@@ -1,5 +1,6 @@
 pub mod consistency;
 pub mod goal;
+pub mod goal_performance;
 pub mod plot;
 pub mod session;
 pub mod statistic;
