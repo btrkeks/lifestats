@@ -67,12 +67,12 @@ where
 
         match statistic {
             AnyStatistic::Habit(_) => {
-                let value = log_value
-                    .and_then(|v| v.as_bool())
-                    .ok_or_else(|| anyhow!("Expected bool for Habit statistic"))?;
+                let parsed_value = log_value.and_then(|v| v.as_bool());
                 let goal_obj = serde_json::from_value::<HabitGoal>(goal.clone())
                     .map_err(|e| anyhow!("Failed to parse HabitGoal: {}", e))?;
-                Ok(Some(goal_obj.get_percentage_achieved(Some(&value))))
+                Ok(Some(
+                    goal_obj.get_percentage_achieved(parsed_value.as_ref()),
+                ))
             }
             AnyStatistic::IntegerAmount(_) => {
                 let parsed_value = log_value.and_then(|v| v.as_i64());
@@ -209,9 +209,11 @@ mod tests {
     use lifestats_core::shared::dated_value::DatedValue;
     use lifestats_core::shared::ids::StatisticId;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
+    use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
     use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
+    use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use plot_domain::plot::data::DrawableData;
     use plot_domain::plot::plot_type::PlotType;
@@ -359,5 +361,102 @@ mod tests {
 
         // Y-axis should have default range for empty data
         assert_eq!(plot_data.y_axis, YAxis::Integer { min: 0, max: 100 });
+    }
+
+    #[test]
+    fn test_habit_plot_with_goal_but_no_logged_value() {
+        // This test is a regression test for a bug where plotting a Habit statistic
+        // would error with "Expected bool for Habit statistic" when a date had a goal
+        // but no logged value. This is a valid scenario (e.g., future dates with goals).
+
+        // Arrange
+        let mut stat_repo = MockStatisticRepository::new();
+
+        let stat_id = StatisticId::from(60);
+        let date_with_value = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let date_without_value = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        let date_range = DateRange::new(date_with_value, date_without_value).unwrap();
+
+        // Create a Habit statistic with default goal (target is to occur = true)
+        let default_goal = HabitGoal::new(true);
+        let habit_stat =
+            lifestats_core::statistic::any_statistic::AnyStatistic::Habit(HabitStatistic::new(
+                StatisticMetadata::new(stat_id, "Health".into(), "Daily Exercise".into()),
+                Some(default_goal),
+                date_with_value,
+            ));
+
+        stat_repo
+            .expect_find_metadata_by_id()
+            .returning(move |_| Ok(habit_stat.clone()));
+
+        // Only ONE day has a logged value (true = habit occurred)
+        stat_repo
+            .expect_find_log_values_in_range()
+            .returning(|_, _| {
+                Ok(vec![DatedValue::new(
+                    NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                    json!(true), // Did the habit on day 1
+                )])
+            });
+
+        // No daily goal overrides - using default goal for both dates
+        stat_repo
+            .expect_find_goals_in_range()
+            .returning(|_, _| Ok(vec![]));
+
+        let handler = GetPlotDataQueryHandler::new(Arc::new(stat_repo));
+        let query = GetPlotDataQuery {
+            statistic_id: stat_id,
+            plot_type: PlotType::BarChart,
+            date_range,
+        };
+
+        // Act
+        let result = handler.handle(query);
+
+        // Assert - should NOT error even though day 2 has no logged value
+        assert!(
+            result.is_ok(),
+            "Should not error when Habit has goal but no logged value"
+        );
+        let plot_data = result.unwrap();
+
+        // Verify we have data points for both dates
+        assert_eq!(
+            plot_data.points.len(),
+            2,
+            "Should have points for both dates (one with value, one goal-only)"
+        );
+
+        // Day 1: Has value=true, goal=true -> 100% achievement (target met)
+        let point1 = &plot_data.points[0];
+        assert_eq!(point1.date, date_with_value);
+        match &point1.value {
+            Some(DrawableData::Integer(val)) => {
+                assert_eq!(*val, 1, "Habit occurrence should be represented as 1");
+            }
+            _ => panic!("Expected Some(Integer DrawableData) for logged habit"),
+        }
+        assert!(point1.goal.is_some(), "Day 1 should have a goal");
+        assert_eq!(
+            point1.color,
+            [169, 252, 177],
+            "Should be green (100% - goal met)"
+        );
+
+        // Day 2: No logged value, goal=true -> defaults to false -> 0% achievement
+        let point2 = &plot_data.points[1];
+        assert_eq!(point2.date, date_without_value);
+        assert_eq!(
+            point2.value, None,
+            "Day 2 should have no logged value (this was the bug)"
+        );
+        assert!(point2.goal.is_some(), "Day 2 should still have a goal");
+        assert_eq!(
+            point2.color,
+            [245, 169, 142],
+            "Should be red (0% - no value defaults to false, goal not met)"
+        );
     }
 }
