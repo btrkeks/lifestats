@@ -44,6 +44,10 @@ where
             post(statistics::log_time_frame),
         )
         .route(
+            "/statistics/{id}/logged/{date}",
+            get(statistics::get_logged_value),
+        )
+        .route(
             "/statistics/{id}/time_spans/total",
             get(statistics::get_time_spans_total),
         )

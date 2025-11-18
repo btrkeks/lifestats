@@ -8,6 +8,7 @@ pub mod get_daily_timeline_plot;
 pub mod get_default_goal;
 pub mod get_goal_performance;
 pub mod get_loggable_metadata;
+pub mod get_logged_value;
 pub mod get_metadata;
 pub mod get_plot_data;
 pub mod get_statistic_by_id;
@@ -28,6 +29,7 @@ pub use get_daily_timeline_plot::{GetDailyTimelinePlotQuery, GetDailyTimelinePlo
 pub use get_default_goal::{GetDefaultGoalQuery, GetDefaultGoalQueryHandler};
 pub use get_goal_performance::{GetGoalPerformanceQuery, GetGoalPerformanceQueryHandler};
 pub use get_loggable_metadata::{GetLoggableMetadataQuery, GetLoggableMetadataQueryHandler};
+pub use get_logged_value::{GetLoggedValueQuery, GetLoggedValueQueryHandler};
 pub use get_metadata::{GetMetadataQuery, GetMetadataQueryHandler};
 pub use get_plot_data::{GetPlotDataQuery, GetPlotDataQueryHandler};
 pub use get_statistic_by_id::{GetStatisticByIdQuery, GetStatisticByIdQueryHandler};

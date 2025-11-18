@@ -2,6 +2,7 @@ mod helpers;
 
 use axum_test::TestServer;
 use helpers::{mock_app_state, mock_integer_statistic};
+use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
 use lifestats_web_api::dto::statistic::StatisticMetadataResponse;
@@ -261,4 +262,198 @@ async fn test_get_goal_performance_invalid_date_format() {
     // Assert error response contains validation message
     let body: serde_json::Value = response.json();
     assert!(body["error"].as_str().unwrap().contains("Invalid"));
+}
+
+// ============================================================================
+// GET /statistics/:id/logged/:date Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_logged_value_has_value() {
+    use chrono::NaiveDate;
+    use lifestats_core::shared::ids::StatisticId;
+    use serde_json::json;
+
+    // Create mock repository
+    let mut mock_repo = MockStatisticRepository::new();
+
+    let stat = mock_integer_statistic(1, "Push Ups", "Fitness");
+    let date = NaiveDate::from_ymd_opt(2025, 11, 18).unwrap();
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(move |_| Ok(stat.clone()));
+
+    mock_repo
+        .expect_find_log_value()
+        .with(
+            mockall::predicate::eq(StatisticId(1)),
+            mockall::predicate::eq(date),
+        )
+        .times(1)
+        .returning(move |_, _| Ok(Some(json!(42))));
+
+    // Create app state and router
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+
+    // Create test server
+    let server = TestServer::new(app).unwrap();
+
+    // Send request
+    let response = server.get("/statistics/1/logged/2025-11-18").await;
+
+    // Assert status code
+    assert_eq!(response.status_code(), 200);
+
+    // Assert response body
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["statistic_id"], 1);
+    assert_eq!(body["date"], "2025-11-18");
+    assert_eq!(body["has_value"], true);
+    assert_eq!(body["value"], json!(42));
+}
+
+#[tokio::test]
+async fn test_get_logged_value_no_value() {
+    use chrono::NaiveDate;
+    use lifestats_core::shared::ids::StatisticId;
+
+    // Create mock repository
+    let mut mock_repo = MockStatisticRepository::new();
+
+    let stat = mock_integer_statistic(1, "Push Ups", "Fitness");
+    let date = NaiveDate::from_ymd_opt(2025, 11, 18).unwrap();
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(move |_| Ok(stat.clone()));
+
+    mock_repo
+        .expect_find_log_value()
+        .with(
+            mockall::predicate::eq(StatisticId(1)),
+            mockall::predicate::eq(date),
+        )
+        .times(1)
+        .returning(move |_, _| Ok(None));
+
+    // Create app state and router
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+
+    // Create test server
+    let server = TestServer::new(app).unwrap();
+
+    // Send request
+    let response = server.get("/statistics/1/logged/2025-11-18").await;
+
+    // Assert status code
+    assert_eq!(response.status_code(), 200);
+
+    // Assert response body
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["statistic_id"], 1);
+    assert_eq!(body["date"], "2025-11-18");
+    assert_eq!(body["has_value"], false);
+    // value field should not be present when None
+    assert!(body.get("value").is_none() || body["value"].is_null());
+}
+
+#[tokio::test]
+async fn test_get_logged_value_statistic_not_found() {
+    // Create mock repository
+    let mut mock_repo = MockStatisticRepository::new();
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(|_| Err(RepositoryError::NotFound));
+
+    // Create app state and router
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+
+    // Create test server
+    let server = TestServer::new(app).unwrap();
+
+    // Send request
+    let response = server.get("/statistics/999/logged/2025-11-18").await;
+
+    // Assert status code
+    assert_eq!(response.status_code(), 404);
+
+    // Assert error response
+    let body: serde_json::Value = response.json();
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("Statistic 999 not found"));
+}
+
+#[tokio::test]
+async fn test_get_logged_value_derived_statistic() {
+    use chrono::NaiveDate;
+    use lifestats_core::shared::ids::StatisticId;
+    use lifestats_core::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
+    use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+
+    // Create mock repository
+    let mut mock_repo = MockStatisticRepository::new();
+
+    // Create a derived statistic (SummingStatistic)
+    let metadata =
+        StatisticMetadata::new(StatisticId(1), "Test".to_string(), "Total Work".to_string());
+    let derived_stat = AnyStatistic::Summing(SummingStatistic::new(
+        metadata,
+        vec![],
+        None,
+        NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+    ));
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(move |_| Ok(derived_stat.clone()));
+
+    // Create app state and router
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+
+    // Create test server
+    let server = TestServer::new(app).unwrap();
+
+    // Send request
+    let response = server.get("/statistics/1/logged/2025-11-18").await;
+
+    // Assert status code
+    assert_eq!(response.status_code(), 400);
+
+    // Assert error response
+    let body: serde_json::Value = response.json();
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("derived statistics"));
+}
+
+#[tokio::test]
+async fn test_get_logged_value_invalid_date_format() {
+    // Create mock repository (no expectations needed - validation fails at routing level)
+    let mock_repo = MockStatisticRepository::new();
+
+    // Create app state and router
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+
+    // Create test server
+    let server = TestServer::new(app).unwrap();
+
+    // Send request with invalid date format
+    let response = server.get("/statistics/1/logged/2025-13-45").await;
+
+    // Assert status code (Axum returns 400 for invalid path parameter parsing)
+    assert_eq!(response.status_code(), 400);
 }

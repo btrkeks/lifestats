@@ -175,6 +175,7 @@ web_api/
 | `DELETE` | `/statistics/{id}` | Delete a statistic |
 | `POST` | `/statistics/{id}/log/{date}` | Log a value for a statistic on a date |
 | `POST` | `/statistics/{id}/log_time_frame/{date}` | Log a time frame for TimeSpans |
+| `GET` | `/statistics/{id}/logged/{date}` | Check if a value has been logged for a specific date |
 | `GET` | `/statistics/{id}/time_spans/total` | Get total duration for date range |
 | `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
 | `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
@@ -265,6 +266,37 @@ web_api/
 ```
 
 **Response:** `204 No Content`
+
+### Checking if Value is Logged
+
+**Request:** `GET /statistics/{id}/logged/{date}`
+
+**Response:** `200 OK`
+
+```json
+{
+  "statistic_id": 1,
+  "date": "2025-11-18",
+  "has_value": true,
+  "value": 42
+}
+```
+
+**When no value exists:**
+
+```json
+{
+  "statistic_id": 1,
+  "date": "2025-11-18",
+  "has_value": false
+}
+```
+
+**Notes:**
+- Returns 404 if statistic doesn't exist
+- Returns 400 for derived statistics (Summing, TimeDifference) - they are computed, not logged
+- The `value` field is omitted when `has_value` is false
+- Date must be in `YYYY-MM-DD` format
 
 ### Setting a Goal
 

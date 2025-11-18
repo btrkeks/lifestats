@@ -720,3 +720,52 @@ where
 
     Ok(Json(result))
 }
+
+/// GET /statistics/:id/logged/:date - Check if a statistic has been logged for a specific date
+pub async fn get_logged_value<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
+    Path((statistic_id, date)): Path<(u32, NaiveDate)>,
+) -> Result<Json<lifestats_application::dto::LoggedValueResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::dto::LoggedValueResponse;
+    use lifestats_application::use_cases::queries::{
+        GetLoggedValueQuery, GetLoggedValueQueryHandler,
+    };
+
+    // Build query
+    let query = GetLoggedValueQuery {
+        statistic_id: StatisticId(statistic_id),
+        date,
+    };
+
+    // Execute query
+    let handler = GetLoggedValueQueryHandler::new(app_state.statistic_repository.clone());
+    let log_value = handler.handle(query).map_err(|e| {
+        // Map application errors to appropriate HTTP errors
+        match e {
+            lifestats_application::error::ApplicationError::Repository(
+                lifestats_core::statistic::ports::error::RepositoryError::NotFound,
+            ) => ApiError::NotFound(format!("Statistic {} not found", statistic_id)),
+            lifestats_application::error::ApplicationError::InvalidInput(msg) => {
+                ApiError::BadRequest(msg)
+            }
+            _ => ApiError::InternalError(format!("Failed to check logged value: {}", e)),
+        }
+    })?;
+
+    // Build response DTO
+    let response = LoggedValueResponse {
+        statistic_id,
+        date,
+        has_value: log_value.is_some(),
+        value: log_value,
+    };
+
+    Ok(Json(response))
+}

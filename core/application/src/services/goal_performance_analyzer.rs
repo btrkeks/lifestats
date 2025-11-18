@@ -60,8 +60,8 @@ where
     /// - `InsufficientData` error if the date range has no data
     ///
     /// # Semantics for days without goals
-    /// - Days with `percentage_achieved: None` (suppressed goals, no goal, etc.) are treated
-    ///   as 100% achievement for the purposes of performance analysis
+    /// - Days with `percentage_achieved: None` (suppressed goals, no goal, etc.) are excluded
+    ///   from the calculation entirely - only days with active goals are counted
     pub fn analyze(
         &self,
         statistic_id: StatisticId,
@@ -74,15 +74,10 @@ where
         let day_evals = self.evaluator.eval_range(&stat, date_range)?;
 
         // Map DayEval -> daily percentage scores
-        // Treat None (suppressed/no-goal) as 100% for this analysis
+        // Filter out None (suppressed/no-goal) - only count days with active goals
         let daily_scores: Vec<f64> = day_evals
             .iter()
-            .map(|d| {
-                d.percentage_achieved
-                    .unwrap_or_else(|| Percentage::new(100))
-                    .as_fraction()
-                    * 100.0
-            })
+            .filter_map(|d| d.percentage_achieved.map(|p| p.as_fraction() * 100.0))
             .collect();
 
         // Check for empty data
@@ -146,9 +141,11 @@ where
 mod tests {
     use super::*;
     use chrono::NaiveDate;
-    use lifestats_core::statistic::any_statistic::AnyStatistic;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
+    use lifestats_core::statistic::{
+        any_statistic::AnyStatistic, value_objects::goals::habit_goal::HabitGoal,
+    };
 
     use crate::services::daily_achievement_evaluator::{DayEval, MockDailyAchievementEvaluator};
 
@@ -412,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn test_suppressed_goals_treated_as_100_percent() {
+    fn test_suppressed_goals_ignored_in_calculation() {
         let stat_id = StatisticId(1);
         let date_range = DateRange::new(
             NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
@@ -454,7 +451,85 @@ mod tests {
 
         let result = analyzer.analyze(stat_id, date_range).unwrap();
 
-        // 16 days at 60% + 4 days at 100% (suppressed) = (960 + 400) / 20 = 68%
-        assert_eq!(result.overall_score, Percentage::new(68));
+        // 16 days at 60%, 4 days suppressed (ignored) = 960 / 16 = 60%
+        assert_eq!(result.overall_score, Percentage::new(60));
+    }
+
+    #[test]
+    fn test_overall_score_with_partial_goal_coverage() {
+        let stat_id = StatisticId(1);
+        let date_range = DateRange::new(
+            NaiveDate::from_ymd_opt(2025, 11, 2).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 11, 16).unwrap(),
+        )
+        .unwrap();
+
+        let mut stat = mock_habit_statistic(1);
+        let mut mock_repo = MockStatisticRepository::new();
+        mock_repo
+            .expect_find_metadata_by_id()
+            .times(1)
+            .return_once(move |_| Ok(stat));
+
+        // Days 11/02-11/12: no goal (should be ignored in calculation)
+        // Day 11/13: goal exists, logged true (100%)
+        // Days 11/14-11/15: goal exists, not logged (0%)
+        // Day 11/16: goal exists, logged true (100%)
+        let mut mock_evaluator = MockDailyAchievementEvaluator::new();
+        mock_evaluator
+            .expect_eval_range()
+            .times(1)
+            .returning(|_, _| {
+                let mut evals = Vec::new();
+
+                // Days 2-12: no goal exists
+                for day in 2..=12 {
+                    evals.push(DayEval {
+                        date: NaiveDate::from_ymd_opt(2025, 11, day).unwrap(),
+                        has_goal: false,
+                        achieved: false,
+                        percentage_achieved: None,
+                    });
+                }
+
+                // Day 13: goal exists, logged true
+                evals.push(DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 11, 13).unwrap(),
+                    has_goal: true,
+                    achieved: true,
+                    percentage_achieved: Some(Percentage::new(100)),
+                });
+
+                // Days 14-15: goal exists, not logged (0%)
+                for day in 14..=15 {
+                    evals.push(DayEval {
+                        date: NaiveDate::from_ymd_opt(2025, 11, day).unwrap(),
+                        has_goal: true,
+                        achieved: false,
+                        percentage_achieved: Some(Percentage::new(0)),
+                    });
+                }
+
+                // Day 16: goal exists, logged true
+                evals.push(DayEval {
+                    date: NaiveDate::from_ymd_opt(2025, 11, 16).unwrap(),
+                    has_goal: true,
+                    achieved: true,
+                    percentage_achieved: Some(Percentage::new(100)),
+                });
+
+                Ok(evals)
+            });
+
+        let analyzer = GoalPerformanceAnalyzer::new(Arc::new(mock_evaluator), Arc::new(mock_repo));
+
+        let result = analyzer.analyze(stat_id, date_range).unwrap();
+
+        // 1 day at 100% + 2 days at 0% + 1 day at 100%
+        // = (100 + 0 + 100) / 4 = 200 / 4 = 50%
+        assert_eq!(result.overall_score, Percentage::new(50));
+
+        // 15 days is >= MIN_DATA_POINTS_FOR_TREND (14), but we're just testing overall_score here
+        // The trend calculation is tested in other tests
     }
 }

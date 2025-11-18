@@ -11,11 +11,12 @@ use lifestats_core::statistic::any_statistic::AnyStatistic;
 use plot_domain::plot::data::{DrawableData, DrawableGoal};
 use serde_json::Value;
 
-/// Converts a JSON log value to DrawableData based on the statistic type
+/// Converts a JSON log value to DrawableData based on the statistic type and plot type
 ///
 /// # Arguments
 /// * `statistic` - The statistic metadata to determine the expected type
 /// * `value` - The JSON value from the database
+/// * `plot_type` - The type of plot being rendered (affects conversion for TimeSpans)
 ///
 /// # Returns
 /// * `Ok(DrawableData)` - The typed drawable data
@@ -23,6 +24,7 @@ use serde_json::Value;
 pub fn json_value_to_drawable_data(
     statistic: &AnyStatistic,
     value: &Value,
+    plot_type: plot_domain::plot::plot_type::PlotType,
 ) -> Result<DrawableData> {
     match statistic {
         AnyStatistic::Habit(_) => {
@@ -54,7 +56,21 @@ pub fn json_value_to_drawable_data(
         AnyStatistic::TimeSpans(_) => {
             let time_frame_list = serde_json::from_value::<TimeFrameList>(value.clone())
                 .map_err(|e| anyhow!("Failed to parse TimeFrameList: {}", e))?;
-            Ok(DrawableData::TimeFrames(time_frame_list))
+
+            // For bar/line/scatter plots, convert to total duration in seconds
+            // For time_frames plot, keep as TimeFrameList for range visualization
+            match plot_type {
+                plot_domain::plot::plot_type::PlotType::BarChart
+                | plot_domain::plot::plot_type::PlotType::LineChart
+                | plot_domain::plot::plot_type::PlotType::Scatter => {
+                    let total_seconds = time_frame_list.get_total_duration().num_seconds();
+                    Ok(DrawableData::Integer(total_seconds))
+                }
+                plot_domain::plot::plot_type::PlotType::TimeFrames
+                | plot_domain::plot::plot_type::PlotType::CircularProgress => {
+                    Ok(DrawableData::TimeFrames(time_frame_list))
+                }
+            }
         }
         AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
             // Derived statistics - currently not fully supported for plotting
@@ -70,11 +86,12 @@ pub fn json_value_to_drawable_data(
     }
 }
 
-/// Converts a JSON goal value to DrawableGoal based on the statistic type
+/// Converts a JSON goal value to DrawableGoal based on the statistic type and plot type
 ///
 /// # Arguments
 /// * `statistic` - The statistic metadata to determine the expected type
 /// * `value` - The JSON goal value from the database
+/// * `plot_type` - The type of plot being rendered (affects conversion for TimeSpans)
 ///
 /// # Returns
 /// * `Ok(DrawableGoal)` - The typed drawable goal
@@ -82,6 +99,7 @@ pub fn json_value_to_drawable_data(
 pub fn json_value_to_drawable_goal(
     statistic: &AnyStatistic,
     value: &Value,
+    plot_type: plot_domain::plot::plot_type::PlotType,
 ) -> Result<DrawableGoal> {
     match statistic {
         AnyStatistic::Habit(_) => {
@@ -136,7 +154,21 @@ pub fn json_value_to_drawable_goal(
                     serde_json::from_value::<TimeFrameList>(v.clone())
                         .map_err(|e| anyhow!("Failed to parse TimeFrameList from goal: {}", e))
                 })?;
-            Ok(DrawableGoal::TimeFrames(time_frame_list))
+
+            // For bar/line/scatter plots, convert to total duration in seconds
+            // For time_frames plot, keep as TimeFrameList for range visualization
+            match plot_type {
+                plot_domain::plot::plot_type::PlotType::BarChart
+                | plot_domain::plot::plot_type::PlotType::LineChart
+                | plot_domain::plot::plot_type::PlotType::Scatter => {
+                    let total_seconds = time_frame_list.get_total_duration().num_seconds();
+                    Ok(DrawableGoal::Integer(total_seconds))
+                }
+                plot_domain::plot::plot_type::PlotType::TimeFrames
+                | plot_domain::plot::plot_type::PlotType::CircularProgress => {
+                    Ok(DrawableGoal::TimeFrames(time_frame_list))
+                }
+            }
         }
         AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
             // Derived statistics - goals would be in seconds
@@ -204,10 +236,20 @@ mod tests {
             chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         ));
 
-        let result_true = json_value_to_drawable_data(&stat, &json!(true)).unwrap();
+        let result_true = json_value_to_drawable_data(
+            &stat,
+            &json!(true),
+            plot_domain::plot::plot_type::PlotType::BarChart,
+        )
+        .unwrap();
         assert_eq!(result_true, DrawableData::Integer(1));
 
-        let result_false = json_value_to_drawable_data(&stat, &json!(false)).unwrap();
+        let result_false = json_value_to_drawable_data(
+            &stat,
+            &json!(false),
+            plot_domain::plot::plot_type::PlotType::BarChart,
+        )
+        .unwrap();
         assert_eq!(result_false, DrawableData::Integer(0));
     }
 
@@ -219,12 +261,17 @@ mod tests {
             chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         ));
 
-        let result = json_value_to_drawable_data(&stat, &json!(42)).unwrap();
+        let result = json_value_to_drawable_data(
+            &stat,
+            &json!(42),
+            plot_domain::plot::plot_type::PlotType::BarChart,
+        )
+        .unwrap();
         assert_eq!(result, DrawableData::Integer(42));
     }
 
     #[test]
-    fn test_time_spans_to_drawable_data() {
+    fn test_time_spans_to_drawable_data_for_time_frames_plot() {
         let stat = AnyStatistic::TimeSpans(TimeSpansStatistic::new(
             StatisticMetadata::new(StatisticId::from(1), "Test".into(), "Test Spans".into()),
             None,
@@ -236,13 +283,49 @@ mod tests {
             {"start": "14:00:00", "end": "18:00:00"}
         ]);
 
-        let result = json_value_to_drawable_data(&stat, &time_frames_json).unwrap();
+        // TimeFrames plot type should return DrawableData::TimeFrames
+        let result = json_value_to_drawable_data(
+            &stat,
+            &time_frames_json,
+            plot_domain::plot::plot_type::PlotType::TimeFrames,
+        )
+        .unwrap();
         match result {
             DrawableData::TimeFrames(tf) => {
                 // Verify we got a TimeFrameList
                 assert_eq!(tf.iter().count(), 2);
             }
             _ => panic!("Expected TimeFrames"),
+        }
+    }
+
+    #[test]
+    fn test_time_spans_to_drawable_data_for_bar_chart() {
+        let stat = AnyStatistic::TimeSpans(TimeSpansStatistic::new(
+            StatisticMetadata::new(StatisticId::from(1), "Test".into(), "Test Spans".into()),
+            None,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        ));
+
+        let time_frames_json = json!([
+            {"start": "09:00:00", "end": "12:00:00"},  // 3 hours = 10800 seconds
+            {"start": "14:00:00", "end": "18:00:00"}   // 4 hours = 14400 seconds
+        ]);
+        // Total: 7 hours = 25200 seconds
+
+        // Bar chart plot type should return DrawableData::Integer (total duration in seconds)
+        let result = json_value_to_drawable_data(
+            &stat,
+            &time_frames_json,
+            plot_domain::plot::plot_type::PlotType::BarChart,
+        )
+        .unwrap();
+        match result {
+            DrawableData::Integer(seconds) => {
+                // Verify we got total duration in seconds (7 hours = 25200 seconds)
+                assert_eq!(seconds, 25200);
+            }
+            _ => panic!("Expected Integer"),
         }
     }
 
@@ -256,7 +339,12 @@ mod tests {
 
         // AmountGoal JSON structure has a "target_amount" field
         let goal_json = json!({"target_amount": 100, "is_at_least": true});
-        let result = json_value_to_drawable_goal(&stat, &goal_json).unwrap();
+        let result = json_value_to_drawable_goal(
+            &stat,
+            &goal_json,
+            plot_domain::plot::plot_type::PlotType::BarChart,
+        )
+        .unwrap();
         assert_eq!(result, DrawableGoal::Integer(100));
     }
 
@@ -270,7 +358,12 @@ mod tests {
 
         // HabitGoal JSON structure has a "target" field with boolean
         let goal_json = json!({"target": true});
-        let result = json_value_to_drawable_goal(&stat, &goal_json).unwrap();
+        let result = json_value_to_drawable_goal(
+            &stat,
+            &goal_json,
+            plot_domain::plot::plot_type::PlotType::BarChart,
+        )
+        .unwrap();
         assert_eq!(result, DrawableGoal::Integer(1));
     }
 

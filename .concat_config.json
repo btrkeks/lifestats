@@ -1,7 +1,12 @@
 {
   "_description": "Expert review context: Rust API + Node.js web UI",
   "_task": "Comprehensive review of ui/web-ui/ Node.js project and core Rust API integration points",
-  "project_roots": ["./core/core/", "./core/application/", "./README.md"],
+  "project_roots": [
+    "./core/core/",
+    "./core/application/",
+    "./core/infrastructure/web_api/",
+    "./README.md"
+  ],
   "extensions": [".rs", ".ts", ".tsx", ".js", ".jsx", ".json", ".mjs"],
   "exclude_dirs": [
     "target",

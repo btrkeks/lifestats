@@ -167,12 +167,12 @@ where
 
             // Convert JSON value to DrawableData (if present)
             let drawable_value = log_value_json
-                .map(|v| json_value_to_drawable_data(&statistic, v))
+                .map(|v| json_value_to_drawable_data(&statistic, v, query.plot_type))
                 .transpose()?;
 
             // Convert JSON goal to DrawableGoal (if present)
             let drawable_goal = goal_for_day
-                .map(|g| json_value_to_drawable_goal(&statistic, g))
+                .map(|g| json_value_to_drawable_goal(&statistic, g, query.plot_type))
                 .transpose()?;
 
             // Create the data point with all typed, renderer-ready data
