@@ -229,6 +229,14 @@ Routes defined in `core/infrastructure/web_api/src/routes/`.
 
 **Documentation Maintenance**: When making changes to the web API (routes, DTOs, error handling, etc.), always update `core/infrastructure/web_api/README.md` to keep the documentation in sync with the code.
 
+### Adding Anki Metrics
+
+For detailed guidance on adding new metrics to the Anki bundle system, see `logger_applications/AnkiLogger/INTEGRATION.md`. This guide covers:
+- Understanding the Anki bundle architecture
+- Step-by-step instructions for adding a new metric
+- Both Rust (backend) and Python (add-on) changes required
+- Testing and troubleshooting
+
 ### Adding a New Statistic Type
 
 1. Add type to `core/core/src/statistic/types/{logable,derived}_statistics/`

@@ -10,8 +10,6 @@ members = [
     "core/infrastructure/system_clock",
     "core/infrastructure/web_api",
     "core/plot-domain",
-    "./logger_applications/stopwatch_logger/",
-    "./logger_applications/stopwatch-service/",
     "./logger_applications/midi_logger/",
     "lifestats-bootstrap",
 ]

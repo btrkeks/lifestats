@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
 use base64::Engine as _;
-use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, Utc};
 use lifestats_application::error::{ApplicationError, ApplicationResult};
 use lifestats_application::integrations::fitbit::error::FitbitUpstreamError;
 use lifestats_application::integrations::fitbit::ports::{
@@ -353,7 +353,8 @@ impl SleepEnvelope {
 
         if let Some(main_sleep) = self.sleep.into_iter().find(|entry| entry.is_main_sleep) {
             data.sleep_efficiency = Some(main_sleep.efficiency);
-            data.woke_up_at_utc = Some(Utc.from_utc_datetime(&main_sleep.end_time));
+            // Fitbit returns times in user's local timezone (not UTC)
+            data.woke_up_at_local = Some(main_sleep.end_time);
 
             if let Some(stage) = main_sleep
                 .levels
@@ -361,7 +362,8 @@ impl SleepEnvelope {
                 .iter()
                 .find(|stage| stage.level != SleepStage::Wake && stage.seconds > 300)
             {
-                data.fell_asleep_at_utc = Some(Utc.from_utc_datetime(&stage.date_time));
+                // Fitbit returns times in user's local timezone (not UTC)
+                data.fell_asleep_at_local = Some(stage.date_time);
             }
 
             let awake_seconds: u32 = main_sleep
@@ -495,8 +497,8 @@ mod tests {
 
         assert_eq!(sleep.sleep_efficiency, Some(95));
         assert_eq!(sleep.total_duration_asleep.unwrap().num_minutes(), 420);
-        assert!(sleep.fell_asleep_at_utc.is_some());
-        assert!(sleep.woke_up_at_utc.is_some());
+        assert!(sleep.fell_asleep_at_local.is_some());
+        assert!(sleep.woke_up_at_local.is_some());
         assert_eq!(sleep.total_duration_awake.unwrap().num_minutes(), 10);
     }
 

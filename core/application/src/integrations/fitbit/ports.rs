@@ -3,7 +3,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, Utc};
 
 use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
 
@@ -100,8 +100,10 @@ pub struct FitbitActivityData {
 pub struct FitbitSleepData {
     pub total_duration_asleep: Option<ChronoDuration>,
     pub total_duration_awake: Option<ChronoDuration>,
-    pub fell_asleep_at_utc: Option<DateTime<Utc>>,
-    pub woke_up_at_utc: Option<DateTime<Utc>>,
+    /// Time when user fell asleep (in user's local timezone, as returned by Fitbit API)
+    pub fell_asleep_at_local: Option<NaiveDateTime>,
+    /// Time when user woke up (in user's local timezone, as returned by Fitbit API)
+    pub woke_up_at_local: Option<NaiveDateTime>,
     pub sleep_efficiency: Option<u8>,
 }
 
@@ -109,7 +111,7 @@ impl FitbitSleepData {
     /// Extracts the main sleep period and converts it into a TimeFrameList.
     /// Returns Ok(None) if there is no main sleep period for the day.
     pub fn into_main_sleep_time_frames(&self) -> ApplicationResult<Option<TimeFrameList>> {
-        if let (Some(start), Some(end)) = (self.fell_asleep_at_utc, self.woke_up_at_utc) {
+        if let (Some(start), Some(end)) = (self.fell_asleep_at_local, self.woke_up_at_local) {
             let time_frame = TimeFrame::new(start.time(), end.time())
                 .map_err(|e| ApplicationError::InvalidInput(e.to_string()))?;
 
@@ -162,7 +164,7 @@ pub trait TokenStorePort: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use chrono::NaiveTime;
 
     #[test]
     fn test_into_main_sleep_time_frames_happy_path() {
@@ -171,8 +173,16 @@ mod tests {
         let sleep_data = FitbitSleepData {
             total_duration_asleep: None,
             total_duration_awake: None,
-            fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 14, 0, 0).unwrap()),
-            woke_up_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 16, 30, 0).unwrap()),
+            fell_asleep_at_local: Some(
+                NaiveDate::from_ymd_opt(2024, 1, 15)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(14, 0, 0).unwrap()),
+            ),
+            woke_up_at_local: Some(
+                NaiveDate::from_ymd_opt(2024, 1, 15)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(16, 30, 0).unwrap()),
+            ),
             sleep_efficiency: None,
         };
 
@@ -204,8 +214,8 @@ mod tests {
         let sleep_data = FitbitSleepData {
             total_duration_asleep: None,
             total_duration_awake: None,
-            fell_asleep_at_utc: None,
-            woke_up_at_utc: None,
+            fell_asleep_at_local: None,
+            woke_up_at_local: None,
             sleep_efficiency: None,
         };
 
@@ -223,8 +233,12 @@ mod tests {
         let sleep_data = FitbitSleepData {
             total_duration_asleep: None,
             total_duration_awake: None,
-            fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 22, 30, 0).unwrap()),
-            woke_up_at_utc: None,
+            fell_asleep_at_local: Some(
+                NaiveDate::from_ymd_opt(2024, 1, 15)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(22, 30, 0).unwrap()),
+            ),
+            woke_up_at_local: None,
             sleep_efficiency: None,
         };
 
@@ -242,8 +256,12 @@ mod tests {
         let sleep_data = FitbitSleepData {
             total_duration_asleep: None,
             total_duration_awake: None,
-            fell_asleep_at_utc: None,
-            woke_up_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 16, 6, 15, 0).unwrap()),
+            fell_asleep_at_local: None,
+            woke_up_at_local: Some(
+                NaiveDate::from_ymd_opt(2024, 1, 16)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(6, 15, 0).unwrap()),
+            ),
             sleep_efficiency: None,
         };
 
@@ -261,8 +279,16 @@ mod tests {
         let sleep_data = FitbitSleepData {
             total_duration_asleep: None,
             total_duration_awake: None,
-            fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 6, 15, 0).unwrap()),
-            woke_up_at_utc: Some(Utc.with_ymd_and_hms(2024, 1, 15, 3, 30, 0).unwrap()),
+            fell_asleep_at_local: Some(
+                NaiveDate::from_ymd_opt(2024, 1, 15)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(6, 15, 0).unwrap()),
+            ),
+            woke_up_at_local: Some(
+                NaiveDate::from_ymd_opt(2024, 1, 15)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(3, 30, 0).unwrap()),
+            ),
             sleep_efficiency: None,
         };
 

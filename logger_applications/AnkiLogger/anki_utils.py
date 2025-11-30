@@ -1,6 +1,10 @@
 from anki.decks import DeckId
 from aqt import mw
 
+from .logger_config import get_logger
+
+logger = get_logger(__name__)
+
 
 def deck_is_finished(deck_id: DeckId) -> bool:
     """Check if a specific deck has no more cards due today."""
@@ -46,34 +50,6 @@ def get_deck_name(deck_id: DeckId) -> str:
         return mw.col.decks.get(deck_id)["name"]
 
 
-# def get_total_backlog_count(deck_id: DeckId) -> int:
-#     """Get the total number of cards due (Learning + Review).
-#
-#     Args:
-#         deck_id: The Anki deck ID
-#
-#     Returns:
-#         Sum of cards in new, learning, and review queues.
-#     """
-#     if deck_id is None:
-#         return 0
-#
-#     # Select the deck temporarily to get its counts
-#     original_deck = mw.col.decks.selected()
-#     try:
-#         mw.col.decks.select(deck_id)
-#         # counts() returns a tuple: (new, learning, review) due today
-#         counts = mw.col.sched.counts()
-#
-#         # Sum them up to get the total backlog
-#         total_backlog = counts[1] + counts[2]
-#
-#         return total_backlog
-#     finally:
-#         # Restore original deck selection
-#         mw.col.decks.select(original_deck)
-
-
 def get_total_backlog_count(deck_id: DeckId) -> int:
     """Get the UNCAPPED total number of cards due (Learning + Review).
 
@@ -106,3 +82,39 @@ def get_total_backlog_count(deck_id: DeckId) -> int:
     )
 
     return total_backlog
+
+
+def get_cards_studied_today(deck_id: DeckId | None = None) -> int:
+    """Get the number of unique cards reviewed today, optionally filtered by deck."""
+    today_start_ms = (mw.col.sched.day_cutoff - 86400) * 1000
+
+    if deck_id is None:
+        # All decks
+        count = mw.col.db.scalar(
+            """
+            SELECT COUNT(DISTINCT cid)
+            FROM revlog
+            WHERE id > ?
+              AND type NOT IN (4, 5)
+            """,
+            today_start_ms,
+        )
+    else:
+        # Specific deck (including subdecks)
+        deck_ids = [deck_id] + [d.id for d in mw.col.decks.children(deck_id)]
+        placeholders = ",".join("?" * len(deck_ids))
+
+        count = mw.col.db.scalar(
+            f"""
+            SELECT COUNT(DISTINCT r.cid)
+            FROM revlog r
+            JOIN cards c ON r.cid = c.id
+            WHERE r.id > ?
+              AND r.type NOT IN (4, 5)
+              AND c.did IN ({placeholders})
+            """,
+            today_start_ms,
+            *deck_ids,
+        )
+
+    return count or 0

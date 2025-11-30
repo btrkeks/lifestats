@@ -11,7 +11,12 @@ from anki.cards import Card
 from anki.decks import DeckId
 from aqt import gui_hooks, reviewer
 
-from .anki_utils import deck_is_finished, get_current_deck_id, get_deck_name
+from .anki_utils import (
+    deck_is_finished,
+    get_cards_studied_today,
+    get_current_deck_id,
+    get_deck_name,
+)
 from .logger_config import get_logger
 from .session_tracker import SessionTracker
 
@@ -59,6 +64,10 @@ def on_reviewer_will_end(session_tracker: SessionTracker):
 
     current_deck_id = get_current_deck_id()
     logger.debug(f"Current deck_id: {current_deck_id}")
+
+    # TEST: Log cards studied today
+    cards_studied = get_cards_studied_today(DeckId(1661059140274))
+    logger.info(f"TEST: Cards studied today = {cards_studied}")
 
     # Check if current deck is finished BEFORE stopping (so bundle still exists)
     if deck_is_finished(current_deck_id):

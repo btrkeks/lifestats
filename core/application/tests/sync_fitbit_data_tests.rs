@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use mockall::{mock, predicate::*};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -150,8 +150,17 @@ fn create_test_sleep_data() -> FitbitSleepData {
     FitbitSleepData {
         total_duration_asleep: Some(ChronoDuration::hours(8)),
         sleep_efficiency: Some(95),
-        fell_asleep_at_utc: Some(Utc.with_ymd_and_hms(2025, 1, 1, 22, 0, 0).unwrap()),
-        woke_up_at_utc: Some(Utc.with_ymd_and_hms(2025, 1, 2, 6, 0, 0).unwrap()),
+        // Fitbit returns times in user's local timezone (as NaiveDateTime)
+        fell_asleep_at_local: Some(
+            NaiveDate::from_ymd_opt(2025, 1, 1)
+                .unwrap()
+                .and_time(NaiveTime::from_hms_opt(22, 0, 0).unwrap()),
+        ),
+        woke_up_at_local: Some(
+            NaiveDate::from_ymd_opt(2025, 1, 2)
+                .unwrap()
+                .and_time(NaiveTime::from_hms_opt(6, 0, 0).unwrap()),
+        ),
         total_duration_awake: Some(ChronoDuration::minutes(30)),
     }
 }

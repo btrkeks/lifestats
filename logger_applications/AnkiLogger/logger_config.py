@@ -23,7 +23,7 @@ def setup_logging(level=logging.WARNING):
     The log file is limited to 5MB with 3 backup files.
 
     Args:
-        level: The logging level (default: WARNING - only warnings and errors)
+        level: The logging level (default: WARNING - shows warnings and errors)
     """
     global _configured
 

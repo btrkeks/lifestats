@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 
 use anyhow::anyhow;
-use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, Timelike};
+use chrono::{Duration as ChronoDuration, NaiveDate, Timelike};
 use chrono_tz::Tz;
 use futures::stream::{self, TryStreamExt};
 use rand::Rng;
@@ -540,27 +540,27 @@ impl SyncFitbitDataCommandHandler {
             FitbitMetric::SleepEfficiency => sleep
                 .sleep_efficiency
                 .map(|efficiency| (requested_date, json!(efficiency))),
-            FitbitMetric::WakeUpTime => sleep.woke_up_at_utc.map(|time| {
-                let local = time.with_timezone(&self.timezone);
+            FitbitMetric::WakeUpTime => sleep.woke_up_at_local.map(|time| {
+                // Fitbit returns times in user's local timezone, use directly
                 (
-                    canonical_sleep_date(local),
+                    time.date(),
                     json!(format!(
                         "{:02}:{:02}:{:02}",
-                        local.hour(),
-                        local.minute(),
-                        local.second()
+                        time.hour(),
+                        time.minute(),
+                        time.second()
                     )),
                 )
             }),
-            FitbitMetric::FellAsleepTime => sleep.fell_asleep_at_utc.map(|time| {
-                let local = time.with_timezone(&self.timezone);
+            FitbitMetric::FellAsleepTime => sleep.fell_asleep_at_local.map(|time| {
+                // Fitbit returns times in user's local timezone, use directly
                 (
-                    canonical_sleep_date(local),
+                    time.date(),
                     json!(format!(
                         "{:02}:{:02}:{:02}",
-                        local.hour(),
-                        local.minute(),
-                        local.second()
+                        time.hour(),
+                        time.minute(),
+                        time.second()
                     )),
                 )
             }),
@@ -625,8 +625,4 @@ fn metric_category(metric: &FitbitMetric) -> FitbitDataCategory {
         | FitbitMetric::CardioMinutes
         | FitbitMetric::PeakMinutes => FitbitDataCategory::Activity,
     }
-}
-
-fn canonical_sleep_date(local_time: DateTime<Tz>) -> NaiveDate {
-    local_time.date_naive()
 }
