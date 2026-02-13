@@ -180,6 +180,7 @@ web_api/
 | `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
 | `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
 | `GET` | `/statistics/{id}/performance` | Get goal performance analysis with trend over date range |
+| `POST` | `/statistics/dashboard` | Get dashboard data for multiple statistics |
 
 ### Goals
 
@@ -401,6 +402,68 @@ web_api/
 - Returns `400 Bad Request` if no data exists in the range
 - Returns `404 Not Found` if statistic doesn't exist
 - Returns `400 Bad Request` for invalid date formats or `start_date > end_date`
+
+### Getting Dashboard Data
+
+**Request:** `POST /statistics/dashboard`
+
+```json
+{
+  "statistic_ids": [80, 24, 23],
+  "today": "2025-12-22",
+  "performance_window_days": 14
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "statistics": [
+    {
+      "statistic_id": 80,
+      "statistic_name": "Steps",
+      "statistic_type": "IntegerAmount",
+      "today_value": 573,
+      "avg_7d_value": 412.5,
+      "performance": {
+        "overall_score": 61,
+        "trend": {
+          "direction": "improving",
+          "strength": 0.24
+        }
+      }
+    },
+    {
+      "statistic_id": 24,
+      "statistic_name": "Reading",
+      "statistic_type": "TimeSpans",
+      "today_value": 3600,
+      "avg_7d_value": 2700.0,
+      "performance": {
+        "overall_score": 85,
+        "trend": {
+          "direction": "stable"
+        }
+      }
+    }
+  ]
+}
+```
+
+**Notes:**
+- `statistic_ids`: Array of statistic IDs to include (must not be empty)
+- `today`: Reference date for "today's value" calculation
+- `performance_window_days`: Number of days for performance analysis (1-365)
+- `today_value`: Today's logged value as i64 (null if no value logged)
+  - IntegerAmount: direct value
+  - Habit: 1 (true) or 0 (false)
+  - TimeSpans: total duration in seconds
+  - PointInTime: seconds from midnight
+- `avg_7d_value`: 7-day rolling average (null if insufficient data)
+- `performance`: Goal performance analysis (null if no goals or insufficient data)
+- Returns `404 Not Found` if any statistic ID doesn't exist
+- Returns `400 Bad Request` if derived statistics (Summing, TimeDifference) are requested
 
 ### Getting Daily Summary
 

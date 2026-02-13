@@ -42,6 +42,7 @@ class StatisticBundle:
     disruptions_id: int
     backlog_id: int
     finished_time_id: int  # Per-deck statistic (when this deck's cards are all done)
+    cards_studied_id: int  # Number of unique cards studied today
 
 
 # Define custom exceptions for clear error handling
@@ -112,7 +113,7 @@ class ApiClient:
             data = response.json()
 
             # Validate that response contains all required keys
-            required_keys = {'time_spent_id', 'disruptions_id', 'backlog_id', 'finished_time_id'}
+            required_keys = {'time_spent_id', 'disruptions_id', 'backlog_id', 'finished_time_id', 'cards_studied_id'}
             missing_keys = required_keys - set(data.keys())
             if missing_keys:
                 # Log the problematic payload for easy debugging
@@ -123,7 +124,8 @@ class ApiClient:
                 time_spent_id=data['time_spent_id'],
                 disruptions_id=data['disruptions_id'],
                 backlog_id=data['backlog_id'],
-                finished_time_id=data['finished_time_id']
+                finished_time_id=data['finished_time_id'],
+                cards_studied_id=data['cards_studied_id'],
             )
             logger.info(f"Successfully provisioned and validated bundle: {bundle}")
             return bundle

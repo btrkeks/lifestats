@@ -13,7 +13,7 @@ use crate::services::ewma_calculator::Ewma;
 /// Configuration constants for EWMA trend calculation
 const FAST_EWMA_SPAN: u32 = 3;
 const SLOW_EWMA_SPAN: u32 = 7;
-const MIN_DATA_POINTS_FOR_TREND: usize = 14;
+const MIN_DATA_POINTS_FOR_TREND: usize = 5;
 const TREND_EPSILON: f64 = 1.0; // Percentage points
 
 /// Analyzes goal performance over a date range using EWMA-based trend detection
@@ -214,7 +214,7 @@ mod tests {
             .times(1)
             .return_once(move |_| Ok(stat));
 
-        // Only 5 data points (less than MIN_DATA_POINTS_FOR_TREND = 14)
+        // Only 4 data points (less than MIN_DATA_POINTS_FOR_TREND = 5)
         let mut mock_evaluator = MockDailyAchievementEvaluator::new();
         mock_evaluator
             .expect_eval_range()
@@ -245,12 +245,6 @@ mod tests {
                         achieved: true,
                         percentage_achieved: Some(Percentage::new(100)),
                     },
-                    DayEval {
-                        date: NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-                        has_goal: true,
-                        achieved: true,
-                        percentage_achieved: Some(Percentage::new(100)),
-                    },
                 ])
             });
 
@@ -258,7 +252,7 @@ mod tests {
 
         let result = analyzer.analyze(stat_id, date_range).unwrap();
 
-        assert_eq!(result.overall_score, Percentage::new(80)); // 400/5 = 80%
+        assert_eq!(result.overall_score, Percentage::new(75)); // 300/4 = 75%
         assert_eq!(result.trend, TrendDto::InsufficientData);
     }
 

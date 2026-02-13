@@ -21,6 +21,7 @@ const METRIC_TIME_SPENT: &str = "time_spent";
 const METRIC_DISRUPTIONS: &str = "disruptions";
 const METRIC_BACKLOG: &str = "backlog";
 const METRIC_FINISHED_TIME: &str = "finished_time";
+const METRIC_CARDS_STUDIED: &str = "cards_studied";
 
 pub struct AnkiBundleFactory;
 
@@ -107,6 +108,22 @@ impl BundleFactory for AnkiBundleFactory {
             current_date,
         ));
 
+        // Create Cards Studied (Reps) statistic
+        let cards_studied_metadata = StatisticMetadata::new(
+            temp_id,
+            "Anki".to_string(),
+            format!("[Anki] Reps ({})", deck_name),
+        )
+        .with_tag("source".to_string(), ANKI_SOURCE_TAG.to_string())
+        .with_tag("deck_name".to_string(), deck_name.clone())
+        .with_tag("metric".to_string(), METRIC_CARDS_STUDIED.to_string());
+
+        let cards_studied = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            cards_studied_metadata,
+            None,
+            current_date,
+        ));
+
         // Return the provisioned statistics
         Ok(vec![
             ProvisionedStatistic {
@@ -124,6 +141,10 @@ impl BundleFactory for AnkiBundleFactory {
             ProvisionedStatistic {
                 key: METRIC_FINISHED_TIME.to_string(),
                 statistic: finished_time,
+            },
+            ProvisionedStatistic {
+                key: METRIC_CARDS_STUDIED.to_string(),
+                statistic: cards_studied,
             },
         ])
     }

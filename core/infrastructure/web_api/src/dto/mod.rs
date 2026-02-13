@@ -1,4 +1,5 @@
 pub mod consistency;
+pub mod dashboard;
 pub mod goal;
 pub mod goal_performance;
 pub mod plot;

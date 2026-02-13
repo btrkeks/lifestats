@@ -5,6 +5,7 @@ pub mod get_consistency_score;
 pub mod get_daily_goal;
 pub mod get_daily_summary;
 pub mod get_daily_timeline_plot;
+pub mod get_dashboard;
 pub mod get_default_goal;
 pub mod get_goal_performance;
 pub mod get_loggable_metadata;
@@ -26,6 +27,7 @@ pub use get_consistency_score::{
 pub use get_daily_goal::{GetDailyGoalQuery, GetDailyGoalQueryHandler};
 pub use get_daily_summary::{GetDailySummaryQuery, GetDailySummaryQueryHandler};
 pub use get_daily_timeline_plot::{GetDailyTimelinePlotQuery, GetDailyTimelinePlotQueryHandler};
+pub use get_dashboard::{GetDashboardQuery, GetDashboardQueryHandler};
 pub use get_default_goal::{GetDefaultGoalQuery, GetDefaultGoalQueryHandler};
 pub use get_goal_performance::{GetGoalPerformanceQuery, GetGoalPerformanceQueryHandler};
 pub use get_loggable_metadata::{GetLoggableMetadataQuery, GetLoggableMetadataQueryHandler};

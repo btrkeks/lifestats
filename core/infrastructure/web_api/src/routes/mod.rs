@@ -1,4 +1,5 @@
 pub mod daily_summary;
+pub mod dashboard;
 pub mod goals;
 pub mod integrations;
 pub mod plots;
@@ -63,6 +64,8 @@ where
             "/statistics/{id}/performance",
             get(statistics::get_goal_performance),
         )
+        // Dashboard endpoint
+        .route("/statistics/dashboard", post(dashboard::get_dashboard))
         // Goal management endpoints
         .route(
             "/statistics/{id}/goals/default",

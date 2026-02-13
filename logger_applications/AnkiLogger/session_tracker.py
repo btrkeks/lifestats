@@ -12,7 +12,7 @@ from anki.decks import DeckId
 from aqt import mw
 from aqt.utils import tooltip
 
-from .anki_utils import get_current_deck_id, get_deck_name, get_total_backlog_count
+from .anki_utils import get_current_deck_id, get_deck_name, get_total_backlog_count, get_cards_studied_today
 from .api_client import ApiClient, ApiError, StatisticBundle
 from .config_manager import ConfigManager
 from .logger_config import get_logger
@@ -191,6 +191,7 @@ class SessionTracker:
         self.timer_manager.cancel_timer()
         self._log_time_frame()
         self._log_backlog()
+        self._log_cards_studied()
 
         # Reset state
         self.is_running = False
@@ -293,6 +294,32 @@ class SessionTracker:
             )
         except Exception as e:
             logger.error(f"Failed to log backlog: {e}", exc_info=True)
+
+    def _log_cards_studied(self):
+        """Logs the number of unique cards studied today for the current deck.
+
+        Uses 'overwrite' policy since this is a daily snapshot.
+        """
+        if not self.active_bundle or not self.deck_id:
+            return
+
+        cards_count = get_cards_studied_today(self.deck_id)
+        date = datetime.now().date()
+
+        logger.info(
+            f"Logging cards studied count ({cards_count}) "
+            f"to statistic {self.active_bundle.cards_studied_id}"
+        )
+
+        try:
+            self.api_client.log_statistic_value_async(
+                statistic_id=self.active_bundle.cards_studied_id,
+                date=date,
+                value=str(cards_count),
+                update_policy="overwrite",
+            )
+        except Exception as e:
+            logger.error(f"Failed to log cards studied: {e}", exc_info=True)
 
     def log_finished_time(self):
         """Logs the current time as the 'finished time' for the current deck.

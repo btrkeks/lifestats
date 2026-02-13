@@ -4,6 +4,7 @@ pub mod goal_performance_analyzer;
 pub mod goal_resolver;
 pub mod plot_data_builder;
 pub mod statistic_score_calculator;
+pub mod value_averaging;
 
 pub use daily_achievement_evaluator::{
     DailyAchievementEvaluator, DayEval, DefaultDailyAchievementEvaluator,
