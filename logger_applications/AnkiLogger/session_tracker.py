@@ -369,6 +369,9 @@ class SessionTracker:
         else:
             logger.debug("Flush interval reached, flushing time frame")
             self._flush_time_frame()
+            # Timer callbacks run on a background thread; query Anki collection state
+            # on the main thread when capturing periodic snapshot metrics.
+            mw.taskman.run_on_main(self._log_cards_studied)
             self._schedule_next_timeout()
 
     def calculate_next_timeout_interval(self) -> timedelta:
