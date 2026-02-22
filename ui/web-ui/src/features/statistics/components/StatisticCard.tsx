@@ -9,7 +9,10 @@ export function StatisticCard({ statistic, onManageGoal }: StatisticCardProps) {
   return (
     <div className="p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
       <div className="mb-4">
-        <h3 className="text-xl font-semibold text-gray-900">{statistic.name}</h3>
+        <h3 className="text-xl font-semibold text-gray-900">
+          <span className="text-xs font-normal text-gray-400 mr-2">#{statistic.id}</span>
+          {statistic.name}
+        </h3>
         <p className="text-sm text-gray-600 mt-1">{statistic.category}</p>
         <p className="text-xs text-gray-500 mt-1">Type: {statistic.statistic_type}</p>
       </div>
