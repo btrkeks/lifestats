@@ -53,6 +53,10 @@ where
             get(statistics::get_time_spans_total),
         )
         .route(
+            "/statistics/{id}/integer_amount/total",
+            get(statistics::get_integer_amount_total),
+        )
+        .route(
             "/statistics/{id}/consistency",
             get(statistics::get_consistency_score),
         )

@@ -518,6 +518,49 @@ where
     )))
 }
 
+/// GET /statistics/:id/integer_amount/total - Get total integer amount for an IntegerAmount statistic in a date range
+pub async fn get_integer_amount_total<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+    Query(params): Query<DateRangeParams>,
+) -> Result<Json<crate::dto::integer_amount::IntegerAmountTotalResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::use_cases::queries::get_integer_amount_total::{
+        GetIntegerAmountTotalQuery, GetIntegerAmountTotalQueryHandler,
+    };
+    use lifestats_core::shared::date_range::DateRange;
+
+    let date_range = DateRange::new(params.start_date, params.end_date)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
+
+    let handler = GetIntegerAmountTotalQueryHandler::new(app_state.statistic_repository.clone());
+
+    let result = handler
+        .handle(GetIntegerAmountTotalQuery {
+            statistic_id: StatisticId(statistic_id),
+            date_range,
+        })
+        .map_err(|e| {
+            if e.to_string().contains("not an IntegerAmount type") {
+                ApiError::BadRequest(e.to_string())
+            } else if e.to_string().contains("not found") {
+                ApiError::NotFound(e.to_string())
+            } else {
+                ApiError::InternalError(format!("Failed to get integer amount total: {}", e))
+            }
+        })?;
+
+    Ok(Json(
+        crate::dto::integer_amount::IntegerAmountTotalResponse::from(result),
+    ))
+}
+
 /// GET /statistics/:id/consistency - Get consistency score for a statistic
 pub async fn get_consistency_score<R, Rend, E, I>(
     State(app_state): State<AppState<R, Rend, E, I>>,

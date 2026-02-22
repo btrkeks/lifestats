@@ -2,6 +2,7 @@ pub mod consistency;
 pub mod dashboard;
 pub mod goal;
 pub mod goal_performance;
+pub mod integer_amount;
 pub mod plot;
 pub mod session;
 pub mod statistic;

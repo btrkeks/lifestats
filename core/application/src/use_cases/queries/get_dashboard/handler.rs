@@ -94,7 +94,9 @@ where
     ) -> ApplicationResult<Option<f64>> {
         const WINDOW_DAYS: u64 = 7;
 
-        let start = today.checked_sub_days(Days::new(WINDOW_DAYS - 1)).unwrap_or(today);
+        let start = today
+            .checked_sub_days(Days::new(WINDOW_DAYS - 1))
+            .unwrap_or(today);
         let range = DateRange::new(start, today).map_err(ApplicationError::Infrastructure)?;
 
         let dated_values = self.repo.find_log_values_in_range(stat.id(), range)?;

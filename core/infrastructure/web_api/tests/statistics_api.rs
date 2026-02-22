@@ -1,12 +1,18 @@
 mod helpers;
 
 use axum_test::TestServer;
+use chrono::NaiveDate;
 use helpers::{mock_app_state, mock_integer_statistic};
+use lifestats_core::shared::dated_value::DatedValue;
+use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
+use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
+use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_web_api::dto::statistic::StatisticMetadataResponse;
 use lifestats_web_api::routes::create_router;
+use serde_json::json;
 use std::sync::Arc;
 
 // ============================================================================
@@ -199,6 +205,101 @@ async fn test_log_value_statistic_not_found() {
     // Assert error response
     let body: serde_json::Value = response.json();
     assert_eq!(body["error"], "The requested resource was not found.");
+}
+
+// ============================================================================
+// GET /statistics/:id/integer_amount/total Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_integer_amount_total_success() {
+    let mut mock_repo = MockStatisticRepository::new();
+    let stat = mock_integer_statistic(1, "Anki Reps", "Learning");
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(move |_| Ok(stat.clone()));
+
+    mock_repo
+        .expect_find_log_values_in_range()
+        .times(1)
+        .returning(|_, _| {
+            Ok(vec![
+                DatedValue::new(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(), json!(100)),
+                DatedValue::new(NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(), json!(66)),
+            ])
+        });
+
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/statistics/1/integer_amount/total?start_date=2024-01-01&end_date=2024-01-02")
+        .await;
+
+    assert_eq!(response.status_code(), 200);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["total"], 166);
+}
+
+#[tokio::test]
+async fn test_get_integer_amount_total_wrong_stat_type_returns_400() {
+    let mut mock_repo = MockStatisticRepository::new();
+    let stat = AnyStatistic::Habit(HabitStatistic::new(
+        StatisticMetadata::new(StatisticId(1), "Health".into(), "Walked".into()),
+        None,
+        NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+    ));
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(move |_| Ok(stat.clone()));
+
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/statistics/1/integer_amount/total?start_date=2024-01-01&end_date=2024-01-02")
+        .await;
+
+    assert_eq!(response.status_code(), 400);
+}
+
+#[tokio::test]
+async fn test_get_integer_amount_total_stat_not_found_returns_404() {
+    let mut mock_repo = MockStatisticRepository::new();
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(|_| Err(RepositoryError::NotFound));
+
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/statistics/999/integer_amount/total?start_date=2024-01-01&end_date=2024-01-02")
+        .await;
+
+    assert_eq!(response.status_code(), 404);
+}
+
+#[tokio::test]
+async fn test_get_integer_amount_total_invalid_date_range_returns_400() {
+    let mock_repo = MockStatisticRepository::new();
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/statistics/1/integer_amount/total?start_date=2024-01-03&end_date=2024-01-02")
+        .await;
+
+    assert_eq!(response.status_code(), 400);
 }
 
 // ============================================================================
