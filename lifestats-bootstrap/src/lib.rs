@@ -11,13 +11,17 @@ use lifestats_application::statistic::ports::TagQueryableStatisticRepository;
 use lifestats_application::time::Clock;
 use lifestats_application::use_cases::{
     commands::sync_fitbit_data::SyncFitbitDataCommandHandler,
-    integration::{AnkiBundleFactory, BundleFactory, FitbitBundleFactory, IntegrationService},
+    integration::{
+        AnkiBundleFactory, BundleFactory, EbookBundleFactory, EbookEventStore, FitbitBundleFactory,
+        IntegrationService,
+    },
 };
 use lifestats_application::SessionManager;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_fitbit_client::{HttpFitbitDataClient, HttpFitbitOAuthClient};
 use lifestats_persistence::{
-    pool::get_database_pool, repository::SqliteStatisticRepository, token_store::SqliteTokenStore,
+    ebook_event_store::SqliteEbookEventStore, pool::get_database_pool,
+    repository::SqliteStatisticRepository, token_store::SqliteTokenStore,
 };
 use lifestats_plotting::PlottersRenderer;
 use lifestats_system_clock::SystemClock;
@@ -63,11 +67,17 @@ pub fn build_services() -> Result<Application> {
     let renderer = Arc::new(PlottersRenderer::new());
     let publisher = Arc::new(NoOpEventPublisher);
 
-    let factories: Vec<Arc<dyn BundleFactory>> =
-        vec![Arc::new(AnkiBundleFactory), Arc::new(FitbitBundleFactory)];
+    let factories: Vec<Arc<dyn BundleFactory>> = vec![
+        Arc::new(AnkiBundleFactory),
+        Arc::new(EbookBundleFactory),
+        Arc::new(FitbitBundleFactory),
+    ];
+    let ebook_event_store: Arc<dyn EbookEventStore> =
+        Arc::new(SqliteEbookEventStore::new(Arc::clone(&pool)));
     let integration_service = Arc::new(IntegrationService::new(
         statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
+        Some(ebook_event_store),
     ));
 
     // 2. Instantiate Fitbit integration components

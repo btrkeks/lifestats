@@ -8,6 +8,21 @@ diesel::table! {
 }
 
 diesel::table! {
+    ebook_sync_events (event_id) {
+        event_id -> Text,
+        source_name -> Text,
+        metric -> Text,
+        statistic_id -> Integer,
+        date -> Text,
+        delta -> BigInt,
+        book_id -> Nullable<Text>,
+        book_title -> Text,
+        confirmed_position_after -> BigInt,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
     goals (statistic_id, date) {
         statistic_id -> Integer,
         date -> Text,
@@ -49,10 +64,12 @@ diesel::table! {
 }
 
 diesel::joinable!(default_goals -> statistics (statistic_id));
+diesel::joinable!(ebook_sync_events -> statistics (statistic_id));
 diesel::joinable!(goals -> statistics (statistic_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     default_goals,
+    ebook_sync_events,
     goals,
     integrations,
     logging_data,

@@ -117,6 +117,10 @@ where
         )
         // Integration endpoints
         .route(
+            "/integrations/ebook/events",
+            post(integrations::ingest_ebook_event),
+        )
+        .route(
             "/integrations/{source}",
             post(integrations::provision_integration),
         )

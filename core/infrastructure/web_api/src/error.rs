@@ -53,7 +53,7 @@ impl IntoResponse for ApiError {
                     .into_response()
             }
             ApiError::InternalServerError(err) => {
-                tracing::error!("Internal server error: {:?}", err);
+                tracing::error!(error = %format_anyhow_chain(&err), error_debug = ?err, "Internal server error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(json!({ "error": "Internal server error" })),
@@ -80,6 +80,19 @@ impl IntoResponse for ApiError {
                 response
             }
         }
+    }
+}
+
+fn format_anyhow_chain(err: &anyhow::Error) -> String {
+    let parts = err
+        .chain()
+        .map(|cause| cause.to_string())
+        .collect::<Vec<_>>();
+
+    if parts.is_empty() {
+        "unknown error".to_string()
+    } else {
+        parts.join(": ")
     }
 }
 

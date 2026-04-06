@@ -1,12 +1,16 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     Json,
 };
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use events::event_port::EventPublisher;
-use lifestats_application::use_cases::integration::IntegrationServiceTrait;
+use events::event_port::{Event, EventPublisher};
+use lifestats_application::use_cases::integration::{
+    EbookEventIngestionRequest, IntegrationServiceTrait,
+};
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
 
@@ -26,6 +30,23 @@ pub struct ProvisionBundleResponse {
     /// Map from logical key to statistic ID
     #[serde(flatten)]
     pub statistic_ids: HashMap<String, u32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EbookEventRequest {
+    pub event_id: String,
+    pub date: NaiveDate,
+    pub metric: String,
+    pub delta: i64,
+    pub book_id: Option<u32>,
+    pub book_title: String,
+    pub confirmed_position_after: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EbookEventResponse {
+    pub accepted: bool,
+    pub duplicate: bool,
 }
 
 /// POST /integrations/:source
@@ -56,4 +77,77 @@ where
         .collect();
 
     Ok(Json(ProvisionBundleResponse { statistic_ids }))
+}
+
+pub async fn ingest_ebook_event<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+    Json(request): Json<EbookEventRequest>,
+) -> Result<(StatusCode, Json<EbookEventResponse>), ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    let event_id = request.event_id.clone();
+    let date = request.date;
+    let metric = request.metric.clone();
+    let delta = request.delta;
+    let book_id = request.book_id;
+    let book_title = request.book_title.clone();
+    let confirmed_position_after = request.confirmed_position_after;
+
+    let result = state
+        .integration_service
+        .ingest_ebook_event(EbookEventIngestionRequest {
+            event_id: event_id.clone(),
+            date,
+            metric: metric.clone(),
+            delta,
+            book_id: book_id.map(|book_id| book_id.to_string()),
+            book_title: book_title.clone(),
+            confirmed_position_after,
+        })
+        .map_err(|error| {
+            tracing::error!(
+                event_id = %event_id,
+                date = %date,
+                metric = %metric,
+                delta,
+                book_id = ?book_id,
+                book_title = %book_title,
+                confirmed_position_after,
+                error = %error,
+                error_debug = ?error,
+                "Failed to ingest ebook sync event"
+            );
+            ApiError::from(error)
+        })?;
+
+    tracing::debug!(
+        event_id = %event_id,
+        date = %date,
+        metric = %metric,
+        delta,
+        book_id = ?book_id,
+        book_title = %book_title,
+        confirmed_position_after,
+        accepted = result.accepted,
+        statistic_id = result.statistic_id.0,
+        "Processed ebook sync event"
+    );
+
+    if result.accepted {
+        state
+            .event_publisher
+            .publish_event_async(Event::ValueUpdated(result.statistic_id));
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(EbookEventResponse {
+            accepted: result.accepted,
+            duplicate: !result.accepted,
+        }),
+    ))
 }

@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
 use lifestats_application::use_cases::integration::{
-    AnkiBundleFactory, BundleFactory, IntegrationService,
+    AnkiBundleFactory, BundleFactory, EbookBundleFactory, IntegrationService,
 };
 use lifestats_application::SessionManager;
 use lifestats_core::shared::ids::StatisticId;
@@ -54,10 +54,12 @@ pub fn mock_app_state(
     let publisher = Arc::new(NoOpEventPublisher);
     let renderer = Arc::new(MockPlotRend::new());
 
-    let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
+    let factories: Vec<Arc<dyn BundleFactory>> =
+        vec![Arc::new(AnkiBundleFactory), Arc::new(EbookBundleFactory)];
     let integration_service = Arc::new(IntegrationService::new(
         mock_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
+        None,
     ));
 
     let session_manager = Arc::new(SessionManager::new(mock_repo.clone()));

@@ -109,6 +109,21 @@ pub struct DefaultGoalRaw {
     pub goal: String, // The single JSON blob
 }
 
+#[derive(Debug, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::db::schema::ebook_sync_events)]
+pub struct EbookSyncEventRow {
+    pub event_id: String,
+    pub source_name: String,
+    pub metric: String,
+    pub statistic_id: i32,
+    pub date: String,
+    pub delta: i64,
+    pub book_id: Option<String>,
+    pub book_title: String,
+    pub confirmed_position_after: i64,
+    pub created_at: String,
+}
+
 #[derive(Debug, Queryable, Selectable)]
 #[allow(dead_code)]
 #[diesel(table_name = crate::db::schema::integrations)]
