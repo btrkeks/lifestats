@@ -82,6 +82,7 @@
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
+  import BookReaderProgressBar from '$lib/components/book-reader/book-reader-progress-bar.svelte';
   import {
     readerImageGalleryPictures$,
     toggleImageGalleryPictureSpoiler$,
@@ -1831,6 +1832,8 @@
     <Fa icon={faSpinner} spin />
   </div>
 {/if}
+
+<BookReaderProgressBar {exploredCharCount} {bookCharCount} />
 
 <div
   id="ttu-page-footer"
