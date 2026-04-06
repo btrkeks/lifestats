@@ -4,5 +4,5 @@ services:
       context: ./
       dockerfile: ./apps/web/Dockerfile
     ports:
-      - 5001:80
+      - 5001:5001
     restart: always

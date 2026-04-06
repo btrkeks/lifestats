@@ -237,27 +237,7 @@
     updateSectionProgress();
   }
 
-  /** Experimental Code - May be removed any time without warning */
   onMount(() => document.addEventListener('ttu-action', handleAction, false));
-
-  const API_BASE_URL = 'http://localhost:8000';
-
-  async function logScrollEvent(): Promise<void> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/heartbeatlogger/23/ping`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-  
-      if (!response.ok) {
-        console.error('Failed to log scroll event:', response.statusText);
-      }
-    } catch (error) {
-      console.error('Error logging scroll event:', error);
-    }
-  }
 
   function handleAction({ detail }: any) {
     if (!detail.type) {
@@ -351,7 +331,6 @@
       rect
     };
   }
-  /** Experimental Code - May be removed any time without warning */
 
   onDestroy(() => {
     document.removeEventListener('ttu-action', handleAction, false);
@@ -555,8 +534,6 @@
         prevIntendedCharCount = exploredCharCount;
       }
       isResizeScroll = false;
-
-      logScrollEvent();
     });
   }
 
