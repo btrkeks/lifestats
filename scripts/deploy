@@ -8,6 +8,7 @@ set -e # Exit on error
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 DEST_DIR="$HOME/.local/bin"
+EBOOK_READER_DIR="$PROJECT_ROOT/logger_applications/ebook-reader"
 
 echo "Project root: ${PROJECT_ROOT}"
 
@@ -15,6 +16,16 @@ echo "Project root: ${PROJECT_ROOT}"
 echo "Stopping systemd services..."
 systemctl --user stop lifestats-web-api.service 2>/dev/null || echo "  lifestats-web-api.service not running or not found"
 systemctl --user stop lifestats-web-ui.service 2>/dev/null || echo "  lifestats-web-ui.service not running or not found"
+
+echo "Stopping ebook-reader..."
+if command -v docker >/dev/null 2>&1; then
+  (
+    cd "$EBOOK_READER_DIR"
+    docker compose down
+  ) 2>/dev/null || echo "  ebook-reader not running or not found"
+else
+  echo "  docker not found, skipping ebook-reader shutdown"
+fi
 
 echo ""
 echo "Building LifeStats in release mode..."
@@ -80,7 +91,25 @@ systemctl --user start lifestats-web-api.service && echo "  ✓ lifestats-web-ap
 systemctl --user start lifestats-web-ui.service && echo "  ✓ lifestats-web-ui.service started" || echo "  ✗ Failed to start lifestats-web-ui.service"
 
 echo ""
+echo "Rebuilding and restarting ebook-reader..."
+if command -v docker >/dev/null 2>&1; then
+  (
+    cd "$EBOOK_READER_DIR"
+    docker compose up -d --build
+  ) && echo "  ✓ ebook-reader restarted" || echo "  ✗ Failed to restart ebook-reader"
+else
+  echo "  docker not found, skipping ebook-reader restart"
+fi
+
+echo ""
 echo "Checking service status..."
 systemctl --user status lifestats-web-api.service --no-pager -l || true
 echo ""
 systemctl --user status lifestats-web-ui.service --no-pager -l || true
+if command -v docker >/dev/null 2>&1; then
+  echo ""
+  (
+    cd "$EBOOK_READER_DIR"
+    docker compose ps
+  ) || true
+fi
