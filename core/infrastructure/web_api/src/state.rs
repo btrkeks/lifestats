@@ -3,6 +3,7 @@ use std::sync::Arc;
 use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_application::SessionManager;
+use lifestats_core::progress::ports::progress_repository::ProgressRepository;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
 
@@ -23,6 +24,7 @@ where
 {
     // Direct repository access for CQRS handlers
     pub statistic_repository: Arc<R>,
+    pub progress_repository: Arc<dyn ProgressRepository + Send + Sync>,
     pub event_publisher: Arc<E>,
     pub renderer: Arc<Rend>,
     pub integration_service: Arc<I>,
@@ -40,6 +42,7 @@ where
     fn clone(&self) -> Self {
         Self {
             statistic_repository: Arc::clone(&self.statistic_repository),
+            progress_repository: Arc::clone(&self.progress_repository),
             event_publisher: Arc::clone(&self.event_publisher),
             renderer: Arc::clone(&self.renderer),
             integration_service: Arc::clone(&self.integration_service),
@@ -57,6 +60,7 @@ where
 {
     pub fn new(
         statistic_repository: Arc<R>,
+        progress_repository: Arc<dyn ProgressRepository + Send + Sync>,
         event_publisher: Arc<E>,
         renderer: Arc<Rend>,
         integration_service: Arc<I>,
@@ -64,6 +68,7 @@ where
     ) -> Self {
         Self {
             statistic_repository,
+            progress_repository,
             event_publisher,
             renderer,
             integration_service,

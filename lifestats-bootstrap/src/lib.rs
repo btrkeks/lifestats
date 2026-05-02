@@ -17,11 +17,13 @@ use lifestats_application::use_cases::{
     },
 };
 use lifestats_application::SessionManager;
+use lifestats_core::progress::ports::progress_repository::ProgressRepository;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_fitbit_client::{HttpFitbitDataClient, HttpFitbitOAuthClient};
 use lifestats_persistence::{
     ebook_event_store::SqliteEbookEventStore, pool::get_database_pool,
-    repository::SqliteStatisticRepository, token_store::SqliteTokenStore,
+    progress_repository::SqliteProgressRepository, repository::SqliteStatisticRepository,
+    token_store::SqliteTokenStore,
 };
 use lifestats_plotting::PlottersRenderer;
 use lifestats_system_clock::SystemClock;
@@ -42,6 +44,7 @@ impl EventPublisher for NoOpEventPublisher {
 pub struct Application {
     // Direct infrastructure access for web_api
     pub statistic_repository: Arc<SqliteStatisticRepository>,
+    pub progress_repository: Arc<dyn ProgressRepository + Send + Sync>,
     pub event_publisher: Arc<NoOpEventPublisher>,
     pub renderer: Arc<PlottersRenderer>,
     pub integration_service: Arc<IntegrationService>,
@@ -64,6 +67,8 @@ pub fn build_services() -> Result<Application> {
     // 1. Instantiate concrete infrastructure adapters
     let pool = get_database_pool();
     let statistic_repo = Arc::new(SqliteStatisticRepository::new(Arc::clone(&pool)));
+    let progress_repo: Arc<dyn ProgressRepository + Send + Sync> =
+        Arc::new(SqliteProgressRepository::new(Arc::clone(&pool)));
     let renderer = Arc::new(PlottersRenderer::new());
     let publisher = Arc::new(NoOpEventPublisher);
 
@@ -148,6 +153,7 @@ pub fn build_services() -> Result<Application> {
     // 3. Return the container with repositories (for web_api) and services (for logger apps)
     Ok(Application {
         statistic_repository: statistic_repo,
+        progress_repository: progress_repo,
         event_publisher: publisher,
         renderer,
         integration_service,

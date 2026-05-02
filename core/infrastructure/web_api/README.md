@@ -2,6 +2,9 @@
 
 HTTP REST API server for LifeStats, built with Axum. This crate is an **adapter** in the Ports & Adapters architecture, providing web access to the application's CQRS commands and queries.
 
+For third-party applications integrating with a running `lifestats-web-api.service`,
+see the public [Web API Integration Guide](../../../docs/web-api-integration.md).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -23,6 +26,7 @@ The web API server provides a RESTful HTTP interface for:
 
 - Managing statistics (create, read, delete)
 - Logging values to statistics
+- Managing progress items and absolute progress checkpoints
 - Managing goals (default and daily)
 - Retrieving plot images and data
 - Integration provisioning (Anki, Fitbit, etc.)
@@ -116,7 +120,7 @@ curl http://localhost:3000/statistics/loggable
 # Log a value (assuming statistic ID 1 exists)
 curl -X POST http://localhost:3000/statistics/1/log/2024-01-15 \
   -H "Content-Type: application/json" \
-  -d '{"value": "42", "update_policy": "Sum"}'
+  -d '{"value": "42", "update_policy": "sum"}'
 ```
 
 ## Project Structure
@@ -133,11 +137,13 @@ web_api/
 │   │   ├── mod.rs
 │   │   ├── statistic.rs            # Statistic request/response DTOs
 │   │   ├── goal.rs                 # Goal DTOs
+│   │   ├── progress.rs             # Progress item/checkpoint DTOs
 │   │   ├── plot.rs                 # Plot DTOs
 │   │   └── time_spans.rs           # TimeSpans-specific DTOs
 │   ├── routes/                      # Route handlers
 │   │   ├── mod.rs                  # Router configuration
 │   │   ├── statistics.rs           # Statistics CRUD + logging
+│   │   ├── progress.rs             # Progress items + checkpoints
 │   │   ├── goals.rs                # Goal management
 │   │   ├── plots.rs                # Plot retrieval
 │   │   └── integrations.rs         # Integration provisioning
@@ -152,6 +158,7 @@ web_api/
 │           └── state_cache.rs      # OAuth state cache
 └── tests/
     ├── statistics_api.rs            # Statistics endpoint tests
+    ├── progress_api.rs              # Progress endpoint tests
     ├── integrations_api.rs          # Integration tests
     ├── e2e.rs                       # End-to-end tests
     └── helpers.rs                   # Test utilities
@@ -193,6 +200,19 @@ web_api/
 | `PUT` | `/statistics/{id}/goals/{date}` | Set daily goal for specific date |
 | `DELETE` | `/statistics/{id}/goals/{date}` | Delete daily goal |
 
+### Progress Items
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/progress-items` | Create a bounded progress item |
+| `GET` | `/progress-items` | List progress items |
+| `GET` | `/progress-items/{id}` | Get a progress item |
+| `PATCH` | `/progress-items/{id}/target` | Update a progress item's target value |
+| `POST` | `/progress-items/{id}/checkpoints` | Log an absolute progress checkpoint |
+| `GET` | `/progress-items/{id}/checkpoints` | List checkpoints ordered by recorded time |
+| `GET` | `/progress-items/{id}/summary` | Get latest/furthest position and completion percentage |
+| `GET` | `/progress-items/{id}/daily-deltas` | Derive daily new progress for an inclusive date range |
+
 ### Plots
 
 | Method | Path | Description |
@@ -217,6 +237,65 @@ web_api/
 | `GET` | `/daily_summary/{date}` | Get daily summary for a specific date |
 
 ## Request/Response DTOs
+
+### Creating a Progress Item
+
+**Request:** `POST /progress-items`
+
+```json
+{
+  "name": "The Left Hand of Darkness",
+  "category": "Reading",
+  "target_value": 304,
+  "unit": { "type": "Pages" },
+  "tags": { "media_type": "book" }
+}
+```
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "name": "The Left Hand of Darkness",
+  "category": "Reading",
+  "target_value": 304,
+  "unit": { "type": "Pages" },
+  "tags": { "media_type": "book" },
+  "created_at": "2026-05-02T12:00:00Z",
+  "updated_at": "2026-05-02T12:00:00Z"
+}
+```
+
+### Logging a Progress Checkpoint
+
+**Request:** `POST /progress-items/{id}/checkpoints`
+
+```json
+{
+  "recorded_at": "2026-05-02T20:15:00Z",
+  "effective_date": "2026-05-02",
+  "position": 73,
+  "source": null,
+  "source_event_id": null,
+  "note": "Finished chapter 5"
+}
+```
+
+`recorded_at` is optional at the HTTP edge and defaults to server time. Imported checkpoints can
+provide both `source` and `source_event_id` to make repeated submissions idempotent.
+
+**Summary:** `GET /progress-items/{id}/summary`
+
+```json
+{
+  "latest_position": 73,
+  "furthest_position": 73,
+  "percent_latest": 0.24013157894736842,
+  "percent_furthest": 0.24013157894736842,
+  "is_complete": false
+}
+```
 
 ### Creating a Statistic
 
@@ -248,7 +327,7 @@ web_api/
 ```json
 {
   "value": "50",
-  "update_policy": "Sum"  // Optional: "Sum", "Overwrite", "Max", "Min"
+  "update_policy": "sum"  // Optional: "sum", "overwrite", "ignore"
 }
 ```
 
@@ -262,7 +341,7 @@ web_api/
 {
   "start_time": "09:30",
   "end_time": "11:45",
-  "update_policy": "Append"  // Optional: "Append", "Overwrite"
+  "update_policy": "updateendvalue"  // Optional: "append", "updateendvalue"
 }
 ```
 

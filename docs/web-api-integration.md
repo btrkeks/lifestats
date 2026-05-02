@@ -36,7 +36,7 @@ General conventions:
 - Dates use `YYYY-MM-DD`, for example `2026-05-02`.
 - Times use `HH:MM` or `HH:MM:SS` in 24-hour local time.
 - Date ranges are inclusive at both ends.
-- IDs in paths are numeric statistic IDs.
+- Statistic IDs and progress item IDs in paths are numeric.
 - Errors return JSON in the form `{"error": "message"}`.
 
 ## Quickstart
@@ -176,6 +176,161 @@ Request body:
 This endpoint only accepts `TimeSpans` statistics. The `update_policy` field is
 optional. `updateendvalue` is useful for repeatedly extending an in-progress
 time frame with the same start time.
+
+## Progress Items
+
+Progress items track absolute progress through a bounded object, such as the
+current page in a book or character offset in an ebook. They are separate from
+statistics: they do not appear in `/statistics`, do not use `LogValue`, and do
+not have daily/default goals. Daily new progress is derived from checkpoints.
+
+### Create a Progress Item
+
+```bash
+curl -X POST http://localhost:3000/progress-items \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "The Left Hand of Darkness",
+    "category": "Reading",
+    "target_value": 304,
+    "unit": { "type": "Pages" },
+    "tags": {
+      "media_type": "book",
+      "author": "Ursula K. Le Guin"
+    }
+  }'
+```
+
+Supported units are:
+
+- `{ "type": "Pages" }`
+- `{ "type": "Characters" }`
+- `{ "type": "Percent" }`
+- `{ "type": "Chapters" }`
+- `{ "type": "Custom", "label": "lessons" }`
+
+`target_value` must be positive. For `Percent`, use `100`.
+
+Example response:
+
+```json
+{
+  "id": 1,
+  "name": "The Left Hand of Darkness",
+  "category": "Reading",
+  "target_value": 304,
+  "unit": { "type": "Pages" },
+  "tags": {
+    "media_type": "book",
+    "author": "Ursula K. Le Guin"
+  },
+  "created_at": "2026-05-02T12:00:00Z",
+  "updated_at": "2026-05-02T12:00:00Z"
+}
+```
+
+### Log a Progress Checkpoint
+
+```bash
+curl -X POST http://localhost:3000/progress-items/1/checkpoints \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recorded_at": "2026-05-02T20:15:00Z",
+    "effective_date": "2026-05-02",
+    "position": 73,
+    "source": null,
+    "source_event_id": null,
+    "note": "Finished chapter 5"
+  }'
+```
+
+`position` is absolute, not a delta, and must be between `0` and the item's
+`target_value`. `recorded_at` is optional for HTTP clients; if omitted, the
+server uses its current UTC time. `effective_date` is the local LifeStats date
+used for daily grouping.
+
+Manual logs should usually send `source` and `source_event_id` as `null`.
+Automated imports should provide both fields with a stable event ID. When both
+are present, duplicate submissions return the existing checkpoint instead of
+creating another row.
+
+Response for a new checkpoint:
+
+```json
+{
+  "status": "inserted",
+  "checkpoint": {
+    "id": 10,
+    "item_id": 1,
+    "recorded_at": "2026-05-02T20:15:00Z",
+    "effective_date": "2026-05-02",
+    "position": 73,
+    "source": null,
+    "source_event_id": null,
+    "note": "Finished chapter 5",
+    "created_at": "2026-05-02T20:15:00Z"
+  }
+}
+```
+
+Duplicate imported checkpoints return `200 OK` with `"status": "duplicate"`.
+
+### Query Progress
+
+Get the latest/furthest summary:
+
+```bash
+curl http://localhost:3000/progress-items/1/summary
+```
+
+Example response:
+
+```json
+{
+  "item": {
+    "id": 1,
+    "name": "The Left Hand of Darkness",
+    "category": "Reading",
+    "target_value": 304,
+    "unit": { "type": "Pages" },
+    "tags": { "media_type": "book" },
+    "created_at": "2026-05-02T12:00:00Z",
+    "updated_at": "2026-05-02T12:00:00Z"
+  },
+  "latest_checkpoint": {
+    "id": 10,
+    "item_id": 1,
+    "recorded_at": "2026-05-02T20:15:00Z",
+    "effective_date": "2026-05-02",
+    "position": 73,
+    "source": null,
+    "source_event_id": null,
+    "note": "Finished chapter 5",
+    "created_at": "2026-05-02T20:15:00Z"
+  },
+  "latest_position": 73,
+  "furthest_position": 73,
+  "percent_latest": 0.24013157894736842,
+  "percent_furthest": 0.24013157894736842,
+  "is_complete": false
+}
+```
+
+Get derived daily new progress:
+
+```bash
+curl "http://localhost:3000/progress-items/1/daily-deltas?start=2026-05-01&end=2026-05-07"
+```
+
+Daily deltas use a furthest-frontier model. Moving backward records the current
+position but does not subtract progress.
+
+```json
+[
+  { "date": "2026-05-01", "value": 17 },
+  { "date": "2026-05-02", "value": 25 }
+]
+```
 
 ## Heartbeat Sessions
 
@@ -319,6 +474,9 @@ For `TimeSpans`, `target` is a JSON-encoded time frame list string and
 Use these read endpoints:
 
 - `GET /statistics`
+- `GET /progress-items`
+- `GET /progress-items/{id}/summary`
+- `GET /progress-items/{id}/daily-deltas?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `GET /statistics/{id}/logged/{date}`
 - `GET /statistics/{id}/score?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `GET /statistics/{id}/performance?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`
@@ -348,6 +506,22 @@ Example response:
 ```
 
 The response keys are integration-defined logical names with an `_id` suffix.
+
+### Progress-Aware Reader App
+
+For per-book progress, create one progress item per book and log absolute
+confirmed positions:
+
+1. `POST /progress-items` with a bounded `target_value`.
+2. `POST /progress-items/{id}/checkpoints` whenever the reader confirms a new
+   position.
+3. Include stable `source` and `source_event_id` values for imports or sync
+   events that may be replayed.
+4. Use `GET /progress-items/{id}/summary` for current/furthest position.
+5. Use `GET /progress-items/{id}/daily-deltas` for derived daily reading volume.
+
+Keep using ordinary `IntegerAmount` statistics when your integration wants a
+global daily metric such as total characters read across all books.
 
 ## Optional TypeScript Client
 
@@ -386,6 +560,19 @@ package wraps common statistics and goal operations. See
 | `GET` | `/statistics/{id}/consistency?days=14` | Goal consistency over recent days |
 | `GET` | `/statistics/{id}/score?start=...&end=...` | Mean goal achievement |
 | `GET` | `/statistics/{id}/performance?start_date=...&end_date=...` | Score plus trend |
+
+### Progress Items
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/progress-items` | Create a bounded progress item |
+| `GET` | `/progress-items` | List all progress items |
+| `GET` | `/progress-items/{id}` | Get one progress item |
+| `PATCH` | `/progress-items/{id}/target` | Update target value; unit cannot be changed |
+| `POST` | `/progress-items/{id}/checkpoints` | Log an absolute checkpoint |
+| `GET` | `/progress-items/{id}/checkpoints` | List checkpoints; optional `recorded_at_start` and `recorded_at_end` |
+| `GET` | `/progress-items/{id}/summary` | Latest/furthest position and completion percentage |
+| `GET` | `/progress-items/{id}/daily-deltas?start=...&end=...` | Derived daily new progress |
 
 ### Sessions, Dashboards, and Summaries
 
@@ -452,7 +639,7 @@ Important status codes:
 | --- | --- |
 | `400 Bad Request` | Invalid input, invalid date range, domain validation error |
 | `401 Unauthorized` | Fitbit authorization/session problem |
-| `404 Not Found` | Statistic or active session was not found |
+| `404 Not Found` | Statistic, progress item, or active session was not found |
 | `409 Conflict` | Duplicate active session |
 | `422 Unprocessable Entity` | Request validation failed |
 | `429 Too Many Requests` | Fitbit rate limit; may include `Retry-After` |
@@ -462,3 +649,5 @@ Important status codes:
 For write operations, retry only when the operation is safe for your integration.
 For idempotent provisioning, calling `POST /integrations/{source}` again with the
 same context should return the same statistic IDs.
+For idempotent progress imports, retry `POST /progress-items/{id}/checkpoints`
+only when you provide both `source` and `source_event_id`.

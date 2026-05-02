@@ -15,6 +15,7 @@ use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_persistence::pool::MIGRATIONS;
+use lifestats_persistence::progress_repository::SqliteProgressRepository;
 use lifestats_persistence::repository::SqliteStatisticRepository;
 use lifestats_plotting::PlottersRenderer;
 use lifestats_web_api::routes::create_router;
@@ -62,6 +63,7 @@ async fn test_log_and_get_e2e() -> Result<()> {
 
     // Save the statistic to the database
     let repo = Arc::new(SqliteStatisticRepository::new(Arc::new(pool.clone())));
+    let progress_repo = Arc::new(SqliteProgressRepository::new(Arc::new(pool.clone())));
     let persisted_stat = repo.create_metadata(test_stat)?;
     let statistic_id = persisted_stat.get_metadata().id();
 
@@ -85,6 +87,7 @@ async fn test_log_and_get_e2e() -> Result<()> {
 
     let app_state = AppState::new(
         repo,
+        progress_repo,
         publisher,
         renderer,
         integration_service,

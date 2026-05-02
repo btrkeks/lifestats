@@ -5,9 +5,9 @@ use lifestats_application::use_cases::integration::{
     AnkiBundleFactory, BundleFactory, EbookBundleFactory, IntegrationService,
 };
 use lifestats_application::SessionManager;
+use lifestats_core::progress::ports::progress_repository::MockProgressRepository;
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
-use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::{
     MockStatisticRepository, StatisticRepository,
 };
@@ -52,6 +52,7 @@ pub fn mock_app_state(
     mock_repo: Arc<MockStatisticRepository>,
 ) -> AppState<MockStatisticRepository, MockPlotRend, NoOpEventPublisher, IntegrationService> {
     let publisher = Arc::new(NoOpEventPublisher);
+    let progress_repo = Arc::new(MockProgressRepository::new());
     let renderer = Arc::new(MockPlotRend::new());
 
     let factories: Vec<Arc<dyn BundleFactory>> =
@@ -66,6 +67,7 @@ pub fn mock_app_state(
 
     AppState::new(
         mock_repo,
+        progress_repo,
         publisher,
         renderer,
         integration_service,

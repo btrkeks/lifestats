@@ -52,6 +52,35 @@ diesel::table! {
 }
 
 diesel::table! {
+    progress_checkpoints (id) {
+        id -> Integer,
+        progress_item_id -> Integer,
+        recorded_at -> Text,
+        effective_date -> Text,
+        position_value -> BigInt,
+        source -> Nullable<Text>,
+        source_event_id -> Nullable<Text>,
+        note -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    progress_items (id) {
+        id -> Integer,
+        name -> Text,
+        category -> Text,
+        unit_kind -> Text,
+        unit_label -> Nullable<Text>,
+        target_value -> BigInt,
+        tags -> Text,
+        canonical_tags -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     statistics (id) {
         id -> Integer,
         name -> Text,
@@ -66,6 +95,7 @@ diesel::table! {
 diesel::joinable!(default_goals -> statistics (statistic_id));
 diesel::joinable!(ebook_sync_events -> statistics (statistic_id));
 diesel::joinable!(goals -> statistics (statistic_id));
+diesel::joinable!(progress_checkpoints -> progress_items (progress_item_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     default_goals,
@@ -73,5 +103,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     goals,
     integrations,
     logging_data,
+    progress_checkpoints,
+    progress_items,
     statistics,
 );

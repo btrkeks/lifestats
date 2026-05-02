@@ -149,3 +149,78 @@ pub struct IntegrationUpsert {
     pub last_sync_at: Option<String>,
     pub canonical_tags: Option<String>,
 }
+
+#[derive(Debug, Queryable, QueryableByName, Selectable, Insertable, AsChangeset)]
+#[diesel(table_name = crate::db::schema::progress_items)]
+pub struct ProgressItemRow {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    pub id: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub name: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub category: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub unit_kind: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub unit_label: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub target_value: i64,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub tags: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub canonical_tags: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub created_at: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = crate::db::schema::progress_items)]
+pub struct NewProgressItemRow {
+    pub name: String,
+    pub category: String,
+    pub unit_kind: String,
+    pub unit_label: Option<String>,
+    pub target_value: i64,
+    pub tags: String,
+    pub canonical_tags: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Queryable, QueryableByName, Selectable, Insertable)]
+#[diesel(table_name = crate::db::schema::progress_checkpoints)]
+pub struct ProgressCheckpointRow {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    pub id: i32,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    pub progress_item_id: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub recorded_at: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub effective_date: String,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub position_value: i64,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub source: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub source_event_id: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub note: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub created_at: String,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = crate::db::schema::progress_checkpoints)]
+pub struct NewProgressCheckpointRow {
+    pub progress_item_id: i32,
+    pub recorded_at: String,
+    pub effective_date: String,
+    pub position_value: i64,
+    pub source: Option<String>,
+    pub source_event_id: Option<String>,
+    pub note: Option<String>,
+    pub created_at: String,
+}

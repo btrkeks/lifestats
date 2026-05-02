@@ -33,6 +33,7 @@ async fn main() -> Result<()> {
     // Note: PlotRepository removed - plotting is now stateless
     let app_state = AppState::new(
         app.statistic_repository,
+        app.progress_repository,
         app.event_publisher,
         app.renderer,
         app.integration_service,

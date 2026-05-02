@@ -3,11 +3,12 @@ pub mod dashboard;
 pub mod goals;
 pub mod integrations;
 pub mod plots;
+pub mod progress;
 pub mod sessions;
 pub mod statistics;
 
 use axum::{
-    routing::{get, post},
+    routing::{get, patch, post},
     Router,
 };
 use events::event_port::EventPublisher;
@@ -67,6 +68,28 @@ where
         .route(
             "/statistics/{id}/performance",
             get(statistics::get_goal_performance),
+        )
+        // Progress item endpoints
+        .route(
+            "/progress-items",
+            post(progress::create_progress_item).get(progress::list_progress_items),
+        )
+        .route("/progress-items/{id}", get(progress::get_progress_item))
+        .route(
+            "/progress-items/{id}/target",
+            patch(progress::update_progress_target),
+        )
+        .route(
+            "/progress-items/{id}/checkpoints",
+            post(progress::log_progress_checkpoint).get(progress::get_progress_checkpoints),
+        )
+        .route(
+            "/progress-items/{id}/summary",
+            get(progress::get_progress_summary),
+        )
+        .route(
+            "/progress-items/{id}/daily-deltas",
+            get(progress::get_progress_daily_deltas),
         )
         // Dashboard endpoint
         .route("/statistics/dashboard", post(dashboard::get_dashboard))

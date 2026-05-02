@@ -196,7 +196,7 @@ impl InsertStatisticDto {
     }
 }
 
-fn canonicalize_tags(tags: &HashMap<String, String>) -> Option<String> {
+pub(crate) fn canonicalize_tags(tags: &HashMap<String, String>) -> Option<String> {
     if tags.is_empty() {
         return None;
     }
