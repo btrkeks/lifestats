@@ -595,6 +595,10 @@
     return $statisticsEnabled$ ? $isTrackerPaused$ : false;
   }
 
+  function getObservedEbookTrackerPosition() {
+    return $statisticsEnabled$ && frozenPosition !== -1 ? frozenPosition : exploredCharCount;
+  }
+
   async function initializeEbookSync(bookData: BooksDbBookData) {
     if (!ebookSyncAdapter) {
       return;
@@ -680,7 +684,7 @@
       if (shouldPause) {
         ebookProgressTracker.pause();
       } else {
-        ebookProgressTracker.resume();
+        ebookProgressTracker.resumeAt(getObservedEbookTrackerPosition());
       }
     }
 

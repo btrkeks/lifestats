@@ -76,6 +76,17 @@ export class ReadingProgressTracker {
     this.diagnosticReason = 'resumed';
   }
 
+  resumeAt(position: number) {
+    const normalizedPosition = Math.max(0, position);
+
+    this.isPaused = false;
+    this.currentPosition = normalizedPosition;
+    this.confirmedPosition = normalizedPosition;
+    this.lastFlushedPosition = normalizedPosition;
+    this.pendingJump = undefined;
+    this.diagnosticReason = 'resumed_at_baseline';
+  }
+
   freeze(position: number) {
     this.frozenPosition = Math.max(0, position);
     this.currentPosition = this.frozenPosition;
