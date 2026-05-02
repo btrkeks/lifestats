@@ -81,6 +81,7 @@ async fn test_log_and_get_e2e() -> Result<()> {
         repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
         None,
+        None,
     ));
 
     let session_manager = Arc::new(SessionManager::new(repo.clone()));

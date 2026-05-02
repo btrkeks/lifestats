@@ -9,7 +9,7 @@ import type {
   BooksDbEbookSyncState
 } from '$lib/data/database/books-db/versions/books-db';
 import type { ReadingProgressTrackerState } from '$lib/data/lifestats/reading-progress-tracker';
-import { DatabaseService } from '$lib/data/database/books-db/database.service';
+import type { DatabaseService } from '$lib/data/database/books-db/database.service';
 
 const EBOOK_API_BASE_URL = 'http://localhost:3000';
 const EBOOK_BUNDLE_VERSION = 1;
@@ -40,6 +40,7 @@ export class LifestatsSyncAdapter {
     dateKey: string,
     delta: number,
     confirmedPositionAfter: number,
+    bookTargetCharacters: number,
     bookTitle: string
   ): BooksDbEbookSyncQueueEntry {
     return {
@@ -49,6 +50,7 @@ export class LifestatsSyncAdapter {
       metric: 'characters_read',
       delta,
       confirmedPositionAfter,
+      bookTargetCharacters,
       bookTitle,
       createdAt: Date.now(),
       attemptCount: 0,
@@ -96,6 +98,8 @@ export class LifestatsSyncAdapter {
 
       try {
         await this.ensureBundle();
+        const bookTargetCharacters =
+          queueEntry.bookTargetCharacters ?? Math.max(queueEntry.confirmedPositionAfter, 1);
 
         const response = await fetch(`${this.apiBaseUrl}/integrations/ebook/events`, {
           method: 'POST',
@@ -109,7 +113,8 @@ export class LifestatsSyncAdapter {
             delta: queueEntry.delta,
             book_id: queueEntry.dataId,
             book_title: queueEntry.bookTitle,
-            confirmed_position_after: queueEntry.confirmedPositionAfter
+            confirmed_position_after: queueEntry.confirmedPositionAfter,
+            book_target_characters: bookTargetCharacters
           })
         });
 

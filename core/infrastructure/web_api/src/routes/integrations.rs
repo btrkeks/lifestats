@@ -41,6 +41,7 @@ pub struct EbookEventRequest {
     pub book_id: Option<u32>,
     pub book_title: String,
     pub confirmed_position_after: i64,
+    pub book_target_characters: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -93,9 +94,17 @@ where
     let date = request.date;
     let metric = request.metric.clone();
     let delta = request.delta;
-    let book_id = request.book_id;
+    let book_id = request
+        .book_id
+        .ok_or_else(|| ApiError::BadRequest("ebook book_id is required".to_string()))?;
+    if book_id == 0 {
+        return Err(ApiError::BadRequest(
+            "ebook book_id must be positive".to_string(),
+        ));
+    }
     let book_title = request.book_title.clone();
     let confirmed_position_after = request.confirmed_position_after;
+    let book_target_characters = request.book_target_characters;
 
     let result = state
         .integration_service
@@ -104,9 +113,10 @@ where
             date,
             metric: metric.clone(),
             delta,
-            book_id: book_id.map(|book_id| book_id.to_string()),
+            book_id: book_id.to_string(),
             book_title: book_title.clone(),
             confirmed_position_after,
+            book_target_characters,
         })
         .map_err(|error| {
             tracing::error!(
@@ -114,9 +124,10 @@ where
                 date = %date,
                 metric = %metric,
                 delta,
-                book_id = ?book_id,
+                book_id = book_id,
                 book_title = %book_title,
                 confirmed_position_after,
+                book_target_characters,
                 error = %error,
                 error_debug = ?error,
                 "Failed to ingest ebook sync event"
@@ -129,9 +140,10 @@ where
         date = %date,
         metric = %metric,
         delta,
-        book_id = ?book_id,
+        book_id = book_id,
         book_title = %book_title,
         confirmed_position_after,
+        book_target_characters,
         accepted = result.accepted,
         statistic_id = result.statistic_id.0,
         "Processed ebook sync event"

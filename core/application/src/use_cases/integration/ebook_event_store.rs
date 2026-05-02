@@ -15,6 +15,7 @@ pub struct EbookSyncEvent {
     pub confirmed_position_after: i64,
 }
 
+#[cfg_attr(test, mockall::automock)]
 pub trait EbookEventStore: Send + Sync {
     /// Records an ebook sync event exactly once and applies the associated delta.
     ///

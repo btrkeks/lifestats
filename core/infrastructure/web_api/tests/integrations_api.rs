@@ -164,9 +164,10 @@ async fn test_ingest_ebook_event_contract() {
                 && request.date == NaiveDate::from_ymd_opt(2026, 4, 5).unwrap()
                 && request.metric == "characters_read"
                 && request.delta == 42
-                && request.book_id.as_deref() == Some("7")
+                && request.book_id == "7"
                 && request.book_title == "Book"
                 && request.confirmed_position_after == 420
+                && request.book_target_characters == 1_000
         })
         .times(1)
         .returning(|_| {
@@ -190,7 +191,8 @@ async fn test_ingest_ebook_event_contract() {
             "delta": 42,
             "book_id": 7,
             "book_title": "Book",
-            "confirmed_position_after": 420
+            "confirmed_position_after": 420,
+            "book_target_characters": 1000
         }))
         .await;
 
@@ -199,4 +201,70 @@ async fn test_ingest_ebook_event_contract() {
     let body: serde_json::Value = response.json();
     assert_eq!(body["accepted"], true);
     assert_eq!(body["duplicate"], false);
+}
+
+#[tokio::test]
+async fn test_ingest_ebook_event_requires_book_id() {
+    let mut mock_integration_service = MockIntegrationSvc::new();
+    mock_integration_service
+        .expect_ingest_ebook_event()
+        .times(0);
+
+    let mock_repo = MockStatisticRepository::new();
+    let app_state =
+        mock_app_state_with_integrations(Arc::new(mock_repo), Arc::new(mock_integration_service));
+    let server = TestServer::new(create_router(app_state)).unwrap();
+
+    let response = server
+        .post("/integrations/ebook/events")
+        .json(&json!({
+            "event_id": "evt-123",
+            "date": "2026-04-05",
+            "metric": "characters_read",
+            "delta": 42,
+            "book_title": "Book",
+            "confirmed_position_after": 420,
+            "book_target_characters": 1000
+        }))
+        .await;
+
+    assert_eq!(response.status_code(), 400);
+}
+
+#[tokio::test]
+async fn test_ingest_ebook_event_rejects_invalid_target() {
+    let mut mock_integration_service = MockIntegrationSvc::new();
+
+    mock_integration_service
+        .expect_ingest_ebook_event()
+        .withf(|request| request.book_target_characters == 0)
+        .times(1)
+        .returning(|_| {
+            Err(
+                lifestats_application::error::ApplicationError::InvalidInput(
+                    "ebook book_target_characters must be positive".to_string(),
+                ),
+            )
+        });
+
+    let mock_repo = MockStatisticRepository::new();
+    let app_state =
+        mock_app_state_with_integrations(Arc::new(mock_repo), Arc::new(mock_integration_service));
+    let server = TestServer::new(create_router(app_state)).unwrap();
+
+    let response = server
+        .post("/integrations/ebook/events")
+        .json(&json!({
+            "event_id": "evt-123",
+            "date": "2026-04-05",
+            "metric": "characters_read",
+            "delta": 42,
+            "book_id": 7,
+            "book_title": "Book",
+            "confirmed_position_after": 420,
+            "book_target_characters": 0
+        }))
+        .await;
+
+    assert_eq!(response.status_code(), 400);
 }

@@ -12,8 +12,8 @@ use lifestats_application::time::Clock;
 use lifestats_application::use_cases::{
     commands::sync_fitbit_data::SyncFitbitDataCommandHandler,
     integration::{
-        AnkiBundleFactory, BundleFactory, EbookBundleFactory, EbookEventStore, FitbitBundleFactory,
-        IntegrationService,
+        AnkiBundleFactory, BundleFactory, EbookBundleFactory, EbookEventStore,
+        EbookProgressService, EbookProgressServiceTrait, FitbitBundleFactory, IntegrationService,
     },
 };
 use lifestats_application::SessionManager;
@@ -79,10 +79,13 @@ pub fn build_services() -> Result<Application> {
     ];
     let ebook_event_store: Arc<dyn EbookEventStore> =
         Arc::new(SqliteEbookEventStore::new(Arc::clone(&pool)));
+    let ebook_progress_service: Arc<dyn EbookProgressServiceTrait> =
+        Arc::new(EbookProgressService::new(Arc::clone(&progress_repo)));
     let integration_service = Arc::new(IntegrationService::new(
         statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
         Some(ebook_event_store),
+        Some(ebook_progress_service),
     ));
 
     // 2. Instantiate Fitbit integration components

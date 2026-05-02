@@ -61,6 +61,7 @@ pub fn mock_app_state(
         mock_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
         None,
+        None,
     ));
 
     let session_manager = Arc::new(SessionManager::new(mock_repo.clone()));

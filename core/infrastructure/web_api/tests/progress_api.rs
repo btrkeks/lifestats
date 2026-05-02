@@ -43,6 +43,7 @@ fn progress_server() -> TestServer {
         statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
         None,
+        None,
     ));
     let session_manager = Arc::new(SessionManager::new(statistic_repo.clone()));
 

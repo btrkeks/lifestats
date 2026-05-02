@@ -32,6 +32,7 @@ export interface BooksDbV7EbookSyncQueueEntry {
   metric: 'characters_read';
   delta: number;
   confirmedPositionAfter: number;
+  bookTargetCharacters?: number;
   bookTitle: string;
   createdAt: number;
   attemptCount: number;

@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use super::bundle_factory::BundleFactory;
 use super::ebook_event_store::{EbookEventStore, EbookSyncEvent};
+use super::ebook_progress_service::{EbookProgressServiceTrait, EbookProgressSyncRequest};
 use crate::error::{ApplicationError, ApplicationResult};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 
@@ -44,9 +45,10 @@ pub struct EbookEventIngestionRequest {
     pub date: NaiveDate,
     pub metric: String,
     pub delta: i64,
-    pub book_id: Option<String>,
+    pub book_id: String,
     pub book_title: String,
     pub confirmed_position_after: i64,
+    pub book_target_characters: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,6 +65,7 @@ pub struct IntegrationService {
     repository: Arc<dyn StatisticRepository + Send + Sync>,
     factories: HashMap<String, Arc<dyn BundleFactory>>,
     ebook_event_store: Option<Arc<dyn EbookEventStore>>,
+    ebook_progress_service: Option<Arc<dyn EbookProgressServiceTrait>>,
 }
 
 impl IntegrationService {
@@ -71,6 +74,7 @@ impl IntegrationService {
         repository: Arc<dyn StatisticRepository + Send + Sync>,
         factories: Vec<Arc<dyn BundleFactory>>,
         ebook_event_store: Option<Arc<dyn EbookEventStore>>,
+        ebook_progress_service: Option<Arc<dyn EbookProgressServiceTrait>>,
     ) -> Self {
         // Build a map from source_name to factory for O(1) lookup
         let factories_map = factories
@@ -82,6 +86,7 @@ impl IntegrationService {
             repository,
             factories: factories_map,
             ebook_event_store,
+            ebook_progress_service,
         }
     }
 }
@@ -166,9 +171,38 @@ impl IntegrationServiceTrait for IntegrationService {
             ));
         }
 
+        if request.book_id.trim().is_empty() {
+            return Err(ApplicationError::InvalidInput(
+                "ebook book_id must not be empty".to_string(),
+            ));
+        }
+
+        if request.book_title.trim().is_empty() {
+            return Err(ApplicationError::InvalidInput(
+                "ebook book_title must not be empty".to_string(),
+            ));
+        }
+
+        if request.confirmed_position_after < 0 {
+            return Err(ApplicationError::InvalidInput(
+                "ebook confirmed_position_after must be non-negative".to_string(),
+            ));
+        }
+
+        if request.book_target_characters <= 0 {
+            return Err(ApplicationError::InvalidInput(
+                "ebook book_target_characters must be positive".to_string(),
+            ));
+        }
+
         let ebook_event_store = self.ebook_event_store.as_ref().ok_or_else(|| {
             ApplicationError::InvalidInput(
                 "ebook event ingestion is not configured for this deployment".to_string(),
+            )
+        })?;
+        let ebook_progress_service = self.ebook_progress_service.as_ref().ok_or_else(|| {
+            ApplicationError::InvalidInput(
+                "ebook progress syncing is not configured for this deployment".to_string(),
             )
         })?;
 
@@ -182,16 +216,28 @@ impl IntegrationServiceTrait for IntegrationService {
                 ))
             })?;
 
-        let accepted = ebook_event_store.record_event(&EbookSyncEvent {
-            event_id: request.event_id,
+        let event = EbookSyncEvent {
+            event_id: request.event_id.clone(),
             source_name: EBOOK_SOURCE.to_string(),
-            metric: request.metric,
+            metric: request.metric.clone(),
             statistic_id,
             date: request.date,
             delta: request.delta,
+            book_id: Some(request.book_id.clone()),
+            book_title: request.book_title.clone(),
+            confirmed_position_after: request.confirmed_position_after,
+        };
+
+        let accepted = ebook_event_store.record_event(&event)?;
+
+        ebook_progress_service.ensure_and_log_checkpoint(EbookProgressSyncRequest {
+            event_id: request.event_id,
             book_id: request.book_id,
             book_title: request.book_title,
+            effective_date: request.date,
+            recorded_at: Utc::now(),
             confirmed_position_after: request.confirmed_position_after,
+            book_target_characters: request.book_target_characters,
         })?;
 
         Ok(EbookEventIngestionResult {

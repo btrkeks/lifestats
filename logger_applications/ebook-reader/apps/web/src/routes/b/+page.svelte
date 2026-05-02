@@ -720,6 +720,7 @@
         getDateKey($startDayHoursForTracker$),
         snapshot.flushableCharacters,
         snapshot.confirmedPosition,
+        bookCharCount,
         ebookSyncBookTitle
       );
       const syncState = ebookSyncAdapter.buildSyncState(ebookSyncDataId, {

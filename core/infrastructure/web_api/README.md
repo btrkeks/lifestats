@@ -226,6 +226,7 @@ web_api/
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/integrations/{source}` | Provision integration (e.g., Anki bundle) |
+| `POST` | `/integrations/ebook/events` | Ingest an idempotent ebook reading event and log per-book progress |
 | `GET` | `/integrations/fitbit/auth/begin` | Start Fitbit OAuth flow |
 | `GET` | `/integrations/fitbit/auth/callback` | OAuth callback handler |
 | `POST` | `/integrations/fitbit/sync` | Sync Fitbit data |
@@ -294,6 +295,38 @@ provide both `source` and `source_event_id` to make repeated submissions idempot
   "percent_latest": 0.24013157894736842,
   "percent_furthest": 0.24013157894736842,
   "is_complete": false
+}
+```
+
+### Ingesting an Ebook Event
+
+**Request:** `POST /integrations/ebook/events`
+
+```json
+{
+  "event_id": "evt-123",
+  "date": "2026-05-02",
+  "metric": "characters_read",
+  "delta": 42,
+  "book_id": 7,
+  "book_title": "The Left Hand of Darkness",
+  "confirmed_position_after": 420,
+  "book_target_characters": 1000
+}
+```
+
+The endpoint keeps the ebook-wide `characters_read` statistic idempotent by `event_id`. It also
+ensures a per-book progress item tagged with `source=ebook`, `progress_type=book`, and
+`reader_data_id=<book_id>`, then logs an absolute `Characters` checkpoint at
+`confirmed_position_after`. Replaying a previously accepted event can backfill the checkpoint
+without adding the daily `delta` twice.
+
+**Response:** `200 OK`
+
+```json
+{
+  "accepted": true,
+  "duplicate": false
 }
 ```
 
