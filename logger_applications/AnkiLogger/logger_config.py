@@ -16,7 +16,7 @@ LOG_FILE = os.path.join(ADDON_PATH, 'anki_logger.log')
 _configured = False
 
 
-def setup_logging(level=logging.WARNING):
+def setup_logging(level=logging.INFO):
     """Set up logging configuration for the AnkiLogger addon.
 
     Creates a rotating file handler that logs to anki_logger.log in the addon directory.
