@@ -23,12 +23,13 @@ All metrics are logged per deck and sent to the LifeStats web API for visualizat
 Each deck gets three statistics automatically provisioned:
 - **Time Spent** - TimeSpans statistic tracking study session durations
 - **Disruptions** - Counter for session starts (indicates focus interruptions)
-- **Backlog** - Snapshot of total cards due at session start
+- **Backlog** - Snapshot of total cards due; logged on Anki startup for already-provisioned decks and refreshed during study sessions
 
 ### Automatic Provisioning
 - First time you study a deck, AnkiLogger contacts the LifeStats API to provision statistics
 - Provisions are cached locally in Anki's config
 - Subsequent sessions use cached statistic IDs (no API calls needed for setup)
+- Startup backlog snapshots only use cached statistic IDs; decks that have not been provisioned are skipped
 
 ### Clean Architecture
 Following the **Ports & Adapters (Hexagonal) Architecture** pattern:
@@ -91,6 +92,11 @@ Example cached configuration:
 ## How It Works
 
 ### Session Lifecycle
+
+0. **Anki Startup**
+   - Addon initializes and loads cached deck statistic bundles
+   - For each already-provisioned deck, logs the current backlog count
+   - Unprovisioned decks are skipped to avoid creating unwanted LifeStats statistics
 
 1. **Session Start**
    - User begins reviewing cards (triggers `state_did_change` or card interaction hooks)

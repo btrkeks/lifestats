@@ -86,6 +86,7 @@ class SessionTracker:
 
         # Track which decks we've shown error tooltips for
         self._notified_errors: set = set()
+        self._startup_backlogs_logged: bool = False
 
     def _provision_and_start_session(self, deck_id: DeckId) -> bool:
         """Ensures a deck is configured before starting a session.
@@ -269,31 +270,89 @@ class SessionTracker:
         except Exception as e:
             logger.error(f"Failed to log disruption: {e}", exc_info=True)
 
-    def _log_backlog(self):
+    def _log_backlog_for_bundle(self, deck_id: DeckId, bundle: StatisticBundle):
         """Logs the current total backlog count (New + Learning + Review).
 
         Overwrites the current backlog value with latest count.
         """
-        if not self.active_bundle or not self.deck_id:
+        if not bundle or not deck_id:
             return
 
-        backlog_count = get_total_backlog_count(self.deck_id)
+        backlog_count = get_total_backlog_count(deck_id)
         date = datetime.now().date()
 
         logger.info(
             f"Logging total backlog count ({backlog_count}) "
-            f"to statistic {self.active_bundle.backlog_id}"
+            f"to statistic {bundle.backlog_id}"
         )
 
         try:
             self.api_client.log_statistic_value_async(
-                statistic_id=self.active_bundle.backlog_id,
+                statistic_id=bundle.backlog_id,
                 date=date,
                 value=str(backlog_count),
                 update_policy="overwrite",
             )
         except Exception as e:
             logger.error(f"Failed to log backlog: {e}", exc_info=True)
+
+    def _log_backlog(self):
+        """Logs the active deck's current total backlog count."""
+        if not self.active_bundle or not self.deck_id:
+            return
+
+        self._log_backlog_for_bundle(self.deck_id, self.active_bundle)
+
+    def log_startup_backlogs(self):
+        """Logs backlog snapshots for all already-provisioned decks.
+
+        Startup snapshots intentionally use only cached bundles. Unprovisioned
+        decks are skipped so opening Anki does not create unwanted statistics.
+        """
+        if self._startup_backlogs_logged:
+            logger.debug("Startup backlog snapshots already logged; skipping")
+            return
+
+        if mw.col is None:
+            logger.info("Collection is not open yet; deferring startup backlog logging")
+            return
+
+        deck_bundles = self.config_manager.get_all_bundles()
+        if not deck_bundles:
+            logger.info("No provisioned decks found; skipping startup backlog logging")
+            self._startup_backlogs_logged = True
+            return
+
+        logger.info(
+            f"Logging startup backlog snapshots for {len(deck_bundles)} provisioned decks"
+        )
+
+        for deck_id_str, bundle_data in deck_bundles.items():
+            try:
+                deck_id = DeckId(int(deck_id_str))
+                deck_name = get_deck_name(deck_id)
+                if not deck_name:
+                    logger.warning(
+                        f"Skipping startup backlog for missing deck_id={deck_id_str}"
+                    )
+                    continue
+
+                bundle = StatisticBundle(**bundle_data)
+                logger.debug(
+                    f"Logging startup backlog for deck '{deck_name}' (did={deck_id})"
+                )
+                self._log_backlog_for_bundle(deck_id, bundle)
+            except (TypeError, ValueError) as e:
+                logger.warning(
+                    f"Skipping invalid cached deck bundle for deck_id={deck_id_str}: {e}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to log startup backlog for deck_id={deck_id_str}: {e}",
+                    exc_info=True,
+                )
+
+        self._startup_backlogs_logged = True
 
     def _log_cards_studied(self):
         """Logs the number of unique cards studied today for the current deck.

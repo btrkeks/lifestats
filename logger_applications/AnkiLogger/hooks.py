@@ -53,6 +53,9 @@ def on_state_change(
 ):
     """Event handler for state changes, triggering a ping on review start."""
     logger.info(f"on_state_change: old_state={old_state}, new_state={new_state}")
+    if new_state == "deckBrowser":
+        session_tracker.log_startup_backlogs()
+
     if new_state == "review":
         logger.info("Entering review state, triggering ping")
         session_tracker.ping()
