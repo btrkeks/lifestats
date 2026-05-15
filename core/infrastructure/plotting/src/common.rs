@@ -4,6 +4,7 @@ use plotters::prelude::*;
 // Constants
 pub const BACKGROUND_COLOR: RGBColor = RGBColor(37, 37, 37);
 pub const GOAL_LINE_COLOR: RGBAColor = RGBAColor(255, 0, 0, 0.7);
+pub const MISSED_EMPTY_GOAL_DAY_COLOR: RGBAColor = RGBAColor(245, 169, 142, 0.18);
 pub const SHADING_COLOR: RGBAColor = RGBAColor(200, 200, 200, 0.1);
 pub const Y_MARGIN_PERCENT: i64 = 10;
 

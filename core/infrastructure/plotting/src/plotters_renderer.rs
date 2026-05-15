@@ -9,8 +9,11 @@ use plotters::prelude::*;
 
 use crate::common::{
     add_y_padding, calculate_seconds_ticks, get_bar, get_border, get_horizontal_line,
-    seconds_to_time_formatter, BACKGROUND_COLOR, GOAL_LINE_COLOR, SHADING_COLOR, Y_MARGIN_PERCENT,
+    seconds_to_time_formatter, BACKGROUND_COLOR, GOAL_LINE_COLOR, MISSED_EMPTY_GOAL_DAY_COLOR,
+    SHADING_COLOR, Y_MARGIN_PERCENT,
 };
+
+const MISSED_GOAL_COLOR: [u8; 3] = [245, 169, 142];
 
 /// Concrete implementation of PlotRenderer using the plotters library
 pub struct PlottersRenderer;
@@ -18,6 +21,18 @@ pub struct PlottersRenderer;
 impl PlottersRenderer {
     pub fn new() -> Self {
         Self
+    }
+
+    fn should_shade_empty_missed_goal_day(point: &plot_domain::plot::data::DataPoint) -> bool {
+        if point.goal.is_none() || point.color != MISSED_GOAL_COLOR {
+            return false;
+        }
+
+        match &point.value {
+            None => true,
+            Some(DrawableData::Integer(0)) => true,
+            _ => false,
+        }
     }
 
     fn render_bar_chart(&self, data: &PlotData, config: &RenderConfig) -> Result<Vec<u8>> {
@@ -63,6 +78,19 @@ impl PlottersRenderer {
             .axis_style(WHITE)
             .label_style(("IPAMincho", 20, &WHITE))
             .draw()?;
+
+        // Mark goal days where the missed value would otherwise be invisible.
+        for point in &data.points {
+            if Self::should_shade_empty_missed_goal_day(point) {
+                chart.draw_series([get_bar(
+                    point.date,
+                    0,
+                    y_axis_max,
+                    0,
+                    &MISSED_EMPTY_GOAL_DAY_COLOR,
+                )])?;
+            }
+        }
 
         // Draw bars using DrawableData and pre-calculated colors with helper function
         for point in &data.points {
@@ -462,6 +490,111 @@ mod tests {
     use chrono::NaiveDate;
     use lifestats_core::shared::date_range::DateRange;
     use plot_domain::plot::data::{DataPoint, PlotData};
+
+    fn test_date() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()
+    }
+
+    fn point(value: Option<DrawableData>, color: [u8; 3], goal: Option<DrawableGoal>) -> DataPoint {
+        DataPoint::new(test_date(), value, color, goal)
+    }
+
+    #[test]
+    fn shades_goal_day_with_missing_missed_value() {
+        let point = point(None, MISSED_GOAL_COLOR, Some(DrawableGoal::Integer(10)));
+
+        assert!(PlottersRenderer::should_shade_empty_missed_goal_day(&point));
+    }
+
+    #[test]
+    fn shades_goal_day_with_zero_missed_value() {
+        let point = point(
+            Some(DrawableData::Integer(0)),
+            MISSED_GOAL_COLOR,
+            Some(DrawableGoal::Integer(10)),
+        );
+
+        assert!(PlottersRenderer::should_shade_empty_missed_goal_day(&point));
+    }
+
+    #[test]
+    fn does_not_shade_nonzero_missed_value() {
+        let point = point(
+            Some(DrawableData::Integer(5)),
+            MISSED_GOAL_COLOR,
+            Some(DrawableGoal::Integer(10)),
+        );
+
+        assert!(!PlottersRenderer::should_shade_empty_missed_goal_day(
+            &point
+        ));
+    }
+
+    #[test]
+    fn does_not_shade_zero_achieved_value() {
+        let point = point(
+            Some(DrawableData::Integer(0)),
+            [169, 252, 177],
+            Some(DrawableGoal::Integer(0)),
+        );
+
+        assert!(!PlottersRenderer::should_shade_empty_missed_goal_day(
+            &point
+        ));
+    }
+
+    #[test]
+    fn does_not_shade_day_without_goal() {
+        let point = point(Some(DrawableData::Integer(0)), MISSED_GOAL_COLOR, None);
+
+        assert!(!PlottersRenderer::should_shade_empty_missed_goal_day(
+            &point
+        ));
+    }
+
+    #[test]
+    fn test_render_bar_chart_with_missed_empty_goal_days() {
+        let renderer = PlottersRenderer::new();
+        let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2025, 1, 3).unwrap();
+        let date_range = DateRange::new(start, end).unwrap();
+
+        let points = vec![
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                Some(DrawableData::Integer(12)),
+                [169, 252, 177],
+                Some(DrawableGoal::Integer(10)),
+            ),
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
+                None,
+                MISSED_GOAL_COLOR,
+                Some(DrawableGoal::Integer(10)),
+            ),
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2025, 1, 3).unwrap(),
+                Some(DrawableData::Integer(0)),
+                MISSED_GOAL_COLOR,
+                Some(DrawableGoal::Integer(10)),
+            ),
+        ];
+
+        let plot_data = PlotData::new(
+            "Missed Empty Goal Days".to_string(),
+            points,
+            date_range,
+            PlotType::BarChart,
+            YAxis::Integer { min: 0, max: 12 },
+        );
+
+        let result = renderer.render(&plot_data, &RenderConfig::default());
+
+        assert!(result.is_ok());
+        let png_bytes = result.unwrap();
+        assert!(!png_bytes.is_empty());
+        assert_eq!(&png_bytes[0..4], &[0x89, 0x50, 0x4E, 0x47]);
+    }
 
     #[test]
     fn test_render_line_chart() {
