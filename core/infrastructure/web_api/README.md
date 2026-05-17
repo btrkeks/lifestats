@@ -187,6 +187,7 @@ web_api/
 | `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
 | `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
 | `GET` | `/statistics/{id}/performance` | Get goal performance analysis with trend over date range |
+| `GET` | `/statistics/{id}/streak` | Get current goal-achievement streak in days |
 | `POST` | `/statistics/dashboard` | Get dashboard data for multiple statistics |
 
 ### Goals

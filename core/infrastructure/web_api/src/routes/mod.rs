@@ -69,6 +69,7 @@ where
             "/statistics/{id}/performance",
             get(statistics::get_goal_performance),
         )
+        .route("/statistics/{id}/streak", get(statistics::get_streak))
         // Progress item endpoints
         .route(
             "/progress-items",

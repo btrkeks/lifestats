@@ -764,6 +764,44 @@ where
     Ok(Json(result))
 }
 
+/// GET /statistics/:id/streak - Get the current goal-achievement streak for a statistic
+pub async fn get_streak<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+) -> Result<Json<crate::dto::streak::StreakResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::services::DefaultDailyAchievementEvaluator;
+    use lifestats_application::use_cases::queries::get_streak::{
+        GetStreakQuery, GetStreakQueryHandler,
+    };
+    use std::sync::Arc;
+
+    let clock = Arc::new(lifestats_system_clock::SystemClock);
+    let evaluator = Arc::new(DefaultDailyAchievementEvaluator::new(
+        app_state.statistic_repository.clone(),
+    ));
+
+    let handler =
+        GetStreakQueryHandler::new(app_state.statistic_repository.clone(), clock, evaluator);
+
+    let current_streak_days = handler
+        .handle(GetStreakQuery {
+            statistic_id: StatisticId(statistic_id),
+        })
+        .map_err(ApiError::from)?;
+
+    Ok(Json(crate::dto::streak::StreakResponse {
+        statistic_id,
+        current_streak_days,
+    }))
+}
+
 /// GET /statistics/:id/logged/:date - Check if a statistic has been logged for a specific date
 pub async fn get_logged_value<R, Rend, E, I>(
     State(app_state): State<AppState<R, Rend, E, I>>,

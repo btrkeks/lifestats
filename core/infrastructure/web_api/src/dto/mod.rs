@@ -8,4 +8,5 @@ pub mod progress;
 pub mod session;
 pub mod statistic;
 pub mod statistic_score;
+pub mod streak;
 pub mod time_spans;

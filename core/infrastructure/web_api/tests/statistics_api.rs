@@ -1,7 +1,7 @@
 mod helpers;
 
 use axum_test::TestServer;
-use chrono::NaiveDate;
+use chrono::{Days, NaiveDate, Utc};
 use helpers::{mock_app_state, mock_integer_statistic};
 use lifestats_core::shared::dated_value::DatedValue;
 use lifestats_core::shared::ids::StatisticId;
@@ -9,6 +9,8 @@ use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
 use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
+use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_web_api::dto::statistic::StatisticMetadataResponse;
 use lifestats_web_api::routes::create_router;
@@ -363,6 +365,105 @@ async fn test_get_goal_performance_invalid_date_format() {
     // Assert error response contains validation message
     let body: serde_json::Value = response.json();
     assert!(body["error"].as_str().unwrap().contains("Invalid"));
+}
+
+// ============================================================================
+// GET /statistics/:id/streak Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_streak_success() {
+    let mut mock_repo = MockStatisticRepository::new();
+    let today = Utc::now().date_naive();
+    let yesterday = today.checked_sub_days(Days::new(1)).unwrap();
+    let two_days_ago = today.checked_sub_days(Days::new(2)).unwrap();
+
+    let metadata = StatisticMetadata::new(
+        StatisticId(1),
+        "Fitness".to_string(),
+        "Push Ups".to_string(),
+    );
+    let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+        metadata,
+        Some(AmountGoal::new(10, true)),
+        NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+    ));
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(move |_| Ok(stat.clone()));
+
+    mock_repo
+        .expect_find_log_values_in_range()
+        .times(1)
+        .returning(move |_, _| {
+            Ok(vec![
+                DatedValue::new(two_days_ago, json!(5)),
+                DatedValue::new(yesterday, json!(11)),
+                DatedValue::new(today, json!(10)),
+            ])
+        });
+
+    mock_repo
+        .expect_find_goals_in_range()
+        .times(1)
+        .returning(|_, _| Ok(vec![]));
+
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/statistics/1/streak").await;
+
+    assert_eq!(response.status_code(), 200);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["statistic_id"], 1);
+    assert_eq!(body["current_streak_days"], 2);
+}
+
+#[tokio::test]
+async fn test_get_streak_statistic_not_found() {
+    let mut mock_repo = MockStatisticRepository::new();
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(|_| Err(RepositoryError::NotFound));
+
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/statistics/999/streak").await;
+
+    assert_eq!(response.status_code(), 404);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["error"], "The requested resource was not found.");
+}
+
+#[tokio::test]
+async fn test_get_streak_repository_error() {
+    let mut mock_repo = MockStatisticRepository::new();
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(|_| {
+            Err(RepositoryError::OperationFailed(anyhow::anyhow!(
+                "Database offline"
+            )))
+        });
+
+    let app_state = mock_app_state(Arc::new(mock_repo));
+    let app = create_router(app_state);
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/statistics/1/streak").await;
+
+    assert_eq!(response.status_code(), 500);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["error"], "Internal server error");
 }
 
 // ============================================================================
