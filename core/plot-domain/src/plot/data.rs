@@ -4,33 +4,63 @@ use chrono::NaiveDate;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
 
+/// Semantic unit for scalar plot values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScalarUnit {
+    Number,
+    DurationSeconds,
+    TimeOfDaySeconds,
+    Percent,
+}
+
+/// A scalar plot value with its display semantics preserved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScalarValue {
+    value: i64,
+    unit: ScalarUnit,
+}
+
+impl ScalarValue {
+    pub fn new(value: i64, unit: ScalarUnit) -> Self {
+        Self { value, unit }
+    }
+
+    pub fn number(value: i64) -> Self {
+        Self::new(value, ScalarUnit::Number)
+    }
+
+    pub fn duration_seconds(value: i64) -> Self {
+        Self::new(value, ScalarUnit::DurationSeconds)
+    }
+
+    pub fn time_of_day_seconds(value: i64) -> Self {
+        Self::new(value, ScalarUnit::TimeOfDaySeconds)
+    }
+
+    pub fn percent(value: i64) -> Self {
+        Self::new(value, ScalarUnit::Percent)
+    }
+
+    pub fn value(&self) -> i64 {
+        self.value
+    }
+
+    pub fn unit(&self) -> ScalarUnit {
+        self.unit
+    }
+}
+
 /// Represents data that has been processed and is ready for visualization.
-///
-/// This enum eliminates the need for renderers to parse generic JSON.
-/// All values have been converted from their storage format (JSON) into
-/// strongly-typed, renderer-agnostic data structures.
-///
-/// # Variants
-/// * `Integer` - Numeric data (counts, amounts, boolean as 0/1)
-/// * `TimeFrames` - Duration data (time spans, intervals)
 #[derive(Debug, Clone, PartialEq)]
 pub enum DrawableData {
-    Integer(i64),
+    Scalar(ScalarValue),
     TimeFrames(TimeFrameList),
 }
 
 /// Represents a goal that has been processed and is ready for visualization.
-///
-/// This enum eliminates the need for renderers to parse complex goal JSON.
-/// Goals are converted from their storage format into the same type system
-/// as DrawableData for consistent rendering.
-///
-/// # Variants
-/// * `Integer` - Numeric goals (target counts, amounts)
-/// * `TimeFrames` - Duration goals (target time spans)
 #[derive(Debug, Clone, PartialEq)]
 pub enum DrawableGoal {
-    Integer(i64),
+    Scalar(ScalarValue),
     TimeFrames(TimeFrameList),
 }
 
@@ -41,7 +71,7 @@ pub enum DrawableGoal {
 ///
 /// # Fields
 /// * `date` - The date this data point represents
-/// * `value` - The actual data value (Integer or TimeFrames). `None` means no value was
+/// * `value` - The actual data value. `None` means no value was
 ///   logged for this day; a `DataPoint` may still exist if there is a goal to display.
 /// * `color` - RGB color for rendering this point (typically goal-achievement based)
 /// * `goal` - Optional goal value for comparison/visualization

@@ -212,10 +212,10 @@ mod tests {
     use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
-    use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
     use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
-    use plot_domain::plot::data::DrawableData;
+    use plot_domain::plot::axis::AxisLabelFormat;
+    use plot_domain::plot::data::{DrawableData, ScalarValue};
     use plot_domain::plot::plot_type::PlotType;
     use serde_json::json;
 
@@ -281,10 +281,10 @@ mod tests {
         let point1 = &plot_data.points[0];
         assert_eq!(point1.date, NaiveDate::from_ymd_opt(2025, 1, 1).unwrap());
         match &point1.value {
-            Some(DrawableData::Integer(val)) => {
-                assert_eq!(*val, 15);
+            Some(DrawableData::Scalar(val)) => {
+                assert_eq!(*val, ScalarValue::number(15));
             }
-            _ => panic!("Expected Some(Integer DrawableData)"),
+            _ => panic!("Expected Some(Number Scalar DrawableData)"),
         }
         // Verify color is gold (150% achievement)
         assert_eq!(point1.color, [255, 215, 0]); // Gold
@@ -304,11 +304,16 @@ mod tests {
         // Verify Y-axis was calculated
         // With value 15 and goal 10, axis should include both
         match plot_data.y_axis {
-            YAxis::Integer { min, max } => {
+            YAxis::Scalar {
+                min,
+                max,
+                label_format,
+            } => {
+                assert_eq!(label_format, AxisLabelFormat::Number);
                 assert!(min <= 10, "Min should be <= 10");
                 assert!(max >= 15, "Max should be >= 15");
             }
-            _ => panic!("Expected Integer YAxis"),
+            _ => panic!("Expected Scalar YAxis"),
         }
     }
 
@@ -360,7 +365,14 @@ mod tests {
         assert_eq!(plot_data.points.len(), 0);
 
         // Y-axis should have default range for empty data
-        assert_eq!(plot_data.y_axis, YAxis::Integer { min: 0, max: 100 });
+        assert_eq!(
+            plot_data.y_axis,
+            YAxis::Scalar {
+                min: 0,
+                max: 100,
+                label_format: AxisLabelFormat::Number,
+            }
+        );
     }
 
     #[test]
@@ -433,10 +445,14 @@ mod tests {
         let point1 = &plot_data.points[0];
         assert_eq!(point1.date, date_with_value);
         match &point1.value {
-            Some(DrawableData::Integer(val)) => {
-                assert_eq!(*val, 1, "Habit occurrence should be represented as 1");
+            Some(DrawableData::Scalar(val)) => {
+                assert_eq!(
+                    *val,
+                    ScalarValue::number(1),
+                    "Habit occurrence should be represented as 1"
+                );
             }
-            _ => panic!("Expected Some(Integer DrawableData) for logged habit"),
+            _ => panic!("Expected Some(Number Scalar DrawableData) for logged habit"),
         }
         assert!(point1.goal.is_some(), "Day 1 should have a goal");
         assert_eq!(

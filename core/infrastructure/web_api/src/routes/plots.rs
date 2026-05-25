@@ -13,6 +13,8 @@ use lifestats_application::use_cases::queries::get_plot_data::{
 };
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::axis::AxisLabelFormat;
+use plot_domain::plot::data::{ScalarUnit, ScalarValue};
 use plot_domain::plot::plot_type::PlotType;
 use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
 use serde::{Deserialize, Serialize};
@@ -57,16 +59,37 @@ pub struct DateRangeDto {
 #[derive(Debug, Serialize)]
 pub struct DataPointDto {
     pub date: String,
-    pub value: String, // Serialized DrawableData
+    pub value: Option<DrawableValueDto>,
     pub color: [u8; 3],
-    pub goal: Option<String>, // Serialized DrawableGoal
+    pub goal: Option<DrawableValueDto>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum YAxisDto {
-    Integer { min: i64, max: i64 },
-    Time { min: String, max: String },
+    Scalar {
+        min: i64,
+        max: i64,
+        label_format: String,
+    },
+    TimeOfDay {
+        min_seconds: i64,
+        max_seconds: i64,
+        label_format: String,
+    },
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", content = "value")]
+pub enum DrawableValueDto {
+    Scalar(ScalarValueDto),
+    TimeFrames(serde_json::Value),
+}
+
+#[derive(Debug, Serialize)]
+pub struct ScalarValueDto {
+    pub value: i64,
+    pub unit: String,
 }
 
 // ============================================================================
@@ -272,35 +295,47 @@ fn plot_data_to_dto(plot_data: plot_domain::plot::data::PlotData) -> PlotDataRes
         .points
         .into_iter()
         .map(|point| {
-            let value_str = match point.value {
-                Some(DrawableData::Integer(i)) => format!("{}", i),
-                Some(DrawableData::TimeFrames(tf)) => {
-                    serde_json::to_string(&tf).unwrap_or_else(|_| "[]".to_string())
-                }
-                None => "null".to_string(),
-            };
+            let value = point.value.map(|value| match value {
+                DrawableData::Scalar(value) => DrawableValueDto::Scalar(value.into()),
+                DrawableData::TimeFrames(tf) => DrawableValueDto::TimeFrames(
+                    serde_json::to_value(tf).unwrap_or_else(|_| serde_json::json!([])),
+                ),
+            });
 
-            let goal_str = point.goal.map(|g| match g {
-                DrawableGoal::Integer(i) => format!("{}", i),
-                DrawableGoal::TimeFrames(tf) => {
-                    serde_json::to_string(&tf).unwrap_or_else(|_| "[]".to_string())
-                }
+            let goal = point.goal.map(|goal| match goal {
+                DrawableGoal::Scalar(value) => DrawableValueDto::Scalar(value.into()),
+                DrawableGoal::TimeFrames(tf) => DrawableValueDto::TimeFrames(
+                    serde_json::to_value(tf).unwrap_or_else(|_| serde_json::json!([])),
+                ),
             });
 
             DataPointDto {
                 date: point.date.format("%Y-%m-%d").to_string(),
-                value: value_str,
+                value,
                 color: point.color,
-                goal: goal_str,
+                goal,
             }
         })
         .collect();
 
     let y_axis_dto = match plot_data.y_axis {
-        YAxis::Integer { min, max } => YAxisDto::Integer { min, max },
-        YAxis::Time { min, max } => YAxisDto::Time {
-            min: min.format("%H:%M:%S").to_string(),
-            max: max.format("%H:%M:%S").to_string(),
+        YAxis::Scalar {
+            min,
+            max,
+            label_format,
+        } => YAxisDto::Scalar {
+            min,
+            max,
+            label_format: axis_label_format_to_string(label_format).to_string(),
+        },
+        YAxis::TimeOfDay {
+            min_seconds,
+            max_seconds,
+            label_format,
+        } => YAxisDto::TimeOfDay {
+            min_seconds,
+            max_seconds,
+            label_format: axis_label_format_to_string(label_format).to_string(),
         },
     };
 
@@ -321,5 +356,74 @@ fn plot_data_to_dto(plot_data: plot_domain::plot::data::PlotData) -> PlotDataRes
         },
         points,
         y_axis: y_axis_dto,
+    }
+}
+
+impl From<ScalarValue> for ScalarValueDto {
+    fn from(value: ScalarValue) -> Self {
+        Self {
+            value: value.value(),
+            unit: scalar_unit_to_string(value.unit()).to_string(),
+        }
+    }
+}
+
+fn scalar_unit_to_string(unit: ScalarUnit) -> &'static str {
+    match unit {
+        ScalarUnit::Number => "number",
+        ScalarUnit::DurationSeconds => "duration_seconds",
+        ScalarUnit::TimeOfDaySeconds => "time_of_day_seconds",
+        ScalarUnit::Percent => "percent",
+    }
+}
+
+fn axis_label_format_to_string(format: AxisLabelFormat) -> &'static str {
+    match format {
+        AxisLabelFormat::Number => "number",
+        AxisLabelFormat::DurationHhMm => "duration_hh_mm",
+        AxisLabelFormat::TimeOfDayHhMm => "time_of_day_hh_mm",
+        AxisLabelFormat::Percent => "percent",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use plot_domain::plot::axis::YAxis;
+    use plot_domain::plot::data::{DataPoint, DrawableData, DrawableGoal, PlotData};
+
+    #[test]
+    fn plot_data_dto_exposes_scalar_units_and_axis_label_format() {
+        let start = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+        let date_range = DateRange::new(start, start).unwrap();
+        let plot_data = PlotData::new(
+            "Deep Work".to_string(),
+            vec![DataPoint::new(
+                start,
+                Some(DrawableData::Scalar(ScalarValue::duration_seconds(7200))),
+                [169, 252, 177],
+                Some(DrawableGoal::Scalar(ScalarValue::duration_seconds(3600))),
+            )],
+            date_range,
+            PlotType::BarChart,
+            YAxis::Scalar {
+                min: 0,
+                max: 7560,
+                label_format: AxisLabelFormat::DurationHhMm,
+            },
+        );
+
+        let response = plot_data_to_dto(plot_data);
+        let json = serde_json::to_value(response).unwrap();
+
+        assert_eq!(json["points"][0]["value"]["type"], "Scalar");
+        assert_eq!(json["points"][0]["value"]["value"]["value"], 7200);
+        assert_eq!(
+            json["points"][0]["value"]["value"]["unit"],
+            "duration_seconds"
+        );
+        assert_eq!(json["points"][0]["goal"]["value"]["value"], 3600);
+        assert_eq!(json["y_axis"]["type"], "Scalar");
+        assert_eq!(json["y_axis"]["label_format"], "duration_hh_mm");
     }
 }

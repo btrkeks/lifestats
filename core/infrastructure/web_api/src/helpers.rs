@@ -5,7 +5,7 @@ use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
 use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
-use plot_domain::plot::data::{DrawableData, DrawableGoal};
+use plot_domain::plot::data::{DrawableData, DrawableGoal, ScalarValue};
 use plot_domain::plot::plot_type::PlotType;
 use serde_json::Value;
 
@@ -58,7 +58,7 @@ pub fn json_to_drawable_data(
                     plot_type
                 )
             })?;
-            Ok(DrawableData::Integer(int_value))
+            Ok(DrawableData::Scalar(ScalarValue::number(int_value)))
         }
     }
 }
@@ -76,12 +76,16 @@ pub fn json_to_drawable_goal(statistic: &AnyStatistic, goal: &Value) -> Result<D
         AnyStatistic::Habit(_) => {
             let habit_goal = serde_json::from_value::<HabitGoal>(goal.clone())
                 .map_err(|e| anyhow!("Failed to parse HabitGoal: {}", e))?;
-            Ok(DrawableGoal::Integer(habit_goal.occurred() as i64))
+            Ok(DrawableGoal::Scalar(ScalarValue::number(
+                habit_goal.occurred() as i64,
+            )))
         }
         AnyStatistic::IntegerAmount(_) => {
             let amount_goal = serde_json::from_value::<AmountGoal<i64>>(goal.clone())
                 .map_err(|e| anyhow!("Failed to parse AmountGoal: {}", e))?;
-            Ok(DrawableGoal::Integer(amount_goal.target_amount()))
+            Ok(DrawableGoal::Scalar(ScalarValue::number(
+                amount_goal.target_amount(),
+            )))
         }
         AnyStatistic::PointInTime(_) => {
             // PointInTime goals are not typically displayed on plots, but we can convert them

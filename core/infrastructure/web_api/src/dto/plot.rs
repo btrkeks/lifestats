@@ -1,8 +1,10 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::NaiveDate;
 use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
-use plot_domain::plot::axis::YAxis;
-use plot_domain::plot::data::{DataPoint, DrawableData, DrawableGoal, PlotData};
+use plot_domain::plot::axis::{AxisLabelFormat, YAxis};
+use plot_domain::plot::data::{
+    DataPoint, DrawableData, DrawableGoal, PlotData, ScalarUnit, ScalarValue,
+};
 use plot_domain::plot::plot_type::PlotType;
 use serde::{Deserialize, Serialize};
 
@@ -52,14 +54,14 @@ impl From<DataPoint> for DataPointResponse {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum DrawableDataResponse {
-    Integer(i64),
+    Scalar(ScalarValueResponse),
     TimeFrames(TimeFrameList),
 }
 
 impl From<DrawableData> for DrawableDataResponse {
     fn from(data: DrawableData) -> Self {
         match data {
-            DrawableData::Integer(val) => DrawableDataResponse::Integer(val),
+            DrawableData::Scalar(val) => DrawableDataResponse::Scalar(val.into()),
             DrawableData::TimeFrames(frames) => DrawableDataResponse::TimeFrames(frames),
         }
     }
@@ -69,15 +71,30 @@ impl From<DrawableData> for DrawableDataResponse {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum DrawableGoalResponse {
-    Integer(i64),
+    Scalar(ScalarValueResponse),
     TimeFrames(TimeFrameList),
 }
 
 impl From<DrawableGoal> for DrawableGoalResponse {
     fn from(goal: DrawableGoal) -> Self {
         match goal {
-            DrawableGoal::Integer(val) => DrawableGoalResponse::Integer(val),
+            DrawableGoal::Scalar(val) => DrawableGoalResponse::Scalar(val.into()),
             DrawableGoal::TimeFrames(frames) => DrawableGoalResponse::TimeFrames(frames),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScalarValueResponse {
+    pub value: i64,
+    pub unit: String,
+}
+
+impl From<ScalarValue> for ScalarValueResponse {
+    fn from(value: ScalarValue) -> Self {
+        Self {
+            value: value.value(),
+            unit: scalar_unit_to_string(value.unit()).to_string(),
         }
     }
 }
@@ -86,16 +103,58 @@ impl From<DrawableGoal> for DrawableGoalResponse {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum YAxisResponse {
-    Integer { min: i64, max: i64 },
-    Time { min: NaiveTime, max: NaiveTime },
+    Scalar {
+        min: i64,
+        max: i64,
+        label_format: String,
+    },
+    TimeOfDay {
+        min_seconds: i64,
+        max_seconds: i64,
+        label_format: String,
+    },
 }
 
 impl From<YAxis> for YAxisResponse {
     fn from(axis: YAxis) -> Self {
         match axis {
-            YAxis::Integer { min, max } => YAxisResponse::Integer { min, max },
-            YAxis::Time { min, max } => YAxisResponse::Time { min, max },
+            YAxis::Scalar {
+                min,
+                max,
+                label_format,
+            } => YAxisResponse::Scalar {
+                min,
+                max,
+                label_format: axis_label_format_to_string(label_format).to_string(),
+            },
+            YAxis::TimeOfDay {
+                min_seconds,
+                max_seconds,
+                label_format,
+            } => YAxisResponse::TimeOfDay {
+                min_seconds,
+                max_seconds,
+                label_format: axis_label_format_to_string(label_format).to_string(),
+            },
         }
+    }
+}
+
+fn scalar_unit_to_string(unit: ScalarUnit) -> &'static str {
+    match unit {
+        ScalarUnit::Number => "number",
+        ScalarUnit::DurationSeconds => "duration_seconds",
+        ScalarUnit::TimeOfDaySeconds => "time_of_day_seconds",
+        ScalarUnit::Percent => "percent",
+    }
+}
+
+fn axis_label_format_to_string(format: AxisLabelFormat) -> &'static str {
+    match format {
+        AxisLabelFormat::Number => "number",
+        AxisLabelFormat::DurationHhMm => "duration_hh_mm",
+        AxisLabelFormat::TimeOfDayHhMm => "time_of_day_hh_mm",
+        AxisLabelFormat::Percent => "percent",
     }
 }
 

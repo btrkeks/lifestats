@@ -1,16 +1,16 @@
 use anyhow::{anyhow, Result};
 use chrono::Timelike;
 use image::{ImageBuffer, Rgb};
-use plot_domain::plot::axis::YAxis;
+use plot_domain::plot::axis::{AxisLabelFormat, YAxis};
 use plot_domain::plot::data::{DrawableData, DrawableGoal, PlotData};
 use plot_domain::plot::plot_type::PlotType;
 use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
 use plotters::prelude::*;
 
 use crate::common::{
-    add_y_padding, calculate_seconds_ticks, get_bar, get_border, get_horizontal_line,
-    seconds_to_time_formatter, BACKGROUND_COLOR, GOAL_LINE_COLOR, MISSED_EMPTY_GOAL_DAY_COLOR,
-    SHADING_COLOR, Y_MARGIN_PERCENT,
+    calculate_seconds_ticks, duration_seconds_to_hh_mm, get_bar, get_border, get_horizontal_line,
+    number_formatter, percent_formatter, time_of_day_seconds_to_hh_mm, BACKGROUND_COLOR,
+    GOAL_LINE_COLOR, MISSED_EMPTY_GOAL_DAY_COLOR, SHADING_COLOR,
 };
 
 const MISSED_GOAL_COLOR: [u8; 3] = [245, 169, 142];
@@ -23,6 +23,44 @@ impl PlottersRenderer {
         Self
     }
 
+    fn scalar_data_value(data: &DrawableData) -> Option<i64> {
+        match data {
+            DrawableData::Scalar(value) => Some(value.value()),
+            DrawableData::TimeFrames(_) => None,
+        }
+    }
+
+    fn scalar_goal_value(goal: &DrawableGoal) -> Option<i64> {
+        match goal {
+            DrawableGoal::Scalar(value) => Some(value.value()),
+            DrawableGoal::TimeFrames(_) => None,
+        }
+    }
+
+    fn scalar_axis_bounds(axis: &YAxis, _plot_name: &str) -> Result<(i64, i64, AxisLabelFormat)> {
+        match axis {
+            YAxis::Scalar {
+                min,
+                max,
+                label_format,
+            } => Ok((*min, *max, *label_format)),
+            YAxis::TimeOfDay {
+                min_seconds,
+                max_seconds,
+                label_format,
+            } => Ok((*min_seconds, *max_seconds, *label_format)),
+        }
+    }
+
+    fn format_y_label(label_format: AxisLabelFormat, value: &i64) -> String {
+        match label_format {
+            AxisLabelFormat::Number => number_formatter(value),
+            AxisLabelFormat::DurationHhMm => duration_seconds_to_hh_mm(value),
+            AxisLabelFormat::TimeOfDayHhMm => time_of_day_seconds_to_hh_mm(value),
+            AxisLabelFormat::Percent => percent_formatter(value),
+        }
+    }
+
     fn should_shade_empty_missed_goal_day(point: &plot_domain::plot::data::DataPoint) -> bool {
         if point.goal.is_none() || point.color != MISSED_GOAL_COLOR {
             return false;
@@ -30,7 +68,7 @@ impl PlottersRenderer {
 
         match &point.value {
             None => true,
-            Some(DrawableData::Integer(0)) => true,
+            Some(DrawableData::Scalar(value)) => value.value() == 0,
             _ => false,
         }
     }
@@ -42,18 +80,8 @@ impl PlottersRenderer {
 
         root.fill(&BACKGROUND_COLOR)?;
 
-        // Extract y-axis range from PlotData and add padding (matching old behavior)
-        let y_axis_max = match &data.y_axis {
-            YAxis::Integer { min: _, max } => {
-                let (_, padded_max) = add_y_padding(0, *max, Y_MARGIN_PERCENT);
-                padded_max
-            }
-            YAxis::Time { .. } => {
-                return Err(anyhow!(
-                    "BarChart plot requires Integer axis, but got Time axis"
-                ))
-            }
-        };
+        let (y_axis_min, y_axis_max, label_format) =
+            Self::scalar_axis_bounds(&data.y_axis, "BarChart")?;
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
@@ -62,7 +90,7 @@ impl PlottersRenderer {
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
                 (data.date_range.start()..data.date_range.end()).into_segmented(),
-                0..y_axis_max,
+                y_axis_min..y_axis_max,
             )?;
 
         chart
@@ -75,6 +103,7 @@ impl PlottersRenderer {
                 SegmentValue::CenterOf(d) => d.format("%d.").to_string(),
                 SegmentValue::Last => "".to_string(),
             })
+            .y_label_formatter(&|value| Self::format_y_label(label_format, value))
             .axis_style(WHITE)
             .label_style(("IPAMincho", 20, &WHITE))
             .draw()?;
@@ -94,19 +123,19 @@ impl PlottersRenderer {
 
         // Draw bars using DrawableData and pre-calculated colors with helper function
         for point in &data.points {
-            if let Some(DrawableData::Integer(value)) = &point.value {
+            if let Some(value) = point.value.as_ref().and_then(Self::scalar_data_value) {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
-                chart.draw_series([get_bar(point.date, 0, *value, 2, &color.to_rgba())])?;
+                chart.draw_series([get_bar(point.date, 0, value, 2, &color.to_rgba())])?;
             }
         }
 
         // Draw goal lines using helper function
         for point in &data.points {
-            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
+            if let Some(goal_number) = point.goal.as_ref().and_then(Self::scalar_goal_value) {
                 chart.draw_series([get_horizontal_line(
                     point.date,
-                    *goal_number,
+                    goal_number,
                     GOAL_LINE_COLOR,
                 )])?;
             }
@@ -140,15 +169,8 @@ impl PlottersRenderer {
 
         root.fill(&BACKGROUND_COLOR)?;
 
-        // Extract y-axis range from PlotData and add padding
-        let (y_axis_min, y_axis_max) = match &data.y_axis {
-            YAxis::Integer { min, max } => add_y_padding(*min, *max, Y_MARGIN_PERCENT),
-            YAxis::Time { .. } => {
-                return Err(anyhow!(
-                    "LineChart plot requires Integer axis, but got Time axis"
-                ))
-            }
-        };
+        let (y_axis_min, y_axis_max, label_format) =
+            Self::scalar_axis_bounds(&data.y_axis, "LineChart")?;
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
@@ -170,6 +192,7 @@ impl PlottersRenderer {
                 SegmentValue::CenterOf(d) => d.format("%d.").to_string(),
                 SegmentValue::Last => "".to_string(),
             })
+            .y_label_formatter(&|value| Self::format_y_label(label_format, value))
             .axis_style(WHITE)
             .label_style(("IPAMincho", 20, &WHITE))
             .draw()?;
@@ -179,11 +202,11 @@ impl PlottersRenderer {
             .points
             .iter()
             .filter_map(|point| {
-                if let Some(DrawableData::Integer(v)) = &point.value {
-                    Some((SegmentValue::CenterOf(point.date), *v))
-                } else {
-                    None
-                }
+                point
+                    .value
+                    .as_ref()
+                    .and_then(Self::scalar_data_value)
+                    .map(|value| (SegmentValue::CenterOf(point.date), value))
             })
             .collect();
 
@@ -193,11 +216,11 @@ impl PlottersRenderer {
 
         // Draw points with pre-calculated colors
         for point in &data.points {
-            if let Some(DrawableData::Integer(value)) = &point.value {
+            if let Some(value) = point.value.as_ref().and_then(Self::scalar_data_value) {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
                 chart.draw_series([Circle::new(
-                    (SegmentValue::CenterOf(point.date), *value),
+                    (SegmentValue::CenterOf(point.date), value),
                     5,
                     color.filled(),
                 )])?;
@@ -206,10 +229,10 @@ impl PlottersRenderer {
 
         // Draw goal lines
         for point in &data.points {
-            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
+            if let Some(goal_number) = point.goal.as_ref().and_then(Self::scalar_goal_value) {
                 chart.draw_series([get_horizontal_line(
                     point.date,
-                    *goal_number,
+                    goal_number,
                     GOAL_LINE_COLOR,
                 )])?;
             }
@@ -243,15 +266,8 @@ impl PlottersRenderer {
 
         root.fill(&BACKGROUND_COLOR)?;
 
-        // Extract y-axis range from PlotData and add padding
-        let (y_axis_min, y_axis_max) = match &data.y_axis {
-            YAxis::Integer { min, max } => add_y_padding(*min, *max, Y_MARGIN_PERCENT),
-            YAxis::Time { .. } => {
-                return Err(anyhow!(
-                    "Scatter plot requires Integer axis, but got Time axis"
-                ))
-            }
-        };
+        let (y_axis_min, y_axis_max, label_format) =
+            Self::scalar_axis_bounds(&data.y_axis, "Scatter")?;
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
@@ -273,25 +289,26 @@ impl PlottersRenderer {
                 SegmentValue::CenterOf(d) => d.format("%d.").to_string(),
                 SegmentValue::Last => "".to_string(),
             })
+            .y_label_formatter(&|value| Self::format_y_label(label_format, value))
             .axis_style(WHITE)
             .label_style(("IPAMincho", 20, &WHITE))
             .draw()?;
 
         // Draw horizontal lines for each data point (old scatter plot style)
         for point in &data.points {
-            if let Some(DrawableData::Integer(value)) = &point.value {
+            if let Some(value) = point.value.as_ref().and_then(Self::scalar_data_value) {
                 let [r, g, b] = point.color;
                 let color = RGBColor(r, g, b);
-                chart.draw_series([get_horizontal_line(point.date, *value, color.to_rgba())])?;
+                chart.draw_series([get_horizontal_line(point.date, value, color.to_rgba())])?;
             }
         }
 
         // Draw goal lines
         for point in &data.points {
-            if let Some(DrawableGoal::Integer(goal_number)) = &point.goal {
+            if let Some(goal_number) = point.goal.as_ref().and_then(Self::scalar_goal_value) {
                 chart.draw_series([get_horizontal_line(
                     point.date,
-                    *goal_number,
+                    goal_number,
                     GOAL_LINE_COLOR,
                 )])?;
             }
@@ -325,20 +342,14 @@ impl PlottersRenderer {
 
         root.fill(&BACKGROUND_COLOR)?;
 
-        // Extract y-axis bounds from PlotData (provided by domain logic)
-        let (y_axis_min, y_axis_max) = match &data.y_axis {
-            YAxis::Time { min, max } => {
-                let (min_seconds, max_seconds) = add_y_padding(
-                    min.num_seconds_from_midnight() as i64,
-                    max.num_seconds_from_midnight() as i64,
-                    Y_MARGIN_PERCENT,
-                );
-                (min_seconds, max_seconds)
-            }
-            YAxis::Integer { .. } => {
-                return Err(anyhow!(
-                    "TimeFrames plot requires Time axis, but got Integer axis"
-                ))
+        let (y_axis_min, y_axis_max, label_format) = match &data.y_axis {
+            YAxis::TimeOfDay {
+                min_seconds,
+                max_seconds,
+                label_format,
+            } => (*min_seconds, *max_seconds, *label_format),
+            YAxis::Scalar { .. } => {
+                return Err(anyhow!("TimeFrames plot requires TimeOfDay axis"));
             }
         };
 
@@ -366,7 +377,7 @@ impl PlottersRenderer {
                 SegmentValue::CenterOf(d) => d.format("%d.").to_string(),
                 SegmentValue::Last => "".to_string(),
             })
-            .y_label_formatter(&seconds_to_time_formatter)
+            .y_label_formatter(&|value| Self::format_y_label(label_format, value))
             .axis_style(WHITE)
             .label_style(("IPAMincho", 15, &WHITE))
             .draw()?;
@@ -489,7 +500,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use lifestats_core::shared::date_range::DateRange;
-    use plot_domain::plot::data::{DataPoint, PlotData};
+    use plot_domain::plot::data::{DataPoint, PlotData, ScalarValue};
 
     fn test_date() -> NaiveDate {
         NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()
@@ -499,31 +510,31 @@ mod tests {
         DataPoint::new(test_date(), value, color, goal)
     }
 
+    fn number(value: i64) -> DrawableData {
+        DrawableData::Scalar(ScalarValue::number(value))
+    }
+
+    fn number_goal(value: i64) -> DrawableGoal {
+        DrawableGoal::Scalar(ScalarValue::number(value))
+    }
+
     #[test]
     fn shades_goal_day_with_missing_missed_value() {
-        let point = point(None, MISSED_GOAL_COLOR, Some(DrawableGoal::Integer(10)));
+        let point = point(None, MISSED_GOAL_COLOR, Some(number_goal(10)));
 
         assert!(PlottersRenderer::should_shade_empty_missed_goal_day(&point));
     }
 
     #[test]
     fn shades_goal_day_with_zero_missed_value() {
-        let point = point(
-            Some(DrawableData::Integer(0)),
-            MISSED_GOAL_COLOR,
-            Some(DrawableGoal::Integer(10)),
-        );
+        let point = point(Some(number(0)), MISSED_GOAL_COLOR, Some(number_goal(10)));
 
         assert!(PlottersRenderer::should_shade_empty_missed_goal_day(&point));
     }
 
     #[test]
     fn does_not_shade_nonzero_missed_value() {
-        let point = point(
-            Some(DrawableData::Integer(5)),
-            MISSED_GOAL_COLOR,
-            Some(DrawableGoal::Integer(10)),
-        );
+        let point = point(Some(number(5)), MISSED_GOAL_COLOR, Some(number_goal(10)));
 
         assert!(!PlottersRenderer::should_shade_empty_missed_goal_day(
             &point
@@ -532,11 +543,7 @@ mod tests {
 
     #[test]
     fn does_not_shade_zero_achieved_value() {
-        let point = point(
-            Some(DrawableData::Integer(0)),
-            [169, 252, 177],
-            Some(DrawableGoal::Integer(0)),
-        );
+        let point = point(Some(number(0)), [169, 252, 177], Some(number_goal(0)));
 
         assert!(!PlottersRenderer::should_shade_empty_missed_goal_day(
             &point
@@ -545,7 +552,7 @@ mod tests {
 
     #[test]
     fn does_not_shade_day_without_goal() {
-        let point = point(Some(DrawableData::Integer(0)), MISSED_GOAL_COLOR, None);
+        let point = point(Some(number(0)), MISSED_GOAL_COLOR, None);
 
         assert!(!PlottersRenderer::should_shade_empty_missed_goal_day(
             &point
@@ -562,21 +569,21 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                Some(DrawableData::Integer(12)),
+                Some(number(12)),
                 [169, 252, 177],
-                Some(DrawableGoal::Integer(10)),
+                Some(number_goal(10)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
                 None,
                 MISSED_GOAL_COLOR,
-                Some(DrawableGoal::Integer(10)),
+                Some(number_goal(10)),
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 3).unwrap(),
-                Some(DrawableData::Integer(0)),
+                Some(number(0)),
                 MISSED_GOAL_COLOR,
-                Some(DrawableGoal::Integer(10)),
+                Some(number_goal(10)),
             ),
         ];
 
@@ -585,7 +592,11 @@ mod tests {
             points,
             date_range,
             PlotType::BarChart,
-            YAxis::Integer { min: 0, max: 12 },
+            YAxis::Scalar {
+                min: 0,
+                max: 12,
+                label_format: AxisLabelFormat::Number,
+            },
         );
 
         let result = renderer.render(&plot_data, &RenderConfig::default());
@@ -606,19 +617,23 @@ mod tests {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                Some(DrawableData::Integer(10)),
+                Some(number(10)),
                 [0, 255, 0],
                 None,
             ),
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-                Some(DrawableData::Integer(20)),
+                Some(number(20)),
                 [0, 255, 0],
                 None,
             ),
         ];
 
-        let y_axis = YAxis::Integer { min: 0, max: 30 };
+        let y_axis = YAxis::Scalar {
+            min: 0,
+            max: 30,
+            label_format: AxisLabelFormat::Number,
+        };
         let plot_data = PlotData::new(
             "Test Plot".to_string(),
             points,
@@ -674,10 +689,10 @@ mod tests {
             ),
         ];
 
-        use chrono::NaiveTime;
-        let y_axis = YAxis::Time {
-            min: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
-            max: NaiveTime::from_hms_opt(18, 0, 0).unwrap(),
+        let y_axis = YAxis::TimeOfDay {
+            min_seconds: 8 * 3600,
+            max_seconds: 18 * 3600,
+            label_format: AxisLabelFormat::TimeOfDayHhMm,
         };
         let plot_data = PlotData::new(
             "Time Frames Test Plot".to_string(),

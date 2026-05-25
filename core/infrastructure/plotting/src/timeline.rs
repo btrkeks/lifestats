@@ -7,7 +7,7 @@ use plotters::prelude::*;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::hash::{Hash, Hasher};
 
-use crate::common::{calculate_seconds_ticks, seconds_to_time_formatter, BACKGROUND_COLOR};
+use crate::common::{calculate_seconds_ticks, time_of_day_seconds_to_hh_mm, BACKGROUND_COLOR};
 
 /// Represents a timeline event for plotting purposes
 /// This is a simple wrapper to avoid circular dependencies with the application layer
@@ -117,7 +117,7 @@ pub fn plot_timeline_events(
         .configure_mesh()
         .disable_x_mesh()
         .bold_line_style(WHITE.mix(0.2))
-        .y_label_formatter(&seconds_to_time_formatter)
+        .y_label_formatter(&time_of_day_seconds_to_hh_mm)
         .axis_style(WHITE)
         .label_style(("IPAMincho", 15, &WHITE))
         .draw()?;

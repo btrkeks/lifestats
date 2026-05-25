@@ -6,7 +6,6 @@ pub const BACKGROUND_COLOR: RGBColor = RGBColor(37, 37, 37);
 pub const GOAL_LINE_COLOR: RGBAColor = RGBAColor(255, 0, 0, 0.7);
 pub const MISSED_EMPTY_GOAL_DAY_COLOR: RGBAColor = RGBAColor(245, 169, 142, 0.18);
 pub const SHADING_COLOR: RGBAColor = RGBAColor(200, 200, 200, 0.1);
-pub const Y_MARGIN_PERCENT: i64 = 10;
 
 /// Creates a horizontal line element for plotters
 pub fn get_horizontal_line(
@@ -57,22 +56,6 @@ pub fn get_bar(
     bar
 }
 
-/// Adds padding to y-axis bounds based on a percentage
-pub fn add_y_padding(y0: i64, y1: i64, percent: i64) -> (i64, i64) {
-    let diff = (y0 - y1).abs();
-
-    debug_assert!((1..100).contains(&percent));
-    let denom = 100 - 2 * percent;
-
-    if denom <= 0 {
-        return (y0, y1);
-    }
-
-    let padding = (diff * percent) / denom;
-
-    (y0 - padding, y1 + padding)
-}
-
 /// Rounds a number up to the nearest multiple
 fn round_up_to_multiple(num: i64, multiple: i64) -> i64 {
     ((num + multiple - 1) / multiple) * multiple
@@ -102,27 +85,29 @@ pub fn calculate_seconds_ticks(y_min: i64, y_max: i64, plot_height: usize) -> Ve
     get_ticks_for_step_size(y_min, y_max, step_size)
 }
 
-/// Formats seconds as HH:MM time string
-pub fn seconds_to_time_formatter(total_sec: &i64) -> String {
-    const FORMATTER: [u8; 5] = [b'0'; 5];
-    let mut buf = FORMATTER;
+/// Formats elapsed seconds as HH:MM. Durations may exceed 24 hours.
+pub fn duration_seconds_to_hh_mm(total_sec: &i64) -> String {
+    let total_minutes = total_sec.max(&0) / 60;
+    let hours = total_minutes / 60;
+    let minutes = total_minutes % 60;
+    format!("{:02}:{:02}", hours, minutes)
+}
 
-    let mins = (total_sec / 60) % 60;
-    let hours = total_sec / 3600;
+/// Formats seconds from midnight as clock-style HH:MM.
+pub fn time_of_day_seconds_to_hh_mm(total_sec: &i64) -> String {
+    let seconds = total_sec.rem_euclid(24 * 60 * 60);
+    let total_minutes = seconds / 60;
+    let hours = total_minutes / 60;
+    let minutes = total_minutes % 60;
+    format!("{:02}:{:02}", hours, minutes)
+}
 
-    let h1 = (hours / 10) as u8 + b'0';
-    let h2 = ((hours % 10) % 24) as u8 + b'0';
+pub fn number_formatter(value: &i64) -> String {
+    value.to_string()
+}
 
-    let m1 = (mins / 10) as u8 + b'0';
-    let m2 = (mins % 10) as u8 + b'0';
-
-    buf[0] = h1;
-    buf[1] = h2;
-    buf[2] = b':';
-    buf[3] = m1;
-    buf[4] = m2;
-
-    unsafe { String::from_utf8_unchecked(buf.to_vec()) }
+pub fn percent_formatter(value: &i64) -> String {
+    format!("{}%", value)
 }
 
 #[cfg(test)]
@@ -130,19 +115,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add_y_padding_basic() {
-        let (min, max) = add_y_padding(0, 100, 10);
-        // For 10% padding: diff=100, denom=80, padding=(100*10)/80=12
-        assert_eq!(min, -12);
-        assert_eq!(max, 112);
+    fn test_duration_seconds_to_hh_mm() {
+        assert_eq!(duration_seconds_to_hh_mm(&0), "00:00");
+        assert_eq!(duration_seconds_to_hh_mm(&3600), "01:00");
+        assert_eq!(duration_seconds_to_hh_mm(&3660), "01:01");
+        assert_eq!(duration_seconds_to_hh_mm(&99000), "27:30");
     }
 
     #[test]
-    fn test_seconds_to_time_formatter() {
-        assert_eq!(seconds_to_time_formatter(&0), "00:00");
-        assert_eq!(seconds_to_time_formatter(&3600), "01:00");
-        assert_eq!(seconds_to_time_formatter(&3660), "01:01");
-        assert_eq!(seconds_to_time_formatter(&36000), "10:00");
+    fn test_time_of_day_seconds_to_hh_mm() {
+        assert_eq!(time_of_day_seconds_to_hh_mm(&0), "00:00");
+        assert_eq!(time_of_day_seconds_to_hh_mm(&3600), "01:00");
+        assert_eq!(time_of_day_seconds_to_hh_mm(&3660), "01:01");
+        assert_eq!(time_of_day_seconds_to_hh_mm(&90000), "01:00");
     }
 
     #[test]

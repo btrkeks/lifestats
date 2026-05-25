@@ -8,7 +8,7 @@ use chrono::Timelike;
 use lifestats_core::shared::percentage::Percentage;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
-use plot_domain::plot::data::{DrawableData, DrawableGoal};
+use plot_domain::plot::data::{DrawableData, DrawableGoal, ScalarValue};
 use serde_json::Value;
 
 /// Converts a JSON log value to DrawableData based on the statistic type and plot type
@@ -32,7 +32,11 @@ pub fn json_value_to_drawable_data(
                 .as_bool()
                 .ok_or_else(|| anyhow!("Expected boolean for Habit statistic, got: {}", value))?;
             // Habits are rendered as 0 or 1
-            Ok(DrawableData::Integer(if boolean { 1 } else { 0 }))
+            Ok(DrawableData::Scalar(ScalarValue::number(if boolean {
+                1
+            } else {
+                0
+            })))
         }
         AnyStatistic::IntegerAmount(_) => {
             let number = value.as_i64().ok_or_else(|| {
@@ -41,7 +45,7 @@ pub fn json_value_to_drawable_data(
                     value
                 )
             })?;
-            Ok(DrawableData::Integer(number))
+            Ok(DrawableData::Scalar(ScalarValue::number(number)))
         }
         AnyStatistic::PointInTime(_) => {
             // PointInTime is stored as HH:MM:SS string, but we render it as seconds from midnight
@@ -51,7 +55,9 @@ pub fn json_value_to_drawable_data(
             let naive_time = chrono::NaiveTime::parse_from_str(time_str, "%H:%M:%S")
                 .map_err(|e| anyhow!("Failed to parse time '{}': {}", time_str, e))?;
             let seconds_from_midnight = naive_time.num_seconds_from_midnight() as i64;
-            Ok(DrawableData::Integer(seconds_from_midnight))
+            Ok(DrawableData::Scalar(ScalarValue::time_of_day_seconds(
+                seconds_from_midnight,
+            )))
         }
         AnyStatistic::TimeSpans(_) => {
             let time_frame_list = serde_json::from_value::<TimeFrameList>(value.clone())
@@ -64,7 +70,9 @@ pub fn json_value_to_drawable_data(
                 | plot_domain::plot::plot_type::PlotType::LineChart
                 | plot_domain::plot::plot_type::PlotType::Scatter => {
                     let total_seconds = time_frame_list.get_total_duration().num_seconds();
-                    Ok(DrawableData::Integer(total_seconds))
+                    Ok(DrawableData::Scalar(ScalarValue::duration_seconds(
+                        total_seconds,
+                    )))
                 }
                 plot_domain::plot::plot_type::PlotType::TimeFrames
                 | plot_domain::plot::plot_type::PlotType::CircularProgress => {
@@ -81,7 +89,7 @@ pub fn json_value_to_drawable_data(
                     value
                 )
             })?;
-            Ok(DrawableData::Integer(seconds))
+            Ok(DrawableData::Scalar(ScalarValue::duration_seconds(seconds)))
         }
     }
 }
@@ -114,7 +122,11 @@ pub fn json_value_to_drawable_goal(
                         value
                     )
                 })?;
-            Ok(DrawableGoal::Integer(if goal_value { 1 } else { 0 }))
+            Ok(DrawableGoal::Scalar(ScalarValue::number(if goal_value {
+                1
+            } else {
+                0
+            })))
         }
         AnyStatistic::IntegerAmount(_) => {
             // IntegerAmount goals have a "target_amount" field with the target number
@@ -127,7 +139,7 @@ pub fn json_value_to_drawable_goal(
                         value
                     )
                 })?;
-            Ok(DrawableGoal::Integer(goal_value))
+            Ok(DrawableGoal::Scalar(ScalarValue::number(goal_value)))
         }
         AnyStatistic::PointInTime(_) => {
             // PointInTime goals have a "target" field with the target time
@@ -143,7 +155,9 @@ pub fn json_value_to_drawable_goal(
             let naive_time = chrono::NaiveTime::parse_from_str(time_str, "%H:%M:%S")
                 .map_err(|e| anyhow!("Failed to parse goal time '{}': {}", time_str, e))?;
             let seconds_from_midnight = naive_time.num_seconds_from_midnight() as i64;
-            Ok(DrawableGoal::Integer(seconds_from_midnight))
+            Ok(DrawableGoal::Scalar(ScalarValue::time_of_day_seconds(
+                seconds_from_midnight,
+            )))
         }
         AnyStatistic::TimeSpans(_) => {
             // TimeSpans goals have a "target" field with the target duration as TimeFrameList
@@ -162,7 +176,9 @@ pub fn json_value_to_drawable_goal(
                 | plot_domain::plot::plot_type::PlotType::LineChart
                 | plot_domain::plot::plot_type::PlotType::Scatter => {
                     let total_seconds = time_frame_list.get_total_duration().num_seconds();
-                    Ok(DrawableGoal::Integer(total_seconds))
+                    Ok(DrawableGoal::Scalar(ScalarValue::duration_seconds(
+                        total_seconds,
+                    )))
                 }
                 plot_domain::plot::plot_type::PlotType::TimeFrames
                 | plot_domain::plot::plot_type::PlotType::CircularProgress => {
@@ -178,7 +194,7 @@ pub fn json_value_to_drawable_goal(
                     value
                 )
             })?;
-            Ok(DrawableGoal::Integer(seconds))
+            Ok(DrawableGoal::Scalar(ScalarValue::duration_seconds(seconds)))
         }
     }
 }
@@ -242,7 +258,7 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result_true, DrawableData::Integer(1));
+        assert_eq!(result_true, DrawableData::Scalar(ScalarValue::number(1)));
 
         let result_false = json_value_to_drawable_data(
             &stat,
@@ -250,7 +266,7 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result_false, DrawableData::Integer(0));
+        assert_eq!(result_false, DrawableData::Scalar(ScalarValue::number(0)));
     }
 
     #[test]
@@ -267,7 +283,7 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result, DrawableData::Integer(42));
+        assert_eq!(result, DrawableData::Scalar(ScalarValue::number(42)));
     }
 
     #[test]
@@ -313,7 +329,7 @@ mod tests {
         ]);
         // Total: 7 hours = 25200 seconds
 
-        // Bar chart plot type should return DrawableData::Integer (total duration in seconds)
+        // Bar chart plot type should return a duration scalar in seconds.
         let result = json_value_to_drawable_data(
             &stat,
             &time_frames_json,
@@ -321,11 +337,11 @@ mod tests {
         )
         .unwrap();
         match result {
-            DrawableData::Integer(seconds) => {
+            DrawableData::Scalar(value) => {
                 // Verify we got total duration in seconds (7 hours = 25200 seconds)
-                assert_eq!(seconds, 25200);
+                assert_eq!(value, ScalarValue::duration_seconds(25200));
             }
-            _ => panic!("Expected Integer"),
+            _ => panic!("Expected duration scalar"),
         }
     }
 
@@ -345,7 +361,7 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result, DrawableGoal::Integer(100));
+        assert_eq!(result, DrawableGoal::Scalar(ScalarValue::number(100)));
     }
 
     #[test]
@@ -364,7 +380,7 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result, DrawableGoal::Integer(1));
+        assert_eq!(result, DrawableGoal::Scalar(ScalarValue::number(1)));
     }
 
     #[test]

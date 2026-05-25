@@ -222,6 +222,40 @@ web_api/
 | `GET` | `/statistics/{id}/plot/data` | Get plot data (JSON) - stateless on-the-fly generation |
 | `GET` | `/plots/timeline/{date}` | Get timeline plot for specific date |
 
+`GET /statistics/{id}/plot/data` accepts `plot_type`, `date_from`, and `date_to`.
+The response uses typed drawable values so clients can distinguish counts from time values:
+
+```json
+{
+  "title": "Deep Work",
+  "plot_type": "bar_chart",
+  "date_range": { "start": "2026-05-01", "end": "2026-05-02" },
+  "points": [
+    {
+      "date": "2026-05-01",
+      "value": {
+        "type": "Scalar",
+        "value": { "value": 7200, "unit": "duration_seconds" }
+      },
+      "color": [169, 252, 177],
+      "goal": {
+        "type": "Scalar",
+        "value": { "value": 3600, "unit": "duration_seconds" }
+      }
+    }
+  ],
+  "y_axis": {
+    "type": "Scalar",
+    "min": 0,
+    "max": 7560,
+    "label_format": "duration_hh_mm"
+  }
+}
+```
+
+Scalar units are `number`, `duration_seconds`, `time_of_day_seconds`, and `percent`.
+Axis label formats are `number`, `duration_hh_mm`, `time_of_day_hh_mm`, and `percent`.
+
 ### Integrations
 
 | Method | Path | Description |
