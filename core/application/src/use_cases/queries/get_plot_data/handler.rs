@@ -448,7 +448,7 @@ mod tests {
             Some(DrawableData::Scalar(val)) => {
                 assert_eq!(
                     *val,
-                    ScalarValue::number(1),
+                    ScalarValue::binary(true),
                     "Habit occurrence should be represented as 1"
                 );
             }
@@ -473,6 +473,16 @@ mod tests {
             point2.color,
             [245, 169, 142],
             "Should be red (0% - no value defaults to false, goal not met)"
+        );
+
+        assert_eq!(
+            plot_data.y_axis,
+            YAxis::Scalar {
+                min: 0,
+                max: 1,
+                label_format: AxisLabelFormat::Number,
+            },
+            "Habit plot axis should use the binary 0..1 range"
         );
     }
 }

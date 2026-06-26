@@ -8,6 +8,7 @@ use lifestats_core::shared::time_frame_list::TimeFrameList;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScalarUnit {
     Number,
+    Binary,
     DurationSeconds,
     TimeOfDaySeconds,
     Percent,
@@ -27,6 +28,10 @@ impl ScalarValue {
 
     pub fn number(value: i64) -> Self {
         Self::new(value, ScalarUnit::Number)
+    }
+
+    pub fn binary(value: bool) -> Self {
+        Self::new(i64::from(value), ScalarUnit::Binary)
     }
 
     pub fn duration_seconds(value: i64) -> Self {

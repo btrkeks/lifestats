@@ -31,12 +31,8 @@ pub fn json_value_to_drawable_data(
             let boolean = value
                 .as_bool()
                 .ok_or_else(|| anyhow!("Expected boolean for Habit statistic, got: {}", value))?;
-            // Habits are rendered as 0 or 1
-            Ok(DrawableData::Scalar(ScalarValue::number(if boolean {
-                1
-            } else {
-                0
-            })))
+            // Habits are rendered as binary 0/1 values.
+            Ok(DrawableData::Scalar(ScalarValue::binary(boolean)))
         }
         AnyStatistic::IntegerAmount(_) => {
             let number = value.as_i64().ok_or_else(|| {
@@ -122,11 +118,7 @@ pub fn json_value_to_drawable_goal(
                         value
                     )
                 })?;
-            Ok(DrawableGoal::Scalar(ScalarValue::number(if goal_value {
-                1
-            } else {
-                0
-            })))
+            Ok(DrawableGoal::Scalar(ScalarValue::binary(goal_value)))
         }
         AnyStatistic::IntegerAmount(_) => {
             // IntegerAmount goals have a "target_amount" field with the target number
@@ -258,7 +250,7 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result_true, DrawableData::Scalar(ScalarValue::number(1)));
+        assert_eq!(result_true, DrawableData::Scalar(ScalarValue::binary(true)));
 
         let result_false = json_value_to_drawable_data(
             &stat,
@@ -266,7 +258,10 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result_false, DrawableData::Scalar(ScalarValue::number(0)));
+        assert_eq!(
+            result_false,
+            DrawableData::Scalar(ScalarValue::binary(false))
+        );
     }
 
     #[test]
@@ -380,7 +375,7 @@ mod tests {
             plot_domain::plot::plot_type::PlotType::BarChart,
         )
         .unwrap();
-        assert_eq!(result, DrawableGoal::Scalar(ScalarValue::number(1)));
+        assert_eq!(result, DrawableGoal::Scalar(ScalarValue::binary(true)));
     }
 
     #[test]

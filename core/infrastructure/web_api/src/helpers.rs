@@ -51,6 +51,13 @@ pub fn json_to_drawable_data(
         | PlotType::LineChart
         | PlotType::Scatter
         | PlotType::CircularProgress => {
+            if let AnyStatistic::Habit(_) = statistic {
+                let value = value.as_bool().ok_or_else(|| {
+                    anyhow!("Expected boolean for Habit statistic, got: {}", value)
+                })?;
+                return Ok(DrawableData::Scalar(ScalarValue::binary(value)));
+            }
+
             let int_value = statistic.value_as_i64_from_json(value).map_err(|_| {
                 anyhow!(
                     "Statistic '{}' cannot be represented as an integer for a {:?} plot.",
@@ -76,8 +83,8 @@ pub fn json_to_drawable_goal(statistic: &AnyStatistic, goal: &Value) -> Result<D
         AnyStatistic::Habit(_) => {
             let habit_goal = serde_json::from_value::<HabitGoal>(goal.clone())
                 .map_err(|e| anyhow!("Failed to parse HabitGoal: {}", e))?;
-            Ok(DrawableGoal::Scalar(ScalarValue::number(
-                habit_goal.occurred() as i64,
+            Ok(DrawableGoal::Scalar(ScalarValue::binary(
+                habit_goal.occurred(),
             )))
         }
         AnyStatistic::IntegerAmount(_) => {

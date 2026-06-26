@@ -253,7 +253,8 @@ The response uses typed drawable values so clients can distinguish counts from t
 }
 ```
 
-Scalar units are `number`, `duration_seconds`, `time_of_day_seconds`, and `percent`.
+Scalar units are `number`, `binary`, `duration_seconds`, `time_of_day_seconds`, and `percent`.
+Habit values use `binary`, with `0` for false and `1` for true.
 Axis label formats are `number`, `duration_hh_mm`, `time_of_day_hh_mm`, and `percent`.
 
 ### Integrations

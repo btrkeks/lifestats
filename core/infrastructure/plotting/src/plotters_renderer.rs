@@ -514,8 +514,16 @@ mod tests {
         DrawableData::Scalar(ScalarValue::number(value))
     }
 
+    fn binary(value: bool) -> DrawableData {
+        DrawableData::Scalar(ScalarValue::binary(value))
+    }
+
     fn number_goal(value: i64) -> DrawableGoal {
         DrawableGoal::Scalar(ScalarValue::number(value))
+    }
+
+    fn binary_goal(value: bool) -> DrawableGoal {
+        DrawableGoal::Scalar(ScalarValue::binary(value))
     }
 
     #[test]
@@ -595,6 +603,48 @@ mod tests {
             YAxis::Scalar {
                 min: 0,
                 max: 12,
+                label_format: AxisLabelFormat::Number,
+            },
+        );
+
+        let result = renderer.render(&plot_data, &RenderConfig::default());
+
+        assert!(result.is_ok());
+        let png_bytes = result.unwrap();
+        assert!(!png_bytes.is_empty());
+        assert_eq!(&png_bytes[0..4], &[0x89, 0x50, 0x4E, 0x47]);
+    }
+
+    #[test]
+    fn test_render_binary_bar_chart() {
+        let renderer = PlottersRenderer::new();
+        let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        let date_range = DateRange::new(start, end).unwrap();
+
+        let points = vec![
+            DataPoint::new(
+                start,
+                Some(binary(true)),
+                [169, 252, 177],
+                Some(binary_goal(true)),
+            ),
+            DataPoint::new(
+                end,
+                Some(binary(false)),
+                MISSED_GOAL_COLOR,
+                Some(binary_goal(true)),
+            ),
+        ];
+
+        let plot_data = PlotData::new(
+            "Habit".to_string(),
+            points,
+            date_range,
+            PlotType::BarChart,
+            YAxis::Scalar {
+                min: 0,
+                max: 1,
                 label_format: AxisLabelFormat::Number,
             },
         );

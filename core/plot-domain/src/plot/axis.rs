@@ -118,12 +118,19 @@ fn resolve_unit(current: Option<ScalarUnit>, next: ScalarUnit) -> ScalarUnit {
         | (Some(ScalarUnit::Number), ScalarUnit::DurationSeconds) => ScalarUnit::DurationSeconds,
         (Some(ScalarUnit::TimeOfDaySeconds), ScalarUnit::Number)
         | (Some(ScalarUnit::Number), ScalarUnit::TimeOfDaySeconds) => ScalarUnit::TimeOfDaySeconds,
+        (Some(ScalarUnit::Binary), ScalarUnit::Number)
+        | (Some(ScalarUnit::Number), ScalarUnit::Binary) => ScalarUnit::Number,
         (Some(unit), _) => unit,
     }
 }
 
 fn default_scalar_axis(unit: ScalarUnit) -> YAxis {
     match unit {
+        ScalarUnit::Binary => YAxis::Scalar {
+            min: 0,
+            max: 1,
+            label_format: AxisLabelFormat::Number,
+        },
         ScalarUnit::DurationSeconds => YAxis::Scalar {
             min: 0,
             max: 3600,
@@ -178,6 +185,11 @@ fn axis_for_scalar_range(min: i64, max: i64, unit: ScalarUnit) -> YAxis {
             max: padded_max.max(100),
             label_format: AxisLabelFormat::Percent,
         },
+        ScalarUnit::Binary => YAxis::Scalar {
+            min: 0,
+            max: 1,
+            label_format: AxisLabelFormat::Number,
+        },
         ScalarUnit::Number => YAxis::Scalar {
             min: padded_min,
             max: padded_max,
@@ -203,8 +215,16 @@ mod tests {
         DrawableData::Scalar(ScalarValue::new(value, unit))
     }
 
+    fn binary(value: bool) -> DrawableData {
+        DrawableData::Scalar(ScalarValue::binary(value))
+    }
+
     fn scalar_goal(value: i64, unit: ScalarUnit) -> DrawableGoal {
         DrawableGoal::Scalar(ScalarValue::new(value, unit))
+    }
+
+    fn binary_goal(value: bool) -> DrawableGoal {
+        DrawableGoal::Scalar(ScalarValue::binary(value))
     }
 
     #[test]
@@ -257,6 +277,56 @@ mod tests {
                 min: 0,
                 max: 7560,
                 label_format: AxisLabelFormat::DurationHhMm,
+            }
+        );
+    }
+
+    #[test]
+    fn binary_axis_uses_zero_to_one_range() {
+        let points = vec![
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                Some(binary(true)),
+                [0, 255, 0],
+                Some(binary_goal(true)),
+            ),
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
+                Some(binary(false)),
+                [255, 0, 0],
+                Some(binary_goal(true)),
+            ),
+        ];
+
+        let axis = YAxis::from_data_points(&points, PlotType::BarChart).unwrap();
+
+        assert_eq!(
+            axis,
+            YAxis::Scalar {
+                min: 0,
+                max: 1,
+                label_format: AxisLabelFormat::Number,
+            }
+        );
+    }
+
+    #[test]
+    fn binary_axis_with_only_true_values_still_uses_zero_to_one_range() {
+        let points = vec![DataPoint::new(
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            Some(binary(true)),
+            [0, 255, 0],
+            Some(binary_goal(true)),
+        )];
+
+        let axis = YAxis::from_data_points(&points, PlotType::BarChart).unwrap();
+
+        assert_eq!(
+            axis,
+            YAxis::Scalar {
+                min: 0,
+                max: 1,
+                label_format: AxisLabelFormat::Number,
             }
         );
     }

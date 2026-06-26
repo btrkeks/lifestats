@@ -143,6 +143,7 @@ impl From<YAxis> for YAxisResponse {
 fn scalar_unit_to_string(unit: ScalarUnit) -> &'static str {
     match unit {
         ScalarUnit::Number => "number",
+        ScalarUnit::Binary => "binary",
         ScalarUnit::DurationSeconds => "duration_seconds",
         ScalarUnit::TimeOfDaySeconds => "time_of_day_seconds",
         ScalarUnit::Percent => "percent",
