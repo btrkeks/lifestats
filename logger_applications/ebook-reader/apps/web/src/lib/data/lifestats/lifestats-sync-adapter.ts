@@ -10,6 +10,7 @@ import type {
 } from '$lib/data/database/books-db/versions/books-db';
 import type { ReadingProgressTrackerState } from '$lib/data/lifestats/reading-progress-tracker';
 import type { DatabaseService } from '$lib/data/database/books-db/database.service';
+import { logger } from '$lib/data/logger';
 
 const EBOOK_API_BASE_URL = 'http://localhost:3000';
 const EBOOK_BUNDLE_VERSION = 1;
@@ -87,11 +88,18 @@ export class LifestatsSyncAdapter {
     }
 
     this.bundleEnsured = true;
+    logger.info('Lifestats ebook bundle provisioned');
   }
 
   async flushQueue(force = false) {
     const queueEntries = await this.database.getEbookSyncQueueEntries(force, Date.now());
     let flushed = 0;
+
+    if (queueEntries.length > 0) {
+      logger.info(
+        `Flushing ${queueEntries.length} lifestats ebook sync event(s)${force ? ' (forced)' : ''}`
+      );
+    }
 
     for (let index = 0; index < queueEntries.length; index += 1) {
       const queueEntry = queueEntries[index];
@@ -125,13 +133,27 @@ export class LifestatsSyncAdapter {
         await this.database.deleteEbookSyncQueueEntry(queueEntry.eventId);
         flushed += 1;
       } catch (error: any) {
+        const errorMessage = error?.message || 'Unknown ebook sync error';
+        logger.warn('Failed to flush lifestats ebook sync event', {
+          eventId: queueEntry.eventId,
+          dataId: queueEntry.dataId,
+          dateKey: queueEntry.dateKey,
+          delta: queueEntry.delta,
+          attemptCount: queueEntry.attemptCount + 1,
+          error: errorMessage
+        });
+
         await this.database.putEbookSyncQueueEntry({
           ...queueEntry,
           attemptCount: queueEntry.attemptCount + 1,
           nextRetryAt: Date.now() + this.retryDelayMs(queueEntry.attemptCount + 1),
-          lastError: error?.message || 'Unknown ebook sync error'
+          lastError: errorMessage
         });
       }
+    }
+
+    if (flushed > 0) {
+      logger.info(`Flushed ${flushed} lifestats ebook sync event(s)`);
     }
 
     return {

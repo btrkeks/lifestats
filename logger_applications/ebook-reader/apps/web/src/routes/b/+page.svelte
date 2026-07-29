@@ -644,6 +644,17 @@
     }
 
     await persistEbookSyncState();
+    logger.info('Initialized lifestats ebook sync tracker', {
+      dataId: bookData.id,
+      title: bookData.title,
+      initialPosition,
+      currentPosition: ebookProgressTracker.snapshot().currentPosition,
+      confirmedPosition: ebookProgressTracker.snapshot().confirmedPosition,
+      lastFlushedPosition: ebookProgressTracker.snapshot().lastFlushedPosition,
+      statisticsEnabled: $statisticsEnabled$,
+      paused: ebookTrackerWasPaused,
+      frozen: ebookTrackerWasFrozen
+    });
     void ebookSyncAdapter.ensureBundle().catch(() => {});
     void flushEbookSyncQueue();
   }
@@ -735,6 +746,14 @@
       });
 
       await ebookSyncAdapter.persistConfirmedDelta(syncState, queueEntry);
+      logger.info('Queued lifestats ebook sync delta', {
+        dataId: ebookSyncDataId,
+        dateKey: queueEntry.dateKey,
+        delta: queueEntry.delta,
+        confirmedPositionAfter: queueEntry.confirmedPositionAfter,
+        bookTargetCharacters: queueEntry.bookTargetCharacters,
+        diagnosticReason: snapshot.diagnosticReason
+      });
       ebookProgressTracker.markFlushed(snapshot.confirmedPosition);
       void flushEbookSyncQueue();
       return;

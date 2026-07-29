@@ -80,9 +80,9 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 1px;
+    width: 2px;
     background: var(--font-color);
-    opacity: 0.15;
+    opacity: 0.4;
   }
 
   .tooltip {
