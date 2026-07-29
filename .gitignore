@@ -4,6 +4,7 @@ target
 .idea
 .env
 project_dump.txt
+/project_context.txt
 /generate_graph.sh
 /graph.png
 
@@ -14,6 +15,9 @@ __pycache__/
 
 # AnkiLogger bundled dependencies (install via requirements.txt)
 logger_applications/AnkiLogger/vendor/
-logger_applications/AnkiLogger/anki_logger.log
+
+# AnkiLogger runtime state (this directory doubles as the live Anki add-on dir)
+logger_applications/AnkiLogger/anki_logger.log*
+logger_applications/AnkiLogger/meta.json
 
 lcov.info
