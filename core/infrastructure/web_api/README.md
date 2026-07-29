@@ -136,14 +136,24 @@ web_api/
 │   ├── dto/                         # Data Transfer Objects
 │   │   ├── mod.rs
 │   │   ├── statistic.rs            # Statistic request/response DTOs
+│   │   ├── statistic_score.rs      # Score DTOs
 │   │   ├── goal.rs                 # Goal DTOs
+│   │   ├── goal_performance.rs     # Performance DTOs
+│   │   ├── consistency.rs          # Consistency-score DTOs
+│   │   ├── streak.rs               # Streak DTOs
+│   │   ├── dashboard.rs            # Dashboard DTOs
 │   │   ├── progress.rs             # Progress item/checkpoint DTOs
+│   │   ├── session.rs              # Heartbeat session DTOs
 │   │   ├── plot.rs                 # Plot DTOs
+│   │   ├── integer_amount.rs       # IntegerAmount-specific DTOs
 │   │   └── time_spans.rs           # TimeSpans-specific DTOs
 │   ├── routes/                      # Route handlers
 │   │   ├── mod.rs                  # Router configuration
 │   │   ├── statistics.rs           # Statistics CRUD + logging
 │   │   ├── progress.rs             # Progress items + checkpoints
+│   │   ├── sessions.rs             # Heartbeat session management
+│   │   ├── dashboard.rs            # Multi-statistic dashboard
+│   │   ├── daily_summary.rs        # Daily summary endpoint
 │   │   ├── goals.rs                # Goal management
 │   │   ├── plots.rs                # Plot retrieval
 │   │   └── integrations.rs         # Integration provisioning
@@ -184,6 +194,7 @@ web_api/
 | `POST` | `/statistics/{id}/log_time_frame/{date}` | Log a time frame for TimeSpans |
 | `GET` | `/statistics/{id}/logged/{date}` | Check if a value has been logged for a specific date |
 | `GET` | `/statistics/{id}/time_spans/total` | Get total duration for date range |
+| `GET` | `/statistics/{id}/integer_amount/total` | Get total amount for date range |
 | `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
 | `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
 | `GET` | `/statistics/{id}/performance` | Get goal performance analysis with trend over date range |
@@ -256,6 +267,18 @@ The response uses typed drawable values so clients can distinguish counts from t
 Scalar units are `number`, `binary`, `duration_seconds`, `time_of_day_seconds`, and `percent`.
 Habit values use `binary`, with `0` for false and `1` for true.
 Axis label formats are `number`, `duration_hh_mm`, `time_of_day_hh_mm`, and `percent`.
+
+### Sessions
+
+Heartbeat sessions track ongoing activity for a single statistic. Only one active session per statistic is allowed.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/sessions` | List all currently active sessions |
+| `POST` | `/sessions/{statistic_id}/start` | Start a new heartbeat session |
+| `POST` | `/sessions/{statistic_id}/beat` | Send a heartbeat (extends idle timeout; creates session on first call) |
+| `POST` | `/sessions/{statistic_id}/stop` | Stop the session and finalize pending time frames |
+| `GET` | `/sessions/{statistic_id}` | Get current session status |
 
 ### Integrations
 
@@ -613,6 +636,32 @@ without adding the daily `delta` twice.
 - Returns `404 Not Found` if any statistic ID doesn't exist
 - Returns `400 Bad Request` if derived statistics (Summing, TimeDifference) are requested
 
+### Starting a Session
+
+**Request:** `POST /sessions/{statistic_id}/start`
+
+```json
+{
+  "idle_timeout_seconds": 60,
+  "flush_interval_seconds": 60
+}
+```
+
+Both fields are optional; defaults from `HeartbeatConfig` are used when omitted. Values are clamped between 1 and 86400.
+
+**Response:** `201 Created`
+
+```json
+{
+  "statistic_id": 42,
+  "status": "running",
+  "is_running": true,
+  "total_elapsed_seconds": 0
+}
+```
+
+The same `SessionStatusResponse` shape is returned by `GET /sessions/{statistic_id}` and (as an array) by `GET /sessions`. `POST /sessions/{statistic_id}/beat` and `/stop` return `204 No Content`.
+
 ### Getting Daily Summary
 
 **Request:** `GET /daily_summary/{date}`
@@ -686,20 +735,23 @@ All errors return JSON:
 The `AppState` struct holds **globally shared dependencies** injected into every handler:
 
 ```rust
-pub struct AppState<R, P, Rend, E, I> {
+pub struct AppState<R, Rend, E, I> {
     pub statistic_repository: Arc<R>,
-    pub plot_repository: Arc<P>,
+    pub progress_repository: Arc<dyn ProgressRepository + Send + Sync>,
     pub event_publisher: Arc<E>,
     pub renderer: Arc<Rend>,
     pub integration_service: Arc<I>,
+    pub session_manager: Arc<SessionManager<R>>,
 }
 ```
+
+Plotting is **stateless** — there is no `plot_repository`; plots are rendered on-the-fly via `renderer`. The `progress_repository` is type-erased (`dyn`) rather than a generic parameter.
 
 Access in handlers:
 
 ```rust
-pub async fn handler<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn handler<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
 ) -> Result<Json<ResponseDto>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
@@ -800,8 +852,8 @@ async fn test_get_statistic() {
 
 ```rust
 // routes/statistics.rs
-pub async fn my_new_handler<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn my_new_handler<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(statistic_id): Path<u32>,
     Json(payload): Json<MyRequestDto>,
 ) -> Result<Json<MyResponseDto>, ApiError>
@@ -829,7 +881,7 @@ where
 2. **Register the route** in `routes/mod.rs`:
 
 ```rust
-pub fn create_router<R, P, Rend, E, I>(...) -> Router {
+pub fn create_router<R, Rend, E, I>(...) -> Router {
     Router::new()
         // ... existing routes
         .route("/my-new-endpoint", get(my_new_handler))
@@ -908,8 +960,8 @@ FITBIT_CLIENT_SECRET=your_client_secret
 Every handler follows this pattern:
 
 ```rust
-pub async fn handler<R, P, Rend, E, I>(
-    State(app_state): State<AppState<R, P, Rend, E, I>>,
+pub async fn handler<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
     Path(id): Path<u32>,              // Optional: path params
     Query(params): Query<QueryDto>,   // Optional: query params
     Json(payload): Json<RequestDto>,  // Optional: request body

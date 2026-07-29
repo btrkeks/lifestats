@@ -18,6 +18,9 @@ LifeStats is a personal observability platform for tracking daily habits and per
 - Session tracking with heartbeat mechanism
 - Backward-compatible database reads (verified via compatibility tests)
 
+For third-party applications integrating with a running `lifestats-web-api.service`,
+see the [Web API Integration Guide](docs/web-api-integration.md).
+
 ---
 
 ## Repository Layout

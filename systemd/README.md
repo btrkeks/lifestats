@@ -162,7 +162,7 @@ sudo systemctl disable lifestats-fitbit-sync.timer
 
 1. **Check if the web API is running**:
    ```bash
-   curl http://localhost:3000/health  # or appropriate health endpoint
+   curl http://localhost:3000/statistics
    ```
 
 2. **Verify Fitbit OAuth token exists**:
