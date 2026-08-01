@@ -31,7 +31,7 @@ impl YAxis {
     pub fn from_data_points(points: &[DataPoint], plot_type: PlotType) -> anyhow::Result<Self> {
         match plot_type {
             PlotType::BarChart | PlotType::LineChart | PlotType::Scatter => {
-                Self::calculate_scalar_axis(points)
+                Self::calculate_scalar_axis(points, plot_type)
             }
             PlotType::TimeFrames => Self::calculate_time_frames_axis(points),
             PlotType::CircularProgress => Ok(Self::Scalar {
@@ -42,7 +42,7 @@ impl YAxis {
         }
     }
 
-    fn calculate_scalar_axis(points: &[DataPoint]) -> anyhow::Result<Self> {
+    fn calculate_scalar_axis(points: &[DataPoint], plot_type: PlotType) -> anyhow::Result<Self> {
         let mut values = Vec::new();
         let mut unit = None;
 
@@ -65,7 +65,7 @@ impl YAxis {
 
         let min = *values.iter().min().unwrap();
         let max = *values.iter().max().unwrap();
-        Ok(axis_for_scalar_range(min, max, unit))
+        Ok(axis_for_scalar_range(min, max, unit, plot_type))
     }
 
     fn calculate_time_frames_axis(points: &[DataPoint]) -> anyhow::Result<Self> {
@@ -154,7 +154,7 @@ fn default_scalar_axis(unit: ScalarUnit) -> YAxis {
     }
 }
 
-fn axis_for_scalar_range(min: i64, max: i64, unit: ScalarUnit) -> YAxis {
+fn axis_for_scalar_range(min: i64, max: i64, unit: ScalarUnit, plot_type: PlotType) -> YAxis {
     let (mut padded_min, mut padded_max) = padded_range(min, max);
 
     match unit {
@@ -190,11 +190,24 @@ fn axis_for_scalar_range(min: i64, max: i64, unit: ScalarUnit) -> YAxis {
             max: 1,
             label_format: AxisLabelFormat::Number,
         },
-        ScalarUnit::Number => YAxis::Scalar {
-            min: padded_min,
-            max: padded_max,
-            label_format: AxisLabelFormat::Number,
-        },
+        ScalarUnit::Number => {
+            if plot_type == PlotType::BarChart {
+                // A bar's length is measured from zero, so the baseline must remain visible.
+                // Keep padding only on sides where actual values extend beyond zero.
+                if min >= 0 {
+                    padded_min = 0;
+                }
+                if max <= 0 {
+                    padded_max = 0;
+                }
+            }
+
+            YAxis::Scalar {
+                min: padded_min,
+                max: padded_max,
+                label_format: AxisLabelFormat::Number,
+            }
+        }
     }
 }
 
@@ -228,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn scalar_number_axis_with_values() {
+    fn nonnegative_scalar_bar_chart_starts_at_zero() {
         let points = vec![
             DataPoint::new(
                 NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
@@ -246,18 +259,72 @@ mod tests {
 
         let axis = YAxis::from_data_points(&points, PlotType::BarChart).unwrap();
 
-        match axis {
+        assert_eq!(
+            axis,
             YAxis::Scalar {
-                min,
-                max,
-                label_format,
-            } => {
-                assert_eq!(label_format, AxisLabelFormat::Number);
-                assert!(min < 10);
-                assert!(max > 50);
+                min: 0,
+                max: 55,
+                label_format: AxisLabelFormat::Number,
             }
-            _ => panic!("Expected scalar axis"),
-        }
+        );
+    }
+
+    #[test]
+    fn negative_scalar_bar_chart_ends_at_zero() {
+        let points = vec![
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                Some(scalar(-50, ScalarUnit::Number)),
+                [0, 255, 0],
+                None,
+            ),
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
+                Some(scalar(-10, ScalarUnit::Number)),
+                [0, 255, 0],
+                None,
+            ),
+        ];
+
+        let axis = YAxis::from_data_points(&points, PlotType::BarChart).unwrap();
+
+        assert_eq!(
+            axis,
+            YAxis::Scalar {
+                min: -55,
+                max: 0,
+                label_format: AxisLabelFormat::Number,
+            }
+        );
+    }
+
+    #[test]
+    fn scalar_line_chart_keeps_padding_below_positive_values() {
+        let points = vec![
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                Some(scalar(10, ScalarUnit::Number)),
+                [0, 255, 0],
+                None,
+            ),
+            DataPoint::new(
+                NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
+                Some(scalar(50, ScalarUnit::Number)),
+                [0, 255, 0],
+                None,
+            ),
+        ];
+
+        let axis = YAxis::from_data_points(&points, PlotType::LineChart).unwrap();
+
+        assert_eq!(
+            axis,
+            YAxis::Scalar {
+                min: 5,
+                max: 55,
+                label_format: AxisLabelFormat::Number,
+            }
+        );
     }
 
     #[test]
