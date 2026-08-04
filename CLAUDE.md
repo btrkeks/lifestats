@@ -40,7 +40,7 @@ The web API server is running locally at `http://localhost:3000` — query it di
 
 ## Adding New Features
 
-**Documentation Maintenance**: When making changes to the web API (routes, DTOs, error handling, etc.), always update `core/infrastructure/web_api/README.md` to keep the documentation in sync with the code.
+**Documentation Maintenance**: When making changes to the web API (routes, DTOs, error handling, etc.), always update `core/infrastructure/web_api/README.md` **and** the agent skill at `.claude/skills/lifestats/SKILL.md` to keep both in sync with the code. (The skill is symlinked into `~/.claude/skills/` so Claude Code can use the API from outside the repo.)
 
 ### Adding Anki Metrics
 
@@ -69,4 +69,4 @@ New binaries depend on `lifestats-bootstrap` + `lifestats-application`, call `bu
 1. Add handler under `core/infrastructure/web_api/src/routes/`
 2. Register in `routes::create_router`
 3. Add integration test; handler should instantiate command/query handlers on-demand
-4. **Update `core/infrastructure/web_api/README.md`** in the API Routes Reference section
+4. **Update `core/infrastructure/web_api/README.md`** in the API Routes Reference section, and `.claude/skills/lifestats/SKILL.md` if the route is relevant for interactive agent use

@@ -2,7 +2,7 @@
 
 FROM node:20.11-alpine as builder
 
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9.15.9
 
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-*.yaml ./
