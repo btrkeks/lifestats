@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lifestats Screen Time</string>
+    <string name="screen_title">Screen Time Logger</string>
+    <string name="screen_description">Logs today\'s Android foreground-app time to one Lifestats IntegerAmount statistic.</string>
+    <string name="base_url_label">Lifestats base URL</string>
+    <string name="base_url_hint">http://192.168.1.10:3000</string>
+    <string name="statistic_id_label">Statistic ID</string>
+    <string name="statistic_id_hint">42</string>
+    <string name="save_and_sync">Save and sync now</string>
+    <string name="open_usage_access">Open Usage Access settings</string>
+    <string name="usage_access_granted">Usage Access: granted</string>
+    <string name="usage_access_missing">Usage Access: not granted</string>
+    <string name="configuration_saved">Configuration saved. A sync has been queued.</string>
+</resources>

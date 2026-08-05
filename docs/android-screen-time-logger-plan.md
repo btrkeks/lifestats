@@ -1,6 +1,10 @@
 # Android Screen Time Logger — Plan
 
-Status: not started
+Status: implementation and USB verification complete (2026-08-05); criteria
+1-4 verified on the Xiaomi after setting **Battery saver → No restrictions**.
+For criterion 4, a fresh namespaced WorkManager job overwrote the API value
+from 75 to 83 while the device still reported deep `IDLE`, before idle was
+released.
 
 ## Contract
 
@@ -37,11 +41,14 @@ manual interaction after initial setup.
 
 ## Design outline
 
-- **Data**: `UsageStatsManager.queryAndAggregateUsageStats(startOfDayLocal, now)`,
-  sum foreground time across packages → minutes. Requires the
+- **Data**: `UsageStatsManager.queryEvents(previousLocalMidnight, now)`, union
+  exact resumed-activity intervals clipped to `startOfDayLocal`, then convert
+  to minutes. The device proved that `queryAndAggregateUsageStats` can return
+  an OEM daily bucket beginning before local midnight (266 minutes versus 56
+  in Digital Wellbeing), so bucket summation is not safe. Requires the
   `PACKAGE_USAGE_STATS` special permission (grantable via adb, see harness;
-  the app should also deep-link to the Usage Access settings screen for
-  non-adb setup).
+  the app also deep-links to the Usage Access settings screen for non-adb
+  setup).
 - **Scheduling**: `WorkManager` periodic worker (~every 2–4 h, logging the
   running total with `overwrite`) so the end-of-day value converges even if
   the phone sleeps through midnight. Constraint: any network; retry with
@@ -91,7 +98,9 @@ curl http://localhost:3000/statistics/<id>/logged/$(date +%F)
 
 # Doze/background robustness check:
 $ADB shell dumpsys deviceidle force-idle
-$ADB shell cmd jobscheduler run -f <pkg> <job-id>   # or re-broadcast
+$ADB shell am broadcast -a <pkg>.SYNC_NOW -n <pkg>/.DebugSyncReceiver
+$ADB shell cmd jobscheduler run -f -u 0 \
+  -n androidx.work.systemjobscheduler <pkg> <new-job-id>
 $ADB shell dumpsys deviceidle unforce
 ```
 
