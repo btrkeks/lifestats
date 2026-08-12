@@ -1,18 +1,22 @@
 [Unit]
 Description=LifeStats Fitbit Data Sync
 Documentation=https://github.com/yourusername/lifestats
-After=network-online.target
+After=network-online.target lifestats-web-api.service
 Wants=network-online.target
+Requires=lifestats-web-api.service
 
 [Service]
 Type=oneshot
-# Calculate today's date for syncing
+# Calculate yesterday's date for syncing
 # Fitbit data is typically finalized the day after
-ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "today" +%%Y-%%m-%%d); \
-  curl -X POST http://localhost:3000/integrations/fitbit/sync \
-    -H "Content-Type: application/json" \
-    -d "{\\"since\\": \\"$YESTERDAY\\", \\"until\\": \\"$YESTERDAY\\"}" \
-    --fail --silent --show-error'
+ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "yesterday" +%%Y-%%m-%%d); \
+  for i in {1..5}; do \
+    curl -X POST http://localhost:3000/integrations/fitbit/sync \
+      -H "Content-Type: application/json" \
+      -d "{\\"since\\": \\"$YESTERDAY\\", \\"until\\": \\"$YESTERDAY\\"}" \
+      --fail --silent --show-error && break || \
+      { echo "Attempt $i failed, waiting 10s..."; sleep 10; }; \
+  done'
 
 # Optional: Set the user if you want to run as a specific user
 # User=your-username

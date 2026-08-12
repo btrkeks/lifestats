@@ -5,8 +5,6 @@ Requires=lifestats-fitbit-sync.service
 
 [Timer]
 # Run daily at 2:00 AM (when Fitbit data is typically finalized)
-OnCalendar=daily
-# Specific time (24-hour format)
 OnCalendar=*-*-* 02:00:00
 # Add randomized delay to avoid load spikes if running multiple instances
 RandomizedDelaySec=30m

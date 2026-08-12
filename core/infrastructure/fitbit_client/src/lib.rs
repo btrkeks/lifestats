@@ -336,9 +336,12 @@ struct SleepLevelData {
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum SleepStage {
+    Awake,
+    Asleep,
     Deep,
     Light,
     Rem,
+    Restless,
     Wake,
 }
 
@@ -352,6 +355,10 @@ impl SleepEnvelope {
         }
 
         if let Some(main_sleep) = self.sleep.into_iter().find(|entry| entry.is_main_sleep) {
+            if let Some(duration) = main_sleep.stage_duration_asleep() {
+                data.total_duration_asleep = Some(duration);
+            }
+
             data.sleep_efficiency = Some(main_sleep.efficiency);
             // Fitbit returns times in user's local timezone (not UTC)
             data.woke_up_at_local = Some(main_sleep.end_time);
@@ -360,7 +367,7 @@ impl SleepEnvelope {
                 .levels
                 .data
                 .iter()
-                .find(|stage| stage.level != SleepStage::Wake && stage.seconds > 300)
+                .find(|stage| stage.level.is_sleep() && stage.seconds > 300)
             {
                 // Fitbit returns times in user's local timezone (not UTC)
                 data.fell_asleep_at_local = Some(stage.date_time);
@@ -370,7 +377,7 @@ impl SleepEnvelope {
                 .levels
                 .data
                 .iter()
-                .filter(|stage| stage.level == SleepStage::Wake)
+                .filter(|stage| stage.level.is_awake())
                 .map(|stage| stage.seconds)
                 .sum();
 
@@ -380,6 +387,33 @@ impl SleepEnvelope {
         }
 
         data
+    }
+}
+
+impl SleepEntry {
+    fn stage_duration_asleep(&self) -> Option<ChronoDuration> {
+        let asleep_seconds: u32 = self
+            .levels
+            .data
+            .iter()
+            .filter(|stage| stage.level.is_sleep())
+            .map(|stage| stage.seconds)
+            .sum();
+
+        (asleep_seconds > 0).then(|| ChronoDuration::seconds(asleep_seconds as i64))
+    }
+}
+
+impl SleepStage {
+    fn is_awake(&self) -> bool {
+        matches!(self, SleepStage::Wake | SleepStage::Awake)
+    }
+
+    fn is_sleep(&self) -> bool {
+        matches!(
+            self,
+            SleepStage::Deep | SleepStage::Light | SleepStage::Rem | SleepStage::Asleep
+        )
     }
 }
 
@@ -496,10 +530,37 @@ mod tests {
         let sleep = envelope.into_sleep_data();
 
         assert_eq!(sleep.sleep_efficiency, Some(95));
-        assert_eq!(sleep.total_duration_asleep.unwrap().num_minutes(), 420);
+        assert_eq!(sleep.total_duration_asleep.unwrap().num_seconds(), 3000);
         assert!(sleep.fell_asleep_at_local.is_some());
         assert!(sleep.woke_up_at_local.is_some());
         assert_eq!(sleep.total_duration_awake.unwrap().num_minutes(), 10);
+    }
+
+    #[test]
+    fn sleep_response_falls_back_to_summary_duration_without_stage_sleep() {
+        let payload = json!({
+            "summary": { "totalMinutesAsleep": 420 },
+            "sleep": [
+                {
+                    "isMainSleep": true,
+                    "efficiency": 95,
+                    "duration": 25200000,
+                    "minutesAwake": 30,
+                    "startTime": "2024-10-01T22:30:00",
+                    "endTime": "2024-10-02T06:30:00",
+                    "levels": {
+                        "data": [
+                            {"dateTime": "2024-10-02T06:00:00", "level": "wake", "seconds": 600}
+                        ]
+                    }
+                }
+            ]
+        });
+
+        let envelope: SleepEnvelope = serde_json::from_value(payload).unwrap();
+        let sleep = envelope.into_sleep_data();
+
+        assert_eq!(sleep.total_duration_asleep.unwrap().num_minutes(), 420);
     }
 
     #[test]
