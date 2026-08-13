@@ -46,7 +46,19 @@ where
         let statistic = self.repository.find_metadata_by_id(query.statistic_id)?;
 
         // Bulk-evaluate goal achievement for the full date range
-        let evals = self.evaluator.eval_range(&statistic, query.date_range)?;
+        let mut evals = self.evaluator.eval_range(&statistic, query.date_range)?;
+
+        // Optionally cap each day's contribution before averaging
+        if let Some(cap) = query.daily_cap_percent {
+            for eval in &mut evals {
+                if let Some(p) = eval.percentage_achieved {
+                    if p.as_num() > cap {
+                        eval.percentage_achieved =
+                            Some(lifestats_core::shared::percentage::Percentage::new(cap));
+                    }
+                }
+            }
+        }
 
         // Aggregate percentages
         let mean_percentage = compute_mean_percentage(&evals);
@@ -56,12 +68,15 @@ where
             .filter(|e| e.percentage_achieved.is_some())
             .count() as u32;
 
+        let days_achieved = evals.iter().filter(|e| e.achieved).count() as u32;
+
         Ok(StatisticScoreResult {
             statistic_id: query.statistic_id,
             start_date: query.date_range.start(),
             end_date: query.date_range.end(),
             mean_percentage_achieved: mean_percentage,
             days_with_goal,
+            days_achieved,
         })
     }
 }
@@ -135,6 +150,7 @@ mod tests {
         let query = GetStatisticScoreQuery {
             statistic_id: stat_id,
             date_range,
+            daily_cap_percent: None,
         };
         let result = handler.handle(query);
 
@@ -202,6 +218,7 @@ mod tests {
         let query = GetStatisticScoreQuery {
             statistic_id: stat_id,
             date_range,
+            daily_cap_percent: None,
         };
         let result = handler.handle(query);
 
@@ -239,6 +256,7 @@ mod tests {
         let query = GetStatisticScoreQuery {
             statistic_id: stat_id,
             date_range,
+            daily_cap_percent: None,
         };
         let result = handler.handle(query);
 
@@ -306,6 +324,7 @@ mod tests {
         let query = GetStatisticScoreQuery {
             statistic_id: stat_id,
             date_range,
+            daily_cap_percent: None,
         };
         let result = handler.handle(query);
 
@@ -316,5 +335,69 @@ mod tests {
         // Only days with goals count: (80 + 100) / 2 = 90
         assert_eq!(result.mean_percentage_achieved, Some(Percentage::new(90)));
         assert_eq!(result.days_with_goal, 2);
+    }
+    #[test]
+    fn test_get_statistic_score_daily_cap_limits_overachievement() {
+        // Arrange: one over-achieved day (167%), one partial day (50%),
+        // one missed day (0%).
+        let stat_id = StatisticId(1);
+        let start_date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let end_date = NaiveDate::from_ymd_opt(2025, 1, 3).unwrap();
+        let date_range = DateRange::new(start_date, end_date).unwrap();
+
+        let mut mock_repo = MockStatisticRepository::new();
+        let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            StatisticMetadata::new(stat_id, "Test".into(), "test_stat".into()),
+            None,
+            start_date,
+        ));
+        mock_repo
+            .expect_find_metadata_by_id()
+            .times(1)
+            .return_once(move |_| Ok(stat));
+
+        let mut mock_evaluator = MockDailyAchievementEvaluator::new();
+        mock_evaluator
+            .expect_eval_range()
+            .times(1)
+            .returning(|_, _| {
+                Ok(vec![
+                    DayEval {
+                        date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                        has_goal: true,
+                        achieved: true,
+                        percentage_achieved: Some(Percentage::new(167)),
+                    },
+                    DayEval {
+                        date: NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
+                        has_goal: true,
+                        achieved: false,
+                        percentage_achieved: Some(Percentage::new(50)),
+                    },
+                    DayEval {
+                        date: NaiveDate::from_ymd_opt(2025, 1, 3).unwrap(),
+                        has_goal: true,
+                        achieved: false,
+                        percentage_achieved: Some(Percentage::new(0)),
+                    },
+                ])
+            });
+
+        let handler =
+            GetStatisticScoreQueryHandler::new(Arc::new(mock_repo), Arc::new(mock_evaluator));
+
+        // Act
+        let result = handler
+            .handle(GetStatisticScoreQuery {
+                statistic_id: stat_id,
+                date_range,
+                daily_cap_percent: Some(100),
+            })
+            .unwrap();
+
+        // Assert: (100 + 50 + 0) / 3 = 50 — the 167% day contributes only 100
+        assert_eq!(result.mean_percentage_achieved, Some(Percentage::new(50)));
+        assert_eq!(result.days_with_goal, 3);
+        assert_eq!(result.days_achieved, 1);
     }
 }

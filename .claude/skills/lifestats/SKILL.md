@@ -65,7 +65,10 @@ curl -s "http://localhost:3000/statistics/23/time_spans/total?start_date=2026-07
 curl -s "http://localhost:3000/statistics/1/integer_amount/total?start_date=2026-07-01&end_date=2026-07-31"
 
 # Goal achievement score (mean % of goal, params are start/end here!)
-curl -s "http://localhost:3000/statistics/1/score?start=2026-07-01&end=2026-07-31"
+# Optional daily_cap_percent=100: caps each day at 100% before averaging, so
+# over-achieving can't offset missed days (partial days still count; response
+# also includes days_achieved). This is the habit-dashboard default.
+curl -s "http://localhost:3000/statistics/1/score?start=2026-07-01&end=2026-07-31&daily_cap_percent=100"
 
 # Performance + trend (params start_date/end_date; trend needs ≥14 data points)
 curl -s "http://localhost:3000/statistics/1/performance?start_date=2026-07-01&end_date=2026-07-31"

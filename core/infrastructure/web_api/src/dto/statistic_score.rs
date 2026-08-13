@@ -10,6 +10,11 @@ pub struct StatisticScoreParams {
     /// End date (YYYY-MM-DD)
     #[validate(length(min = 1))]
     pub end: String,
+    /// Optional per-day cap applied before averaging (1-100). With
+    /// `daily_cap_percent=100`, over-achieving a day cannot compensate for
+    /// missing another, while partial days still contribute proportionally.
+    #[validate(range(min = 1, max = 100))]
+    pub daily_cap_percent: Option<u8>,
 }
 
 /// Response DTO for the statistic score endpoint
@@ -25,6 +30,8 @@ pub struct StatisticScoreResponse {
     pub mean_percentage_achieved: Option<u8>,
     /// Number of days in the range that had a goal and contributed to the score
     pub days_with_goal: u32,
+    /// Number of goal days on which the goal was fully achieved
+    pub days_achieved: u32,
 }
 
 #[cfg(test)]
@@ -45,6 +52,7 @@ mod tests {
         let params = StatisticScoreParams {
             start: String::new(),
             end: "2025-01-31".to_string(),
+            daily_cap_percent: None,
         };
         assert!(params.validate().is_err());
     }
@@ -54,6 +62,7 @@ mod tests {
         let params = StatisticScoreParams {
             start: "2025-01-01".to_string(),
             end: String::new(),
+            daily_cap_percent: None,
         };
         assert!(params.validate().is_err());
     }
@@ -66,6 +75,7 @@ mod tests {
             end_date: "2025-01-31".to_string(),
             mean_percentage_achieved: Some(85),
             days_with_goal: 25,
+            days_achieved: 20,
         };
 
         let json = serde_json::to_string(&response).unwrap();
@@ -84,6 +94,7 @@ mod tests {
             end_date: "2025-01-31".to_string(),
             mean_percentage_achieved: None,
             days_with_goal: 0,
+            days_achieved: 0,
         };
 
         let json = serde_json::to_string(&response).unwrap();

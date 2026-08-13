@@ -679,6 +679,7 @@ where
         .handle(GetStatisticScoreQuery {
             statistic_id: StatisticId(statistic_id),
             date_range,
+            daily_cap_percent: params.daily_cap_percent,
         })
         .map_err(|e| {
             if e.to_string().contains("not found") {
@@ -694,6 +695,7 @@ where
         end_date: result.end_date.format("%Y-%m-%d").to_string(),
         mean_percentage_achieved: result.mean_percentage_achieved.map(|p| p.as_num()),
         days_with_goal: result.days_with_goal,
+        days_achieved: result.days_achieved,
     }))
 }
 

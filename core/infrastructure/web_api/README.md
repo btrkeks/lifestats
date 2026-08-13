@@ -514,6 +514,11 @@ never cleared retroactively). Legacy protobuf exports are rejected with `400`.
 
 **Request:** `GET /statistics/{id}/score?start=2025-01-01&end=2025-01-31`
 
+Optional: `daily_cap_percent` (1-100) caps each day's achievement percentage before
+averaging — with `daily_cap_percent=100`, over-achieving one day cannot compensate
+for missing another, while partial days still contribute proportionally (compare
+`/consistency`, which is binary per day).
+
 **Response:** `200 OK`
 
 ```json
@@ -522,7 +527,8 @@ never cleared retroactively). Legacy protobuf exports are rejected with `400`.
   "start_date": "2025-01-01",
   "end_date": "2025-01-31",
   "mean_percentage_achieved": 85,
-  "days_with_goal": 25
+  "days_with_goal": 25,
+  "days_achieved": 20
 }
 ```
 
