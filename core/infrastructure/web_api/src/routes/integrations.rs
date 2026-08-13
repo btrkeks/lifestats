@@ -50,6 +50,13 @@ pub struct EbookEventResponse {
     pub duplicate: bool,
 }
 
+/// Response body for an ingested LiftLog backup snapshot
+#[derive(Debug, Serialize)]
+pub struct LiftLogBackupResponse {
+    pub workouts_imported: usize,
+    pub days_logged: usize,
+}
+
 /// POST /integrations/:source
 ///
 /// Provisions a bundle of statistics for a given integration source.
@@ -162,4 +169,54 @@ where
             duplicate: !result.accepted,
         }),
     ))
+}
+
+/// POST /integrations/liftlog/backup
+///
+/// Accepts a LiftLog remote-backup payload (gzipped SQLite snapshot, sent by
+/// the app as `application/octet-stream`) and re-logs the workout statistics
+/// for every day present in the snapshot. Idempotent: re-uploading the same
+/// snapshot changes nothing. The app's optional `X-Api-Key` header is ignored;
+/// the API relies on network-level access control like the other routes.
+pub async fn ingest_liftlog_backup<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+    body: axum::body::Bytes,
+) -> Result<Json<LiftLogBackupResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    let result = state
+        .integration_service
+        .ingest_liftlog_backup(&body)
+        .map_err(|error| {
+            tracing::error!(
+                payload_bytes = body.len(),
+                error = %error,
+                error_debug = ?error,
+                "Failed to ingest liftlog backup"
+            );
+            ApiError::from(error)
+        })?;
+
+    tracing::info!(
+        payload_bytes = body.len(),
+        workouts_imported = result.workouts_imported,
+        days_logged = result.days_logged,
+        updated_statistics = result.updated_statistic_ids.len(),
+        "Processed liftlog backup"
+    );
+
+    for statistic_id in result.updated_statistic_ids {
+        state
+            .event_publisher
+            .publish_event_async(Event::ValueUpdated(statistic_id));
+    }
+
+    Ok(Json(LiftLogBackupResponse {
+        workouts_imported: result.workouts_imported,
+        days_logged: result.days_logged,
+    }))
 }

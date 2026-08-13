@@ -4,6 +4,8 @@ pub mod ebook_bundle_factory;
 pub mod ebook_event_store;
 pub mod ebook_progress_service;
 pub mod fitbit_bundle_factory;
+pub mod liftlog_backup_parser;
+pub mod liftlog_bundle_factory;
 pub mod service;
 
 pub use anki_bundle_factory::AnkiBundleFactory;
@@ -15,7 +17,9 @@ pub use ebook_progress_service::{
     EbookProgressSyncResult,
 };
 pub use fitbit_bundle_factory::FitbitBundleFactory;
+pub use liftlog_backup_parser::{LiftLogBackupParser, LiftLogWorkout};
+pub use liftlog_bundle_factory::LiftLogBundleFactory;
 pub use service::{
     EbookEventIngestionRequest, EbookEventIngestionResult, IntegrationService,
-    IntegrationServiceTrait,
+    IntegrationServiceTrait, LiftLogBackupIngestionResult,
 };

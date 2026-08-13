@@ -35,6 +35,13 @@ mock! {
             &self,
             request: EbookEventIngestionRequest,
         ) -> lifestats_application::error::ApplicationResult<EbookEventIngestionResult>;
+
+        fn ingest_liftlog_backup(
+            &self,
+            gzipped_backup: &[u8],
+        ) -> lifestats_application::error::ApplicationResult<
+            lifestats_application::use_cases::integration::LiftLogBackupIngestionResult,
+        >;
     }
 }
 

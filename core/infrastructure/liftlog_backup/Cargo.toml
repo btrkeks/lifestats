@@ -1,0 +1,19 @@
+[package]
+name = "lifestats-liftlog-backup"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lifestats-application = { path = "../../application" }
+
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+diesel = { version = "2.0", features = ["sqlite"] }
+flate2 = "1"
+tempfile = "3"
+tracing = "0.1"
+
+[dev-dependencies]
+lifestats-core = { path = "../../core" }

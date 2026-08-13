@@ -14,6 +14,7 @@ events = { path = "../events/event_impl" }
 lifestats-persistence = { path = "../core/infrastructure/persistence" }
 lifestats-plotting = { path = "../core/infrastructure/plotting" }
 lifestats-fitbit-client = { path = "../core/infrastructure/fitbit_client" }
+lifestats-liftlog-backup = { path = "../core/infrastructure/liftlog_backup" }
 lifestats-system-clock = { path = "../core/infrastructure/system_clock" }
 
 # Utilities

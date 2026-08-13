@@ -67,3 +67,8 @@ plot-domain = { path = "../../plot-domain", features = ["testing"] }
 # Database tooling for E2E tests
 diesel = { version = "2.0", features = ["sqlite", "chrono", "r2d2"] }
 diesel_migrations = "2.1.0"
+
+# For building synthetic LiftLog backups in E2E tests
+lifestats-liftlog-backup = { path = "../liftlog_backup" }
+flate2 = "1"
+tempfile = "3"

@@ -1621,6 +1621,7 @@ dependencies = [
  "lifestats-application",
  "lifestats-core",
  "lifestats-fitbit-client",
+ "lifestats-liftlog-backup",
  "lifestats-persistence",
  "lifestats-plotting",
  "lifestats-system-clock",
@@ -1655,6 +1656,22 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "lifestats-liftlog-backup"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "diesel",
+ "flate2",
+ "lifestats-application",
+ "lifestats-core",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tracing",
 ]
 
@@ -1710,9 +1727,11 @@ dependencies = [
  "diesel_migrations",
  "dotenvy",
  "events",
+ "flate2",
  "lifestats-application",
  "lifestats-bootstrap",
  "lifestats-core",
+ "lifestats-liftlog-backup",
  "lifestats-persistence",
  "lifestats-plotting",
  "lifestats-system-clock",
@@ -1725,6 +1744,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "tokio",
  "tokio-test",
  "tower-http",

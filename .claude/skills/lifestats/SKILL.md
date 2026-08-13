@@ -121,6 +121,8 @@ curl -s -X POST http://localhost:3000/progress-items/1/checkpoints \
 
 Ebook reading syncs automatically via `POST /integrations/ebook/events` (idempotent by `event_id`) — don't log ebook progress manually unless asked.
 
+Gym workouts sync automatically via `POST /integrations/liftlog/backup` (the LiftLog Android app uploads its full backup snapshot; the server rewrites `[LiftLog] Workout Time` and `[LiftLog] Total Weight Lifted (kg)` per day, idempotently) — don't log LiftLog workouts manually unless asked.
+
 ## Sessions (live activity timers)
 
 Heartbeat sessions accumulate time frames on a TimeSpans statistic. One active session per statistic.

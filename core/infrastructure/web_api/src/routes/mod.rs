@@ -144,6 +144,13 @@ where
             "/integrations/ebook/events",
             post(integrations::ingest_ebook_event),
         )
+        // LiftLog remote-backup ingest; raw gzipped SQLite snapshots can
+        // exceed axum's 2 MB default body limit
+        .route(
+            "/integrations/liftlog/backup",
+            post(integrations::ingest_liftlog_backup)
+                .layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)),
+        )
         .route(
             "/integrations/{source}",
             post(integrations::provision_integration),

@@ -62,6 +62,7 @@ pub fn mock_app_state(
         factories,
         None,
         None,
+        None,
     ));
 
     let session_manager = Arc::new(SessionManager::new(mock_repo.clone()));

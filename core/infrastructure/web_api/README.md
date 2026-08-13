@@ -286,6 +286,7 @@ Heartbeat sessions track ongoing activity for a single statistic. Only one activ
 |--------|------|-------------|
 | `POST` | `/integrations/{source}` | Provision integration (e.g., Anki bundle) |
 | `POST` | `/integrations/ebook/events` | Ingest an idempotent ebook reading event and log per-book progress |
+| `POST` | `/integrations/liftlog/backup` | Ingest a LiftLog remote-backup snapshot and re-log workout statistics |
 | `GET` | `/integrations/fitbit/auth/begin` | Start Fitbit OAuth flow |
 | `GET` | `/integrations/fitbit/auth/callback` | OAuth callback handler |
 | `POST` | `/integrations/fitbit/sync` | Sync Fitbit data |
@@ -386,6 +387,32 @@ without adding the daily `delta` twice.
 {
   "accepted": true,
   "duplicate": false
+}
+```
+
+### Ingesting a LiftLog Backup
+
+**Request:** `POST /integrations/liftlog/backup`
+
+The body is the raw payload LiftLog's remote-backup feature sends: a gzipped, serialized SQLite
+snapshot of the app database (`Content-Type: application/octet-stream`, up to 32 MB). Point the
+LiftLog app's *Settings → Backup and restore → Remote backup* endpoint at this route; the app's
+optional `X-Api-Key` header is ignored.
+
+On each upload the server parses the `session` table, auto-provisions the `liftlog` bundle on
+first use (`[LiftLog] Workout Time` as `TimeSpans` and `[LiftLog] Total Weight Lifted (kg)` as
+`IntegerAmount`, both in category `LiftLog`), and rewrites the values for every day present in
+the snapshot: merged first-set→last-set time frames, and bodyweight-aware total weight in kg.
+Because every backup is a full snapshot, uploads are idempotent and edits to past workouts are
+propagated; deleted sessions only disappear from days that still have other workouts (a day is
+never cleared retroactively). Legacy protobuf exports are rejected with `400`.
+
+**Response:** `200 OK`
+
+```json
+{
+  "workouts_imported": 42,
+  "days_logged": 17
 }
 ```
 
