@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly DEFAULT_LIFESTATS_BASE_URL="http://localhost:3000"
+readonly DEFAULT_REMOTE_CLEF_PATH="/opt/clef/bin/clef"
+readonly DEFAULT_REMOTE_DB_PATH="/var/lib/clef/memorization.sqlite"
+readonly DEFAULT_REMOTE_SERVICE_USER="clef"
+readonly DEFAULT_SYNC_DAYS="7"
+
+fail() {
+  printf 'CLEF_LIFESTATS_SYNC status=error message=%q\n' "$1" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "required command is unavailable: $1"
+}
+
+current_utc_offset_minutes() {
+  local raw sign hours minutes total
+  raw=$(date +%z)
+  [[ "$raw" =~ ^([+-])([0-9]{2})([0-9]{2})$ ]] || fail "date returned an invalid UTC offset: $raw"
+  sign=${BASH_REMATCH[1]}
+  hours=$((10#${BASH_REMATCH[2]}))
+  minutes=$((10#${BASH_REMATCH[3]}))
+  total=$((hours * 60 + minutes))
+  if [[ "$sign" == "-" ]]; then
+    total=$((-total))
+  fi
+  printf '%s' "$total"
+}
+
+quote_remote_command() {
+  local quoted
+  printf -v quoted '%q ' "$@"
+  printf '%s' "${quoted% }"
+}
+
+require_command curl
+require_command jq
+require_command ssh
+
+ssh_host=${CLEF_SYNC_SSH_HOST:-}
+account_email=${CLEF_SYNC_ACCOUNT_EMAIL:-}
+statistic_id=${CLEF_SYNC_LIFESTATS_STATISTIC_ID:-}
+sync_days=${CLEF_SYNC_DAYS:-$DEFAULT_SYNC_DAYS}
+utc_offset_minutes=${CLEF_SYNC_UTC_OFFSET_MINUTES:-}
+lifestats_base_url=${CLEF_SYNC_LIFESTATS_BASE_URL:-$DEFAULT_LIFESTATS_BASE_URL}
+remote_clef_path=${CLEF_SYNC_REMOTE_CLEF_PATH:-$DEFAULT_REMOTE_CLEF_PATH}
+remote_db_path=${CLEF_SYNC_REMOTE_DB_PATH:-$DEFAULT_REMOTE_DB_PATH}
+remote_service_user=${CLEF_SYNC_REMOTE_SERVICE_USER:-$DEFAULT_REMOTE_SERVICE_USER}
+
+[[ -n "$ssh_host" && "$ssh_host" != -* ]] || fail "CLEF_SYNC_SSH_HOST is required"
+[[ -n "$account_email" ]] || fail "CLEF_SYNC_ACCOUNT_EMAIL is required"
+[[ "$statistic_id" =~ ^[1-9][0-9]*$ ]] || fail "CLEF_SYNC_LIFESTATS_STATISTIC_ID must be a positive integer"
+[[ "$sync_days" =~ ^[0-9]+$ ]] || fail "CLEF_SYNC_DAYS must be an integer from 1 through 366"
+((sync_days >= 1 && sync_days <= 366)) || fail "CLEF_SYNC_DAYS must be an integer from 1 through 366"
+[[ -n "$remote_clef_path" && "$remote_clef_path" == /* ]] || fail "CLEF_SYNC_REMOTE_CLEF_PATH must be absolute"
+[[ -n "$remote_db_path" && "$remote_db_path" == /* ]] || fail "CLEF_SYNC_REMOTE_DB_PATH must be absolute"
+[[ -n "$remote_service_user" && "$remote_service_user" != -* ]] || fail "CLEF_SYNC_REMOTE_SERVICE_USER is invalid"
+
+if [[ -z "$utc_offset_minutes" ]]; then
+  utc_offset_minutes=$(current_utc_offset_minutes)
+fi
+[[ "$utc_offset_minutes" =~ ^-?[0-9]+$ ]] || fail "CLEF_SYNC_UTC_OFFSET_MINUTES must be an integer from -1440 through 1440"
+((utc_offset_minutes >= -1440 && utc_offset_minutes <= 1440)) || fail "CLEF_SYNC_UTC_OFFSET_MINUTES must be an integer from -1440 through 1440"
+
+lifestats_base_url=${lifestats_base_url%/}
+statistic_json=$(curl --fail --silent --show-error \
+  --connect-timeout 10 --max-time 30 \
+  "$lifestats_base_url/statistics/$statistic_id")
+if ! jq -e --argjson id "$statistic_id" \
+  '.id == $id and .statistic_type == "IntegerAmount"' \
+  <<<"$statistic_json" >/dev/null; then
+  fail "configured Lifestats statistic is missing or is not IntegerAmount"
+fi
+
+remote_args=(
+  sudo -n -u "$remote_service_user" --
+  "$remote_clef_path" practice-activity
+  --db "$remote_db_path" export
+  --email "$account_email"
+  --utc-offset-minutes "$utc_offset_minutes"
+  --days "$sync_days"
+)
+remote_command=$(quote_remote_command "${remote_args[@]}")
+ssh_args=(-F /dev/null -o BatchMode=yes -o ConnectTimeout=10)
+if [[ -n "${CLEF_SYNC_SSH_IDENTITY_FILE:-}" ]]; then
+  ssh_args+=(-i "$CLEF_SYNC_SSH_IDENTITY_FILE")
+fi
+
+activity_json=$(ssh "${ssh_args[@]}" -- "$ssh_host" "$remote_command")
+if ! jq -e '
+  type == "object" and
+  .schemaVersion == 1 and
+  .source == "clef" and
+  (.range.from | type == "string") and
+  (.range.through | type == "string") and
+  (.days | type == "array") and
+  all(.days[];
+    (.date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and
+    (.activeMillis | type == "number" and . >= 0 and . == floor) and
+    (.minutes | type == "number" and . >= 0 and . == floor) and
+    (.minutes == ((.activeMillis / 60000) | floor))
+  )
+' <<<"$activity_json" >/dev/null; then
+  fail "Clef returned an unsupported or malformed practice activity export"
+fi
+
+mapfile -t activity_rows < <(jq -r '.days[] | [.date, (.minutes | tostring)] | @tsv' <<<"$activity_json")
+logged_days=0
+for row in "${activity_rows[@]}"; do
+  IFS=$'\t' read -r activity_date minutes <<<"$row"
+  payload=$(jq -cn --arg value "$minutes" '{value: $value, update_policy: "overwrite"}')
+  curl --fail --silent --show-error \
+    --connect-timeout 10 --max-time 30 \
+    -o /dev/null \
+    -X POST "$lifestats_base_url/statistics/$statistic_id/log/$activity_date" \
+    -H "Content-Type: application/json" \
+    --data "$payload"
+  logged_days=$((logged_days + 1))
+done
+
+range_through=$(jq -r '.range.through' <<<"$activity_json")
+printf 'CLEF_LIFESTATS_SYNC status=ok days=%s through=%s\n' "$logged_days" "$range_through"

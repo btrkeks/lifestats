@@ -1,0 +1,15 @@
+[Unit]
+Description=Import Clef practice activity into Lifestats
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/lifestats/clef-sync.env
+ExecStart=%h/.local/bin/clef-lifestats-sync
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lifestats-clef-sync

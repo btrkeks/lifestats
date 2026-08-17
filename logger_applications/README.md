@@ -7,6 +7,7 @@ Automatic activity tracking integrations for the LifeStats platform. Each logger
 | Logger | Tracks | Integration Type | Tech Stack |
 |--------|--------|------------------|------------|
 | [AnkiLogger](#ankilogger) | Flashcard study time, disruptions, backlog | Anki add-on | Python |
+| [Clef Sync](#clef-sync) | Clef active piano practice minutes | SSH snapshot import | Bash |
 | [Stopwatch](#stopwatch) | Manual time tracking | CLI application | Rust |
 | [MIDI Logger](#midi-logger) | Piano/keyboard practice time | CLI application | Rust |
 | [MPV Logger](#mpv-logger) | Video playback time | MPV Lua script | Lua |
@@ -14,6 +15,20 @@ Automatic activity tracking integrations for the LifeStats platform. Each logger
 | [Web Activity Tracker](#web-activity-time-tracker) | Browsing time per site | Browser extension | TypeScript |
 
 ## Logger Applications
+
+### Clef Sync
+
+**Tracks:** Clef's authoritative active piano practice minutes
+
+**How it works:**
+- Pulls a versioned rolling daily snapshot from Clef over SSH
+- Reuses Clef's input-derived idle cutoff and 03:00 activity-day semantics
+- Overwrites an `IntegerAmount` statistic so retries remain idempotent
+- Runs hourly from a persistent systemd user timer
+
+See [`clef_sync/README.md`](clef_sync/README.md) for setup and operations.
+
+---
 
 ### AnkiLogger
 
@@ -157,11 +172,14 @@ Automatic activity tracking integrations for the LifeStats platform. Each logger
 ## Common Patterns
 
 ### Heartbeat-Based Tracking
-Most loggers use a heartbeat/ping pattern to track active time:
+Most live loggers use a heartbeat/ping pattern to track active time:
 - **MIDI Logger:** MIDI note-on events trigger heartbeats
 - **MPV Logger:** Periodic pings every second during playback
 - **E-book Reader:** Scroll events trigger activity pings
 - **Stopwatch:** Manual control with automatic flushes
+
+Clef Sync deliberately imports Clef's finished daily snapshot instead of
+creating a second heartbeat clock.
 
 ### Idle Detection
 Prevents inflated time tracking during inactivity:
@@ -179,6 +197,7 @@ Prevents inflated time tracking during inactivity:
 Each logger has its own README with installation and configuration instructions. See the individual directories for details:
 
 - `AnkiLogger/README.md`
+- `clef_sync/README.md`
 - `stopwatch/stopwatch_logger/README.md`
 - `midi_logger/README.md`
 - `mpv_logger/README.md`

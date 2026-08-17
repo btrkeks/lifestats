@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly Clef practice activity import into Lifestats
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1m
+Unit=lifestats-clef-sync.service
+
+[Install]
+WantedBy=timers.target
