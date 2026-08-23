@@ -233,6 +233,13 @@ web_api/
 | `GET` | `/statistics/{id}/plot/data` | Get plot data (JSON) - stateless on-the-fly generation |
 | `GET` | `/plots/timeline/{date}` | Get timeline plot for specific date |
 
+`GET /statistics/{id}/plot/image` accepts `plot_type` (required), `date_from`, `date_to`
+(default: last 14 days), `width`, `height` (default 800×600) and `value_labels`.
+Bar, line and scatter plots annotate every day with its exact value (e.g. `23:48`,
+`01:30`, `12`) above the mark; by default (`value_labels` omitted) the labels are only
+drawn when they fit inside a day column, `value_labels=true` forces them and
+`value_labels=false` hides them. Binary (yes/no) bars are never labelled.
+
 `GET /statistics/{id}/plot/data` accepts `plot_type`, `date_from`, and `date_to`.
 The response uses typed drawable values so clients can distinguish counts from time values:
 

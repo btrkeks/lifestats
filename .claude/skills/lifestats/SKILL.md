@@ -141,7 +141,9 @@ curl -s http://localhost:3000/sessions/25                          # status
 ## Plots
 
 ```bash
-curl -s "http://localhost:3000/statistics/23/plot/image" -o plot.png
+curl -s "http://localhost:3000/statistics/23/plot/image?plot_type=bar_chart" -o plot.png
+# optional: date_from, date_to (default last 14 days), width, height (800x600),
+# value_labels=true|false (force/hide per-day value annotations; default auto = when they fit)
 curl -s "http://localhost:3000/statistics/23/plot/data?plot_type=bar_chart&date_from=2026-07-01&date_to=2026-07-31"
 curl -s http://localhost:3000/plots/timeline/2026-08-01 -o timeline.png
 ```

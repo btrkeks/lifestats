@@ -2,18 +2,46 @@ use anyhow::{anyhow, Result};
 use chrono::Timelike;
 use image::{ImageBuffer, Rgb};
 use plot_domain::plot::axis::{AxisLabelFormat, YAxis};
-use plot_domain::plot::data::{DrawableData, DrawableGoal, PlotData};
+use plot_domain::plot::data::{DrawableData, DrawableGoal, PlotData, ScalarUnit};
 use plot_domain::plot::plot_type::PlotType;
-use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
+use plot_domain::plot::renderer::{PlotRenderer, RenderConfig, ValueLabels};
+use plotters::coord::ranged1d::{BoldPoints, Ranged};
+use plotters::coord::types::RangedCoordi64;
+use plotters::coord::Shift;
 use plotters::prelude::*;
+use plotters::style::text_anchor::{HPos, Pos, VPos};
 
 use crate::common::{
     calculate_seconds_ticks, duration_seconds_to_hh_mm, get_bar, get_border, get_horizontal_line,
-    number_formatter, percent_formatter, time_of_day_seconds_to_hh_mm, BACKGROUND_COLOR,
-    GOAL_LINE_COLOR, MISSED_EMPTY_GOAL_DAY_COLOR, SHADING_COLOR,
+    nice_seconds_ticks, number_formatter, percent_formatter, time_of_day_seconds_to_hh_mm,
+    BACKGROUND_COLOR, GOAL_LINE_COLOR, MISSED_EMPTY_GOAL_DAY_COLOR, SHADING_COLOR,
 };
 
 const MISSED_GOAL_COLOR: [u8; 3] = [245, 169, 142];
+
+const FONT: &str = "IPAMincho";
+/// Minimum vertical distance between two y-axis ticks on clock/duration axes.
+const MIN_PX_PER_Y_TICK: u32 = 40;
+/// Gap between a mark (bar top / line) and its value label.
+const VALUE_LABEL_PAD: i32 = 3;
+/// Extra horizontal room required around a label before auto mode enables labels.
+const VALUE_LABEL_COLUMN_SLACK: i32 = 4;
+
+/// A value annotation for one day, already positioned in pixel space.
+struct ValueLabelSpec {
+    text: String,
+    /// Pixel x of the day column's center.
+    x: i32,
+    /// Pixel y of the mark the label belongs to (bar end / value line / point).
+    y: i32,
+    /// Half the mark's height in pixels (line stroke / circle radius), so the label
+    /// clears the mark itself.
+    mark_radius: i32,
+    /// Pixel y of the goal line on the same day, if any.
+    goal_y: Option<i32>,
+    /// Prefer placing the label below the mark (e.g. negative bars grow downwards).
+    prefer_below: bool,
+}
 
 /// Concrete implementation of PlotRenderer using the plotters library
 pub struct PlottersRenderer;
@@ -61,6 +89,93 @@ impl PlottersRenderer {
         }
     }
 
+    /// Y-axis tick positions. Clock and duration axes snap to round times with
+    /// readable spacing; plain numbers keep plotters' default "nice number" ticks.
+    fn y_key_points(
+        label_format: AxisLabelFormat,
+        y_min: i64,
+        y_max: i64,
+        plot_height: u32,
+    ) -> Vec<i64> {
+        match label_format {
+            AxisLabelFormat::DurationHhMm | AxisLabelFormat::TimeOfDayHhMm => {
+                nice_seconds_ticks(y_min, y_max, plot_height, MIN_PX_PER_Y_TICK)
+            }
+            AxisLabelFormat::Number | AxisLabelFormat::Percent => {
+                RangedCoordi64::from(y_min..y_max).key_points(BoldPoints(11))
+            }
+        }
+    }
+
+    fn value_label_font_px(config: &RenderConfig) -> u32 {
+        (config.height / 40).clamp(10, 15)
+    }
+
+    /// Binary (yes/no) values are self-explanatory as bars; labelling them is noise.
+    fn is_binary(data: &DrawableData) -> bool {
+        matches!(data, DrawableData::Scalar(value) if value.unit() == ScalarUnit::Binary)
+    }
+
+    /// Draws value annotations next to their marks, keeping them inside the plotting
+    /// area and off the goal line where possible. In `Auto` mode labels are only drawn
+    /// when every label fits inside a single day column.
+    fn draw_value_labels(
+        root: &DrawingArea<BitMapBackend<'_>, Shift>,
+        labels: &[ValueLabelSpec],
+        plot_y: std::ops::Range<i32>,
+        column_px: i32,
+        mode: ValueLabels,
+        font_px: u32,
+    ) -> Result<()> {
+        if labels.is_empty() || mode == ValueLabels::Hide {
+            return Ok(());
+        }
+
+        let style = TextStyle::from((FONT, font_px).into_font()).color(&WHITE);
+        let sizes = labels
+            .iter()
+            .map(|label| root.estimate_text_size(&label.text, &style))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        if mode == ValueLabels::Auto {
+            let widest = sizes.iter().map(|(w, _)| *w as i32).max().unwrap_or(0);
+            if widest + VALUE_LABEL_COLUMN_SLACK > column_px {
+                return Ok(());
+            }
+        }
+
+        for (label, (_, h)) in labels.iter().zip(sizes) {
+            let h = h as i32;
+            let overlaps_goal =
+                |lo: i32, hi: i32| label.goal_y.is_some_and(|g| (lo - 1..=hi + 1).contains(&g));
+
+            let top = label.y - label.mark_radius - VALUE_LABEL_PAD;
+            let bottom = label.y + label.mark_radius + VALUE_LABEL_PAD;
+            let above = (top - h, top);
+            let below = (bottom, bottom + h);
+            let above_ok = above.0 >= plot_y.start && !overlaps_goal(above.0, above.1);
+            let below_ok = below.1 <= plot_y.end && !overlaps_goal(below.0, below.1);
+
+            let place_below = match (label.prefer_below, above_ok, below_ok) {
+                (false, true, _) => false,
+                (false, false, true) => true,
+                (true, _, true) => true,
+                (true, true, false) => false,
+                (_, false, false) => label.prefer_below,
+            };
+
+            let (y, v_pos) = if place_below {
+                (below.0, VPos::Top)
+            } else {
+                (above.1, VPos::Bottom)
+            };
+            let style = style.pos(Pos::new(HPos::Center, v_pos));
+            root.draw(&Text::new(label.text.clone(), (label.x, y), &style))?;
+        }
+
+        Ok(())
+    }
+
     fn should_shade_empty_missed_goal_day(point: &plot_domain::plot::data::DataPoint) -> bool {
         if point.goal.is_none() || point.color != MISSED_GOAL_COLOR {
             return false;
@@ -90,7 +205,12 @@ impl PlottersRenderer {
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
                 (data.date_range.start()..data.date_range.end()).into_segmented(),
-                y_axis_min..y_axis_max,
+                (y_axis_min..y_axis_max).with_key_points(Self::y_key_points(
+                    label_format,
+                    y_axis_min,
+                    y_axis_max,
+                    config.height,
+                )),
             )?;
 
         chart
@@ -149,6 +269,46 @@ impl PlottersRenderer {
             y_axis_max,
         )])?;
 
+        // Annotate every day with its exact value.
+        let font_px = Self::value_label_font_px(config);
+        let (plot_x, plot_y) = chart.plotting_area().get_pixel_range();
+        let n_days = (data.date_range.end() - data.date_range.start()).num_days() as i32 + 1;
+        let column_px = (plot_x.end - plot_x.start) / n_days.max(1);
+        let labels: Vec<ValueLabelSpec> = data
+            .points
+            .iter()
+            .filter_map(|point| {
+                let data_value = point.value.as_ref()?;
+                if Self::is_binary(data_value) {
+                    return None;
+                }
+                let value = Self::scalar_data_value(data_value)?;
+                let goal = point.goal.as_ref().and_then(Self::scalar_goal_value);
+                let (x, y) = chart.backend_coord(&(SegmentValue::CenterOf(point.date), value));
+                let goal_y = goal.map(|g| {
+                    chart
+                        .backend_coord(&(SegmentValue::CenterOf(point.date), g))
+                        .1
+                });
+                Some(ValueLabelSpec {
+                    text: Self::format_y_label(label_format, &value),
+                    x,
+                    y,
+                    mark_radius: 1,
+                    goal_y,
+                    prefer_below: value < 0,
+                })
+            })
+            .collect();
+        Self::draw_value_labels(
+            &root,
+            &labels,
+            plot_y,
+            column_px,
+            config.value_labels,
+            font_px,
+        )?;
+
         drop(chart);
         drop(root);
 
@@ -179,7 +339,12 @@ impl PlottersRenderer {
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
                 (data.date_range.start()..data.date_range.end()).into_segmented(),
-                y_axis_min..y_axis_max,
+                (y_axis_min..y_axis_max).with_key_points(Self::y_key_points(
+                    label_format,
+                    y_axis_min,
+                    y_axis_max,
+                    config.height,
+                )),
             )?;
 
         chart
@@ -246,6 +411,42 @@ impl PlottersRenderer {
             y_axis_max,
         )])?;
 
+        // Annotate every day with its exact value.
+        let font_px = Self::value_label_font_px(config);
+        let (plot_x, plot_y) = chart.plotting_area().get_pixel_range();
+        let n_days = (data.date_range.end() - data.date_range.start()).num_days() as i32 + 1;
+        let column_px = (plot_x.end - plot_x.start) / n_days.max(1);
+        let labels: Vec<ValueLabelSpec> = data
+            .points
+            .iter()
+            .filter_map(|point| {
+                let value = point.value.as_ref().and_then(Self::scalar_data_value)?;
+                let goal = point.goal.as_ref().and_then(Self::scalar_goal_value);
+                let (x, y) = chart.backend_coord(&(SegmentValue::CenterOf(point.date), value));
+                let goal_y = goal.map(|g| {
+                    chart
+                        .backend_coord(&(SegmentValue::CenterOf(point.date), g))
+                        .1
+                });
+                Some(ValueLabelSpec {
+                    text: Self::format_y_label(label_format, &value),
+                    x,
+                    y,
+                    mark_radius: 5,
+                    goal_y,
+                    prefer_below: false,
+                })
+            })
+            .collect();
+        Self::draw_value_labels(
+            &root,
+            &labels,
+            plot_y,
+            column_px,
+            config.value_labels,
+            font_px,
+        )?;
+
         drop(chart);
         drop(root);
 
@@ -276,7 +477,12 @@ impl PlottersRenderer {
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
                 (data.date_range.start()..data.date_range.end()).into_segmented(),
-                y_axis_min..y_axis_max,
+                (y_axis_min..y_axis_max).with_key_points(Self::y_key_points(
+                    label_format,
+                    y_axis_min,
+                    y_axis_max,
+                    config.height,
+                )),
             )?;
 
         chart
@@ -321,6 +527,42 @@ impl PlottersRenderer {
             data.date_range.end(),
             y_axis_max,
         )])?;
+
+        // Annotate every day with its exact value.
+        let font_px = Self::value_label_font_px(config);
+        let (plot_x, plot_y) = chart.plotting_area().get_pixel_range();
+        let n_days = (data.date_range.end() - data.date_range.start()).num_days() as i32 + 1;
+        let column_px = (plot_x.end - plot_x.start) / n_days.max(1);
+        let labels: Vec<ValueLabelSpec> = data
+            .points
+            .iter()
+            .filter_map(|point| {
+                let value = point.value.as_ref().and_then(Self::scalar_data_value)?;
+                let goal = point.goal.as_ref().and_then(Self::scalar_goal_value);
+                let (x, y) = chart.backend_coord(&(SegmentValue::CenterOf(point.date), value));
+                let goal_y = goal.map(|g| {
+                    chart
+                        .backend_coord(&(SegmentValue::CenterOf(point.date), g))
+                        .1
+                });
+                Some(ValueLabelSpec {
+                    text: Self::format_y_label(label_format, &value),
+                    x,
+                    y,
+                    mark_radius: 1,
+                    goal_y,
+                    prefer_below: false,
+                })
+            })
+            .collect();
+        Self::draw_value_labels(
+            &root,
+            &labels,
+            plot_y,
+            column_px,
+            config.value_labels,
+            font_px,
+        )?;
 
         drop(chart);
         drop(root);

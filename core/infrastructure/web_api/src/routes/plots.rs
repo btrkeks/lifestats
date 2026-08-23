@@ -16,7 +16,7 @@ use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::axis::AxisLabelFormat;
 use plot_domain::plot::data::{ScalarUnit, ScalarValue};
 use plot_domain::plot::plot_type::PlotType;
-use plot_domain::plot::renderer::{PlotRenderer, RenderConfig};
+use plot_domain::plot::renderer::{PlotRenderer, RenderConfig, ValueLabels};
 use serde::{Deserialize, Serialize};
 
 use crate::{error::ApiError, state::AppState};
@@ -32,6 +32,9 @@ pub struct PlotImageQuery {
     pub date_to: Option<String>,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    /// `true` forces per-day value labels, `false` hides them; omitted = auto
+    /// (labels are drawn when they fit inside a day column).
+    pub value_labels: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,7 +161,12 @@ where
     // 3. Build RenderConfig
     let width = params.width.unwrap_or(800);
     let height = params.height.unwrap_or(600);
-    let render_config = RenderConfig { width, height };
+    let value_labels = match params.value_labels {
+        Some(true) => ValueLabels::Show,
+        Some(false) => ValueLabels::Hide,
+        None => ValueLabels::Auto,
+    };
+    let render_config = RenderConfig::new(width, height).with_value_labels(value_labels);
 
     // 4. Render the plot
     let png_bytes = state

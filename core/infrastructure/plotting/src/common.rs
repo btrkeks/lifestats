@@ -85,6 +85,37 @@ pub fn calculate_seconds_ticks(y_min: i64, y_max: i64, plot_height: usize) -> Ve
     get_ticks_for_step_size(y_min, y_max, step_size)
 }
 
+/// Candidate tick steps for clock/duration axes, from one minute up to one day.
+const NICE_SECONDS_STEPS: [i64; 13] = [
+    60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 14400, 21600, 43200, 86400,
+];
+
+/// Calculates tick marks for a seconds-based y-axis that land on "round" times
+/// (full minutes / quarter hours / hours ...) and keep at least `min_px_per_tick`
+/// pixels between neighbouring ticks so labels stay readable.
+pub fn nice_seconds_ticks(
+    y_min: i64,
+    y_max: i64,
+    plot_height: u32,
+    min_px_per_tick: u32,
+) -> Vec<i64> {
+    let range = (y_max - y_min).max(1);
+    let max_ticks = (plot_height / min_px_per_tick.max(1)).max(1) as i64;
+    let step = NICE_SECONDS_STEPS
+        .iter()
+        .copied()
+        .find(|step| range / step <= max_ticks)
+        .unwrap_or(*NICE_SECONDS_STEPS.last().unwrap());
+
+    let first_tick = y_min.div_euclid(step) * step;
+    let first_tick = if first_tick < y_min {
+        first_tick + step
+    } else {
+        first_tick
+    };
+    (first_tick..=y_max).step_by(step as usize).collect()
+}
+
 /// Formats elapsed seconds as HH:MM. Durations may exceed 24 hours.
 pub fn duration_seconds_to_hh_mm(total_sec: &i64) -> String {
     let total_minutes = total_sec.max(&0) / 60;
@@ -128,6 +159,30 @@ mod tests {
         assert_eq!(time_of_day_seconds_to_hh_mm(&3600), "01:00");
         assert_eq!(time_of_day_seconds_to_hh_mm(&3660), "01:01");
         assert_eq!(time_of_day_seconds_to_hh_mm(&90000), "01:00");
+    }
+
+    #[test]
+    fn nice_seconds_ticks_land_on_round_times() {
+        // 23:20 .. 00:05 on a 500px plot with >= 40px spacing -> 5 min steps
+        let ticks = nice_seconds_ticks(23 * 3600 + 20 * 60, 24 * 3600 + 5 * 60, 500, 40);
+        assert_eq!(ticks.first(), Some(&(23 * 3600 + 20 * 60)));
+        assert!(ticks.iter().all(|t| t % 300 == 0));
+        assert!(ticks.len() <= 500 / 40);
+        assert!(ticks.len() >= 3);
+    }
+
+    #[test]
+    fn nice_seconds_ticks_use_hours_for_long_ranges() {
+        let ticks = nice_seconds_ticks(0, 10 * 3600, 300, 40);
+        assert!(ticks.len() <= 300 / 40);
+        assert!(ticks.iter().all(|t| t % 3600 == 0));
+    }
+
+    #[test]
+    fn nice_seconds_ticks_skip_below_range_start() {
+        let ticks = nice_seconds_ticks(100, 1000, 600, 40);
+        assert!(ticks.iter().all(|t| (100..=1000).contains(t)));
+        assert_eq!(ticks.first(), Some(&120));
     }
 
     #[test]
