@@ -15,7 +15,7 @@ use plot_domain::plot::renderer::PlotRenderer;
 use validator::Validate;
 
 use crate::{
-    dto::goal::{GoalResponse, SetDailyGoalRequest, SetDefaultGoalRequest},
+    dto::goal::{DailyGoalResponse, GoalResponse, SetDailyGoalRequest, SetDefaultGoalRequest},
     error::ApiError,
     state::AppState,
 };
@@ -255,16 +255,13 @@ where
 pub async fn get_daily_goal<R, Rend, E, I>(
     State(app_state): State<AppState<R, Rend, E, I>>,
     Path((statistic_id, date)): Path<(u32, NaiveDate)>,
-) -> Result<Json<Option<GoalResponse>>, ApiError>
+) -> Result<Json<DailyGoalResponse>, ApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
-
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
-
     let handler = GetDailyGoalQueryHandler::new(app_state.statistic_repository.clone());
     let goal_result = handler
         .handle(GetDailyGoalQuery {
@@ -273,13 +270,7 @@ where
         })
         .map_err(|e| ApiError::InternalError(format!("Failed to get goal: {}", e)))?;
 
-    let response = match goal_result {
-        GoalQueryResult::Goal(goal_data) => Some(GoalResponse { goal_data }),
-        GoalQueryResult::Suppressed => None, // Suppressed goals return as if not set (404)
-        GoalQueryResult::NotSet => None,     // No override returns as if not set (404)
-    };
-
-    Ok(Json(response))
+    Ok(Json(DailyGoalResponse::from(goal_result)))
 }
 
 /// PUT /statistics/{id}/goals/{date} - Set a goal for a specific date

@@ -25,7 +25,7 @@ Quick liveness check: `curl -s http://localhost:3000/statistics` — if it fails
 ## Finding statistics
 
 ```bash
-curl -s http://localhost:3000/statistics           # all: [{id, name, category, statistic_type}]
+curl -s http://localhost:3000/statistics           # all: [{id, name, category, statistic_type, default_goal}] (default_goal is null when unset)
 curl -s http://localhost:3000/statistics/loggable  # excludes derived
 curl -s http://localhost:3000/statistics/42        # one
 ```
@@ -70,6 +70,10 @@ curl -s "http://localhost:3000/statistics/1/integer_amount/total?start_date=2026
 # also includes days_achieved). This is the habit-dashboard default.
 curl -s "http://localhost:3000/statistics/1/score?start=2026-07-01&end=2026-07-31&daily_cap_percent=100"
 
+# Per-day achievement strip (params start/end). Each day: {date, has_goal, achieved,
+# percentage_achieved (null without goal), override: none|suppressed|goal}
+curl -s "http://localhost:3000/statistics/1/achievements?start=2026-07-25&end=2026-07-31"
+
 # Performance + trend (params start_date/end_date; trend needs ≥14 data points)
 curl -s "http://localhost:3000/statistics/1/performance?start_date=2026-07-01&end_date=2026-07-31"
 # → {overall_score, trend: {direction: improving|declining|stable|insufficient_data, strength?}}
@@ -97,11 +101,19 @@ curl -s -X POST http://localhost:3000/statistics/dashboard \
 ## Goals
 
 ```bash
-curl -s http://localhost:3000/statistics/1/goals/default          # GET / PUT / DELETE
-curl -s http://localhost:3000/statistics/1/goals/2026-08-01       # daily override, same verbs
-# Set (PUT, returns 204). target is a string in the same format as log values for that type:
+curl -s http://localhost:3000/statistics/1/goals/default     # GET → {"goal_data": {...}} | null; PUT / DELETE
+curl -s http://localhost:3000/statistics/1/goals/2026-08-01  # GET → {"kind": "not_set"} | {"kind": "suppressed"} | {"kind": "goal", "goal_data": {...}}
+# Set default (PUT, 204). goal_data values are all strings; fields per type:
+#   IntegerAmount/Summing/TimeDifference: target (+ optional is_at_least, default "true")
+#   Habit: occurred | PointInTime: deadline "HH:MM" | TimeSpans: target (TimeFrameList JSON string), efficiency
 curl -s -X PUT http://localhost:3000/statistics/1/goals/default \
-  -H "Content-Type: application/json" -d '{"target": "480", "is_higher_better": true}'
+  -H "Content-Type: application/json" -d '{"goal_data": {"target": "480", "is_at_least": "true"}}'
+# Daily override (PUT, 204) — overrides the default for that date only; DELETE removes the override
+curl -s -X PUT http://localhost:3000/statistics/1/goals/2026-08-01 \
+  -H "Content-Type: application/json" -d '{"kind": "goal", "goal_data": {"target": "200"}}'
+# Suppress = "no goal applies that day" (e.g. travelling). Shows as override: suppressed in /achievements
+curl -s -X PUT http://localhost:3000/statistics/1/goals/2026-08-01 \
+  -H "Content-Type: application/json" -d '{"kind": "suppressed"}'
 ```
 
 ## Progress items (books etc.)

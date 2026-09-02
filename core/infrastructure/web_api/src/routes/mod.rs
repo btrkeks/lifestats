@@ -66,6 +66,10 @@ where
             get(statistics::get_statistic_score),
         )
         .route(
+            "/statistics/{id}/achievements",
+            get(statistics::get_daily_achievements),
+        )
+        .route(
             "/statistics/{id}/performance",
             get(statistics::get_goal_performance),
         )

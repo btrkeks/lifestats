@@ -699,6 +699,77 @@ where
     }))
 }
 
+/// GET /statistics/:id/achievements - Per-day goal achievement and override state over a date range
+pub async fn get_daily_achievements<R, Rend, E, I>(
+    State(app_state): State<AppState<R, Rend, E, I>>,
+    Path(statistic_id): Path<u32>,
+    Query(params): Query<crate::dto::daily_achievements::DailyAchievementsParams>,
+) -> Result<Json<crate::dto::daily_achievements::DailyAchievementsResponse>, ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    use crate::dto::daily_achievements::{DailyAchievementResponse, DailyAchievementsResponse};
+    use lifestats_application::cqrs::QueryHandler;
+    use lifestats_application::services::DefaultDailyAchievementEvaluator;
+    use lifestats_application::use_cases::queries::get_daily_achievements::{
+        GetDailyAchievementsQuery, GetDailyAchievementsQueryHandler,
+    };
+    use lifestats_core::shared::date_range::DateRange;
+    use std::sync::Arc;
+
+    params.validate()?;
+
+    let start_date = NaiveDate::parse_from_str(&params.start, "%Y-%m-%d").map_err(|_| {
+        ApiError::BadRequest(format!(
+            "Invalid start date format: '{}'. Expected YYYY-MM-DD",
+            params.start
+        ))
+    })?;
+
+    let end_date = NaiveDate::parse_from_str(&params.end, "%Y-%m-%d").map_err(|_| {
+        ApiError::BadRequest(format!(
+            "Invalid end date format: '{}'. Expected YYYY-MM-DD",
+            params.end
+        ))
+    })?;
+
+    let date_range = DateRange::new(start_date, end_date)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid date range: {}", e)))?;
+
+    let evaluator = Arc::new(DefaultDailyAchievementEvaluator::new(
+        app_state.statistic_repository.clone(),
+    ));
+    let handler =
+        GetDailyAchievementsQueryHandler::new(app_state.statistic_repository.clone(), evaluator);
+
+    let result = handler
+        .handle(GetDailyAchievementsQuery {
+            statistic_id: StatisticId(statistic_id),
+            date_range,
+        })
+        .map_err(ApiError::from)?;
+
+    Ok(Json(DailyAchievementsResponse {
+        statistic_id,
+        start_date: result.start_date.format("%Y-%m-%d").to_string(),
+        end_date: result.end_date.format("%Y-%m-%d").to_string(),
+        days: result
+            .days
+            .into_iter()
+            .map(|day| DailyAchievementResponse {
+                date: day.date.format("%Y-%m-%d").to_string(),
+                has_goal: day.has_goal,
+                achieved: day.achieved,
+                percentage_achieved: day.percentage_achieved.map(|p| p.as_num()),
+                override_kind: day.override_kind.into(),
+            })
+            .collect(),
+    }))
+}
+
 /// GET /statistics/:id/performance - Get goal performance analysis with trend over a date range
 pub async fn get_goal_performance<R, Rend, E, I>(
     State(app_state): State<AppState<R, Rend, E, I>>,

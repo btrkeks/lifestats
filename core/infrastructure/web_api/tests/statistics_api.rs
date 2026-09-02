@@ -11,6 +11,7 @@ use lifestats_core::statistic::ports::statistic_repository::MockStatisticReposit
 use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
 use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_web_api::dto::statistic::StatisticMetadataResponse;
 use lifestats_web_api::routes::create_router;
@@ -60,6 +61,39 @@ async fn test_get_all_statistics_happy_path() {
     assert_eq!(body[1].name, "Water Intake");
     assert_eq!(body[1].category, "Health");
     assert_eq!(body[1].statistic_type, "IntegerAmount");
+}
+
+#[tokio::test]
+async fn test_get_all_statistics_includes_default_goal() {
+    let mut mock_repo = MockStatisticRepository::new();
+
+    let with_goal = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+        StatisticMetadata::new(StatisticId(1), "Fitness".into(), "Push Ups".into()),
+        Some(AmountGoal::new(10, true)),
+        NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+    ));
+    let without_goal = mock_integer_statistic(2, "Water Intake", "Health");
+    let stats = vec![with_goal, without_goal];
+
+    mock_repo
+        .expect_find_all_metadata()
+        .times(1)
+        .returning(move || Ok(stats.clone()));
+
+    let app = create_router(mock_app_state(Arc::new(mock_repo)));
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/statistics").await;
+    assert_eq!(response.status_code(), 200);
+
+    let body: serde_json::Value = response.json();
+    assert_eq!(
+        body[0]["default_goal"],
+        json!({"target_amount": 10, "is_at_least": true})
+    );
+    // Key is present with an explicit null when no default goal is set
+    assert!(body[1].get("default_goal").is_some());
+    assert_eq!(body[1]["default_goal"], serde_json::Value::Null);
 }
 
 #[tokio::test]
@@ -657,5 +691,133 @@ async fn test_get_logged_value_invalid_date_format() {
     let response = server.get("/statistics/1/logged/2025-13-45").await;
 
     // Assert status code (Axum returns 400 for invalid path parameter parsing)
+    assert_eq!(response.status_code(), 400);
+}
+
+// ============================================================================
+// GET /statistics/:id/goals/:date Tests
+// ============================================================================
+
+async fn daily_goal_response_for(result: GoalQueryResult) -> serde_json::Value {
+    let mut mock_repo = MockStatisticRepository::new();
+    mock_repo
+        .expect_find_goal()
+        .times(1)
+        .return_once(move |_, _| Ok(result));
+
+    let app = create_router(mock_app_state(Arc::new(mock_repo)));
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/statistics/1/goals/2025-01-01").await;
+    assert_eq!(response.status_code(), 200);
+    response.json()
+}
+
+#[tokio::test]
+async fn test_get_daily_goal_not_set() {
+    let body = daily_goal_response_for(GoalQueryResult::NotSet).await;
+    assert_eq!(body, json!({"kind": "not_set"}));
+}
+
+#[tokio::test]
+async fn test_get_daily_goal_suppressed() {
+    let body = daily_goal_response_for(GoalQueryResult::Suppressed).await;
+    assert_eq!(body, json!({"kind": "suppressed"}));
+}
+
+#[tokio::test]
+async fn test_get_daily_goal_with_goal() {
+    let goal = json!({"target_amount": 10, "is_at_least": true});
+    let body = daily_goal_response_for(GoalQueryResult::Goal(goal.clone())).await;
+    assert_eq!(body, json!({"kind": "goal", "goal_data": goal}));
+}
+
+// ============================================================================
+// GET /statistics/:id/achievements Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_daily_achievements_happy_path() {
+    let mut mock_repo = MockStatisticRepository::new();
+
+    let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+        StatisticMetadata::new(StatisticId(1), "Fitness".into(), "Push Ups".into()),
+        Some(AmountGoal::new(10, true)),
+        NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+    ));
+    let day1 = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+    let day2 = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+    let day3 = NaiveDate::from_ymd_opt(2025, 1, 3).unwrap();
+
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(move |_| Ok(stat.clone()));
+    mock_repo
+        .expect_find_log_values_in_range()
+        .times(1)
+        .returning(move |_, _| {
+            Ok(vec![
+                DatedValue::new(day1, json!(10)),
+                DatedValue::new(day2, json!(5)),
+            ])
+        });
+    // Called once by the evaluator's GoalResolver and once by the query handler
+    mock_repo
+        .expect_find_goals_in_range()
+        .times(2)
+        .returning(move |_, _| Ok(vec![DatedValue::new(day3, GoalQueryResult::Suppressed)]));
+
+    let app = create_router(mock_app_state(Arc::new(mock_repo)));
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/statistics/1/achievements?start=2025-01-01&end=2025-01-03")
+        .await;
+    assert_eq!(response.status_code(), 200);
+
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["statistic_id"], 1);
+    assert_eq!(body["start_date"], "2025-01-01");
+    assert_eq!(body["end_date"], "2025-01-03");
+    assert_eq!(
+        body["days"],
+        json!([
+            {"date": "2025-01-01", "has_goal": true, "achieved": true, "percentage_achieved": 100, "override": "none"},
+            {"date": "2025-01-02", "has_goal": true, "achieved": false, "percentage_achieved": 50, "override": "none"},
+            {"date": "2025-01-03", "has_goal": false, "achieved": false, "percentage_achieved": null, "override": "suppressed"},
+        ])
+    );
+}
+
+#[tokio::test]
+async fn test_get_daily_achievements_statistic_not_found() {
+    let mut mock_repo = MockStatisticRepository::new();
+    mock_repo
+        .expect_find_metadata_by_id()
+        .times(1)
+        .returning(|_| Err(RepositoryError::NotFound));
+
+    let app = create_router(mock_app_state(Arc::new(mock_repo)));
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/statistics/999/achievements?start=2025-01-01&end=2025-01-03")
+        .await;
+    assert_eq!(response.status_code(), 404);
+
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["error"], "The requested resource was not found.");
+}
+
+#[tokio::test]
+async fn test_get_daily_achievements_invalid_range() {
+    let mock_repo = MockStatisticRepository::new();
+    let app = create_router(mock_app_state(Arc::new(mock_repo)));
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/statistics/1/achievements?start=2025-01-05&end=2025-01-01")
+        .await;
     assert_eq!(response.status_code(), 400);
 }

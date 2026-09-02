@@ -197,6 +197,7 @@ web_api/
 | `GET` | `/statistics/{id}/integer_amount/total` | Get total amount for date range |
 | `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
 | `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
+| `GET` | `/statistics/{id}/achievements` | Per-day goal achievement + daily-override state over date range |
 | `GET` | `/statistics/{id}/performance` | Get goal performance analysis with trend over date range |
 | `GET` | `/statistics/{id}/streak` | Get current goal-achievement streak in days |
 | `POST` | `/statistics/dashboard` | Get dashboard data for multiple statistics |
@@ -208,7 +209,7 @@ web_api/
 | `GET` | `/statistics/{id}/goals/default` | Get default goal |
 | `PUT` | `/statistics/{id}/goals/default` | Set default goal |
 | `DELETE` | `/statistics/{id}/goals/default` | Delete default goal |
-| `GET` | `/statistics/{id}/goals/{date}` | Get daily goal for specific date |
+| `GET` | `/statistics/{id}/goals/{date}` | Get daily goal override state for a date (`not_set` / `suppressed` / `goal`) |
 | `PUT` | `/statistics/{id}/goals/{date}` | Set daily goal for specific date |
 | `DELETE` | `/statistics/{id}/goals/{date}` | Delete daily goal |
 
@@ -442,9 +443,12 @@ never cleared retroactively). Legacy protobuf exports are rejected with `400`.
   "id": 42,
   "name": "Push Ups",
   "category": "Fitness",
-  "statistic_type": "IntegerAmount"
+  "statistic_type": "IntegerAmount",
+  "default_goal": null
 }
 ```
+
+`default_goal` is always present on statistic metadata responses (`GET /statistics`, `GET /statistics/loggable`, `GET /statistics/{id}`, `POST /statistics`): `null` when no default goal is set, otherwise the same object as `goal_data` from `GET /statistics/{id}/goals/default`.
 
 ### Logging a Value
 
@@ -506,16 +510,77 @@ never cleared retroactively). Legacy protobuf exports are rejected with `400`.
 
 ### Setting a Goal
 
-**Request:** `PUT /statistics/{id}/goals/default` (same for daily goals)
+**Default goal:** `PUT /statistics/{id}/goals/default`
 
 ```json
 {
-  "target": "100",
-  "is_higher_better": true
+  "goal_data": {
+    "target": "100",
+    "is_at_least": "true"
+  }
 }
 ```
 
+All `goal_data` values are strings; the fields depend on the statistic type:
+
+- IntegerAmount / Summing / TimeDifference: `target`, optional `is_at_least` (default `"true"`; the two derived types take seconds)
+- Habit: `occurred` (`"true"` / `"false"`)
+- PointInTime: `deadline` (`"HH:MM"` or `"HH:MM:SS"`)
+- TimeSpans: `target` (JSON string of a TimeFrameList, e.g. `"[{\"start\":\"09:00:00\",\"end\":\"17:00:00\"}]"`), `efficiency` (`"0"`-`"100"`)
+
+**Daily goal:** `PUT /statistics/{id}/goals/{date}` overrides the default for that date only.
+
+```json
+{ "kind": "goal", "goal_data": { "target": "50", "is_at_least": "true" } }
+```
+
+```json
+{ "kind": "suppressed" }
+```
+
+`suppressed` means no goal applies on that date even though a default goal exists (useful to excuse a missed day). `DELETE /statistics/{id}/goals/{date}` removes the override so the default applies again.
+
 **Response:** `204 No Content`
+
+### Getting a Goal
+
+`GET /statistics/{id}/goals/default` returns `{"goal_data": {"target_amount": 100, "is_at_least": true}}`, or `null` when unset. Note the stored shape uses the domain field names (`target_amount`), not the request's `target`.
+
+`GET /statistics/{id}/goals/{date}` returns one of:
+
+```json
+{ "kind": "not_set" }
+{ "kind": "suppressed" }
+{ "kind": "goal", "goal_data": { "target_amount": 50, "is_at_least": true } }
+```
+
+- `not_set`: no override row; the default goal applies (if any)
+- `suppressed`: the goal is explicitly turned off for this date
+- `goal`: a daily override is set
+
+### Getting Daily Achievements
+
+**Request:** `GET /statistics/{id}/achievements?start=2025-01-01&end=2025-01-03`
+
+**Response:** `200 OK`
+
+```json
+{
+  "statistic_id": 1,
+  "start_date": "2025-01-01",
+  "end_date": "2025-01-03",
+  "days": [
+    { "date": "2025-01-01", "has_goal": true,  "achieved": true,  "percentage_achieved": 100,  "override": "none" },
+    { "date": "2025-01-02", "has_goal": true,  "achieved": false, "percentage_achieved": 50,   "override": "none" },
+    { "date": "2025-01-03", "has_goal": false, "achieved": false, "percentage_achieved": null, "override": "suppressed" }
+  ]
+}
+```
+
+**Notes:**
+- One entry per day in the range, ascending. `percentage_achieved` is 0-255 (can exceed 100) or `null` when no goal applied that day.
+- `override` is `none` (default goal applies), `suppressed`, or `goal` (a daily override is set). Use `PUT /statistics/{id}/goals/{date}` with `{"kind": "suppressed"}` to excuse a missed day.
+- Returns 404 for unknown statistics and 400 for malformed dates or `start > end`.
 
 ### Getting Statistic Score
 
@@ -974,6 +1039,7 @@ Configuration via environment variables (loaded from `.env` if present):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | No* | In-memory | Path to SQLite database |
+| `PORT` | No | `3000` | TCP port the server listens on |
 | `RUST_LOG` | No | `info,web_api=debug,tower_http=debug` | Log level |
 | `FITBIT_CLIENT_ID` | No | `dummy_client_id` | Fitbit OAuth client ID |
 | `FITBIT_CLIENT_SECRET` | No | `dummy_secret` | Fitbit OAuth secret |

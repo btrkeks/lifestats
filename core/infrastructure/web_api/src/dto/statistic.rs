@@ -58,18 +58,24 @@ pub struct StatisticMetadataResponse {
     pub name: String,
     pub category: String,
     pub statistic_type: String,
+    /// The active default goal. Always present: `null` when no default goal is set,
+    /// otherwise the same object as `goal_data` of `GET /statistics/{id}/goals/default`.
+    #[serde(default)]
+    pub default_goal: Option<serde_json::Value>,
 }
 
 impl StatisticMetadataResponse {
     fn from_metadata_and_type(
         metadata: &StatisticMetadata,
         statistic_type: impl Into<String>,
+        default_goal: Option<serde_json::Value>,
     ) -> Self {
         Self {
             id: metadata.id().0,
             name: metadata.name().to_string(),
             category: metadata.category().to_string(),
             statistic_type: statistic_type.into(),
+            default_goal,
         }
     }
 }
@@ -86,7 +92,10 @@ impl From<&AnyStatistic> for StatisticMetadataResponse {
             AnyStatistic::TimeDifference(_) => "TimeDifference",
         }
         .to_string();
-        Self::from_metadata_and_type(metadata, statistic_type)
+        let default_goal = statistic
+            .get_default_goal()
+            .and_then(|goal| lifestats_application::services::any_goal_to_json(&goal).ok());
+        Self::from_metadata_and_type(metadata, statistic_type, default_goal)
     }
 }
 
@@ -96,13 +105,17 @@ impl From<&StatisticMetadata> for StatisticMetadataResponse {
             .get_tag("statistic_type")
             .cloned()
             .unwrap_or_else(|| "Unknown".to_string());
-        Self::from_metadata_and_type(metadata, statistic_type)
+        Self::from_metadata_and_type(metadata, statistic_type, None)
     }
 }
 
 impl From<&lifestats_application::dto::StatisticSummary> for StatisticMetadataResponse {
     fn from(summary: &lifestats_application::dto::StatisticSummary) -> Self {
-        Self::from_metadata_and_type(&summary.metadata, summary.statistic_type.as_str())
+        Self::from_metadata_and_type(
+            &summary.metadata,
+            summary.statistic_type.as_str(),
+            summary.default_goal.clone(),
+        )
     }
 }
 
@@ -136,6 +149,40 @@ mod tests {
         assert_eq!(dto.name, "Push Ups");
         assert_eq!(dto.category, "Fitness");
         assert_eq!(dto.statistic_type, "IntegerAmount");
+        assert!(dto.default_goal.is_none());
+    }
+
+    #[test]
+    fn test_from_any_statistic_with_default_goal() {
+        use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+
+        let metadata = StatisticMetadata::new(
+            StatisticId(42),
+            "Fitness".to_string(),
+            "Push Ups".to_string(),
+        );
+        let statistic = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            metadata,
+            Some(AmountGoal::new(10, true)),
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        ));
+
+        let dto = StatisticMetadataResponse::from(&statistic);
+
+        assert_eq!(
+            dto.default_goal,
+            Some(serde_json::json!({"target_amount": 10, "is_at_least": true}))
+        );
+        // The key must be present (as null) even without a goal so clients get a stable shape
+        let json = serde_json::to_value(StatisticMetadataResponse::from(
+            &AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+                StatisticMetadata::new(StatisticId(1), "c".into(), "n".into()),
+                None,
+                NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            )),
+        ))
+        .unwrap();
+        assert_eq!(json["default_goal"], serde_json::Value::Null);
     }
 
     #[test]

@@ -102,6 +102,9 @@ impl FromStr for StatisticType {
 pub struct StatisticSummary {
     pub metadata: StatisticMetadata,
     pub statistic_type: StatisticType,
+    /// The active default goal, serialized like `StatisticRepository::find_default_goal`
+    /// returns it (`None` when the statistic has no default goal).
+    pub default_goal: Option<serde_json::Value>,
 }
 
 impl From<&AnyStatistic> for StatisticSummary {
@@ -116,9 +119,14 @@ impl From<&AnyStatistic> for StatisticSummary {
             AnyStatistic::TimeDifference(_) => StatisticType::TimeDifference,
         };
 
+        let default_goal = statistic
+            .get_default_goal()
+            .and_then(|goal| crate::services::any_goal_to_json(&goal).ok());
+
         Self {
             metadata,
             statistic_type,
+            default_goal,
         }
     }
 }
@@ -220,6 +228,30 @@ mod tests {
         assert_eq!(summary.metadata.name(), "Push Ups");
         assert_eq!(summary.metadata.category(), "Fitness");
         assert_eq!(summary.statistic_type, StatisticType::IntegerAmount);
+        assert_eq!(summary.default_goal, None);
+    }
+
+    #[test]
+    fn test_statistic_summary_default_goal_serializes_inner_goal() {
+        use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+
+        let metadata = StatisticMetadata::new(
+            StatisticId(1),
+            "Fitness".to_string(),
+            "Push Ups".to_string(),
+        );
+        let statistic = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+            metadata,
+            Some(AmountGoal::new(10, true)),
+            Local::now().date_naive(),
+        ));
+
+        let summary = StatisticSummary::from(&statistic);
+
+        assert_eq!(
+            summary.default_goal,
+            Some(serde_json::json!({"target_amount": 10, "is_at_least": true}))
+        );
     }
 
     #[test]

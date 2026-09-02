@@ -11,7 +11,7 @@ pub use daily_achievement_evaluator::{
 };
 pub use ewma_calculator::Ewma;
 pub use goal_performance_analyzer::GoalPerformanceAnalyzer;
-pub use goal_resolver::GoalResolver;
+pub use goal_resolver::{any_goal_to_json, GoalResolver};
 pub use statistic_score_calculator::compute_mean_percentage;
 
 #[cfg(test)]

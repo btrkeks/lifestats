@@ -3,11 +3,27 @@ use std::sync::Arc;
 
 use chrono::{Days, NaiveDate};
 use lifestats_core::shared::date_range::DateRange;
-use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::any_statistic::{AnyGoal, AnyStatistic};
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 
 use crate::error::ApplicationResult;
+
+/// Serializes the concrete goal wrapped by an `AnyGoal`.
+///
+/// This is the JSON shape persisted by `SetDefaultGoalCommandHandler` and returned by
+/// `StatisticRepository::find_default_goal` (e.g. `{"target_amount": 10, "is_at_least": true}`).
+/// Do not `serde_json::to_value(&any_goal)` directly: `AnyGoal` is externally tagged and
+/// would produce `{"IntegerAmount": {...}}`.
+pub fn any_goal_to_json(goal: &AnyGoal) -> serde_json::Result<serde_json::Value> {
+    match goal {
+        AnyGoal::Habit(g) => serde_json::to_value(g),
+        AnyGoal::IntegerAmount(g) => serde_json::to_value(g),
+        AnyGoal::FinishedInTime(g) => serde_json::to_value(g),
+        AnyGoal::TimeSpans(g) => serde_json::to_value(g),
+        AnyGoal::SecondsAmount(g) => serde_json::to_value(g),
+    }
+}
 
 /// Service for resolving goals across date ranges.
 ///
@@ -61,16 +77,9 @@ impl<R: StatisticRepository> GoalResolver<R> {
 
         // Get default goal information from the statistic
         let default_goal_valid_since = statistic.get_default_goal_valid_since();
-        let default_goal_json = statistic.get_default_goal().and_then(|any_goal| {
-            use lifestats_core::statistic::any_statistic::AnyGoal;
-            match any_goal {
-                AnyGoal::Habit(g) => serde_json::to_value(g).ok(),
-                AnyGoal::IntegerAmount(g) => serde_json::to_value(g).ok(),
-                AnyGoal::FinishedInTime(g) => serde_json::to_value(g).ok(),
-                AnyGoal::TimeSpans(g) => serde_json::to_value(g).ok(),
-                AnyGoal::SecondsAmount(g) => serde_json::to_value(g).ok(),
-            }
-        });
+        let default_goal_json = statistic
+            .get_default_goal()
+            .and_then(|any_goal| any_goal_to_json(&any_goal).ok());
 
         // Resolve goal for each date in the range
         let mut result = HashMap::new();

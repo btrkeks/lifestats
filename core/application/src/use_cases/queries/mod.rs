@@ -2,6 +2,7 @@ pub mod get_all_metadata;
 pub mod get_all_statistics;
 pub mod get_all_timeline_events;
 pub mod get_consistency_score;
+pub mod get_daily_achievements;
 pub mod get_daily_goal;
 pub mod get_daily_summary;
 pub mod get_daily_timeline_plot;
@@ -29,6 +30,10 @@ pub use get_all_statistics::{GetAllStatisticsQuery, GetAllStatisticsQueryHandler
 pub use get_all_timeline_events::{GetAllTimelineEventsQuery, GetAllTimelineEventsQueryHandler};
 pub use get_consistency_score::{
     ConsistencyScoreResult, GetConsistencyScoreQuery, GetConsistencyScoreQueryHandler,
+};
+pub use get_daily_achievements::{
+    DailyAchievement, DailyAchievementsResult, DailyGoalOverrideKind, GetDailyAchievementsQuery,
+    GetDailyAchievementsQueryHandler,
 };
 pub use get_daily_goal::{GetDailyGoalQuery, GetDailyGoalQueryHandler};
 pub use get_daily_summary::{GetDailySummaryQuery, GetDailySummaryQueryHandler};

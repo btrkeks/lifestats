@@ -68,5 +68,40 @@ mod tests {
             result[0].statistic_type,
             crate::dto::StatisticType::IntegerAmount
         );
+        assert_eq!(result[0].default_goal, None);
+    }
+
+    #[test]
+    fn test_get_all_metadata_includes_default_goal() {
+        use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+        use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+
+        let mut repo = MockStatisticRepository::new();
+        let today = Local::now().date_naive();
+        let metadata = vec![
+            AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+                StatisticMetadata::new(StatisticId(1), "cat".into(), "with goal".into()),
+                Some(AmountGoal::new(10, true)),
+                today,
+            )),
+            AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+                StatisticMetadata::new(StatisticId(2), "cat".into(), "without goal".into()),
+                None,
+                today,
+            )),
+        ];
+
+        repo.expect_find_all_metadata()
+            .times(1)
+            .return_once(move || Ok(metadata.clone()));
+
+        let handler = GetAllMetadataQueryHandler::new(Arc::new(repo));
+        let result = handler.handle(GetAllMetadataQuery).unwrap();
+
+        assert_eq!(
+            result[0].default_goal,
+            Some(serde_json::json!({"target_amount": 10, "is_at_least": true}))
+        );
+        assert_eq!(result[1].default_goal, None);
     }
 }

@@ -55,8 +55,9 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
-    let addr = "0.0.0.0:3000";
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
 
     tracing::info!("Listening on {}", addr);
 
