@@ -6,9 +6,12 @@ import type {
   SetDailyGoalRequest,
   GoalResponse,
   GoalResponseRaw,
+  DailyGoalState,
+  DailyGoalStateRaw,
+  DailyAchievementsResponse,
   StatisticType,
 } from '@/types';
-import { parseGoalData } from './schemas';
+import { parseDailyGoalState, parseGoalData } from './schemas';
 
 // Base URL for the API - can be configured via environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -25,65 +28,41 @@ const api = axios.create({
 // ============================================================================
 
 export async function getAllStatistics(): Promise<StatisticMetadata[]> {
-  const response = await api.get('/statistics');
-  return response.data;
+  const { data } = await api.get<StatisticMetadata[]>('/statistics');
+  return data;
 }
 
 export async function getLoggableStatistics(): Promise<StatisticMetadata[]> {
-  const response = await api.get('/statistics/loggable');
-  return response.data;
-}
-
-export async function getStatistic(id: number): Promise<StatisticMetadata> {
-  const response = await api.get(`/statistics/${id}`);
-  return response.data;
+  const { data } = await api.get<StatisticMetadata[]>('/statistics/loggable');
+  return data;
 }
 
 export async function createStatistic(
-  data: CreateStatisticRequest
+  request: CreateStatisticRequest
 ): Promise<StatisticMetadata> {
-  const response = await api.post('/statistics', data);
-  return response.data;
-}
-
-export async function deleteStatistic(id: number): Promise<void> {
-  await api.delete(`/statistics/${id}`);
+  const { data } = await api.post<StatisticMetadata>('/statistics', request);
+  return data;
 }
 
 // ============================================================================
-// Goals API (Type-Safe with Zod Parsing)
+// Goals API (parsed through Zod at the boundary)
 // ============================================================================
 
-/**
- * Fetches and parses a default goal with type safety.
- * Returns null if no goal exists.
- */
+/** Fetches the default goal; null when none is set. */
 export async function getDefaultGoal(
   statisticId: number,
   statisticType: StatisticType
 ): Promise<GoalResponse | null> {
-  try {
-    const response = await api.get<GoalResponseRaw>(
-      `/statistics/${statisticId}/goals/default`
-    );
-
-    if (!response.data || !response.data.goal_data) {
-      return null;
-    }
-
-    // Parse raw data through Zod schemas for type safety
-    const parsedGoalData = parseGoalData(statisticType, response.data.goal_data);
-
-    return {
-      statistic_type: statisticType,
-      goal_data: parsedGoalData,
-    };
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      return null;
-    }
-    throw error;
+  const { data } = await api.get<GoalResponseRaw | null>(
+    `/statistics/${statisticId}/goals/default`
+  );
+  if (!data?.goal_data) {
+    return null;
   }
+  return {
+    statistic_type: statisticType,
+    goal_data: parseGoalData(statisticType, data.goal_data),
+  };
 }
 
 export async function setDefaultGoal(
@@ -97,42 +76,21 @@ export async function deleteDefaultGoal(statisticId: number): Promise<void> {
   await api.delete(`/statistics/${statisticId}/goals/default`);
 }
 
-/**
- * Fetches and parses a daily goal with type safety.
- * Returns null if no goal exists.
- */
+/** Fetches the daily override state (not_set / suppressed / goal) for a date. */
 export async function getDailyGoal(
   statisticId: number,
-  date: string, // YYYY-MM-DD format
+  date: string, // YYYY-MM-DD
   statisticType: StatisticType
-): Promise<GoalResponse | null> {
-  try {
-    const response = await api.get<GoalResponseRaw>(
-      `/statistics/${statisticId}/goals/${date}`
-    );
-
-    if (!response.data || !response.data.goal_data) {
-      return null;
-    }
-
-    // Parse raw data through Zod schemas for type safety
-    const parsedGoalData = parseGoalData(statisticType, response.data.goal_data);
-
-    return {
-      statistic_type: statisticType,
-      goal_data: parsedGoalData,
-    };
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      return null;
-    }
-    throw error;
-  }
+): Promise<DailyGoalState> {
+  const { data } = await api.get<DailyGoalStateRaw>(
+    `/statistics/${statisticId}/goals/${date}`
+  );
+  return parseDailyGoalState(statisticType, data);
 }
 
 export async function setDailyGoal(
   statisticId: number,
-  date: string, // YYYY-MM-DD format
+  date: string, // YYYY-MM-DD
   request: SetDailyGoalRequest
 ): Promise<void> {
   await api.put(`/statistics/${statisticId}/goals/${date}`, request);
@@ -140,7 +98,24 @@ export async function setDailyGoal(
 
 export async function deleteDailyGoal(
   statisticId: number,
-  date: string // YYYY-MM-DD format
+  date: string // YYYY-MM-DD
 ): Promise<void> {
   await api.delete(`/statistics/${statisticId}/goals/${date}`);
+}
+
+// ============================================================================
+// Achievements API
+// ============================================================================
+
+/** Per-day goal achievement and override state over an inclusive date range. */
+export async function getDailyAchievements(
+  statisticId: number,
+  start: string, // YYYY-MM-DD
+  end: string // YYYY-MM-DD
+): Promise<DailyAchievementsResponse> {
+  const { data } = await api.get<DailyAchievementsResponse>(
+    `/statistics/${statisticId}/achievements`,
+    { params: { start, end } }
+  );
+  return data;
 }

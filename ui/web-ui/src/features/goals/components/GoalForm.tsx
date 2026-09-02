@@ -1,21 +1,12 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldValues, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { StatisticType, GoalResponse } from '@/types';
-import {
-  IntegerAmountFields,
-  HabitFields,
-  PointInTimeFields,
-  TimeSpansFields,
-} from './fields';
-import {
-  integerAmountGoalSchema,
-  habitGoalSchema,
-  pointInTimeGoalSchema,
-  timeSpansGoalSchema,
-  serializeGoalData,
-} from '@/lib/schemas';
+import { IntegerAmountFields, HabitFields, PointInTimeFields, TimeSpansFields } from './fields';
+import { goalFormDefaultsFor, goalFormSchemaFor, serializeGoalData } from '@/lib/schemas';
+import { formatGoal } from '@/lib/goalFormat';
+import { ConfirmButton } from '@/components/ConfirmButton';
 
 interface GoalFormProps {
   statisticType: StatisticType;
@@ -26,13 +17,17 @@ interface GoalFormProps {
   isSubmitting?: boolean;
   isDeleting?: boolean;
   submitLabel?: string;
-  submitColor?: string;
+  variant?: 'primary' | 'success';
 }
 
+const SUBMIT_CLASSES: Record<NonNullable<GoalFormProps['variant']>, string> = {
+  primary: 'bg-blue-600 hover:bg-blue-700',
+  success: 'bg-emerald-600 hover:bg-emerald-700',
+};
+
 /**
- * Polymorphic goal form component that renders the appropriate fields
- * based on the statistic type. This is a "dumb" presentational component
- * that doesn't know about data fetching - it just renders UI and calls callbacks.
+ * Polymorphic goal form: renders the fields for the statistic type and hands
+ * back a serialized (all-strings) goal payload. Presentational only.
  */
 export function GoalForm({
   statisticType,
@@ -42,96 +37,23 @@ export function GoalForm({
   onSuppress,
   isSubmitting = false,
   isDeleting = false,
-  submitLabel = 'Set Goal',
-  submitColor = 'blue',
+  submitLabel = 'Save goal',
+  variant = 'primary',
 }: GoalFormProps) {
-  // Determine the schema based on statistic type
-  const getSchema = () => {
-    switch (statisticType) {
-      case 'IntegerAmount':
-      case 'Summing':
-        return integerAmountGoalSchema;
-      case 'Habit':
-        return habitGoalSchema;
-      case 'PointInTime':
-        return pointInTimeGoalSchema;
-      case 'TimeSpans':
-        return timeSpansGoalSchema;
-      default:
-        // For types we haven't implemented yet (e.g., TimeDifference)
-        return integerAmountGoalSchema;
-    }
-  };
-
-  // Get default values from existing goal if available
-  const getDefaultValues = () => {
-    if (!existingGoal) {
-      // Default values for new goals
-      switch (statisticType) {
-        case 'IntegerAmount':
-        case 'Summing':
-          return { target: 0, is_at_least: true } as Record<string, unknown>;
-        case 'Habit':
-          return { occurred: true } as Record<string, unknown>;
-        case 'PointInTime':
-          return { deadline: '12:00:00' } as Record<string, unknown>;
-        case 'TimeSpans':
-          return {
-            target: [{ start: '09:00', end: '17:00' }],
-            efficiency: 80,
-          } as Record<string, unknown>;
-        default:
-          return {} as Record<string, unknown>;
-      }
-    }
-
-    if (statisticType === 'TimeSpans' && existingGoal.goal_data.type === 'TimeSpans') {
-      const data = existingGoal.goal_data.data;
-      const maybeStringTarget = data.target as unknown;
-
-      if (typeof maybeStringTarget === 'string') {
-        try {
-          const parsedTarget = JSON.parse(maybeStringTarget);
-          const baseData = data as unknown as Record<string, unknown>;
-          return { ...baseData, target: parsedTarget };
-        } catch (error) {
-          console.warn('Failed to parse TimeSpans target JSON', error);
-          return data as unknown as Record<string, unknown>;
-        }
-      }
-
-      return data as unknown as Record<string, unknown>;
-    }
-
-    // Extract data from existing goal
-    return existingGoal.goal_data.data as unknown as Record<string, unknown>;
-  };
-
   const {
     register,
     handleSubmit,
     control,
     formState: { errors },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } = useForm<Record<string, any>>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(getSchema()) as any,
-    defaultValues: getDefaultValues(),
+  } = useForm<FieldValues>({
+    resolver: zodResolver(goalFormSchemaFor(statisticType)) as Resolver<FieldValues>,
+    defaultValues: existingGoal ? existingGoal.goal_data.data : goalFormDefaultsFor(statisticType),
   });
 
-  const onFormSubmit = (data: Record<string, unknown>) => {
-    const payload = { ...data } as Record<string, unknown>;
-
-    if (statisticType === 'TimeSpans' && Array.isArray(payload.target)) {
-      payload.target = JSON.stringify(payload.target);
-    }
-
-    // Serialize to backend format (all strings)
-    const serialized = serializeGoalData(payload);
-    onSubmit(serialized);
+  const onFormSubmit = (data: FieldValues) => {
+    onSubmit(serializeGoalData(data));
   };
 
-  // Render the appropriate fields based on statistic type
   const renderFields = () => {
     switch (statisticType) {
       case 'IntegerAmount':
@@ -142,19 +64,11 @@ export function GoalForm({
       case 'PointInTime':
         return <PointInTimeFields register={register} errors={errors} />;
       case 'TimeSpans':
-        return (
-          <TimeSpansFields register={register} errors={errors} control={control} />
-        );
+        return <TimeSpansFields register={register} errors={errors} control={control} />;
       case 'TimeDifference':
         return (
-          <div className="p-4 bg-yellow-50 rounded text-sm text-yellow-800">
-            TimeDifference goal editing not yet implemented
-          </div>
-        );
-      default:
-        return (
-          <div className="p-4 bg-red-50 rounded text-sm text-red-800">
-            Unknown statistic type: {statisticType}
+          <div className="rounded bg-yellow-50 p-4 text-sm text-yellow-800">
+            TimeDifference goal editing is not implemented yet.
           </div>
         );
     }
@@ -163,20 +77,18 @@ export function GoalForm({
   return (
     <div className="space-y-4">
       {existingGoal && (
-        <div className="p-4 bg-blue-50 rounded">
-          <p className="text-sm font-semibold text-blue-900">Current Goal:</p>
-          <pre className="text-sm text-blue-700 mt-2">
-            {JSON.stringify(existingGoal.goal_data.data, null, 2)}
-          </pre>
+        <div className="flex items-center justify-between gap-3 rounded bg-blue-50 px-4 py-3">
+          <p className="text-sm text-blue-900">
+            <span className="font-semibold">Current:</span> {formatGoal(existingGoal.goal_data)}
+          </p>
           {onDelete && (
-            <button
-              type="button"
-              onClick={onDelete}
+            <ConfirmButton
+              label={isDeleting ? 'Deleting…' : 'Delete'}
+              confirmLabel="Confirm delete"
+              onConfirm={onDelete}
               disabled={isDeleting}
-              className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete Goal'}
-            </button>
+              className="shrink-0 rounded px-3 py-1 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+            />
           )}
         </div>
       )}
@@ -190,23 +102,17 @@ export function GoalForm({
               type="button"
               onClick={onSuppress}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
+              className="flex-1 rounded-md bg-amber-500 px-4 py-2 text-white transition hover:bg-amber-600 disabled:opacity-50"
             >
-              Suppress Goal
+              Suppress goal
             </button>
           )}
           <button
             type="submit"
-            disabled={isSubmitting}
-            className={
-              submitColor === 'green'
-                ? 'flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50'
-                : submitColor === 'blue'
-                  ? 'flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50'
-                  : 'flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50'
-            }
+            disabled={isSubmitting || statisticType === 'TimeDifference'}
+            className={`flex-1 rounded-md px-4 py-2 text-white transition disabled:opacity-50 ${SUBMIT_CLASSES[variant]}`}
           >
-            {isSubmitting ? 'Setting Goal...' : submitLabel}
+            {isSubmitting ? 'Saving…' : submitLabel}
           </button>
         </div>
       </form>

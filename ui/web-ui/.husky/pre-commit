@@ -1,1 +1,3 @@
-npm test
+#!/bin/sh
+# Runs ESLint + tsc on staged TypeScript files (see lint-staged in package.json)
+cd "$(dirname -- "$0")/.." && npx lint-staged

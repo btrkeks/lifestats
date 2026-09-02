@@ -1,80 +1,49 @@
-"use client";
+'use client';
 
-import {
-  useStatistic,
-  useDefaultGoal,
-  useSetDefaultGoal,
-  useDeleteDefaultGoal,
-} from "../hooks/useGoals";
-import { GoalForm } from "./GoalForm";
-import type { SetGoalRequest } from "@/types";
+import type { StatisticMetadata } from '@/types';
+import { MutationStatus } from '@/components/MutationStatus';
+import { useDefaultGoal, useSetDefaultGoal, useDeleteDefaultGoal } from '../hooks/useGoals';
+import { GoalForm } from './GoalForm';
 
 interface DefaultGoalEditorProps {
-  statisticId: number;
+  statistic: StatisticMetadata;
 }
 
-/**
- * Controller component for editing default goals.
- * Fetches data and delegates rendering to the presentational GoalForm.
- */
-export function DefaultGoalEditor({ statisticId }: DefaultGoalEditorProps) {
-  // Fetch statistic metadata to get the type
-  const { data: statistic, isLoading: isLoadingStatistic } =
-    useStatistic(statisticId);
-
-  // Fetch existing goal (only if we know the statistic type)
-  const { data: goal, isLoading: isLoadingGoal } = useDefaultGoal(
-    statisticId,
-    statistic?.statistic_type,
-  );
-
-  const setGoal = useSetDefaultGoal(statisticId);
-  const deleteGoal = useDeleteDefaultGoal(statisticId);
-
-  const handleSubmit = (goalData: Record<string, string>) => {
-    const request: SetGoalRequest = { goal_data: goalData };
-    setGoal.mutate(request);
-  };
-
-  const handleDelete = () => {
-    if (confirm("Are you sure you want to delete the default goal?")) {
-      deleteGoal.mutate();
-    }
-  };
-
-  if (isLoadingStatistic || isLoadingGoal) {
-    return <div className="p-4 text-black">Loading...</div>;
-  }
-
-  if (!statistic) {
-    return <div className="p-4 text-red-600">Statistic not found</div>;
-  }
+/** Controller for the default goal: fetches it and wires the mutations into GoalForm. */
+export function DefaultGoalEditor({ statistic }: DefaultGoalEditorProps) {
+  const { data: goal, isLoading, isError } = useDefaultGoal(statistic.id, statistic.statistic_type);
+  const setGoal = useSetDefaultGoal(statistic.id);
+  const deleteGoal = useDeleteDefaultGoal(statistic.id);
 
   return (
-    <div className="p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4 text-black">
-        Default Goal - {statistic.name} ({statistic.statistic_type})
-      </h2>
+    <section className="rounded-lg bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-900">Default goal</h3>
+      <p className="mb-4 text-sm text-gray-500">Applies every day unless a daily override exists.</p>
 
-      <GoalForm
-        statisticType={statistic.statistic_type}
-        existingGoal={goal}
-        onSubmit={handleSubmit}
-        onDelete={handleDelete}
-        isSubmitting={setGoal.isPending}
-        isDeleting={deleteGoal.isPending}
-        submitLabel="Set Default Goal"
-        submitColor="blue"
-      />
+      {isLoading ? (
+        <p className="text-sm text-gray-500">Loading…</p>
+      ) : (
+        <GoalForm
+          statisticType={statistic.statistic_type}
+          existingGoal={goal ?? null}
+          onSubmit={(goalData) => setGoal.mutate({ goal_data: goalData })}
+          onDelete={goal ? () => deleteGoal.mutate() : undefined}
+          isSubmitting={setGoal.isPending}
+          isDeleting={deleteGoal.isPending}
+          submitLabel="Save default goal"
+        />
+      )}
 
-      {setGoal.isError && (
-        <p className="text-red-600 text-sm mt-4">
-          Error: {setGoal.error.message}
+      {isError && (
+        <p className="mt-3 text-sm text-amber-700">
+          The stored goal could not be read; saving will overwrite it.
         </p>
       )}
-      {setGoal.isSuccess && (
-        <p className="text-green-600 text-sm mt-4">Goal set successfully!</p>
-      )}
-    </div>
+      <MutationStatus
+        error={setGoal.error ?? deleteGoal.error}
+        isSuccess={setGoal.isSuccess || deleteGoal.isSuccess}
+        successText={deleteGoal.isSuccess ? 'Default goal deleted.' : 'Default goal saved.'}
+      />
+    </section>
   );
 }

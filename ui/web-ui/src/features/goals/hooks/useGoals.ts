@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   getDefaultGoal,
   setDefaultGoal,
@@ -6,97 +6,100 @@ import {
   getDailyGoal,
   setDailyGoal,
   deleteDailyGoal,
-  getStatistic,
-} from "@/lib/api";
-import type { SetGoalRequest, SetDailyGoalRequest, StatisticType } from "@/types";
+  getDailyAchievements,
+} from '@/lib/api';
+import type { SetGoalRequest, SetDailyGoalRequest, StatisticType } from '@/types';
 
-// ============================================================================
-// Statistic Hooks
-// ============================================================================
+export const goalKeys = {
+  all: (statisticId: number) => ['goal', statisticId] as const,
+  default: (statisticId: number) => ['goal', statisticId, 'default'] as const,
+  daily: (statisticId: number, date: string) => ['goal', statisticId, date] as const,
+  achievements: (statisticId: number) => ['achievements', statisticId] as const,
+  achievementsRange: (statisticId: number, start: string, end: string) =>
+    ['achievements', statisticId, start, end] as const,
+};
 
-export function useStatistic(statisticId: number) {
-  return useQuery({
-    queryKey: ["statistic", statisticId],
-    queryFn: () => getStatistic(statisticId),
-    enabled: !!statisticId,
-  });
+/**
+ * Any goal change affects the goal queries, the achievement strip and the
+ * statistics list (which carries `default_goal`). Returning the promise keeps
+ * the mutation pending until the refetches land, so UIs settle in one step.
+ */
+function invalidateGoalData(queryClient: QueryClient, statisticId: number) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: goalKeys.all(statisticId) }),
+    queryClient.invalidateQueries({ queryKey: goalKeys.achievements(statisticId) }),
+    queryClient.invalidateQueries({ queryKey: ['statistics'] }),
+  ]);
 }
 
 // ============================================================================
 // Default Goal Hooks
 // ============================================================================
 
-export function useDefaultGoal(
-  statisticId: number,
-  statisticType: StatisticType | undefined,
-) {
+export function useDefaultGoal(statisticId: number, statisticType: StatisticType) {
   return useQuery({
-    queryKey: ["goal", statisticId, "default"],
-    queryFn: () => getDefaultGoal(statisticId, statisticType!),
-    enabled: !!statisticId && !!statisticType,
+    queryKey: goalKeys.default(statisticId),
+    queryFn: () => getDefaultGoal(statisticId, statisticType),
   });
 }
 
 export function useSetDefaultGoal(statisticId: number) {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (goal: SetGoalRequest) => setDefaultGoal(statisticId, goal),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["goal", statisticId, "default"],
-      });
-    },
+    onSuccess: () => invalidateGoalData(queryClient, statisticId),
   });
 }
 
 export function useDeleteDefaultGoal(statisticId: number) {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: () => deleteDefaultGoal(statisticId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["goal", statisticId, "default"],
-      });
-    },
+    onSuccess: () => invalidateGoalData(queryClient, statisticId),
   });
 }
 
 // ============================================================================
-// Daily Goal Hooks
+// Daily Goal Hooks (the date is a mutation variable so one hook serves any day)
 // ============================================================================
 
-export function useDailyGoal(
-  statisticId: number,
-  date: string,
-  statisticType: StatisticType | undefined,
-) {
+export function useDailyGoal(statisticId: number, date: string, statisticType: StatisticType) {
   return useQuery({
-    queryKey: ["goal", statisticId, date],
-    queryFn: () => getDailyGoal(statisticId, date, statisticType!),
-    enabled: !!statisticId && !!date && !!statisticType,
+    queryKey: goalKeys.daily(statisticId, date),
+    queryFn: () => getDailyGoal(statisticId, date, statisticType),
+    enabled: date.length > 0,
   });
 }
 
-export function useSetDailyGoal(statisticId: number, date: string) {
-  const queryClient = useQueryClient();
+export interface DailyGoalMutation {
+  date: string;
+  request: SetDailyGoalRequest;
+}
 
+export function useSetDailyGoal(statisticId: number) {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (request: SetDailyGoalRequest) => setDailyGoal(statisticId, date, request),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["goal", statisticId, date] });
-    },
+    mutationFn: ({ date, request }: DailyGoalMutation) =>
+      setDailyGoal(statisticId, date, request),
+    onSuccess: () => invalidateGoalData(queryClient, statisticId),
   });
 }
 
-export function useDeleteDailyGoal(statisticId: number, date: string) {
+export function useDeleteDailyGoal(statisticId: number) {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: () => deleteDailyGoal(statisticId, date),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["goal", statisticId, date] });
-    },
+    mutationFn: (date: string) => deleteDailyGoal(statisticId, date),
+    onSuccess: () => invalidateGoalData(queryClient, statisticId),
+  });
+}
+
+// ============================================================================
+// Achievements
+// ============================================================================
+
+export function useDailyAchievements(statisticId: number, start: string, end: string) {
+  return useQuery({
+    queryKey: goalKeys.achievementsRange(statisticId, start, end),
+    queryFn: () => getDailyAchievements(statisticId, start, end),
   });
 }

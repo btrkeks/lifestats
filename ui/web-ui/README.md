@@ -4,7 +4,7 @@ A modern Next.js web application for managing statistics and goals in the LifeSt
 
 ## Overview
 
-The Web UI is the **goal management interface** for LifeStats. It provides a clean, type-safe web interface for creating statistics and managing their goals (both default goals and daily overrides).
+The Web UI is the **goal management interface** for LifeStats. Its primary job is to make excusing a missed day painless: the dashboard lists every statistic with an active goal, shows its last 14 days as a strip, and lets you suppress (or override) the goal for any day with one click. It also creates statistics and edits default goals.
 
 **Tech Stack:**
 - **Framework**: Next.js 15.5.4 (App Router)
@@ -18,9 +18,10 @@ The Web UI is the **goal management interface** for LifeStats. It provides a cle
 
 ### What This UI Provides
 
-- **Statistics Dashboard** (`/dashboard`): Browse all statistics with quick access to goal management
+- **Goal Dashboard** (`/`): Statistics with an active default goal come first, grouped by category, each with a 14-day achievement strip (achieved / missed / in progress / suppressed / no goal). Statistics without a goal sit in a collapsed list below with a "Set goal" action.
+- **One-click day actions**: Clicking a day in the strip opens a popover to suppress the goal for that day, set a custom goal for it, or remove an existing override. No confirmation dialogs; every action is reversible.
+- **Goal Editor**: Modal with the default goal and the daily override for a chosen date. The override state (not set / suppressed / custom goal) always reflects the server, so it survives reloads.
 - **Statistic Creation** (`/statistics/new`): Create new statistics with type-specific configuration
-- **Goal Management**: Set and edit default goals and daily goal overrides for any statistic
 - **Type-Safe Forms**: Polymorphic forms that adapt to different statistic types with validation
 
 ### What This UI Does NOT (Yet) Provide
@@ -49,22 +50,14 @@ npm install
 npm run dev
 ```
 
-This starts the development server on `http://localhost:3000` (or the next available port if 3000 is in use).
+This starts the development server on `http://localhost:3001` (the backend owns port 3000, and the production UI service also listens on 3001, so stop it first or pass another port: `npm run dev -- -p 3002`).
 
-### ⚠️ Port Conflict Warning
+To point the UI at a backend on another port, set `NEXT_PUBLIC_API_URL`:
 
-By default, both the web-ui dev server and the LifeStats backend bind to port 3000. You have two options:
-
-1. **Run web-ui on a different port** (recommended):
-   ```bash
-   npm run dev -- -p 3001
-   ```
-
-2. **Configure API URL** if backend is on a different port:
-   ```bash
-   # Create .env.local
-   echo "NEXT_PUBLIC_API_URL=http://localhost:3000" > .env.local
-   ```
+```bash
+# .env.local, or inline: NEXT_PUBLIC_API_URL=http://localhost:3010 npm run dev
+NEXT_PUBLIC_API_URL=http://localhost:3000
+```
 
 ### Production Build
 
@@ -79,37 +72,43 @@ npm start
 ui/web-ui/
 ├── src/
 │   ├── app/                          # Next.js App Router pages
-│   │   ├── page.tsx                  # Landing page (/)
-│   │   ├── layout.tsx                # Root layout with providers
-│   │   ├── dashboard/                # Statistics dashboard
+│   │   ├── page.tsx                  # Goal dashboard (/)
+│   │   ├── layout.tsx                # Root layout: providers + AppShell
 │   │   └── statistics/new/           # Statistic creation flow
 │   │
+│   ├── components/                   # Generic UI: AppShell, ConfirmButton, MutationStatus
+│   │
 │   ├── features/                     # Feature-based components
-│   │   ├── statistics/               # Statistic management
-│   │   │   ├── components/           # StatisticCard, StatisticGrid, etc.
-│   │   │   └── hooks/                # useStatistics hook
-│   │   └── goals/                    # Goal management
-│   │       ├── components/           # Goal forms and editors
+│   │   ├── statistics/
+│   │   │   ├── components/           # GoalCard, StatisticRow, CreateStatisticForm, ...
+│   │   │   └── hooks/                # useStatistics
+│   │   └── goals/
+│   │       ├── components/           # DayStrip, DayPopover, DayLegend, GoalEditorModal,
+│   │       │   │                     #   DefaultGoalEditor, DailyGoalOverride, GoalForm
 │   │       │   └── fields/           # Type-specific goal input fields
-│   │       └── hooks/                # useGoals hook
+│   │       ├── dayStatus.ts          # classifyDay(): achievement → cell status
+│   │       └── hooks/                # useGoals (queries, mutations, cache invalidation)
 │   │
 │   ├── lib/                          # Core utilities
 │   │   ├── api.ts                    # API client (axios wrapper)
+│   │   ├── schemas.ts                # Zod schemas: form validation + response parsing
+│   │   ├── goalFormat.ts             # formatGoal(): human-readable goal summaries
+│   │   ├── statisticGroups.ts        # splitByGoal() / groupByCategory()
+│   │   ├── dates.ts                  # ISO date helpers (date-fns)
 │   │   ├── constants.ts              # Statistic type definitions & icons
-│   │   ├── providers.tsx             # React Query provider setup
-│   │   └── schemas.ts                # Zod schemas for validation
+│   │   └── providers.tsx             # React Query provider setup
 │   │
 │   └── types/
 │       └── index.ts                  # TypeScript type definitions
 │
-├── public/                           # Static assets
-└── [config files]                    # TypeScript, ESLint, Tailwind, etc.
+└── [config files]                    # TypeScript, ESLint, Vitest, Tailwind, etc.
 ```
 
 ### Key Files
 
 - **`src/lib/api.ts`**: All backend API calls, typed with Axios
-- **`src/lib/schemas.ts`**: Zod schemas for runtime validation of API responses
+- **`src/lib/schemas.ts`**: Zod schemas for form validation and for parsing API responses (the backend stores goals with domain field names such as `target_amount`; the response schemas map them to the form shape)
+- **`src/features/goals/components/DayStrip.tsx`**: The 14-day strip and its click-to-act popover
 - **`src/lib/constants.ts`**: Statistic type metadata, icons, and descriptions
 - **`src/features/goals/components/GoalForm.tsx`**: Polymorphic form that renders different fields per statistic type
 - **`src/features/goals/components/fields/`**: Type-specific goal input components
@@ -134,13 +133,12 @@ NEXT_PUBLIC_API_URL=http://localhost:3000
 |----------|--------|---------|
 | `/statistics` | GET | Fetch all statistics |
 | `/statistics/loggable` | GET | Fetch only loggable statistics |
-| `/statistics/:id` | GET | Fetch single statistic |
 | `/statistics` | POST | Create new statistic |
-| `/statistics/:id` | DELETE | Delete statistic |
+| `/statistics/:id/achievements` | GET | Per-day achievement + override state for the day strip |
 | `/statistics/:id/goals/default` | GET | Get default goal |
 | `/statistics/:id/goals/default` | PUT | Set default goal |
 | `/statistics/:id/goals/default` | DELETE | Delete default goal |
-| `/statistics/:id/goals/:date` | GET | Get daily goal for specific date |
+| `/statistics/:id/goals/:date` | GET | Daily override state (`not_set` / `suppressed` / `goal`) |
 | `/statistics/:id/goals/:date` | PUT | Set daily goal override |
 | `/statistics/:id/goals/:date` | DELETE | Delete daily goal override |
 
@@ -152,10 +150,11 @@ The web UI maintains strong type safety between frontend and backend:
 2. **Zod Schemas** (`src/lib/schemas.ts`): Runtime validation at API boundary
 3. **Goal Data Serialization**:
    - **Backend expects**: `Record<string, string>` (string maps)
-   - **Frontend uses**: Typed objects (e.g., `{ target: number, isHigherBetter: boolean }`)
+   - **Frontend uses**: Typed objects (e.g., `{ target: number, is_at_least: boolean }`)
+   - **Backend returns**: Domain field names (e.g., `{ target_amount: 100, is_at_least: true }`)
    - **Conversion functions**:
      - `serializeGoalData()`: Typed data → string map (for PUT requests)
-     - `parseGoalData()`: String map → typed data with Zod validation (for GET responses)
+     - `parseGoalData()`: Response object → typed data with Zod validation (for GET responses and the `default_goal` carried by `GET /statistics`)
 
 ## Statistic Types
 
@@ -178,20 +177,21 @@ The web UI supports all 6 statistic types from the LifeStats domain model:
 ### Available Scripts
 
 ```bash
-npm run dev          # Start development server (default: localhost:3000)
+npm run dev          # Start development server (localhost:3001)
 npm run build        # Production build
 npm start            # Start production server
 npm run lint         # Run ESLint
 npm run type-check   # TypeScript type checking (no emit)
+npm test             # Vitest unit tests (pure helpers: formatting, grouping, parsing, day status)
 ```
 
 ### Code Quality Tools
 
 **Pre-commit Hooks** (via Husky + lint-staged):
-- Automatically runs on `git commit`
-- ESLint with auto-fix on staged files
-- TypeScript type checking on staged files
-- Prevents commits with type errors or lint issues
+- `.husky/pre-commit` runs `lint-staged` (ESLint with auto-fix + `tsc-files` on staged files)
+- Only active when git's `core.hooksPath` points at `ui/web-ui/.husky`; the repo does not enable it by default
+
+**Unit tests** (Vitest, `*.test.ts` next to the code): cover `goalFormat`, `statisticGroups`, `schemas` (real backend response shapes) and `dayStatus`. Components are verified manually against the running backend.
 
 **ESLint Configuration**:
 - Extends Next.js core web vitals + TypeScript rules
@@ -275,8 +275,7 @@ const parsed = statisticSchema.parse(response.data);
 1. **TimeDifference Goal Editing**: Not yet implemented (UI shows warning message)
 2. **No Authentication**: All endpoints are publicly accessible
 3. **No Data Logging UI**: Must use logger applications or API directly
-4. **No Plot Visualization**: Plot endpoints exist in backend but no UI integration yet
-5. **Port Conflict**: Default port 3000 conflicts with backend (use `-p 3001` flag)
+4. **No Plot Visualization**: Beyond the 14-day strip, plot endpoints have no UI integration
 
 ### Potential Future Enhancements
 
@@ -284,7 +283,7 @@ const parsed = statisticSchema.parse(response.data);
 - Integrate plot visualization (show charts in statistic cards)
 - Add authentication/authorization
 - Add statistics filtering and search
-- Add bulk goal operations
+- Add bulk goal operations (e.g. suppress a date range across all goals)
 - Add goal history view (track changes over time)
 - Add keyboard shortcuts for power users
 - Add dark mode support
@@ -300,13 +299,13 @@ const parsed = statisticSchema.parse(response.data);
 2. Verify backend is on `http://localhost:3000`
 3. Check `NEXT_PUBLIC_API_URL` if using custom port
 
-### "Port 3000 already in use"
+### "Port 3001 already in use"
 
-**Cause**: Backend is using port 3000
+**Cause**: The production UI service (`lifestats-web-ui.service`) is running
 
-**Solution**: Run web-ui on different port:
+**Solution**: Run the dev server on another port:
 ```bash
-npm run dev -- -p 3001
+npm run dev -- -p 3002
 ```
 
 ### Type errors on `npm run dev`

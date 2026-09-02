@@ -29,14 +29,13 @@ export default function CreateStatisticPage() {
     mutationFn: (payload: CreateStatisticRequest) => createStatistic(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['statistics'] });
-      router.push('/dashboard');
+      router.push('/');
     },
   });
 
   if (!definition) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
-        <div className="mx-auto max-w-xl text-center">
+      <div className="mx-auto max-w-xl text-center">
           <h1 className="text-3xl font-semibold text-gray-900">Statistic type not found</h1>
           <p className="mt-3 text-gray-600">
             The requested statistic type is not available. Please choose one from the selector page.
@@ -47,7 +46,6 @@ export default function CreateStatisticPage() {
           >
             Browse statistic types
           </Link>
-        </div>
       </div>
     );
   }
@@ -61,8 +59,7 @@ export default function CreateStatisticPage() {
         : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl">
         <Link
           href="/statistics/new"
           className="inline-block text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
@@ -97,7 +94,6 @@ export default function CreateStatisticPage() {
             requiresSources={requiresSources}
           />
         </div>
-      </div>
     </div>
   );
 }

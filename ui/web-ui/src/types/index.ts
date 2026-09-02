@@ -5,6 +5,11 @@ export interface StatisticMetadata {
   name: string;
   category: string;
   statistic_type: StatisticType;
+  /**
+   * Raw default goal as stored by the backend (same shape as `goal_data` of
+   * `GET /statistics/{id}/goals/default`); null when no default goal is set.
+   */
+  default_goal: Record<string, unknown> | null;
 }
 
 // Statistic types matching backend enums
@@ -24,7 +29,7 @@ export interface CreateStatisticRequest {
 }
 
 // ============================================================================
-// Goal Data Types - Strongly Typed (for frontend use)
+// Goal data (form / request shape)
 // ============================================================================
 
 export interface IntegerAmountGoalData {
@@ -59,33 +64,57 @@ export type GoalData =
   | { type: 'Summing'; data: IntegerAmountGoalData } // Same as IntegerAmount
   | { type: 'TimeDifference'; data: SecondsAmountGoalData };
 
-// ============================================================================
-// API Request/Response Types
-// ============================================================================
-
-// Raw response from backend (before parsing)
+/** Raw `GET /statistics/{id}/goals/default` body (before parsing) */
 export interface GoalResponseRaw {
-  goal_data: Record<string, unknown>; // JSON value from backend
+  goal_data: Record<string, unknown>;
 }
 
-// Parsed response with type information
+/** Parsed goal with type information */
 export interface GoalResponse {
   statistic_type: StatisticType;
   goal_data: GoalData;
 }
 
-// Request to set a default goal (must match backend string format)
+/** Request to set a default goal (all values are strings on the wire) */
 export interface SetGoalRequest {
   goal_data: Record<string, string>;
 }
 
-// Discriminated union for setting daily goals
-// Matches backend SetDailyGoalRequest enum with serde tag "kind"
+/** Request body of `PUT /statistics/{id}/goals/{date}` (serde tag "kind") */
 export type SetDailyGoalRequest =
   | { kind: 'goal'; goal_data: Record<string, string> }
   | { kind: 'suppressed' };
 
-// Response that may indicate suppressed goal
-export interface GoalResponseWithSuppress extends GoalResponse {
-  suppressed?: true; // Present and true if goal is suppressed
+/** Raw `GET /statistics/{id}/goals/{date}` body */
+export type DailyGoalStateRaw =
+  | { kind: 'not_set' }
+  | { kind: 'suppressed' }
+  | { kind: 'goal'; goal_data: Record<string, unknown> };
+
+/** Parsed daily goal override state for one date */
+export type DailyGoalState =
+  | { kind: 'not_set' }
+  | { kind: 'suppressed' }
+  | { kind: 'goal'; goal: GoalResponse };
+
+// ============================================================================
+// Daily achievements (`GET /statistics/{id}/achievements`)
+// ============================================================================
+
+export type DayOverride = 'none' | 'suppressed' | 'goal';
+
+export interface DailyAchievement {
+  date: string; // YYYY-MM-DD
+  has_goal: boolean;
+  achieved: boolean;
+  /** 0-255 (can exceed 100), null when no goal applied that day */
+  percentage_achieved: number | null;
+  override: DayOverride;
+}
+
+export interface DailyAchievementsResponse {
+  statistic_id: number;
+  start_date: string;
+  end_date: string;
+  days: DailyAchievement[];
 }
