@@ -62,9 +62,9 @@ its rest times. A workout name that occurs once, such as a one-off `New template
 
 If your active plan is empty or is a built-in plan you never changed, the Strong plan becomes
 active. Otherwise your active plan stays active, and you can switch to Strong under **Plans**.
-Importing again replaces the Strong plan with one built from the new file, which undoes any edits you
-made to it. If every workout in the file is already in History, nothing is imported, the plan
-included.
+Importing again never replaces a Strong plan you already have, so your edits to it are safe. Delete
+the plan first if you want one built from the new file. If every workout in the file is already in
+History, nothing is imported, the plan included.
 
 | Imported | Not imported |
 |----------|--------------|
@@ -143,7 +143,7 @@ importFromExternal({ format })
        → format-specific parse + group → NormalizedImportSession[]
        → sessionsFromNormalized() → BackupData { workouts, programs }
        → (Strong) programFromNormalized() → programs: { [planId]: "Strong" plan }
-  → filter session ids already in storedSessions
+  → filter session ids already in storedSessions, and plan ids already in savedPrograms
   → importBackupData(...)
   → setActivePlan(planId) if the active plan is empty or an untouched built-in
   → setStatsIsDirty(true)   // external path only
@@ -156,7 +156,7 @@ importFromExternal({ format })
   - `importers.ts` — `getImportForStrong` / `getImportForFitNotes` / `getImportForStrongLifts`
   - `csv-parse-utils.ts` — shared cell/number/Papa preamble helpers
 - Settings effect: `import-external-effects.ts` uses the registry; filters existing session IDs;
-  dispatches `importBackupData` + `setStatsIsDirty` (or already-imported snackbar). When the import
-  carries a plan, it also dispatches `setActivePlan` if the active plan has no sessions or equals its
+  dispatches `importBackupData` + `setStatsIsDirty` (or already-imported snackbar). It drops any
+  imported plan whose id is already in `savedPrograms`. When the import still carries a plan, it also dispatches `setActivePlan` if the active plan has no sessions or equals its
   `BuiltInPrograms` entry. `importBackupData`'s effect saves the plans synchronously inside that
   dispatch, so the plan exists before it becomes active.

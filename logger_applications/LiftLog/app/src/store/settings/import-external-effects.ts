@@ -37,12 +37,17 @@ export function addImportExternalEffects(addEffect: AddEffectFn) {
           return;
         }
 
-        const importedPlanId = Object.keys(backupData.programs)[0];
+        // A plan already saved under the import's id may carry the user's edits, so it is never replaced.
+        const { savedPrograms } = getState().program;
+        const newPrograms = Object.fromEntries(
+          Object.entries(backupData.programs).filter(([id]) => !savedPrograms[id]),
+        );
+        const importedPlanId = Object.keys(newPrograms)[0];
         const activateImportedPlan = importedPlanId !== undefined && activePlanIsReplaceable(getState());
         dispatch(
           importBackupData({
             workouts: newWorkouts,
-            programs: backupData.programs,
+            programs: newPrograms,
             successMessage: tolgee.t('backup.import_from_other_apps.complete.message', {
               count: newWorkouts.length,
             }),

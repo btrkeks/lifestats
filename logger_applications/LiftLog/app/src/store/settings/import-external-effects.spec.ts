@@ -29,7 +29,7 @@ async function makeExternalImportBed({
   bytes,
   sessions = [],
   imperial = false,
-  program,
+  program = { activePlanId: '', savedPrograms: {} },
   tolgee,
 }: BedOpts) {
   const defaultTolgee = (key: string, params?: { count?: number; error?: string }) => {
@@ -216,6 +216,21 @@ describe('import-external-effects', () => {
     it('activates the imported plan when the active plan is an untouched built-in', async () => {
       const testBed = await importStrongWith({ activePlanId: builtInId, savedPrograms: BuiltInPrograms });
       expect(testBed.getDispatchedAction(setActivePlan).payload).toEqual({ activePlanId: strongPlanId });
+    });
+
+    it('keeps a Strong plan that is already saved, edits included', async () => {
+      const edited = new ProgramBlueprint('Strong, my way', [], LocalDate.of(2026, 2, 1));
+      const testBed = await makeExternalImportBed({
+        format: 'Strong',
+        bytes: new TextEncoder().encode(STRONG_EXPORT_KG),
+        program: { activePlanId: strongPlanId, savedPrograms: { [strongPlanId]: edited } },
+      });
+      await testBed.dispatchHandled(importFromExternal({ format: 'Strong' }));
+
+      const imported = testBed.getDispatchedAction(importBackupData).payload;
+      expect(imported.workouts).toHaveLength(5);
+      expect(imported.programs).toEqual({});
+      expect(() => testBed.getDispatchedAction(setActivePlan)).toThrow();
     });
 
     it('leaves an edited plan active', async () => {
