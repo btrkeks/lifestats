@@ -27,6 +27,8 @@ interface ExerciseSectionProps<T extends RecordedExercise> {
   toStartNext: boolean;
   isReadonly: boolean;
   showPreviousButton: boolean;
+  /** Shown under the title, above the sets. */
+  belowTitle?: ReactNode;
 
   children: ReactNode;
 
@@ -147,6 +149,7 @@ export default function ExerciseSection<T extends RecordedExercise>(props: Exerc
           />
           {interactiveButtons}
         </View>
+        {props.belowTitle}
         {props.children}
         <ExerciseNotesDisplay exercise={props.recordedExercise} previousNotes={props.previousNotes} />
       </View>

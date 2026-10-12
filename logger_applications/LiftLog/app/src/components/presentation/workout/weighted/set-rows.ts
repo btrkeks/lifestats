@@ -2,9 +2,11 @@ import { Resistance } from '@/models/blueprint-models';
 import {
   CompletedWeightedSet,
   CompletedWeightedSets,
+  LoadContext,
   RecordedWeightedExercise,
   WeightedChange,
 } from '@/models/session-models';
+import { SetCue, setCue } from '@/models/set-progress';
 import { Weight, WeightUnit } from '@/models/weight';
 import { localeFormatBigNumber, localeParseBigNumber } from '@/utils/locale-bignumber';
 
@@ -156,4 +158,19 @@ export function resolveBlur(
   return reps !== undefined && reps !== row.status.reps
     ? { kind: 'log', setIndex: row.index, weight: row.weight, reps }
     : undefined;
+}
+
+/**
+ * What the row says under its Previous in the live workout. An unchecked row aims at the weight being
+ * typed, so ✓ and the target read the same number; a checked row is judged on what it logged.
+ */
+export function rowCue(row: SetRow, draft: RowDraft, column: WeightColumn, context: LoadContext): SetCue {
+  const typed = row.status.kind === 'unchecked' ? draftWeight(draft, column) : { kind: 'untouched' as const };
+  if (typed.kind === 'invalid') {
+    return { kind: 'hidden' };
+  }
+  return setCue({
+    current: { context, weight: typed.kind === 'valid' ? typed.weight : row.weight, status: row.status },
+    previous: row.previous,
+  });
 }

@@ -5,6 +5,7 @@ import {
   parseWeightText,
   resolveBlur,
   resolveCheck,
+  rowCue,
   SetRow,
   setRows,
   WeightColumn,
@@ -207,5 +208,43 @@ describe('resolveBlur', () => {
     expect(resolveBlur(uncheckedRow(6), 'weight', { weightText: '70' }, external)).toBeUndefined();
     expect(resolveBlur(uncheckedRow(6), 'weight', {}, external)).toBeUndefined();
     expect(resolveBlur(uncheckedRow(6), 'weight', { weightText: '' }, external)).toBeUndefined();
+  });
+});
+
+describe('rowCue', () => {
+  const lastTime: CompletedWeightedSet = { weight: kg(60), reps: 10, context: { resistance: 'external' } };
+  const aiming = (weight: Weight): SetRow => ({
+    index: 0,
+    previous: lastTime,
+    weight,
+    status: { kind: 'unchecked', suggestedReps: 10 },
+  });
+  const live = { resistance: 'external' } as const;
+
+  it('aims at the weight being typed, and says nothing while it does not parse', () => {
+    expect(rowCue(aiming(kg(60)), {}, external, live)).toEqual({ kind: 'target', reps: 11 });
+    expect(rowCue(aiming(kg(60)), { weightText: '62.5' }, external, live)).toEqual({ kind: 'target', reps: 9 });
+    expect(rowCue(aiming(kg(60)), { weightText: 'x' }, external, live)).toEqual({ kind: 'hidden' });
+  });
+
+  it('reads a cleared bodyweight cell as plain bodyweight', () => {
+    const context = { resistance: 'bodyweight', bodyweight: kg(80) } as const;
+    const row: SetRow = { ...aiming(kg(10)), previous: { weight: kg(0), reps: 10, context } };
+
+    expect(rowCue(row, { weightText: '' }, bodyweight, context)).toEqual({ kind: 'target', reps: 11 });
+  });
+
+  it('judges a checked row on what it logged, whatever is being typed', () => {
+    const done: SetRow = { ...aiming(kg(62.5)), status: { kind: 'checked', reps: 9 } };
+
+    expect(rowCue(done, { weightText: '50' }, external, live)).toEqual({ kind: 'better' });
+  });
+
+  it('leaves ✓ logging the previous reps, not the target', () => {
+    expect(rowCue(aiming(kg(62.5)), {}, external, live)).toEqual({ kind: 'target', reps: 9 });
+    expect(resolveCheck(aiming(kg(62.5)), {}, external)).toEqual({
+      kind: 'commit',
+      change: { kind: 'log', setIndex: 0, weight: kg(62.5), reps: 10 },
+    });
   });
 });

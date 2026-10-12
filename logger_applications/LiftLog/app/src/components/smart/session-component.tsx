@@ -26,7 +26,7 @@ import { getSessionExerciseEditorHref } from '@/components/smart/session-exercis
 import { LocalTime, OffsetDateTime, ZoneId } from '@js-joda/core';
 import { useRouter } from 'expo-router';
 import { useAppSelector } from '@/store';
-import { readPreviousCardioExercises, readWeightedHistory } from '@/db/sessions';
+import { readPreviousCardioExercises, readRecentProgress, readWeightedHistory } from '@/db/sessions';
 import { useSessionsQuery } from '@/hooks/useSessionsQuery';
 import { PageActions } from '@/components/presentation/foundation/page-actions';
 import AddIcon from '@expo/material-symbols/add.xml';
@@ -70,6 +70,10 @@ export default function SessionComponent(props: {
   const weightedHistory = useSessionsQuery(
     (db) => readWeightedHistory(db, { movementKeys, excludeSessionId: session.id }),
     JSON.stringify([session.id, movementKeys]),
+  );
+  const recentProgress = useSessionsQuery(
+    (db) => (isActiveWorkout ? readRecentProgress(db, { movementKeys, excludeSessionId: session.id }) : undefined),
+    JSON.stringify([session.id, movementKeys, !!isActiveWorkout]),
   );
   const cardioKeys = [
     ...new Set(
@@ -173,6 +177,11 @@ export default function SessionComponent(props: {
           isReadonly={isReadonly}
           showPreviousButton={!!isActiveWorkout}
           previous={weightedHistory?.get(item.movementKey())}
+          progress={
+            isActiveWorkout
+              ? { bodyweight: session.bodyweight, recent: recentProgress?.get(item.movementKey()) ?? [] }
+              : undefined
+          }
         />
       ))
       .with(P.instanceOf(RecordedCardioExercise), (item) => (

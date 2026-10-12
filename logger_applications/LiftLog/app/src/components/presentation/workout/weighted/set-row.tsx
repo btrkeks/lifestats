@@ -6,12 +6,13 @@ import {
   resolveBlur,
   resolveCheck,
   RowDraft,
+  rowCue,
   SetRow,
   WeightColumn,
   weightCellText,
 } from '@/components/presentation/workout/weighted/set-rows';
 import { rounding, spacing, useAppTheme } from '@/hooks/useAppTheme';
-import { WeightedChange } from '@/models/session-models';
+import { LoadContext, WeightedChange } from '@/models/session-models';
 import { shortFormatWeightUnit } from '@/models/weight';
 import { useTranslate } from '@tolgee/react';
 import { useRef, useState } from 'react';
@@ -68,9 +69,12 @@ export function SetTableRow(props: {
   column: WeightColumn;
   isReadonly: boolean;
   isNext: boolean;
+  /** Set only in the live workout, where the row aims at and judges against its Previous. */
+  context: LoadContext | undefined;
   onChange: (change: WeightedChange) => void;
 }) {
   const { row, column, onChange } = props;
+  const { t } = useTranslate();
   const { colors } = useAppTheme();
   const [draft, setDraft] = useState<RowDraft>({});
   const weightRef = useRef<TextInput>(null);
@@ -110,6 +114,7 @@ export function SetTableRow(props: {
   const repsText = draft.repsText ?? (row.status.kind === 'checked' ? String(row.status.reps) : '');
   const repsPlaceholder = row.status.kind === 'unchecked' ? (row.status.suggestedReps?.toString() ?? '-') : undefined;
   const cellStyle = isChecked ? { backgroundColor: 'transparent', color: textColor, fontWeight: 'bold' as const } : {};
+  const cue = props.context ? rowCue(row, draft, column, props.context) : undefined;
 
   return (
     <View
@@ -126,30 +131,52 @@ export function SetTableRow(props: {
       >
         {row.index + 1}
       </Text>
-      <Text
-        variant="bodyMedium"
-        numberOfLines={1}
-        style={[columns.previous, { color: isChecked ? colors.onPrimaryContainer : colors.onSurfaceVariant }]}
-      >
-        {row.previous ? (
-          <>
-            {column.resistance !== 'none' && (
-              <>
-                <WeightFormat
-                  weight={row.previous.weight}
-                  usesBodyweight={column.resistance === 'bodyweight'}
-                  color={isChecked ? 'onPrimaryContainer' : 'onSurfaceVariant'}
-                  fontSize="text-sm"
-                />
-                {' × '}
-              </>
-            )}
-            {row.previous.reps}
-          </>
-        ) : (
-          '-'
+      <View style={columns.previous}>
+        <Text
+          variant="bodyMedium"
+          numberOfLines={1}
+          style={{ color: isChecked ? colors.onPrimaryContainer : colors.onSurfaceVariant }}
+        >
+          {row.previous ? (
+            <>
+              {column.resistance !== 'none' && (
+                <>
+                  <WeightFormat
+                    weight={row.previous.weight}
+                    usesBodyweight={column.resistance === 'bodyweight'}
+                    color={isChecked ? 'onPrimaryContainer' : 'onSurfaceVariant'}
+                    fontSize="text-sm"
+                  />
+                  {' × '}
+                </>
+              )}
+              {row.previous.reps}
+            </>
+          ) : (
+            '-'
+          )}
+        </Text>
+        {cue?.kind === 'target' && (
+          <Text
+            testID="set-row-target"
+            variant="labelSmall"
+            style={{ color: colors.primary }}
+            accessibilityLabel={t('exercise.set_target.accessibility_label', { reps: cue.reps })}
+          >
+            {t('exercise.set_target.label', { reps: cue.reps })}
+          </Text>
         )}
-      </Text>
+        {cue?.kind === 'better' && (
+          <Text
+            testID="set-row-better"
+            variant="labelSmall"
+            style={{ color: colors.onPrimaryContainer }}
+            accessibilityLabel={t('exercise.set_better.accessibility_label')}
+          >
+            {t('exercise.set_better.label')}
+          </Text>
+        )}
+      </View>
       {column.resistance !== 'none' && (
         <CellInput
           ref={weightRef}
