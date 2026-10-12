@@ -18,6 +18,7 @@ enum class ForegroundEventType {
 
 data class ForegroundEvent(
     val timestampMillis: Long,
+    val packageName: String,
     val activityId: String,
     val type: ForegroundEventType,
 )
@@ -63,20 +64,28 @@ data class UsageWindow(
 
 data class ScreenTimeSnapshot(
     val localDate: String,
-    val minutes: Long,
+    val totalMinutes: Long,
+    val goalMinutes: Long,
+)
+
+data class ScreenTimeTotals(
+    val totalMinutes: Long,
+    val goalMinutes: Long,
 )
 
 object ScreenTimeCalculator {
-    fun totalForegroundMinutes(
+    fun foregroundMinutes(
         events: Collection<ForegroundEvent>,
         beginTimeMillis: Long,
         endTimeMillis: Long,
-    ): Long {
+        goalExemptPackages: Set<String>,
+    ): ScreenTimeTotals {
         require(beginTimeMillis <= endTimeMillis)
 
-        val activeActivities = mutableSetOf<String>()
+        val activeActivities = mutableMapOf<String, String>()
         var cursor = beginTimeMillis
         var totalMillis = 0L
+        var goalMillis = 0L
 
         events.sortedBy(ForegroundEvent::timestampMillis).forEach { event ->
             if (event.timestampMillis > endTimeMillis) {
@@ -85,21 +94,32 @@ object ScreenTimeCalculator {
 
             val intervalEnd = event.timestampMillis.coerceAtLeast(beginTimeMillis)
             if (activeActivities.isNotEmpty() && intervalEnd > cursor) {
-                totalMillis = Math.addExact(totalMillis, intervalEnd - cursor)
+                val intervalMillis = intervalEnd - cursor
+                totalMillis = Math.addExact(totalMillis, intervalMillis)
+                if (activeActivities.values.any { it !in goalExemptPackages }) {
+                    goalMillis = Math.addExact(goalMillis, intervalMillis)
+                }
             }
             cursor = maxOf(cursor, intervalEnd)
 
             when (event.type) {
-                ForegroundEventType.RESUMED -> activeActivities += event.activityId
+                ForegroundEventType.RESUMED -> activeActivities[event.activityId] = event.packageName
                 ForegroundEventType.INACTIVE -> activeActivities -= event.activityId
                 ForegroundEventType.CLEAR_ALL -> activeActivities.clear()
             }
         }
 
         if (activeActivities.isNotEmpty() && endTimeMillis > cursor) {
-            totalMillis = Math.addExact(totalMillis, endTimeMillis - cursor)
+            val intervalMillis = endTimeMillis - cursor
+            totalMillis = Math.addExact(totalMillis, intervalMillis)
+            if (activeActivities.values.any { it !in goalExemptPackages }) {
+                goalMillis = Math.addExact(goalMillis, intervalMillis)
+            }
         }
-        return totalMillis / MILLIS_PER_MINUTE
+        return ScreenTimeTotals(
+            totalMinutes = totalMillis / MILLIS_PER_MINUTE,
+            goalMinutes = goalMillis / MILLIS_PER_MINUTE,
+        )
     }
 
     private const val MILLIS_PER_MINUTE = 60_000L
@@ -112,6 +132,7 @@ class UsageAccessRequiredException : IllegalStateException(
 class ScreenTimeReader(
     private val usageEventSource: UsageEventSource,
     private val usageAccessChecker: UsageAccessChecker,
+    private val goalExemptPackages: Set<String> = emptySet(),
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val timeZone: TimeZone = TimeZone.getDefault(),
 ) {
@@ -125,13 +146,16 @@ class ScreenTimeReader(
             window.eventQueryBeginTimeMillis,
             window.endTimeMillis,
         )
+        val totals = ScreenTimeCalculator.foregroundMinutes(
+            events = events,
+            beginTimeMillis = window.beginTimeMillis,
+            endTimeMillis = window.endTimeMillis,
+            goalExemptPackages = goalExemptPackages,
+        )
         return ScreenTimeSnapshot(
             localDate = window.localDate,
-            minutes = ScreenTimeCalculator.totalForegroundMinutes(
-                events = events,
-                beginTimeMillis = window.beginTimeMillis,
-                endTimeMillis = window.endTimeMillis,
-            ),
+            totalMinutes = totals.totalMinutes,
+            goalMinutes = totals.goalMinutes,
         )
     }
 }
@@ -164,6 +188,7 @@ class AndroidUsageEventSource(context: Context) : UsageEventSource {
 
             result += ForegroundEvent(
                 timestampMillis = event.timeStamp,
+                packageName = event.packageName.orEmpty(),
                 activityId = activityId(event),
                 type = type,
             )
@@ -173,7 +198,7 @@ class AndroidUsageEventSource(context: Context) : UsageEventSource {
     }
 
     private fun activityId(event: UsageEvents.Event): String =
-        "${event.packageName}/${event.className}"
+        "${event.packageName.orEmpty()}/${event.className.orEmpty()}"
 }
 
 class AndroidUsageAccessChecker(private val context: Context) : UsageAccessChecker {

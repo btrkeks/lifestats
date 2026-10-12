@@ -2,14 +2,28 @@
 <resources>
     <string name="app_name">Lifestats Screen Time</string>
     <string name="screen_title">Screen Time Logger</string>
-    <string name="screen_description">Logs today\'s Android foreground-app time to one Lifestats IntegerAmount statistic.</string>
+    <string name="screen_description">Logs total Android foreground-app time and an optional goal-oriented total that excludes selected apps.</string>
     <string name="base_url_label">Lifestats base URL</string>
     <string name="base_url_hint">http://192.168.1.10:3000</string>
-    <string name="statistic_id_label">Statistic ID</string>
+    <string name="total_statistic_id_label">Total screen-time statistic ID</string>
     <string name="statistic_id_hint">42</string>
+    <string name="goal_statistic_id_label">Goal screen-time statistic ID (optional)</string>
+    <string name="goal_statistic_id_hint">43</string>
+    <string name="goal_statistic_description">When configured, this statistic receives screen time excluding the apps selected below.</string>
     <string name="save_and_sync">Save and sync now</string>
     <string name="open_usage_access">Open Usage Access settings</string>
     <string name="usage_access_granted">Usage Access: granted</string>
     <string name="usage_access_missing">Usage Access: not granted</string>
+    <string name="goal_exempt_apps_label">Apps excluded from the goal</string>
+    <string name="goal_exempt_apps_description">Selected apps still count toward total screen time, but not toward the goal-oriented statistic. The list contains apps used in the last 30 days.</string>
+    <string name="refresh_recent_apps">Refresh recent apps</string>
+    <string name="goal_exempt_apps_require_access">Grant Usage Access to load recent apps. Existing selections are preserved.</string>
+    <string name="goal_exempt_apps_loading">Loading recently used apps…</string>
+    <string name="goal_exempt_apps_empty">No recently used apps found.</string>
+    <plurals name="goal_exempt_apps_found">
+        <item quantity="one">%1$d recently used app</item>
+        <item quantity="other">%1$d recently used apps</item>
+    </plurals>
+    <string name="goal_exempt_apps_load_failed">Recent apps could not be loaded. Existing selections are preserved.</string>
     <string name="configuration_saved">Configuration saved. A sync has been queued.</string>
 </resources>

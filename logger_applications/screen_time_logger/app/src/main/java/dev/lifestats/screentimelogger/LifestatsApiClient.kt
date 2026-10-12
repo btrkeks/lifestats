@@ -11,14 +11,31 @@ data class LogValueRequest(
 )
 
 object LifestatsRequestFactory {
-    fun logScreenTime(settings: LoggerSettings, snapshot: ScreenTimeSnapshot): LogValueRequest {
-        require(snapshot.minutes >= 0) { "Screen-time minutes cannot be negative" }
+    fun logScreenTime(settings: LoggerSettings, snapshot: ScreenTimeSnapshot): List<LogValueRequest> {
+        require(snapshot.totalMinutes >= 0) { "Total screen-time minutes cannot be negative" }
+        require(snapshot.goalMinutes >= 0) { "Goal screen-time minutes cannot be negative" }
+        require(snapshot.goalMinutes <= snapshot.totalMinutes) {
+            "Goal screen time cannot exceed total screen time"
+        }
         require(LOCAL_DATE_PATTERN.matches(snapshot.localDate)) { "Date must use YYYY-MM-DD" }
-        return LogValueRequest(
-            url = "${settings.baseUrl}/statistics/${settings.statisticId}/log/${snapshot.localDate}",
-            body = "{\"value\":\"${snapshot.minutes}\",\"update_policy\":\"overwrite\"}",
-        )
+
+        return buildList {
+            add(logValue(settings.baseUrl, settings.totalStatisticId, snapshot.localDate, snapshot.totalMinutes))
+            settings.goalStatisticId?.let { statisticId ->
+                add(logValue(settings.baseUrl, statisticId, snapshot.localDate, snapshot.goalMinutes))
+            }
+        }
     }
+
+    private fun logValue(
+        baseUrl: String,
+        statisticId: Long,
+        localDate: String,
+        minutes: Long,
+    ) = LogValueRequest(
+        url = "$baseUrl/statistics/$statisticId/log/$localDate",
+        body = "{\"value\":\"$minutes\",\"update_policy\":\"overwrite\"}",
+    )
 
     private val LOCAL_DATE_PATTERN = Regex("\\d{4}-\\d{2}-\\d{2}")
 }
@@ -36,7 +53,10 @@ class LifestatsApiClient(
     private val readTimeoutMillis: Int = 15_000,
 ) {
     fun logScreenTime(settings: LoggerSettings, snapshot: ScreenTimeSnapshot) {
-        val request = LifestatsRequestFactory.logScreenTime(settings, snapshot)
+        LifestatsRequestFactory.logScreenTime(settings, snapshot).forEach(::execute)
+    }
+
+    private fun execute(request: LogValueRequest) {
         val bodyBytes = request.body.toByteArray(StandardCharsets.UTF_8)
         val connection = URL(request.url).openConnection() as HttpURLConnection
         try {

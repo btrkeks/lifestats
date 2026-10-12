@@ -17,14 +17,23 @@ class ScreenTimeSyncWorker(
             val snapshot = ScreenTimeReader(
                 usageEventSource = AndroidUsageEventSource(applicationContext),
                 usageAccessChecker = AndroidUsageAccessChecker(applicationContext),
+                goalExemptPackages = settings.goalExemptPackages,
             ).readToday()
 
             LifestatsApiClient().logScreenTime(settings, snapshot)
-            Log.i(TAG, "Logged ${snapshot.minutes} minutes for ${snapshot.localDate}")
+            val goalLog = settings.goalStatisticId?.let {
+                ", ${snapshot.goalMinutes} goal minutes"
+            }.orEmpty()
+            Log.i(
+                TAG,
+                "Logged ${snapshot.totalMinutes} total minutes$goalLog for ${snapshot.localDate}",
+            )
             Result.success(
                 workDataOf(
                     "date" to snapshot.localDate,
-                    "minutes" to snapshot.minutes,
+                    "minutes" to snapshot.totalMinutes,
+                    "total_minutes" to snapshot.totalMinutes,
+                    "goal_minutes" to snapshot.goalMinutes,
                 ),
             )
         } catch (error: MissingConfigurationException) {

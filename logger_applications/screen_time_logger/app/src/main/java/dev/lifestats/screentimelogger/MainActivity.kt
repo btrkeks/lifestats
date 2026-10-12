@@ -3,6 +3,7 @@ package dev.lifestats.screentimelogger
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
@@ -11,6 +12,7 @@ import android.text.InputType
 import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -20,12 +22,18 @@ import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var baseUrlInput: EditText
-    private lateinit var statisticIdInput: EditText
+    private lateinit var totalStatisticIdInput: EditText
+    private lateinit var goalStatisticIdInput: EditText
     private lateinit var usageAccessStatus: TextView
+    private lateinit var goalExemptAppsStatus: TextView
+    private lateinit var goalExemptAppsContainer: LinearLayout
     private lateinit var saveStatus: TextView
 
     private val settingsRepository by lazy { SettingsRepository(this) }
     private val usageAccessChecker by lazy { AndroidUsageAccessChecker(this) }
+    private val selectedGoalExemptPackages = mutableSetOf<String>()
+    private var recentAppsLoading = false
+    private var recentAppsLoaded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,13 +43,19 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        val hasUsageAccess = usageAccessChecker.hasAccess()
         usageAccessStatus.setText(
-            if (usageAccessChecker.hasAccess()) {
+            if (hasUsageAccess) {
                 R.string.usage_access_granted
             } else {
                 R.string.usage_access_missing
             },
         )
+        if (hasUsageAccess) {
+            loadRecentAppsIfNeeded()
+        } else {
+            goalExemptAppsStatus.setText(R.string.goal_exempt_apps_require_access)
+        }
     }
 
     private fun createContentView(): View {
@@ -71,15 +85,30 @@ class MainActivity : Activity() {
         }
         content.addView(baseUrlInput, matchWidth())
 
-        content.addView(fieldLabel(R.string.statistic_id_label).apply {
+        content.addView(fieldLabel(R.string.total_statistic_id_label).apply {
             setPadding(0, dp(16), 0, 0)
         })
-        statisticIdInput = EditText(this).apply {
+        totalStatisticIdInput = EditText(this).apply {
             hint = getString(R.string.statistic_id_hint)
             inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine(true)
         }
-        content.addView(statisticIdInput, matchWidth())
+        content.addView(totalStatisticIdInput, matchWidth())
+
+        content.addView(fieldLabel(R.string.goal_statistic_id_label).apply {
+            setPadding(0, dp(16), 0, 0)
+        })
+        goalStatisticIdInput = EditText(this).apply {
+            hint = getString(R.string.goal_statistic_id_hint)
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+        }
+        content.addView(goalStatisticIdInput, matchWidth())
+        content.addView(TextView(this).apply {
+            setText(R.string.goal_statistic_description)
+            textSize = 14f
+            setPadding(0, dp(6), 0, 0)
+        })
 
         usageAccessStatus = TextView(this).apply {
             textSize = 16f
@@ -91,6 +120,37 @@ class MainActivity : Activity() {
             setText(R.string.open_usage_access)
             setOnClickListener { openUsageAccessSettings() }
         }, matchWidth())
+
+        content.addView(fieldLabel(R.string.goal_exempt_apps_label).apply {
+            setPadding(0, dp(24), 0, 0)
+        })
+        content.addView(TextView(this).apply {
+            setText(R.string.goal_exempt_apps_description)
+            textSize = 14f
+            setPadding(0, dp(6), 0, dp(8))
+        })
+        content.addView(Button(this).apply {
+            setText(R.string.refresh_recent_apps)
+            setOnClickListener {
+                recentAppsLoaded = false
+                if (usageAccessChecker.hasAccess()) {
+                    loadRecentAppsIfNeeded()
+                } else {
+                    goalExemptAppsStatus.setText(R.string.goal_exempt_apps_require_access)
+                }
+            }
+        }, matchWidth())
+
+        goalExemptAppsStatus = TextView(this).apply {
+            textSize = 14f
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        content.addView(goalExemptAppsStatus)
+
+        goalExemptAppsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        content.addView(goalExemptAppsContainer, matchWidth())
 
         content.addView(Button(this).apply {
             setText(R.string.save_and_sync)
@@ -109,13 +169,25 @@ class MainActivity : Activity() {
     private fun populateSavedSettings() {
         settingsRepository.loadOrNull()?.let { settings ->
             baseUrlInput.setText(settings.baseUrl)
-            statisticIdInput.setText(String.format(Locale.ROOT, "%d", settings.statisticId))
+            totalStatisticIdInput.setText(
+                String.format(Locale.ROOT, "%d", settings.totalStatisticId),
+            )
+            settings.goalStatisticId?.let {
+                goalStatisticIdInput.setText(String.format(Locale.ROOT, "%d", it))
+            }
+            selectedGoalExemptPackages += settings.goalExemptPackages
+            renderAppChoices(settings.goalExemptPackages.map { AppChoice(it, it) })
         }
     }
 
     private fun saveAndSync() {
         val settings = try {
-            SettingsValidator.parse(baseUrlInput.text.toString(), statisticIdInput.text.toString())
+            SettingsValidator.parse(
+                baseUrlInput = baseUrlInput.text.toString(),
+                totalStatisticIdInput = totalStatisticIdInput.text.toString(),
+                goalStatisticIdInput = goalStatisticIdInput.text.toString(),
+                goalExemptPackages = selectedGoalExemptPackages,
+            )
         } catch (error: IllegalArgumentException) {
             saveStatus.text = error.message
             return
@@ -126,6 +198,90 @@ class MainActivity : Activity() {
         SyncScheduler.enqueueImmediate(this)
         saveStatus.setText(R.string.configuration_saved)
         Toast.makeText(this, R.string.configuration_saved, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun loadRecentAppsIfNeeded() {
+        if (recentAppsLoaded || recentAppsLoading) return
+
+        recentAppsLoading = true
+        val savedGoalExemptPackages = selectedGoalExemptPackages.toSet()
+        goalExemptAppsStatus.setText(R.string.goal_exempt_apps_loading)
+        Thread {
+            try {
+                val now = System.currentTimeMillis()
+                val packageNames = AndroidUsageEventSource(applicationContext)
+                    .query(now - RECENT_APP_WINDOW_MILLIS, now)
+                    .asSequence()
+                    .filter { it.type == ForegroundEventType.RESUMED }
+                    .map(ForegroundEvent::packageName)
+                    .filter(String::isNotBlank)
+                    .toSet() + savedGoalExemptPackages
+                val choices = packageNames.map(::resolveAppChoice)
+                    .sortedWith(
+                        compareBy<AppChoice> { it.label.lowercase(Locale.getDefault()) }
+                            .thenBy(AppChoice::packageName),
+                    )
+                runOnUiThread {
+                    if (isDestroyed) return@runOnUiThread
+                    recentAppsLoading = false
+                    recentAppsLoaded = true
+                    renderAppChoices(choices)
+                }
+            } catch (_: RuntimeException) {
+                runOnUiThread {
+                    if (isDestroyed) return@runOnUiThread
+                    recentAppsLoading = false
+                    renderAppChoices(selectedGoalExemptPackages.map { AppChoice(it, it) })
+                    goalExemptAppsStatus.setText(R.string.goal_exempt_apps_load_failed)
+                }
+            }
+        }.apply {
+            name = "recent-screen-time-apps"
+            start()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveAppChoice(packageName: String): AppChoice {
+        val label = try {
+            val applicationInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(applicationInfo).toString()
+        } catch (_: PackageManager.NameNotFoundException) {
+            packageName
+        }
+        return AppChoice(packageName = packageName, label = label)
+    }
+
+    private fun renderAppChoices(choices: Collection<AppChoice>) {
+        goalExemptAppsContainer.removeAllViews()
+        if (choices.isEmpty()) {
+            goalExemptAppsStatus.setText(R.string.goal_exempt_apps_empty)
+            return
+        }
+
+        goalExemptAppsStatus.text = resources.getQuantityString(
+            R.plurals.goal_exempt_apps_found,
+            choices.size,
+            choices.size,
+        )
+        choices.forEach { choice ->
+            goalExemptAppsContainer.addView(CheckBox(this).apply {
+                text = if (choice.label == choice.packageName) {
+                    choice.packageName
+                } else {
+                    "${choice.label}\n${choice.packageName}"
+                }
+                isChecked = choice.packageName in selectedGoalExemptPackages
+                setPadding(0, dp(4), 0, dp(4))
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) {
+                        selectedGoalExemptPackages += choice.packageName
+                    } else {
+                        selectedGoalExemptPackages -= choice.packageName
+                    }
+                }
+            }, matchWidth())
+        }
     }
 
     private fun openUsageAccessSettings() {
@@ -175,4 +331,13 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private data class AppChoice(
+        val packageName: String,
+        val label: String,
+    )
+
+    companion object {
+        private const val RECENT_APP_WINDOW_MILLIS = 30L * 24 * 60 * 60 * 1000
+    }
 }

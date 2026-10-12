@@ -6,6 +6,11 @@ For criterion 4, a fresh namespaced WorkManager job overwrote the API value
 from 75 to 83 while the device still reported deep `IDLE`, before idle was
 released.
 
+Follow-up implemented 2026-08-09: the app now preserves this raw total while
+optionally logging a second goal-oriented total that excludes user-selected
+packages. See `logger_applications/screen_time_logger/INTEGRATION.md` for the
+current contract and setup.
+
 ## Contract
 
 **Outcome**: An Android app that automatically logs the phone's daily screen

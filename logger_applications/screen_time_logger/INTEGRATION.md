@@ -1,9 +1,17 @@
 # Android Screen Time Logger Integration
 
 This app reads timestamped foreground-activity events from Android's
-`UsageStatsManager` and overwrites one Lifestats `IntegerAmount` value every
-four hours. Overwrite is intentional: Android reports a running total for the
-day, so summing repeated syncs would double-count screen time.
+`UsageStatsManager` and overwrites up to two Lifestats `IntegerAmount` values
+every four hours:
+
+- **Total screen time** includes every foreground app and preserves the raw
+  device-usage observation.
+- **Goal screen time** excludes user-selected packages, such as AnkiDroid,
+  while retaining them in the total. This statistic is optional so existing
+  installations continue syncing until it is configured.
+
+Overwrite is intentional: Android reports running totals for the day, so
+summing repeated syncs would double-count screen time.
 
 ## Architecture
 
@@ -13,22 +21,36 @@ The app is a thin external client; it does not add a Lifestats backend route.
 UsageStatsManager
         |
         v
-ScreenTimeReader --> ScreenTimeSyncWorker --> POST /statistics/{id}/log/{date}
-                           ^                         update_policy=overwrite
-                           |
-                 WorkManager every 4 hours
+Usage events + goal-exempt packages
+                 |
+                 v
+         ScreenTimeReader
+          |             |
+          v             v
+    total minutes   goal minutes
+          \             /
+           ScreenTimeSyncWorker --> POST /statistics/{id}/log/{date}
+                    ^                    update_policy=overwrite
+                    |
+          WorkManager every 4 hours
 ```
 
-- `MainActivity` stores the base URL and statistic ID in private
-  `SharedPreferences` and opens Android's Usage Access settings.
+- `MainActivity` stores the base URL, total statistic ID, optional goal
+  statistic ID, and goal-exempt package set in private `SharedPreferences`.
+  It opens Android's Usage Access settings and offers an app picker populated
+  from packages observed in the last 30 days. This avoids requesting broad
+  package-visibility access.
 - `ScreenTimeReader` computes local midnight and unions resumed-activity
   intervals from `UsageEvents`, clipped to the current local day. It seeds
   cross-midnight state from the previous day and clears state at screen-off
   and reboot boundaries before flooring the total to whole minutes. Exact
   events are required because OEM "daily" aggregate buckets can begin before
-  local midnight.
-- `ScreenTimeSyncWorker` sends the current local date and daily total. Network,
-  HTTP 408/429, and server failures retry with exponential backoff.
+  local midnight. An interval contributes to goal screen time when at least
+  one active foreground package is not exempt, preserving split-screen and
+  overlay behavior.
+- `ScreenTimeSyncWorker` always sends the raw total and sends the goal total
+  when a goal statistic ID is configured. Network, HTTP 408/429, and server
+  failures retry with exponential backoff.
 - `SyncScheduler` maintains one unique periodic job with a connected-network
   constraint. Saving settings also queues an immediate sync.
 - `DebugSyncReceiver` exists only in debug builds, requires Android's
@@ -44,8 +66,8 @@ cargo run -p lifestats-web-api
 curl -sS http://localhost:3000/statistics
 ```
 
-Create exactly one statistic if there is no existing `Screen Time`
-`IntegerAmount`:
+Keep the existing `Screen Time` `IntegerAmount` as the raw total, or create it
+if it does not exist:
 
 ```bash
 curl -sS -X POST http://localhost:3000/statistics \
@@ -54,9 +76,25 @@ curl -sS -X POST http://localhost:3000/statistics \
 ```
 
 Keep the returned `id`. In the app, enter the API address reachable from the
-phone and that statistic ID, open Usage Access settings, grant access to
-Lifestats Screen Time, then tap **Save and sync now**. No interaction is needed
-after this initial setup.
+phone as the **Total screen-time statistic ID**.
+
+Create a second statistic for the goal-oriented value:
+
+```bash
+curl -sS -X POST http://localhost:3000/statistics \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Distracting Screen Time","category":"Wellness","statistic_type":"IntegerAmount"}'
+```
+
+Enter its returned `id` as the **Goal screen-time statistic ID**. Open Usage
+Access settings, grant access to Lifestats Screen Time, refresh the recent-app
+list, and select apps that should not count toward the goal. For example,
+AnkiDroid normally appears as `com.ichi2.anki`. Tap **Save and sync now**. No
+interaction is needed after this setup unless the exemptions change.
+
+Upgrading an existing installation preserves the original statistic ID and
+continues logging total screen time. The goal statistic remains disabled until
+its ID is entered; saved goal-exempt apps take effect on the next sync.
 
 For normal use, configure the machine's LAN or Tailscale address. Android's
 `localhost` means the phone itself and only works during development while an
@@ -91,29 +129,35 @@ adb_usb reverse tcp:3000 tcp:3000
 adb_usb shell am start -n "$PKG/.MainActivity"
 
 # Optional extras configure a fresh debug install without UI interaction.
-# Use the ID returned by the one-time statistic creation request.
-STATISTIC_ID=42
+# Use the IDs returned by the one-time statistic creation requests.
+TOTAL_STATISTIC_ID=42
+GOAL_STATISTIC_ID=43
 adb_usb shell am broadcast \
   -a "$PKG.SYNC_NOW" \
   -n "$PKG/.DebugSyncReceiver" \
   --es base_url http://localhost:3000 \
-  --es statistic_id "$STATISTIC_ID"
+  --es statistic_id "$TOTAL_STATISTIC_ID" \
+  --es goal_statistic_id "$GOAL_STATISTIC_ID" \
+  --es goal_exempt_packages com.ichi2.anki
 
 adb_usb shell am wait-for-broadcast-idle
 adb_usb logcat -d -s ScreenTimeLogger
-for _ in $(seq 1 20); do
-  RESPONSE=$(curl -sS \
-    "http://localhost:3000/statistics/$STATISTIC_ID/logged/$(date +%F)")
-  printf '%s\n' "$RESPONSE"
-  printf '%s' "$RESPONSE" | grep -q '"has_value":true' && break
-  sleep 1
+for STATISTIC_ID in "$TOTAL_STATISTIC_ID" "$GOAL_STATISTIC_ID"; do
+  for _ in $(seq 1 20); do
+    RESPONSE=$(curl -sS \
+      "http://localhost:3000/statistics/$STATISTIC_ID/logged/$(date +%F)")
+    printf '%s\n' "$RESPONSE"
+    printf '%s' "$RESPONSE" | grep -q '"has_value":true' && break
+    sleep 1
+  done
 done
 ```
 
-Run the broadcast and GET a second time. The value should remain close to the
-first value rather than doubling. Compare the result with Digital Wellbeing
-once; small differences are expected because the app floors partial minutes
-and Android updates usage aggregates on its own cadence.
+Run the broadcast and GET both statistics a second time. Each value should
+remain close to its first value rather than doubling, and the goal value must
+not exceed the total. Compare the raw total with Digital Wellbeing once; small
+differences are expected because the app floors partial minutes and Android
+updates usage events on its own cadence.
 
 ## Doze and WorkManager verification
 
@@ -167,6 +211,12 @@ must be restored after each phone reboot.
   documented `appops` command for a debug install.
 - HTTP 404: confirm that the configured statistic ID exists.
 - HTTP 400: confirm that the statistic is an `IntegerAmount`.
+- Goal screen time is not logged: enter a goal statistic ID and save again.
+- An app is missing from the exemption list: use it once, return to the logger,
+  and tap **Refresh recent apps**. Only packages observed in the last 30 days
+  are listed, plus previously saved selections.
+- Goal time unexpectedly matches total time: confirm the intended packages are
+  checked and that their package names match the usage-event entries.
 - Connection refused with `http://localhost:3000`: start the API and recreate
   the ADB reverse, or configure a reachable LAN/Tailscale URL.
 - A value much larger than Digital Wellbeing can indicate an OEM aggregate
