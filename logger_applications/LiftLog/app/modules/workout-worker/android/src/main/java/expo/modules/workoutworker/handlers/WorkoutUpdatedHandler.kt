@@ -132,8 +132,9 @@ class WorkoutUpdatedHandler(
             val previousRemainingMs =
                 lastRestCountdown?.takeIf { it.first == restOverAt }?.second ?: remainingMs
             // Several marks only pass in one tick after a stall; overlapping buzzes would merge into one.
-            if (countdownSecondsCrossed(previousRemainingMs, remainingMs).isNotEmpty()) {
-                restCountdownVibrator.pulse()
+            val crossed = countdownSecondsCrossed(previousRemainingMs, remainingMs)
+            if (crossed.isNotEmpty()) {
+                restCountdownVibrator.pulse(if (0 in crossed) 400L else 120L)
             }
             lastRestCountdown = restOverAt to remainingMs
 

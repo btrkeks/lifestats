@@ -27,9 +27,15 @@ class RestCountdownTest {
     }
 
     @Test
-    fun restBeingOverIsNotAMark() {
-        assertEquals(emptyList<Int>(), countdownSecondsCrossed(500, -200))
-        assertEquals(listOf(1), countdownSecondsCrossed(1100, -200))
+    fun restRunningOutIsTheLastMark() {
+        assertEquals(listOf(0), countdownSecondsCrossed(500, -200))
+        assertEquals(listOf(1, 0), countdownSecondsCrossed(1100, -200))
+    }
+
+    @Test
+    fun aRestTimerThatIsAlreadyOverCrossesNothing() {
+        assertEquals(emptyList<Int>(), countdownSecondsCrossed(-200, -700))
+        assertEquals(emptyList<Int>(), countdownSecondsCrossed(0, -500))
     }
 
     @Test

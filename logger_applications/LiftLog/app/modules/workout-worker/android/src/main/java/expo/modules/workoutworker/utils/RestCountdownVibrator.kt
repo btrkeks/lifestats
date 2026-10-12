@@ -8,10 +8,11 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 
-private val COUNTDOWN_SECONDS = listOf(3, 2, 1)
+private val COUNTDOWN_SECONDS = listOf(3, 2, 1, 0)
 
 // The seconds-left marks the rest countdown passed between two ticks, given the milliseconds left
-// until rest is over at each. Zero is not a mark: the "rest over" notification already covers it.
+// until rest is over at each. Zero is a mark too: on silent the "rest over" notification does not
+// vibrate, so the countdown has to end with its own buzz.
 fun countdownSecondsCrossed(previousRemainingMs: Long, remainingMs: Long): List<Int> =
     COUNTDOWN_SECONDS.filter { previousRemainingMs > it * 1000L && remainingMs <= it * 1000L }
 
@@ -25,8 +26,7 @@ class RestCountdownVibrator(context: Context) {
         }
 
     // Alarm usage so the pulse still comes through with the phone on silent, like a timer would.
-    fun pulse() {
-        val durationMs = 120L
+    fun pulse(durationMs: Long) {
         val audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> vibrator.vibrate(
