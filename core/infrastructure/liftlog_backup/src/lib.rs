@@ -18,7 +18,9 @@ use diesel::sql_types::Text;
 use flate2::read::GzDecoder;
 
 use lifestats_application::error::{ApplicationError, ApplicationResult};
-use lifestats_application::use_cases::integration::{LiftLogBackupParser, LiftLogWorkout};
+use lifestats_application::use_cases::integration::liftlog_backup_parser::{
+    LiftLogBackupParser, LiftLogWorkout,
+};
 
 const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];

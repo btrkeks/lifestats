@@ -4,8 +4,9 @@ use std::sync::Arc;
 use super::bundle_factory::BundleFactory;
 use super::ebook_event_store::{EbookEventStore, EbookSyncEvent};
 use super::ebook_progress_service::{EbookProgressServiceTrait, EbookProgressSyncRequest};
-use super::liftlog_backup_parser::{LiftLogBackupParser, LiftLogWorkout};
+use super::liftlog_backup_parser::{LiftLogBackupParser, LiftLogWorkout as BackupWorkout};
 use super::liftlog_bundle_factory::{LIFTLOG_SOURCE_TAG, METRIC_TOTAL_WEIGHT, METRIC_WORKOUT_TIME};
+use super::liftlog_days::{LiftLogDaysSyncResult, LiftLogWorkout};
 use crate::error::{ApplicationError, ApplicationResult};
 use chrono::{NaiveDate, NaiveTime, Utc};
 use lifestats_core::shared::ids::StatisticId;
@@ -51,6 +52,14 @@ pub trait IntegrationServiceTrait: Send + Sync {
         &self,
         gzipped_backup: &[u8],
     ) -> ApplicationResult<LiftLogBackupIngestionResult>;
+
+    /// Replaces `[LiftLog] Workout Time` on exactly the given days with the
+    /// given workouts. A day with no workouts loses its value. Days not named
+    /// are untouched, and resending the same days changes nothing.
+    fn sync_liftlog_days(
+        &self,
+        days: BTreeMap<NaiveDate, Vec<LiftLogWorkout>>,
+    ) -> ApplicationResult<LiftLogDaysSyncResult>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,7 +155,7 @@ impl IntegrationService {
 /// Timestamps are clamped into the session's own calendar date (LiftLog
 /// sessions can technically cross midnight), and touching or overlapping
 /// intervals from multiple sessions on the same day are merged.
-fn day_time_frames(date: NaiveDate, workouts: &[&LiftLogWorkout]) -> TimeFrameList {
+fn day_time_frames(date: NaiveDate, workouts: &[LiftLogWorkout]) -> TimeFrameList {
     use chrono::Timelike;
 
     const DAY_END_SECS: i64 = 23 * 3600 + 59 * 60 + 59;
@@ -391,7 +400,7 @@ impl IntegrationServiceTrait for IntegrationService {
             ))
         })?;
 
-        let mut workouts_by_date: BTreeMap<NaiveDate, Vec<&LiftLogWorkout>> = BTreeMap::new();
+        let mut workouts_by_date: BTreeMap<NaiveDate, Vec<&BackupWorkout>> = BTreeMap::new();
         for workout in &workouts {
             workouts_by_date
                 .entry(workout.date)
@@ -403,7 +412,14 @@ impl IntegrationServiceTrait for IntegrationService {
         let mut total_weight_changed = false;
 
         for (date, day_workouts) in &workouts_by_date {
-            let frames = day_time_frames(*date, day_workouts);
+            let spans: Vec<LiftLogWorkout> = day_workouts
+                .iter()
+                .map(|w| LiftLogWorkout {
+                    started_at: w.started_at,
+                    finished_at: w.finished_at,
+                })
+                .collect();
+            let frames = day_time_frames(*date, &spans);
             if !frames.is_empty() {
                 let value = serde_json::to_value(&frames).map_err(|e| {
                     ApplicationError::Infrastructure(anyhow::anyhow!(
@@ -434,6 +450,51 @@ impl IntegrationServiceTrait for IntegrationService {
             updated_statistic_ids,
         })
     }
+
+    fn sync_liftlog_days(
+        &self,
+        days: BTreeMap<NaiveDate, Vec<LiftLogWorkout>>,
+    ) -> ApplicationResult<LiftLogDaysSyncResult> {
+        let statistic_ids = self.provision_bundle(LIFTLOG_SOURCE_TAG, HashMap::new())?;
+        let statistic_id = *statistic_ids.get(METRIC_WORKOUT_TIME).ok_or_else(|| {
+            ApplicationError::Infrastructure(anyhow::anyhow!(
+                "liftlog bundle did not provision the workout_time statistic"
+            ))
+        })?;
+
+        let mut result = LiftLogDaysSyncResult {
+            statistic_id,
+            days_updated: 0,
+            days_cleared: 0,
+            days_unchanged: 0,
+        };
+        for (date, workouts) in days {
+            let frames = day_time_frames(date, &workouts);
+            if frames.is_empty() {
+                let deleted = self
+                    .repository
+                    .delete_log_value(statistic_id, date)
+                    .map_err(ApplicationError::Repository)?;
+                if deleted {
+                    result.days_cleared += 1;
+                } else {
+                    result.days_unchanged += 1;
+                }
+                continue;
+            }
+            let value = serde_json::to_value(&frames).map_err(|e| {
+                ApplicationError::Infrastructure(anyhow::anyhow!(
+                    "failed to serialize time frames: {e}"
+                ))
+            })?;
+            if self.save_log_value_if_changed(statistic_id, date, value)? {
+                result.days_updated += 1;
+            } else {
+                result.days_unchanged += 1;
+            }
+        }
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -460,8 +521,8 @@ mod tests {
         start: (u32, u32, u32),
         end: (u32, u32, u32),
         total_weight_kg: f64,
-    ) -> LiftLogWorkout {
-        LiftLogWorkout {
+    ) -> BackupWorkout {
+        BackupWorkout {
             session_id: id.to_string(),
             date: NaiveDate::from_ymd_opt(date.0, date.1, date.2).unwrap(),
             started_at: local(date, start),
@@ -505,6 +566,124 @@ mod tests {
             None,
             Some(Arc::new(parser)),
         )
+    }
+
+    fn day(d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 8, d).unwrap()
+    }
+
+    fn span(d: u32, start: (u32, u32, u32), end: (u32, u32, u32)) -> LiftLogWorkout {
+        LiftLogWorkout {
+            started_at: local((2026, 8, d), start),
+            finished_at: local((2026, 8, d), end),
+        }
+    }
+
+    fn sync_service(repository: MockStatisticRepository) -> IntegrationService {
+        IntegrationService::new(
+            Arc::new(repository),
+            vec![Arc::new(LiftLogBundleFactory)],
+            None,
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn sync_liftlog_days_writes_merged_frames_for_a_day() {
+        let mut repository = MockStatisticRepository::new();
+        expect_provisioned_bundle(&mut repository);
+        repository
+            .expect_find_log_value()
+            .returning(|_, _| Ok(None));
+        repository
+            .expect_save_log_value()
+            .withf(|id, date, value| {
+                *id == WORKOUT_TIME_ID
+                    && *date == day(12)
+                    && value == &serde_json::json!([{"start": "18:00:00", "end": "18:55:00"}])
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+
+        let days = BTreeMap::from([(
+            day(12),
+            vec![
+                span(12, (18, 0, 0), (18, 30, 0)),
+                span(12, (18, 20, 0), (18, 55, 0)),
+            ],
+        )]);
+        let result = sync_service(repository).sync_liftlog_days(days).unwrap();
+
+        assert_eq!(
+            result,
+            LiftLogDaysSyncResult {
+                statistic_id: WORKOUT_TIME_ID,
+                days_updated: 1,
+                days_cleared: 0,
+                days_unchanged: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn sync_liftlog_days_clears_empty_days_and_counts_absent_ones_as_unchanged() {
+        let mut repository = MockStatisticRepository::new();
+        expect_provisioned_bundle(&mut repository);
+        repository
+            .expect_delete_log_value()
+            .withf(|id, date| *id == WORKOUT_TIME_ID && *date == day(9))
+            .times(1)
+            .returning(|_, _| Ok(true));
+        repository
+            .expect_delete_log_value()
+            .withf(|id, date| *id == WORKOUT_TIME_ID && *date == day(10))
+            .times(1)
+            .returning(|_, _| Ok(false));
+        repository.expect_save_log_value().times(0);
+
+        let days = BTreeMap::from([(day(9), vec![]), (day(10), vec![])]);
+        let result = sync_service(repository).sync_liftlog_days(days).unwrap();
+
+        assert_eq!(
+            result,
+            LiftLogDaysSyncResult {
+                statistic_id: WORKOUT_TIME_ID,
+                days_updated: 0,
+                days_cleared: 1,
+                days_unchanged: 1,
+            }
+        );
+        assert!(result.changed());
+    }
+
+    #[test]
+    fn sync_liftlog_days_leaves_matching_values_alone() {
+        let mut repository = MockStatisticRepository::new();
+        expect_provisioned_bundle(&mut repository);
+        repository
+            .expect_find_log_value()
+            .withf(|id, date| *id == WORKOUT_TIME_ID && *date == day(12))
+            .returning(|_, _| {
+                Ok(Some(serde_json::json!([
+                    {"start": "18:00:00", "end": "18:30:00"}
+                ])))
+            });
+        repository.expect_save_log_value().times(0);
+
+        let days = BTreeMap::from([(day(12), vec![span(12, (18, 0, 0), (18, 30, 0))])]);
+        let result = sync_service(repository).sync_liftlog_days(days).unwrap();
+
+        assert_eq!(
+            result,
+            LiftLogDaysSyncResult {
+                statistic_id: WORKOUT_TIME_ID,
+                days_updated: 0,
+                days_cleared: 0,
+                days_unchanged: 1,
+            }
+        );
+        assert!(!result.changed());
     }
 
     #[test]

@@ -42,6 +42,16 @@ mock! {
         ) -> lifestats_application::error::ApplicationResult<
             lifestats_application::use_cases::integration::LiftLogBackupIngestionResult,
         >;
+
+        fn sync_liftlog_days(
+            &self,
+            days: std::collections::BTreeMap<
+                NaiveDate,
+                Vec<lifestats_application::use_cases::integration::LiftLogWorkout>,
+            >,
+        ) -> lifestats_application::error::ApplicationResult<
+            lifestats_application::use_cases::integration::LiftLogDaysSyncResult,
+        >;
     }
 }
 

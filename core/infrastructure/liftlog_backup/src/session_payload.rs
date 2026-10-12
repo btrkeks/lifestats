@@ -9,7 +9,7 @@
 use chrono::{DateTime, NaiveDate, NaiveDateTime};
 use serde::Deserialize;
 
-use lifestats_application::use_cases::integration::LiftLogWorkout;
+use lifestats_application::use_cases::integration::liftlog_backup_parser::LiftLogWorkout;
 
 const POUNDS_TO_KG: f64 = 0.453_592_37;
 const WEIGHTED_EXERCISE_TYPE: &str = "RecordedWeightedExercise";
