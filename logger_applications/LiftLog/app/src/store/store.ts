@@ -11,6 +11,7 @@ import programReducer from './program';
 import appReducer from './app';
 import { storedSessionsReducer } from './stored-sessions';
 import { statsReducer } from '@/store/stats';
+import { lifestatsSyncReducer } from '@/store/lifestats-sync';
 import { createServices, Services } from '@/services';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { SQLiteDatabase } from 'expo-sqlite';
@@ -21,6 +22,7 @@ const rootReducer = combineReducers({
   app: appReducer,
   storedSessions: storedSessionsReducer,
   stats: statsReducer,
+  lifestatsSync: lifestatsSyncReducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

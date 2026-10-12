@@ -52,6 +52,8 @@ export const preferenceRegistry = {
   themeMode: pref<ThemeMode>({ default: 'system', codec: themeModeCodec }),
   plansSortOrder: pref<PlansSortOrder>({ default: 'name', codec: plansSortOrderCodec }),
   firstDayOfWeek: pref<DayOfWeek>({ default: DayOfWeek.SUNDAY, codec: dayOfWeekCodec }),
+  lifestatsSyncEnabled: pref({ default: false, codec: boolCodec }),
+  lifestatsSyncUrl: pref<string | undefined>({ default: 'https://laptop-1.tail87da75.ts.net', codec: stringCodec }),
 
   // Sync read + legacy rewrite; write-back also drives Tolgee/RTL.
   preferredLanguage: pref<string | undefined>({

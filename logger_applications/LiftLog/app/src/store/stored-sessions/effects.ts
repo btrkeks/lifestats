@@ -21,6 +21,7 @@ import {
   upsertStoredSessions,
 } from './index';
 import { fetchUpcomingSessions } from '@/store/program';
+import { lifestatsDaysQueued } from '@/store/lifestats-sync';
 import { setStatsIsDirty } from '@/store/stats';
 import { setPreferredLanguage } from '@/store/settings';
 import { exercisesSchema } from '@/db/schema';
@@ -106,14 +107,17 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
   });
 
   addEffect(deleteStoredSession, async (action, { dispatch, extra: { logger, db } }) => {
-    await logger.time('deleteStoredSession', async () => {
-      db.transaction((tx) => queueDaysChangedBy(tx, [action.payload], () => deleteSession(tx, action.payload)));
-    });
+    const queued = await logger.time('deleteStoredSession', async () =>
+      db.transaction((tx) => queueDaysChangedBy(tx, [action.payload], () => deleteSession(tx, action.payload))),
+    );
     dispatch(sessionsChanged());
+    if (queued) {
+      dispatch(lifestatsDaysQueued());
+    }
   });
 
   // Content only. The `active` flag has a single writer below, so a recorded set never touches it.
-  addEffect([putStoredSession, updateStoredSession], async (action, { getState, extra: { db, logger } }) => {
+  addEffect([putStoredSession, updateStoredSession], async (action, { dispatch, getState, extra: { db, logger } }) => {
     const sessionId = putStoredSession.match(action)
       ? action.payload.id
       : updateStoredSession.match(action)
@@ -125,40 +129,49 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     if (!session) {
       return;
     }
-    await logger.time('persistStoredSession', async () => {
-      // Queues a History edit's days. The workout in progress is not finished, so it queues nothing.
-      db.transaction((tx) => queueDaysChangedBy(tx, [session.id], () => writeSession(tx, session)));
-    });
+    // Queues a History edit's days. The workout in progress is not finished, so it queues nothing.
+    const queued = await logger.time('persistStoredSession', async () =>
+      db.transaction((tx) => queueDaysChangedBy(tx, [session.id], () => writeSession(tx, session))),
+    );
+    if (queued) {
+      dispatch(lifestatsDaysQueued());
+    }
   });
 
   // The only writer of `active`. It writes the session's content too, so it does not depend on the effect
   // above having written the row first - the two are dispatched together and race.
   addEffect(setActiveSessionId, async (action, { getState, dispatch, extra: { db, logger } }) => {
-    await logger.time('setActiveSessionId', async () => {
+    const queued = await logger.time('setActiveSessionId', async () => {
       const session = action.payload === undefined ? undefined : selectSession(getState(), action.payload);
       // Finishing a workout puts it on its day and resuming one takes it off, in the same commit as the flag.
-      db.transaction((tx) => {
+      return db.transaction((tx) => {
         const affected = [readActiveSessionId(tx), session?.id].filter((id) => id !== undefined);
-        queueDaysChangedBy(tx, affected, () => setActiveSession(tx, session));
+        return queueDaysChangedBy(tx, affected, () => setActiveSession(tx, session));
       });
     });
     dispatch(sessionsChanged());
+    if (queued) {
+      dispatch(lifestatsDaysQueued());
+    }
   });
 
   addEffect(upsertStoredSessions, async (action, { cancelActiveListeners, dispatch, extra: { db, logger } }) => {
     cancelActiveListeners();
-    await logger.time('upsertStoredSessions', async () => {
-      // Restored sessions are never active - a backup should not resume someone else's workout, and an
-      // in-progress workout on this device keeps its flag because writing content never touches it.
+    // Restored sessions are never active - a backup should not resume someone else's workout, and an
+    // in-progress workout on this device keeps its flag because writing content never touches it.
+    const queued = await logger.time('upsertStoredSessions', async () =>
       db.transaction((tx) =>
         queueDaysChangedBy(
           tx,
           action.payload.map((session) => session.id),
           () => action.payload.forEach((session) => writeSession(tx, session)),
         ),
-      );
-    });
+      ),
+    );
     dispatch(sessionsChanged());
+    if (queued) {
+      dispatch(lifestatsDaysQueued());
+    }
   });
 
   addEffect(deleteExercise, async (action, { stateAfterReduce, extra: { db, keyValueStore } }) => {

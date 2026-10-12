@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { applySettingsEffects } from '@/store/settings/effects';
 import { applyStoredSessionsEffects } from '@/store/stored-sessions/effects';
 import { applyStatsEffects } from '@/store/stats/effects';
+import { applyLifestatsSyncEffects } from '@/store/lifestats-sync/effects';
 import { clearAllListeners, Store } from '@reduxjs/toolkit';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { useIsFocused } from 'expo-router';
@@ -28,6 +29,7 @@ export function resolveStore(db: ExpoSQLiteDatabase, expoDb: SQLiteDatabase) {
   applySettingsEffects(addEffect);
   applyStoredSessionsEffects(addEffect);
   applyStatsEffects(addEffect);
+  applyLifestatsSyncEffects(addEffect);
 
   store.dispatch(initializeAppStateSlice());
   return { store, services };

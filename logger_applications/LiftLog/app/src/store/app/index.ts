@@ -47,6 +47,9 @@ export const initializeAppStateSlice = createAction('initializeAppStateSlice');
 
 export const copyLogs = createAction('copyLogs');
 
+/** The app came to the foreground (`true`) or left it, from React Native's `AppState`. */
+export const appForegroundChanged = createAction<boolean>('app/foregroundChanged');
+
 export type SnackbarDescriptor =
   | {
       text: string;

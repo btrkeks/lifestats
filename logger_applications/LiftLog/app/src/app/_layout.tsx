@@ -1,5 +1,5 @@
 import { AppThemeProvider } from '@/hooks/useAppTheme';
-import { I18nManager, LogBox, Platform } from 'react-native';
+import { AppState, I18nManager, LogBox, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppStateProvider } from '@/components/smart/app-state-provider';
 import { PlanImportGate } from '@/components/smart/plan-import-gate';
@@ -12,6 +12,9 @@ import StackWithHeader from '@/components/layout/stack-with-header';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { requireOptionalNativeModule } from 'expo';
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { appForegroundChanged } from '@/store/app';
 
 install();
 
@@ -51,6 +54,14 @@ export default function RootLayout() {
 }
 
 function Layout() {
+  const dispatch = useDispatch();
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) =>
+      dispatch(appForegroundChanged(state === 'active')),
+    );
+    return () => subscription.remove();
+  }, [dispatch]);
+
   return (
     <StackWithHeader>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

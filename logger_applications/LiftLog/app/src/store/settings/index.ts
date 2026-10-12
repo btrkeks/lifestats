@@ -80,6 +80,8 @@ export const {
   setShowPostWorkoutSummary,
   setTrueBlackDarkTheme,
   setThemeMode,
+  setLifestatsSyncEnabled,
+  setLifestatsSyncUrl,
 } = preferenceSetters;
 
 export const { selectPreferredWeightUnit } = settingsSlice.selectors;

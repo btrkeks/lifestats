@@ -405,6 +405,13 @@ export function readSessionsBetween(db: ExpoSQLiteDatabase, from: LocalDate, to:
   );
 }
 
+/** Finished sessions dated on any of `dates`, in no particular order. */
+export function readFinishedSessionsOn(db: ExpoSQLiteDatabase, dates: LocalDate[]): Session[] {
+  return dates.length
+    ? readSessionsWhere(db, and(isFinished, inArray(sessionsSchema.date, dates.map(toLocalDateJSON))))
+    : [];
+}
+
 export function readEarliestSessionDate(db: ExpoSQLiteDatabase): LocalDate | undefined {
   const earliest = db
     .select({ date: min(sessionsSchema.date) })

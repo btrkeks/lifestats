@@ -23,6 +23,7 @@ import { createAddEffectTestBed } from '@/utils/__test__/add-effect-testbed';
 import { exercisesSchema, sessionsSchema } from '@/db/schema';
 import { readSession, setActiveSession, writeSession } from '@/db/sessions';
 import { readSyncQueue } from '@/db/lifestats-sync';
+import { lifestatsDaysQueued } from '@/store/lifestats-sync';
 import { makeWorkoutOn } from '@/models/session-models/__test__/helpers';
 import { Session } from '@/models/session-models';
 import { toJsonString } from '@/models/storage/versions/latest';
@@ -183,6 +184,7 @@ describe('stored-sessions effects', () => {
       await testBed.dispatchHandled(putStoredSession(started));
       await testBed.dispatchHandled(setActiveSessionId(started.id));
       expect(queued()).toEqual([]);
+      testBed.expectNotDispatched(lifestatsDaysQueued);
 
       testBed.setState(withOpen(makeWorkoutOn('2026-10-11')));
       await testBed.dispatchHandled(putStoredSession(makeWorkoutOn('2026-10-11')));
@@ -190,6 +192,7 @@ describe('stored-sessions effects', () => {
 
       await testBed.dispatchHandled(setActiveSessionId(undefined));
       expect(queued()).toEqual(['2026-10-11']);
+      expect(testBed.dispatchedActions.map((x) => x.type)).toContain(lifestatsDaysQueued.type);
     });
 
     it('queues the day of a finished workout that is resumed, which leaves it until finished again', async () => {
