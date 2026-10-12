@@ -8,6 +8,9 @@ WorkingDirectory=%h/.local/share/src/lifestats/core/infrastructure/web_api
 ExecStart=%h/.local/bin/lifestats-web-api
 Environment=DATABASE_URL="/home/daniel/.local/share/src/lifestats/test_data/test_snapshot.db"
 
+# Restart policy
+Restart=on-failure
+RestartSec=10s
 
 [Install]
 WantedBy=multi-user.target
