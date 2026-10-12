@@ -23,6 +23,14 @@ export type WeightedChange =
   | { kind: 'addSet' }
   | { kind: 'removeLastSet' };
 
+/**
+ * What a set's weight is relative to. A bodyweight set carries the bodyweight of its own session,
+ * undefined when none was recorded.
+ */
+export type LoadContext =
+  | { readonly resistance: 'external' | 'none' }
+  | { readonly resistance: 'bodyweight'; readonly bodyweight: Weight | undefined };
+
 /** A set as it was performed: what is carried into the next time that set comes round. */
 export interface CompletedWeightedSet {
   readonly weight: Weight;

@@ -7,6 +7,7 @@ import {
   CompletedWeightedSet,
   CompletedWeightedSets,
   WeightedHistory,
+  LoadContext,
 } from '@/models/session-models/recorded-weighted-exercise';
 import { RecordedCardioExercise, RecordedCardioExerciseSet } from '@/models/session-models/recorded-cardio-exercise';
 import { fromRecordedExerciseJSON, RecordedExercise } from '@/models/session-models/recorded-exercise';
@@ -25,4 +26,4 @@ export {
   freeformSessionName,
   fromRecordedExerciseJSON,
 };
-export type { WeightedChange, CompletedWeightedSet, CompletedWeightedSets, WeightedHistory, RestWindow };
+export type { WeightedChange, CompletedWeightedSet, CompletedWeightedSets, WeightedHistory, LoadContext, RestWindow };
