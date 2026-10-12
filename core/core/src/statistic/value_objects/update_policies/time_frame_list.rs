@@ -8,11 +8,16 @@ pub enum TimeFrameListUpdatePolicy {
     #[default]
     Append,
     UpdateEndValue,
+    Overwrite,
 }
 
 impl UpdatePolicy<TimeFrameList> for TimeFrameListUpdatePolicy {
     fn apply(&self, existing: Option<TimeFrameList>, new: TimeFrameList) -> (TimeFrameList, bool) {
         match (self, existing) {
+            (Self::Overwrite, current) => {
+                let changed = current.as_ref() != Some(&new);
+                (new, changed)
+            }
             (Self::Append, Some(_current)) => todo!(),
             (Self::Append, _) => (new, true),
             (Self::UpdateEndValue, Some(mut current)) => {
@@ -51,6 +56,30 @@ mod tests {
             list.append_frame(frame).unwrap();
         }
         list
+    }
+
+    #[test]
+    fn overwrite_replaces_all_frames_and_is_idempotent() {
+        use std::str::FromStr;
+
+        let policy = TimeFrameListUpdatePolicy::from_str("overwrite").unwrap();
+        let existing = create_time_frame_list(vec![
+            create_time_frame(9, 0, 10, 0),
+            create_time_frame(14, 0, 15, 0),
+        ]);
+        let replacement = create_time_frame_list(vec![create_time_frame(9, 30, 10, 30)]);
+
+        let (result, changed) = policy.apply(Some(existing), replacement.clone());
+        assert!(changed);
+        assert_eq!(result, replacement);
+
+        let (result, changed) = policy.apply(Some(result), replacement.clone());
+        assert!(!changed);
+        assert_eq!(result, replacement);
+
+        let (result, changed) = policy.apply(None, replacement.clone());
+        assert!(changed);
+        assert_eq!(result, replacement);
     }
 
     #[test]

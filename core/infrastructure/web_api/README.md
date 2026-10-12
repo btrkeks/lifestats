@@ -471,9 +471,11 @@ never cleared retroactively). Legacy protobuf exports are rejected with `400`.
 {
   "start_time": "09:30",
   "end_time": "11:45",
-  "update_policy": "updateendvalue"  // Optional: "append", "updateendvalue"
+  "update_policy": "updateendvalue"  // Optional: "append", "updateendvalue", "overwrite"
 }
 ```
+
+`overwrite` replaces every interval for the selected date with the submitted interval.
 
 **Response:** `204 No Content`
 

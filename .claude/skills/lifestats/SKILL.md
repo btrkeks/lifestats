@@ -52,7 +52,9 @@ Note the default for IntegerAmount is `sum` — logging twice adds up. Use `over
 
 `POST /statistics/{id}/log_time_frame/{date}` with `{"start_time": "09:30", "end_time": "11:45", "update_policy": "updateendvalue"}`. Returns 204.
 
-⚠️ **Always pass `"update_policy": "updateendvalue"`.** The default (`append`) hits an unimplemented code path (`todo!()`) when the date already has time frames and crashes the request. Only omit it if you've verified the date is empty via `GET /statistics/{id}/logged/{date}`.
+Pass `"update_policy": "updateendvalue"` to update an interval, or `"update_policy": "overwrite"` to replace every interval for the selected date with the submitted interval. Repeating an identical overwrite leaves the value unchanged.
+
+The default (`append`) hits an unimplemented code path (`todo!()`) when the date already has time frames and crashes the request. Only omit the policy if you've verified the date is empty via `GET /statistics/{id}/logged/{date}`.
 
 ## Reading data
 
