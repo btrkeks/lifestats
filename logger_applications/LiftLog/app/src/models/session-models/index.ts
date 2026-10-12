@@ -8,6 +8,7 @@ import {
   CompletedWeightedSets,
   WeightedHistory,
   LoadContext,
+  loadContextOf,
 } from '@/models/session-models/recorded-weighted-exercise';
 import { RecordedCardioExercise, RecordedCardioExerciseSet } from '@/models/session-models/recorded-cardio-exercise';
 import { fromRecordedExerciseJSON, RecordedExercise } from '@/models/session-models/recorded-exercise';
@@ -25,5 +26,6 @@ export {
   EmptySession,
   freeformSessionName,
   fromRecordedExerciseJSON,
+  loadContextOf,
 };
 export type { WeightedChange, CompletedWeightedSet, CompletedWeightedSets, WeightedHistory, LoadContext, RestWindow };

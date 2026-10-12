@@ -10,7 +10,7 @@ import {
   WeightColumn,
   weightCellText,
 } from '@/components/presentation/workout/weighted/set-rows';
-import { RecordedWeightedExercise } from '@/models/session-models';
+import { CompletedWeightedSet, RecordedWeightedExercise } from '@/models/session-models';
 import { Weight } from '@/models/weight';
 import {
   emptyPotentialSet,
@@ -41,10 +41,15 @@ function checkedRow(reps: number, weight = kg(70)): SetRow {
 }
 
 describe('setRows', () => {
+  const completed = (weight: number, reps: number): CompletedWeightedSet => ({
+    weight: kg(weight),
+    reps,
+    context: { resistance: 'external' },
+  });
   const history = new Map([
-    [0, { weight: kg(52), reps: 9 }],
-    [1, { weight: kg(55), reps: 7 }],
-    [2, { weight: kg(62), reps: 5 }],
+    [0, completed(52, 9)],
+    [1, completed(55, 7)],
+    [2, completed(62, 5)],
   ]);
 
   it('pairs each set with the last time its index was completed and suggests those reps', () => {

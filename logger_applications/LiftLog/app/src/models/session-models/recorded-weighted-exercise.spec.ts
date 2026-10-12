@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Weight } from '@/models/weight';
 import {
+  CompletedWeightedSet,
+  CompletedWeightedSets,
   PotentialSet,
   RecordedSet,
   RecordedWeightedExercise,
@@ -257,8 +259,13 @@ describe('RecordedWeightedExercise JSON', () => {
 
 describe('RecordedWeightedExercise.empty', () => {
   const history = (weights: Record<number, number>) =>
-    new Map(Object.entries(weights).map(([index, weight]) => [Number(index), { weight: kg(weight), reps: 5 }]));
-  const weightsOfEmpty = (sets: number, previous?: Map<number, { weight: Weight; reps: number }>) =>
+    new Map(
+      Object.entries(weights).map(([index, weight]): [number, CompletedWeightedSet] => [
+        Number(index),
+        { weight: kg(weight), reps: 5, context: { resistance: 'external' } },
+      ]),
+    );
+  const weightsOfEmpty = (sets: number, previous?: CompletedWeightedSets) =>
     RecordedWeightedExercise.empty(makeWeightedBlueprint({ sets }), 'pounds', previous).potentialSets.map(
       (s) => `${s.weight.value.toString()} ${s.weight.unit}`,
     );

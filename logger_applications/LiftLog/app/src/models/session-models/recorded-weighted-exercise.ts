@@ -1,4 +1,10 @@
-import { MovementKey, ProgressionKey, RepsTarget, WeightedExerciseBlueprint } from '@/models/blueprint-models';
+import {
+  MovementKey,
+  ProgressionKey,
+  RepsTarget,
+  Resistance,
+  WeightedExerciseBlueprint,
+} from '@/models/blueprint-models';
 import { RecordedExercise } from '@/models/session-models/recorded-exercise';
 
 import {
@@ -31,10 +37,15 @@ export type LoadContext =
   | { readonly resistance: 'external' | 'none' }
   | { readonly resistance: 'bodyweight'; readonly bodyweight: Weight | undefined };
 
+export function loadContextOf(resistance: Resistance, bodyweight: Weight | undefined): LoadContext {
+  return resistance === 'bodyweight' ? { resistance, bodyweight } : { resistance };
+}
+
 /** A set as it was performed: what is carried into the next time that set comes round. */
 export interface CompletedWeightedSet {
   readonly weight: Weight;
   readonly reps: number;
+  readonly context: LoadContext;
 }
 
 /** Keyed by zero-based set index, including sets added beyond the plan. */

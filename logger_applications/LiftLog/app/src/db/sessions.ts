@@ -11,11 +11,13 @@ import {
   CompletedWeightedSet,
   freeformSessionName,
   fromRecordedExerciseJSON,
+  loadContextOf,
   RecordedCardioExercise,
   RecordedExercise,
   Session,
   WeightedHistory,
 } from '@/models/session-models';
+import { SessionPeak, stallWindow } from '@/models/set-progress';
 import { Weight } from '@/models/weight';
 import {
   CardioExerciseSetBlueprintJSON,
@@ -28,6 +30,7 @@ import {
   RecordedCardioExerciseSetJSON,
   RecordedExerciseJSON,
   RecordedWeightedExerciseJSON,
+  ResistanceJSON,
   RestJSON,
   SessionJSON,
   toDurationJSON,
@@ -691,6 +694,9 @@ export function readWeightedHistory(
       sessionId: exercises.sessionId,
       exerciseOrd: sql<number>`${exercises.ord}`.as('exerciseOrd'),
       notes: exercises.notes,
+      resistance: exercises.resistance,
+      bodyweightValue: sessionsSchema.bodyweightValue,
+      bodyweightUnit: sessionsSchema.bodyweightUnit,
       setIndex: sql<number>`${sets.ord}`.as('setIndex'),
       weightValue: sets.weightValue,
       weightUnit: sets.weightUnit,
@@ -727,12 +733,92 @@ export function readWeightedHistory(
       movement = { sets: new Map(), lastNotes: row.notes ?? undefined };
       history.set(row.movementKey, movement);
     }
+    const bodyweight = bodyweightFromColumns(row);
     movement.sets.set(row.setIndex, {
       weight: Weight.fromJSON({ value: row.weightValue, unit: row.weightUnit }),
       reps: required(row.repsCompleted, 'repsCompleted'),
+      context: loadContextOf(required(row.resistance, 'resistance'), bodyweight && Weight.fromJSON(bodyweight)),
     });
   }
   return history;
+}
+
+/**
+ * The peak of each movement in its latest finished sessions that have a completed set of it, newest
+ * first, for the stall rule. Several performances in one session count as one. A session whose peak
+ * cannot be compared still takes its place, so it breaks a streak rather than being skipped.
+ */
+export function readRecentProgress(
+  db: ExpoSQLiteDatabase,
+  query: { movementKeys: readonly MovementKey[]; excludeSessionId: string },
+): ReadonlyMap<MovementKey, readonly SessionPeak[]> {
+  if (!query.movementKeys.length) {
+    return new Map();
+  }
+  const exercises = recordedExercisesSchema;
+  const sets = weightedSetsSchema;
+  const performed = db
+    .select({
+      movementKey: exercises.movementKey,
+      resistances: sql<number>`count(distinct ${exercises.resistance})`.as('resistances'),
+      resistance: sql<ResistanceJSON | null>`min(${exercises.resistance})`.as('resistance'),
+      oneRepMaxKg: sql<number | null>`max(${exercises.bestOneRepMaxKg})`.as('oneRepMaxKg'),
+      mostReps: sql<number | null>`max(${sets.repsCompleted})`.as('mostReps'),
+      bodyweightKg: sql<number | null>`${sessionsSchema.bodyweightKg}`.as('bodyweightKg'),
+      recency: sql<number>`row_number() over (
+        partition by ${exercises.movementKey}
+        order by ${sessionsSchema.lastCompletedAtMs} desc, ${sessionsSchema.id} desc
+      )`.as('recency'),
+    })
+    .from(exercises)
+    .innerJoin(sessionsSchema, eq(sessionsSchema.id, exercises.sessionId))
+    .innerJoin(sets, ofExercise(sets))
+    .where(
+      and(
+        isFinished,
+        inArray(exercises.movementKey, [...query.movementKeys]),
+        ne(sessionsSchema.id, query.excludeSessionId),
+        isNotNull(sets.completedAtMs),
+      ),
+    )
+    .groupBy(exercises.movementKey, sessionsSchema.id)
+    .as('performed');
+  const rows = db
+    .select()
+    .from(performed)
+    .where(lte(performed.recency, stallWindow))
+    .orderBy(performed.movementKey, sql`${performed.recency}`)
+    .all();
+
+  const progress = new Map<MovementKey, SessionPeak[]>();
+  for (const row of rows) {
+    const peaks = progress.get(row.movementKey) ?? [];
+    peaks.push(sessionPeak(row));
+    progress.set(row.movementKey, peaks);
+  }
+  return progress;
+}
+
+function sessionPeak(row: {
+  resistances: number;
+  resistance: ResistanceJSON | null;
+  oneRepMaxKg: number | null;
+  mostReps: number | null;
+  bodyweightKg: number | null;
+}): SessionPeak {
+  if (row.resistances !== 1) {
+    return { kind: 'unavailable' };
+  }
+  const resistance = required(row.resistance, 'resistance');
+  if (resistance === 'none') {
+    const reps = required(row.mostReps, 'repsCompleted');
+    return reps > 0 ? { kind: 'reps', peak: reps } : { kind: 'unavailable' };
+  }
+  // The stored one-rep max counts an unknown bodyweight as zero, which is no peak to compare.
+  const knowsLoad = resistance === 'external' || (row.bodyweightKg ?? 0) > 0;
+  return knowsLoad && row.oneRepMaxKg !== null && row.oneRepMaxKg > 0
+    ? { kind: 'load', resistance, peak: new Weight(row.oneRepMaxKg, 'kilograms') }
+    : { kind: 'unavailable' };
 }
 
 /** Includes the workout in progress, so an upcoming session can carry what was just done. */

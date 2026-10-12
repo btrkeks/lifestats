@@ -18,8 +18,6 @@ export const stallWindow = 4;
 /** Beyond this the Epley estimate is too loose to aim at. */
 const maxTargetReps = 30;
 
-type PreviousSet = CompletedWeightedSet & { readonly context: LoadContext };
-
 /** Reps alone decide when both sides moved the same load; otherwise the Epley estimate does. */
 type Comparison =
   | { kind: 'reps'; previousReps: number }
@@ -35,7 +33,7 @@ export function setCue(input: {
     weight: Weight;
     status: { kind: 'unchecked' } | { kind: 'checked'; reps: number };
   };
-  previous: PreviousSet | undefined;
+  previous: CompletedWeightedSet | undefined;
 }): SetCue {
   const { current, previous } = input;
   const compared = previous && compare(previous, current);
@@ -77,7 +75,10 @@ export function isStalled(input: {
   return !input.today.sets.some((set) => setScore(input.today.context, set)?.isGreaterThan(latest));
 }
 
-function compare(previous: PreviousSet, current: { context: LoadContext; weight: Weight }): Comparison | undefined {
+function compare(
+  previous: CompletedWeightedSet,
+  current: { context: LoadContext; weight: Weight },
+): Comparison | undefined {
   if (previous.context.resistance !== current.context.resistance) {
     return undefined;
   }

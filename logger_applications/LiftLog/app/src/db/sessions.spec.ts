@@ -15,6 +15,7 @@ import {
   readSessionsBetween,
   readSessionToContinueFrom,
   readStartedSessionVolumes,
+  readRecentProgress,
   readWeightedHistory,
   setActiveSession,
   writeSession,
@@ -23,6 +24,7 @@ import {
   CardioExerciseBlueprint,
   CardioExerciseSetBlueprint,
   movementKeyFor,
+  Resistance,
   Rest,
   SessionBlueprint,
 } from '@/models/blueprint-models';
@@ -45,6 +47,7 @@ import {
   targets,
   tickAt,
 } from '@/models/session-models/__test__/helpers';
+import { SessionPeak } from '@/models/set-progress';
 import { SessionGenerator } from '@/models/storage/generators';
 import { TemporalComparer } from '@/models/comparers';
 import { sessionVolume } from '@/store/activity/volume';
@@ -211,6 +214,27 @@ function sessionOf(name: string, exercises: RecordedExercise[], date = LocalDate
 
 const squatAt = (at: OffsetDateTime, weight = 100) =>
   makeRecordedExercise(makeWeightedBlueprint(), [10], new Weight(weight, 'kilograms'), () => at);
+
+/** One weighted exercise; `[weight, reps]` per set, `reps` undefined for a set left unchecked. */
+function performed(
+  hour: number,
+  sets: [number, number | undefined][],
+  init: { name?: string; notes?: string; unit?: WeightUnit; resistance?: Resistance } = {},
+) {
+  return new RecordedWeightedExercise(
+    makeWeightedBlueprint({ name: init.name ?? 'Squat', sets: sets.length, resistance: init.resistance }),
+    sets.map(([weight, reps], index) =>
+      PotentialSet.of({
+        weight: new Weight(weight, init.unit ?? 'kilograms'),
+        set:
+          reps === undefined
+            ? undefined
+            : RecordedSet.of({ repsCompleted: reps, completionDateTime: tickAt(hour, index) }),
+      }),
+    ),
+    init.notes,
+  );
+}
 
 describe('readSessionToContinueFrom', () => {
   let db: ExpoSQLiteDatabase;
@@ -481,27 +505,6 @@ describe('readWeightedHistory', () => {
     db.transaction((tx) => sessions.forEach((session) => writeSession(tx, session)));
   const squatKey = movementKeyFor('Squat', 'WeightedExerciseBlueprint');
 
-  /** One weighted exercise; `[weight, reps]` per set, `reps` undefined for a set left unchecked. */
-  function performed(
-    hour: number,
-    sets: [number, number | undefined][],
-    init: { name?: string; notes?: string; unit?: WeightUnit } = {},
-  ) {
-    return new RecordedWeightedExercise(
-      makeWeightedBlueprint({ name: init.name ?? 'Squat', sets: sets.length }),
-      sets.map(([weight, reps], index) =>
-        PotentialSet.of({
-          weight: new Weight(weight, init.unit ?? 'kilograms'),
-          set:
-            reps === undefined
-              ? undefined
-              : RecordedSet.of({ repsCompleted: reps, completionDateTime: tickAt(hour, index) }),
-        }),
-      ),
-      init.notes,
-    );
-  }
-
   const describeSets = (history: WeightedHistory | undefined) =>
     [...(history?.sets ?? [])]
       .sort(([a], [b]) => a - b)
@@ -691,6 +694,159 @@ describe('readWeightedHistory', () => {
 
     expect([...readWeightedHistory(db, { movementKeys: [squatKey] })]).toEqual([]);
     expect([...readWeightedHistory(db, { movementKeys: [] })]).toEqual([]);
+  });
+  it('carries each set’s resistance and the bodyweight of the session it was done in', () => {
+    const pullUpKey = movementKeyFor('Pull up', 'WeightedExerciseBlueprint');
+    const pullUps = (hour: number, sets: [number, number][]) =>
+      performed(hour, sets, { name: 'Pull up', resistance: 'bodyweight' });
+    store(
+      sessionOf('Old', [
+        pullUps(8, [
+          [0, 10],
+          [-10, 8],
+          [5, 6],
+        ]),
+      ]).with({ bodyweight: new Weight(80, 'kilograms') }),
+      sessionOf('Middle', [pullUps(9, [[0, 9]])]),
+      sessionOf('New', [pullUps(10, [[2.5, 8]]), performed(10, [[100, 5]])]).with({
+        bodyweight: new Weight(180, 'pounds'),
+      }),
+    );
+
+    const history = readWeightedHistory(db, { movementKeys: [pullUpKey, squatKey] });
+    const describeContexts = (sets: WeightedHistory['sets'] | undefined) =>
+      [...(sets ?? [])]
+        .sort(([a], [b]) => a - b)
+        .map(([index, { context }]) =>
+          context.resistance === 'bodyweight'
+            ? `${index}: bodyweight ${context.bodyweight ? `${context.bodyweight.value.toString()} ${context.bodyweight.unit}` : 'unknown'}`
+            : `${index}: ${context.resistance}`,
+        );
+
+    expect(describeContexts(history.get(pullUpKey)?.sets)).toEqual([
+      '0: bodyweight 180 pounds',
+      '1: bodyweight 80 kilograms',
+      '2: bodyweight 80 kilograms',
+    ]);
+    expect(describeContexts(history.get(squatKey)?.sets)).toEqual(['0: external']);
+
+    store(sessionOf('Newest', [pullUps(11, [[0, 12]])]));
+
+    expect(describeContexts(readWeightedHistory(db, { movementKeys: [pullUpKey] }).get(pullUpKey)?.sets)).toEqual([
+      '0: bodyweight unknown',
+      '1: bodyweight 80 kilograms',
+      '2: bodyweight 80 kilograms',
+    ]);
+  });
+});
+
+describe('readRecentProgress', () => {
+  let db: ExpoSQLiteDatabase;
+  const store = (...sessions: Session[]) =>
+    db.transaction((tx) => sessions.forEach((session) => writeSession(tx, session)));
+  const squatKey = movementKeyFor('Squat', 'WeightedExerciseBlueprint');
+  const kg = (value: number) => new Weight(value, 'kilograms');
+  const describePeaks = (peaks: readonly SessionPeak[] | undefined) =>
+    (peaks ?? []).map((peak) => {
+      switch (peak.kind) {
+        case 'load':
+          return `${peak.resistance} ${peak.peak.value.toFixed(2)} ${peak.peak.unit}`;
+        case 'reps':
+          return `${peak.peak} reps`;
+        case 'unavailable':
+          return 'unavailable';
+      }
+    });
+  const recent = (excludeSessionId = uuid()) =>
+    readRecentProgress(db, { movementKeys: [squatKey], excludeSessionId }).get(squatKey);
+
+  beforeEach(async () => {
+    db = await createDb();
+  });
+
+  it('reads the best estimated one-rep max of the latest four sessions, newest first', () => {
+    store(
+      ...[100, 105, 110, 115, 120].map((weight, index) =>
+        sessionOf(`Day ${index}`, [performed(8 + index, [[weight, 5]])]),
+      ),
+    );
+
+    expect(describePeaks(recent())).toEqual([
+      'external 140.00 kilograms',
+      'external 134.17 kilograms',
+      'external 128.33 kilograms',
+      'external 122.50 kilograms',
+    ]);
+  });
+
+  it('counts several performances in one session once, at their best', () => {
+    store(sessionOf('Twice', [performed(9, [[100, 5]]), performed(10, [[110, 5]])]));
+
+    expect(describePeaks(recent())).toEqual(['external 128.33 kilograms']);
+  });
+
+  it('adds each session’s own bodyweight, and cannot compare a session without one', () => {
+    const bodyweightSquats = (hour: number, added: number) =>
+      performed(hour, [[added, 10]], { resistance: 'bodyweight' });
+    store(
+      sessionOf('Weighed', [bodyweightSquats(8, 10)]).with({ bodyweight: kg(80) }),
+      sessionOf('Unweighed', [bodyweightSquats(9, 10)]),
+      sessionOf('Weighed again', [bodyweightSquats(10, 0)]).with({ bodyweight: new Weight(198.4158, 'pounds') }),
+    );
+
+    expect(describePeaks(recent())).toEqual([
+      'bodyweight 120.00 kilograms',
+      'unavailable',
+      'bodyweight 120.00 kilograms',
+    ]);
+  });
+
+  it('reads most reps for a movement with no load', () => {
+    store(
+      sessionOf('Day', [
+        performed(
+          9,
+          [
+            [0, 12],
+            [0, 15],
+            [0, 9],
+          ],
+          { resistance: 'none' },
+        ),
+      ]),
+    );
+
+    expect(describePeaks(recent())).toEqual(['15 reps']);
+  });
+
+  it('cannot compare a session that did the movement with two resistances, or with no load at all', () => {
+    store(
+      sessionOf('Mixed', [performed(9, [[100, 5]]), performed(10, [[20, 5]], { resistance: 'bodyweight' })]).with({
+        bodyweight: kg(80),
+      }),
+      sessionOf('Empty bar', [performed(11, [[0, 5]])]),
+    );
+
+    expect(describePeaks(recent())).toEqual(['unavailable', 'unavailable']);
+  });
+
+  it('leaves out the excluded session, the workout in progress and sessions where nothing was checked', () => {
+    const excluded = sessionOf('Excluded', [performed(10, [[120, 5]])]);
+    store(
+      sessionOf('Kept', [performed(8, [[100, 5]])]),
+      excluded,
+      sessionOf('Unchecked', [performed(11, [[140, undefined]])]),
+    );
+    db.transaction((tx) => setActiveSession(tx, sessionOf('Now', [performed(12, [[150, 5]])])));
+
+    expect(describePeaks(recent(excluded.id))).toEqual(['external 116.67 kilograms']);
+    expect(describePeaks(recent())).toEqual(['external 140.00 kilograms', 'external 116.67 kilograms']);
+  });
+
+  it('reads nothing for no movements', () => {
+    store(sessionOf('Day', [performed(9, [[100, 5]])]));
+
+    expect([...readRecentProgress(db, { movementKeys: [], excludeSessionId: uuid() })]).toEqual([]);
   });
 });
 
