@@ -310,6 +310,18 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(())
     }
 
+    fn delete_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<bool, RepositoryError> {
+        let mut conn = self.connection()?;
+        let deleted = diesel::delete(
+            logging_data::table
+                .filter(logging_data::statistic_id.eq(id.0 as i32))
+                .filter(logging_data::date.eq(date.to_string())),
+        )
+        .execute(&mut conn)
+        .map_err(diesel_to_repository_error)?;
+        Ok(deleted > 0)
+    }
+
     fn find_log_values_in_range(
         &self,
         id: StatisticId,
@@ -668,6 +680,25 @@ mod tests {
 
             let fetched = repo.find_log_value(statistic_id, date)?;
             assert_eq!(fetched, Some(value));
+            Ok(())
+        }
+
+        #[test]
+        fn delete_log_value_removes_only_that_day() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+            let day = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
+            let next_day = NaiveDate::from_ymd_opt(2024, 3, 2).unwrap();
+            repo.save_log_value(statistic_id, day, serde_json::json!(5))?;
+            repo.save_log_value(statistic_id, next_day, serde_json::json!(7))?;
+
+            assert!(repo.delete_log_value(statistic_id, day)?);
+            assert_eq!(repo.find_log_value(statistic_id, day)?, None);
+            assert_eq!(
+                repo.find_log_value(statistic_id, next_day)?,
+                Some(serde_json::json!(7))
+            );
+            assert!(!repo.delete_log_value(statistic_id, day)?);
             Ok(())
         }
 

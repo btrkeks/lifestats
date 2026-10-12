@@ -35,6 +35,8 @@ pub trait StatisticRepository {
         date: NaiveDate,
         value: serde_json::Value,
     ) -> Result<(), RepositoryError>;
+    /// Removes the value logged on `date`. Returns whether a value existed.
+    fn delete_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<bool, RepositoryError>;
     fn find_log_values_in_range(
         &self,
         id: StatisticId,

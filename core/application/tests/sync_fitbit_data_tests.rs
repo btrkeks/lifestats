@@ -102,6 +102,7 @@ mock! {
         fn find_by_tags(&self, tags: &HashMap<String, String>) -> Result<Vec<lifestats_core::statistic::any_statistic::AnyStatistic>, RepositoryError>;
         fn find_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<Option<serde_json::Value>, RepositoryError>;
         fn save_log_value(&self, id: StatisticId, date: NaiveDate, value: serde_json::Value) -> Result<(), RepositoryError>;
+        fn delete_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<bool, RepositoryError>;
         fn find_log_values_in_range(&self, id: StatisticId, range: lifestats_core::shared::date_range::DateRange) -> Result<Vec<lifestats_core::shared::dated_value::DatedValue<serde_json::Value>>, RepositoryError>;
         fn find_goal(&self, id: StatisticId, date: NaiveDate) -> Result<lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult, RepositoryError>;
         fn save_goal(&self, id: StatisticId, date: NaiveDate, goal: Option<serde_json::Value>) -> Result<(), RepositoryError>;
