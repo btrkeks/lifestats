@@ -19,10 +19,11 @@ work to find the docs relevant to your area, and update it whenever you add, rem
 
 ## Features
 
-- [Progression.md](./Progression.md) - how last session's
-  numbers carry into today (and why weight carries but reps usually do not), and how the progressive
-  overload rules move them. Covers rule order, limits and starting over, rules that can never run, and
-  the two ways to set up double progression. Ends with pointers to the code.
+- [Progression.md](./Progression.md) - how weights carry from one workout to the next: plans hold a
+  set count only, each set starts at the weight last completed at its position (matched by exercise
+  name), reps are suggested from history, and nothing progresses on its own. Covers which history
+  counts, the rest timer, and how old rep targets and rules are kept but ignored. Ends with pointers to
+  the code.
 - [PlanFileFormat.md](./PlanFileFormat.md) - the `.liftlogplan` file format, how plans are imported and
   exported, and the Claude skill that authors plan files against the schema.
 - [PlaintextExport.md](./PlaintextExport.md) — CSV/JSON export of workout data, including which fields

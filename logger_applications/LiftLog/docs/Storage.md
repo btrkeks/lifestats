@@ -203,17 +203,21 @@ A session is spread over four tables, so its history can be queried in SQL:
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `session`           | name, notes, date (indexed), bodyweight, the `active` flag, and its summary                                                                                         |
 | `recorded_exercise` | one per exercise, keyed `(sessionId, ord)`, with indexed `movementKey` and `progressionKey`, plus its blueprint: scalars as columns, lists as JSON, and its summary |
-| `weighted_set`      | one per potential set: target, weight, reps and completion time                                                                                                     |
+| `weighted_set`      | one per potential set: legacy rep target, weight, reps and completion time                                                                                          |
 | `cardio_set`        | one per cardio set: its set blueprint as columns, plus each recorded metric                                                                                         |
 
 - `app/src/db/sessions.ts` is the only code that touches these tables. It writes with `writeSession`,
   `deleteSession` and `setActiveSession`, and reads with queries shaped for their callers:
   - whole sessions by id, by date range, or the active one;
-  - `readPreviousExercises` (the latest finished performance of each `progressionKey`, leaving out the
-    session on screen) and `readPreviousComparableSession` for the workout screens, and
+  - `readWeightedHistory` (per `movementKey` and set index, the latest completed set in a finished
+    session, optionally leaving out the session on screen), which both the set rows and `SessionService`
+    read weighted history from;
+  - `readPreviousCardioExercises` (the latest finished cardio performance of each `progressionKey`,
+    leaving out the session on screen) and `readPreviousComparableSession` for the workout screens, and
     `readExerciseHistory` (every performance of one `movementKey`) for the exercise history sheet;
-  - `readSessionToContinueFrom` and `readLatestExercises` (the most recently completed performance per
-    `progressionKey`), which `SessionService` builds upcoming sessions from;
+  - `readSessionToContinueFrom` and `readLatestCardioExercises` (the most recently completed cardio
+    performance per `progressionKey`, including the workout in progress), which `SessionService` builds
+    upcoming sessions from;
   - `readStartedSessionVolumes` and `readPersonalRecords`, which read the whole history's summaries for
     the activity views. Each one has a spec that checks it against the JS it replaces (`sessionVolume`,
     `findPersonalRecords`) over generated sessions.

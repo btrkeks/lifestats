@@ -1,84 +1,70 @@
-# Progression - how your numbers move week to week
+# Progression - how your numbers carry from one workout to the next
 
-When an exercise is completed, the next time it is loaded into a workout, two things happen:
+LiftLog does not move your numbers for you. A plan says how many sets to do. Each set starts at the
+weight you used for that set last time, and you change it yourself when you are ready to go up.
 
-- **Carry over** always happens. Starting a workout opens each exercise on the numbers you did last
-  time, not the numbers written in your plan.
-- **Progressive overload** is a list of rules on the exercise that pushes those numbers up when you hit
-  all your targets.
+## What a plan holds
 
-## Carry over
+A weighted exercise in a plan has a name, a number of sets, a rest time, a resistance, notes and a link.
+It has no rep target and no progression rules. Its summary reads `3 sets`, or `3 sets @ 50kg–60kg` on a
+workout card once weights are known.
 
-When you start a workout, LiftLog looks for the last time you did the same exercise and loads those
-numbers in.
+## Starting a workout
 
-- It matches on the exercise's **name**, its **number of sets**, and usually its **rep scheme**.
-  Renaming an exercise or changing how many sets it has therefore starts over from the plan.
-- **Weight always carries over.**
-- **Reps you completed last time normally do not.** The target comes back from the plan each session.
-- A workout you opened but never logged a set in is ignored, so an abandoned session cannot become the
-  number you are stuck chasing.
+A workout from your plan opens each weighted exercise with the plan's number of sets, all unchecked.
 
-**Reps carry over too when reps are what you are progressing on** - either the exercise's Resistance is
-set to None (there is nothing else to advance on), or you have given it a rule that increases reps. In
-that case the plan's reps are just the first rung of a ladder, so LiftLog keeps whatever the rule has
-won for you and stops re-reading the plan. Changing the plan's starting reps then will not throw away
-progress you have already made.
+- **Set 1 starts at the weight of the last set 1 you completed, set 2 at the last set 2, and so on.**
+  The sets do not have to come from the same workout. If your latest workout skipped set 2, set 2 comes
+  from the workout before that.
+- **A set you have never completed starts at the weight of the nearest earlier set that has one.** With
+  history for sets 1 and 2 only (52kg and 55kg), a four-set plan opens at 52, 55, 55, 55.
+- **With no history at all, every set starts at 0** in your preferred unit.
+- **Reps are never filled in.** The reps you did last time show as a suggestion instead (see below).
 
-Why reps behave differently by default: the only way to change a rep target is to edit the plan, and
-when you finish a workout LiftLog already asks whether that edit should stick. Carrying the reps as well
-would quietly apply an edit you had just declined.
+## During a workout
 
-## Progressive overload
+Each set row shows **Previous**: the weight and reps from the last time that set was completed. Its reps
+also appear as the hint in the reps cell. Tapping ✓ without typing logs the hinted reps at the row's
+weight; with no hint, ✓ moves you to the reps cell instead.
 
-Found under **Progressive Overload** in the exercise editor. A new exercise has no rules, so it stays
-where you leave it until you add one.
+**+ Add set** adds a set for today only. The plan keeps its set count, so the next workout has the
+planned number of sets again. The extra set still counts as history for its position: if you add a
+fourth set to a three-set plan and later change the plan to four sets, set 4 starts from it.
 
-**Rules only fire after a successful session** - every set logged, each at or above its target. Miss one
-and nothing moves; you repeat the same numbers next time.
+## Which history counts
 
-**Rules run in order, and only one runs per session.** LiftLog takes the first rule that still has room
-to move and stops there. This is what lets you chain them.
+- **Matching is by exercise name.** Case, surrounding spaces and a trailing `s` or `es` are ignored, and
+  `flies`, `flyes` and `flys` match. Changing the set count or the resistance keeps the history; renaming
+  the exercise starts over. A weighted and a cardio exercise never share history, even with the same name.
+- **Only finished workouts count.** The workout in progress never feeds the next one.
+- **Only checked sets count.** A weight typed into a set you never checked is ignored. A set checked
+  with 0 reps counts.
+- **Editing a past workout in History** shows the latest other finished workout as its previous
+  numbers, even one done later.
+- **The last time's notes** are the notes of the workout that holds your most recent completed set of
+  that exercise, even when they are empty.
 
-Each rule has:
+## Rest
 
-- **Increase** - Reps or Weight.
-- **Reps to add** / **Amount to increase** - how much. For weight this is in whatever unit you lift in,
-  so 2.5 is a pair of small plates in a kilo gym and in a pound gym alike.
-- **Apply to** - every set, or just the lowest ones (all of them, or only the first, middle or last).
-  "Lowest" means lowest on whatever that rule increases: a reps rule picks your smallest target, not
-  your lightest set.
-- **Stop at a limit** (reps only) - the rule stops once reps reach the limit, and the next rule takes
-  over.
-- **Start over after** (reps only) - when the next rule takes over, drop reps back to what the plan
-  asks for.
+The rest timer runs from the exercise's minimum to its maximum rest after every set. There is no longer
+a longer rest after a failed set, because there is no target to fail.
 
-**Rep ranges move as a block.** A target of 8-12 with "add 1 rep" becomes 9-13. If a limit is in the
-way, both ends still move by the same amount, so the range keeps its width instead of squashing shut.
+## Plans and data from before
 
-**A rule with no limit never stops**, so nothing after it can ever run. Weight rules have no limit at
-all, so a weight rule always has to be last. The editor dims any rule that can never run and tells you
-how to fix it, and **Add rule** arranges new rules so this does not happen - adding a rule to a
-weight-only exercise puts the new reps rung _in front_ of the weight rule, not behind it.
+Plans, workouts and backups written by older versions still store rep targets, progression rules and a
+failure rest. LiftLog reads and writes them unchanged, so nothing is lost and old backups still restore,
+but nothing uses them: they do not show, do not move any weight and do not change the rest timer. This
+includes the progression rules in the built-in plans and in imported `.liftlogplan` files.
 
-Tap **Example** to see four sessions of your actual exercise played out under the rules you have set.
+## Cardio
 
-## Double progression
-
-Climbing reps to a limit, then adding weight and starting the reps again. There are two ways to set it
-up, and you want one or the other, not both.
-
-- **A rep range** like 8-12 with a weight rule. A set only counts as successful at the top of the range,
-  so the weight only goes up once you hit 12 on everything. The counter shows "8-12" every week.
-- **A fixed rep target** like 8, with two rules: `Reps +1, stop at a limit of 12, start over after`, then
-  `Weight +2.5`. The counter shows the rung you are actually on - 8, 9, 10, 11, 12 - then the weight goes
-  up and the reps drop back to 8.
-
-If you set a rep range _and_ a reps rule whose limit is the top of that range, the reps rule can never
-move and does nothing at all.
+Cardio exercises work as before. Each set starts with the incline and resistance of the latest time you
+did that exercise, under exactly the same name and with the same kind of first-set target (time or
+distance), including the workout in progress.
 
 ---
 
-For the code behind this: `progressionKey()` and `applyProgression` in
-`app/src/models/blueprint-models/index.ts`, session start in `app/src/services/session-service.ts`, the
-editor in `app/src/components/presentation/workout-editor/progressive-overload.tsx`.
+For the code behind this: `readWeightedHistory` in `app/src/db/sessions.ts`,
+`RecordedWeightedExercise.empty` in `app/src/models/session-models/recorded-weighted-exercise.ts`,
+session start in `app/src/services/session-service.ts`, and the set rows in
+`app/src/components/presentation/workout/weighted/set-rows.ts`.

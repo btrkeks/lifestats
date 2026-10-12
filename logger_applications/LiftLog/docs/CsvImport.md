@@ -48,8 +48,8 @@ unit preference.
 - Numbered sets, drop sets (`D`), and failure sets (`F`) are imported. Warm-up sets (`W`) are not.
 - Rows with empty reps are skipped, so timed or distance-only work is left out. A set with reps and
   no weight is imported at 0.
-- Every exercise gets a rep target of 1–20, because Strong has no rep targets. One target keeps an
-  exercise's history in one line, so the in-workout "previous" numbers and prefilled weights match.
+- No exercise gets a rep target. LiftLog matches history by exercise name and set number, so the
+  in-workout "previous" numbers and prefilled weights pick up straight from your Strong history.
 - The first `Rest Timer` row of an exercise sets its rest time.
 
 The import also creates a plan named **Strong** from your templates. Each workout name that occurs
@@ -124,12 +124,11 @@ external-import path only, not inside full backup restore.
 Internal format ids (UI dropdown / `importFromExternal`): `Strong` | `FitNotes` | `StrongLifts`. These
 are unrelated to plaintext export’s own `CSV` value.
 
-Strong imports set `repsTarget` and `restSeconds` on each `NormalizedExercise` and `startedAt` on each
-`NormalizedImportSession`. FitNotes and StrongLifts leave them unset, which keeps their output
-unchanged: a fixed target from the first set's reps, default rest, and noon UTC timestamps. History
-and plan build each exercise blueprint through the same function, so a plan exercise has the same
-`progressionKey()` as the history it was copied from. The plan id is UUID v5 over the plan name
-(`programIdFromCsvImport`).
+Strong imports set `restSeconds` on each `NormalizedExercise` and `startedAt` on each
+`NormalizedImportSession`. FitNotes and StrongLifts leave them unset, which gives default rest and noon
+UTC timestamps. Every format writes set counts only: no rep targets and no progression rules. History
+and plan build each exercise blueprint through the same function. The plan id is UUID v5 over the plan
+name (`programIdFromCsvImport`).
 
 ```text
 UI dropdown  ←── EXTERNAL_IMPORT_FORMATS (id, labelKey, import)

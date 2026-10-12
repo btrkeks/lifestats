@@ -41,7 +41,7 @@ The skill reads plans as happily as it writes them, so you can send it the one y
 
 > Have a look at my plan and tell me what's missing.
 
-Exporting means Claude sees your real exercise names, rest times, and progressive overload settings, so what comes back is your plan with the change made - not an approximation of it rebuilt from a description.
+Exporting means Claude sees your real exercise names, set counts and rest times, so what comes back is your plan with the change made - not an approximation of it rebuilt from a description.
 
 Importing the result **adds a new plan**; it does not overwrite the original. Delete the old one from `Plans` once the replacement is in. Your logged workout history is kept separately and is untouched by either.
 
@@ -59,6 +59,7 @@ Nothing about the format is Claude-specific. To use ChatGPT, Gemini, or anything
 > - Weights, distances and progression steps are decimal **strings**: `"2.5"`, not `2.5`. Rep counts are plain integers.
 > - Rests and cardio times are ISO-8601 durations: `"PT3M"`, `"PT90S"`.
 > - A weighted exercise has no set count: one entry in `plannedSets` is one set. Cardio uses `sets`, an array of set objects.
+> - Write no rep targets or progression: every planned set is `{ "reps": { "min": 0, "max": 0 } }`, `progression` is `[]`, and `failureRest` equals `maxRest`. LiftLog ignores all three.
 > - Supersets are a flag on the preceding exercise: `"supersetWithNext": true`.
 > - `type` values are case-sensitive. Exercise types are PascalCase (`"WeightedExerciseBlueprint"`); cardio targets, progression scopes and resistance are lowercase or camelCase (`"time"`, `"allSets"`, `"bodyweight"`).
 >
@@ -85,23 +86,16 @@ A plan file is one JSON object: a name, a date, and a list of sessions. Each ses
           "type": "WeightedExerciseBlueprint",
           "name": "Barbell Bench Press",
           "plannedSets": [
-            { "reps": { "min": 5, "max": 5 } },
-            { "reps": { "min": 5, "max": 5 } },
-            { "reps": { "min": 5, "max": 5 } }
+            { "reps": { "min": 0, "max": 0 } },
+            { "reps": { "min": 0, "max": 0 } },
+            { "reps": { "min": 0, "max": 0 } }
           ],
           "restBetweenSets": { "minRest": "PT3M", "maxRest": "PT5M", "failureRest": "PT5M" },
           "supersetWithNext": false,
           "notes": "",
           "link": "",
           "resistance": "external",
-          "progression": [
-            {
-              "axis": "load",
-              "step": "2.5",
-              "scope": { "type": "allSets" },
-              "trigger": "allSetsMetTarget"
-            }
-          ]
+          "progression": []
         }
       ]
     }
@@ -115,7 +109,7 @@ Complete examples live in [`plugins/liftlog-plan-builder/skills/create-liftlog-p
 
 An exercise is either a `WeightedExerciseBlueprint` or a `CardioExerciseBlueprint`, chosen by its `type`. The two can be mixed within a session.
 
-**Weighted exercises** have a list of planned sets, rest times, a resistance, and a list of progression rules. `plannedSets` holds one entry per set, each with that set's rep target as a `min`/`max` band - `min === max` is a plain "five reps". `restBetweenSets` needs all three of `minRest`, `maxRest`, and `failureRest` (the last being the rest taken after missing a rep target). `link` is a URL explaining the movement, and should stay `""` unless you have a real one.
+**Weighted exercises** have a list of planned sets, rest times and a resistance. `plannedSets` holds one entry per set; only how many there are matters (see below). `restBetweenSets` needs all three of `minRest`, `maxRest`, and `failureRest`, and the rest timer runs from `minRest` to `maxRest`. `link` is a URL explaining the movement, and should stay `""` unless you have a real one.
 
 `resistance` says where the load comes from: `external` for barbells, dumbbells and machines (the logged weight is the weight lifted), `bodyweight` for pull ups and dips (the logged weight is what is added on top of the lifter), or `none` for movements like crunches, where there is no weight at all and reps are the whole story.
 
@@ -123,22 +117,15 @@ An exercise is either a `WeightedExerciseBlueprint` or a `CardioExerciseBlueprin
 
 **Cardio exercises** have no resistance and no progression. Their `sets` is an array - one entry per interval - and each entry has a `target` (either a time or a distance) plus six `track*` booleans controlling which fields the app shows you while logging, and optionally its own `restBetweenSets`.
 
-### Progression
+### Rep targets, progression and failure rest
 
-`progression` is an ordered list of rules. After a session where every set met its target, the first rule that still has room to move is applied - and only that one. An empty list means the exercise never moves on its own.
+`plannedSets[].reps`, `progression` and `restBetweenSets.failureRest` are left over from when plans
+prescribed reps and moved weights on their own. The format still requires them, so plans written
+before keep loading, but the app ignores them: it shows no rep target, runs no rule and rests from
+`minRest` to `maxRest` after every set. New plans write `{ "min": 0, "max": 0 }` for every set, `[]` for
+`progression`, and the same value as `maxRest` for `failureRest`.
 
-| Field       | Effect                                                                                                                              |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `axis`      | What the rule moves: `load` or `reps`.                                                                                              |
-| `step`      | How much to add, as a decimal string. Unitless - `"2.5"` is the same pair of small plates in a kilo gym and a pound gym.            |
-| `scope`     | `{ "type": "allSets" }`, or `{ "type": "lowestSets", "pick": … }` with `first`, `middle`, `last` or `all` to raise only the lowest. |
-| `trigger`   | Always `allSetsMetTarget`.                                                                                                          |
-| `ceiling`   | Optional, reps only. Where the rule stops, handing over to the next one.                                                            |
-| `onCeiling` | Optional, reps only. `reset` drops the reps back to the plan's when a later rule takes over.                                        |
-
-Only a reps rule takes a ceiling, so a load rule never runs out of room and must come last - anything after it can never fire. Reps to a ceiling followed by weight is double progression: the reps climb, then the weight goes up and the reps start again.
-
-See [Progression](./Progression.md) for how the rules behave in the app.
+See [Progression](./Progression.md) for how weights carry from one workout to the next.
 
 ## Validating a plan
 
