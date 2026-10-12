@@ -11,6 +11,7 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::sql_types::{BigInt, Text};
 use diesel::SqliteConnection;
 use lifestats_application::error::{ApplicationError, ApplicationResult};
+use lifestats_application::services::any_goal_to_json;
 use lifestats_application::shared::tags::TagSet;
 use lifestats_application::statistic::ports::TagQueryableStatisticRepository;
 use lifestats_core::shared::date_range::DateRange;
@@ -64,6 +65,46 @@ impl SqliteStatisticRepository {
         let default_goal = queries::fetch_default_goal(conn, id)?;
         dto.into_any_statistic(default_goal)
     }
+
+    fn insert_statistic_anyhow(
+        conn: &mut SqliteConnection,
+        statistic: &AnyStatistic,
+    ) -> anyhow::Result<AnyStatistic> {
+        let insert_dto = InsertStatisticDto::from_any_statistic(statistic)?;
+
+        diesel::insert_into(statistics::table)
+            .values(&insert_dto)
+            .execute(conn)?;
+
+        let new_id: i64 = diesel::select(sql::<BigInt>("last_insert_rowid()")).get_result(conn)?;
+        let statistic_id = StatisticId(new_id as u32);
+
+        if let Some(goal) = statistic.get_default_goal() {
+            Self::upsert_default_goal(conn, statistic_id, &any_goal_to_json(&goal)?)?;
+        }
+
+        SqliteStatisticRepository::load_statistic_anyhow(conn, statistic_id)
+    }
+
+    fn upsert_default_goal(
+        conn: &mut SqliteConnection,
+        id: StatisticId,
+        goal: &serde_json::Value,
+    ) -> anyhow::Result<()> {
+        let record = DefaultGoalRaw {
+            statistic_id: id.0 as i32,
+            goal: serde_json::to_string(goal)?,
+        };
+
+        diesel::insert_into(default_goals::table)
+            .values(&record)
+            .on_conflict(default_goals::statistic_id)
+            .do_update()
+            .set(default_goals::goal.eq(&record.goal))
+            .execute(conn)?;
+
+        Ok(())
+    }
 }
 
 impl StatisticRepository for SqliteStatisticRepository {
@@ -108,16 +149,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         let mut conn = self.connection()?;
 
         conn.transaction::<_, anyhow::Error, _>(move |conn| {
-            let insert_dto = InsertStatisticDto::from_any_statistic(&statistic)?;
-
-            diesel::insert_into(statistics::table)
-                .values(&insert_dto)
-                .execute(conn)?;
-
-            let new_id: i64 =
-                diesel::select(sql::<BigInt>("last_insert_rowid()")).get_result(conn)?;
-            let statistic_id = StatisticId(new_id as u32);
-            SqliteStatisticRepository::load_statistic_anyhow(conn, statistic_id)
+            SqliteStatisticRepository::insert_statistic_anyhow(conn, &statistic)
         })
         .map_err(RepositoryError::OperationFailed)
     }
@@ -159,22 +191,12 @@ impl StatisticRepository for SqliteStatisticRepository {
         let mut conn = self.connection()?;
 
         conn.transaction::<_, anyhow::Error, _>(move |conn| {
-            let mut persisted = Vec::with_capacity(statistics_to_create.len());
-            for statistic in statistics_to_create {
-                let insert_dto = InsertStatisticDto::from_any_statistic(&statistic)?;
-
-                diesel::insert_into(statistics::table)
-                    .values(&insert_dto)
-                    .execute(conn)?;
-
-                let new_id: i64 =
-                    diesel::select(sql::<BigInt>("last_insert_rowid()")).get_result(conn)?;
-                let statistic_id = StatisticId(new_id as u32);
-                let stored = SqliteStatisticRepository::load_statistic_anyhow(conn, statistic_id)?;
-                persisted.push(stored);
-            }
-
-            Ok(persisted)
+            statistics_to_create
+                .iter()
+                .map(|statistic| {
+                    SqliteStatisticRepository::insert_statistic_anyhow(conn, statistic)
+                })
+                .collect()
         })
         .map_err(RepositoryError::OperationFailed)
     }
@@ -482,23 +504,7 @@ impl StatisticRepository for SqliteStatisticRepository {
         goal: serde_json::Value,
     ) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
-        let serialized_goal =
-            serde_json::to_string(&goal).map_err(|e| RepositoryError::OperationFailed(e.into()))?;
-
-        let record = DefaultGoalRaw {
-            statistic_id: id.0 as i32,
-            goal: serialized_goal,
-        };
-
-        diesel::insert_into(default_goals::table)
-            .values(&record)
-            .on_conflict(default_goals::statistic_id)
-            .do_update()
-            .set(default_goals::goal.eq(&record.goal))
-            .execute(&mut conn)
-            .map_err(diesel_to_repository_error)?;
-
-        Ok(())
+        Self::upsert_default_goal(&mut conn, id, &goal).map_err(RepositoryError::OperationFailed)
     }
 
     fn delete_goal(&self, id: StatisticId, date: NaiveDate) -> Result<(), RepositoryError> {
@@ -659,6 +665,37 @@ mod tests {
 
             let all = repo.find_all_metadata()?;
             assert_eq!(all.len(), 3);
+            Ok(())
+        }
+
+        #[test]
+        fn create_many_metadata_persists_default_goal() -> Result<()> {
+            use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+
+            let repo = setup_repository();
+            let with_goal = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+                StatisticMetadata::new(StatisticId(0), "Fitness".into(), "Reps".into()),
+                Some(AmountGoal::new(400, true)),
+                NaiveDate::from_ymd_opt(2026, 10, 12).unwrap(),
+            ));
+
+            let created = repo.create_many_metadata(vec![with_goal, integer_stat(0)])?;
+            let goals = created
+                .iter()
+                .map(|s| repo.find_default_goal(s.get_metadata().id()))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            assert_eq!(
+                goals,
+                vec![
+                    Some(serde_json::json!({"target_amount": 400, "is_at_least": true})),
+                    None,
+                ]
+            );
+            assert_eq!(
+                created[0].get_default_goal_valid_since(),
+                NaiveDate::from_ymd_opt(2026, 10, 12).unwrap()
+            );
             Ok(())
         }
     }
