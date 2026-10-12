@@ -4,8 +4,8 @@ Documentation=https://github.com/yourusername/lifestats
 Requires=lifestats-fitbit-sync.service
 
 [Timer]
-# Run daily at 2:00 AM (when Fitbit data is typically finalized)
-OnCalendar=*-*-* 02:00:00
+# Run daily at 8:00 AM (after sleep data is typically finalized)
+OnCalendar=*-*-* 08:00:00
 # Add randomized delay to avoid load spikes if running multiple instances
 RandomizedDelaySec=30m
 # Run immediately if the system was off during the scheduled time

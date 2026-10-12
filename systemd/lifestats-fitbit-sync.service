@@ -7,13 +7,13 @@ Requires=lifestats-web-api.service
 
 [Service]
 Type=oneshot
-# Calculate yesterday's date for syncing
-# Fitbit data is typically finalized the day after
+# Sync yesterday through today so finalized late data is backfilled and today's sleep is visible
 ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "yesterday" +%%Y-%%m-%%d); \
+  TODAY=$(date +%%Y-%%m-%%d); \
   for i in {1..5}; do \
     curl -X POST http://localhost:3000/integrations/fitbit/sync \
       -H "Content-Type: application/json" \
-      -d "{\\"since\\": \\"$YESTERDAY\\", \\"until\\": \\"$YESTERDAY\\"}" \
+      -d "{\\"since\\": \\"$YESTERDAY\\", \\"until\\": \\"$TODAY\\"}" \
       --fail --silent --show-error && break || \
       { echo "Attempt $i failed, waiting 10s..."; sleep 10; }; \
   done'

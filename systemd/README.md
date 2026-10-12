@@ -55,7 +55,7 @@ systemctl --user start lifestats-fitbit-sync.timer
 
 #### Changing the Sync Time
 
-By default, the sync runs at 2:00 AM daily. To change this:
+By default, the sync runs at 8:00 AM daily. To change this:
 
 1. Edit the timer file (`~/.config/systemd/user/lifestats-fitbit-sync.timer` or `/etc/systemd/system/lifestats-fitbit-sync.timer`)
 2. Modify the `OnCalendar` line:
@@ -93,9 +93,10 @@ If your web API runs on a different host or port, edit the service file and modi
 ```bash
 # Example: API running on port 8080
 ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "yesterday" +%%Y-%%m-%%d); \
+  TODAY=$(date +%%Y-%%m-%%d); \
   curl -X POST http://localhost:8080/integrations/fitbit/sync \
     -H "Content-Type: application/json" \
-    -d "{\"since\": \"$YESTERDAY\", \"until\": \"$YESTERDAY\"}" \
+    -d "{\"since\": \"$YESTERDAY\", \"until\": \"$TODAY\"}" \
     --fail --silent --show-error'
 ```
 
@@ -190,14 +191,14 @@ sudo systemctl disable lifestats-fitbit-sync.timer
 
 #### Syncing Multiple Days
 
-To sync the last 7 days instead of just yesterday, modify the `ExecStart` line:
+To sync the last 7 days instead of the default two-day window, modify the `ExecStart` line:
 
 ```bash
 ExecStart=/bin/bash -c 'WEEK_AGO=$(date -d "7 days ago" +%%Y-%%m-%%d); \
-  YESTERDAY=$(date -d "yesterday" +%%Y-%%m-%%d); \
+  TODAY=$(date +%%Y-%%m-%%d); \
   curl -X POST http://localhost:3000/integrations/fitbit/sync \
     -H "Content-Type: application/json" \
-    -d "{\"since\": \"$WEEK_AGO\", \"until\": \"$YESTERDAY\"}" \
+    -d "{\"since\": \"$WEEK_AGO\", \"until\": \"$TODAY\"}" \
     --fail --silent --show-error'
 ```
 
@@ -231,9 +232,10 @@ Example with authentication:
 Type=oneshot
 EnvironmentFile=/etc/lifestats/api-credentials
 ExecStart=/bin/bash -c 'YESTERDAY=$(date -d "yesterday" +%%Y-%%m-%%d); \
+  TODAY=$(date +%%Y-%%m-%%d); \
   curl -X POST http://localhost:3000/integrations/fitbit/sync \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $API_TOKEN" \
-    -d "{\"since\": \"$YESTERDAY\", \"until\": \"$YESTERDAY\"}" \
+    -d "{\"since\": \"$YESTERDAY\", \"until\": \"$TODAY\"}" \
     --fail --silent --show-error'
 ```
