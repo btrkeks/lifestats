@@ -31,6 +31,49 @@ weight; with no hint, ✓ moves you to the reps cell instead.
 planned number of sets again. The extra set still counts as history for its position: if you add a
 fourth set to a three-set plan and later change the plan to four sets, set 4 starts from it.
 
+## Beating last time
+
+In the workout in progress, each set row says how to beat its Previous. Nothing changes your weights or
+plan, and nothing here shows when you edit a past workout in History.
+
+- **An unchecked set shows `Aim 11+`** under Previous: the fewest reps at the row's weight that beat that
+  Previous. Change the weight and the number follows as you type. Previous `60kg × 10` at 62.5kg reads
+  `Aim 9+`, and at 80kg `Aim 1+`.
+- **A checked set that beat its Previous shows `▲ Better`.** A set that matched or fell short shows
+  nothing. A set checked with 0 reps never shows it.
+- **✓ does not log the target.** Tapping ✓ without typing still logs the Previous reps, the hint in the
+  reps cell. To log the target, type it.
+
+How a set is compared with its Previous:
+
+- **At the same weight, more reps win.** The target is one more rep. Weights in kg and lb count as the
+  same when they convert exactly, and two sets at 0kg count as the same weight. For a bodyweight
+  exercise this is the added weight, whatever you weighed in either workout.
+- **At a different weight, the estimated one-rep max wins**, using the same formula as everywhere else in
+  the app: `weight × (1 + reps / 30)`.
+- **When the added weight of a bodyweight set changes, its load is the bodyweight of its own workout
+  plus what you added**, which is negative for assistance. If either workout has no bodyweight, the set
+  shows nothing.
+- **A movement with no resistance compares reps only.**
+- **The set shows nothing** when it has no Previous, when the resistance changed since, when the weight
+  moved between 0 and a load, or when the target is more than 30 reps.
+- **After a Previous of 0 reps there is no target.** A checked set at the same weight still shows ▲ for
+  any reps. At a different weight it shows nothing, because a set of 0 reps has no estimated one-rep max.
+
+## No gain in 3 workouts
+
+An exercise card shows `No gain in 3 workouts` under its title when its best set has not improved three
+workouts in a row. It reads the latest four finished workouts that have a checked set of that exercise,
+not counting the one in progress. Each workout's best set is its highest estimated one-rep max, or its most
+reps for a movement with no resistance. Doing the exercise twice in one workout counts once.
+
+- **The flag shows** when each of the three newer workouts is no better than the one before it. A workout
+  that improves on the one before breaks the run, even if it is still below an older best.
+- **It does not show** with fewer than four such workouts, or when any of them cannot be compared because
+  it mixed resistances, is a bodyweight exercise without a bodyweight, or moved no load. It also does not
+  show when those workouts used a different resistance than today.
+- **It goes away during the workout** as soon as a checked set beats the latest of those workouts.
+
 ## Which history counts
 
 - **Matching is by exercise name.** Case, surrounding spaces and a trailing `s` or `es` are ignored, and
@@ -64,7 +107,8 @@ distance), including the workout in progress.
 
 ---
 
-For the code behind this: `readWeightedHistory` in `app/src/db/sessions.ts`,
+For the code behind this: `readWeightedHistory` and `readRecentProgress` in `app/src/db/sessions.ts`,
+the targets, ▲ and the stall rule in `app/src/models/set-progress.ts`,
 `RecordedWeightedExercise.empty` in `app/src/models/session-models/recorded-weighted-exercise.ts`,
 session start in `app/src/services/session-service.ts`, and the set rows in
 `app/src/components/presentation/workout/weighted/set-rows.ts`.
