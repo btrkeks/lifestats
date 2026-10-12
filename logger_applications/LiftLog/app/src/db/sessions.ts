@@ -418,6 +418,10 @@ export function readEarliestSessionDate(db: ExpoSQLiteDatabase): LocalDate | und
   return earliest ? fromLocalDateJSON(earliest) : undefined;
 }
 
+export function readFinishedSessions(db: ExpoSQLiteDatabase, ids: string[]): Session[] {
+  return ids.length ? readSessionsWhere(db, and(isFinished, inArray(sessionsSchema.id, ids))) : [];
+}
+
 export function readExistingSessionIds(db: ExpoSQLiteDatabase, ids: string[]): Set<string> {
   if (!ids.length) {
     return new Set();

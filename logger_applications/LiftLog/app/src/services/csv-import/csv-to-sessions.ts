@@ -135,6 +135,23 @@ function sessionStart(session: NormalizedImportSession): OffsetDateTime {
     : session.date.atTime(LocalTime.NOON).atOffset(ZoneOffset.UTC);
 }
 
+/**
+ * `existing` with its sets re-timed to span what the freshly `imported` copy of it spans, kept on the
+ * date `existing` was moved to. Only completion times change; sets, weights, reps and notes stay.
+ */
+export function retimedLikeImport(existing: Session, imported: Session): Session {
+  const completions = imported.recordedExercises
+    .flatMap((e) => (e instanceof RecordedWeightedExercise ? e.potentialSets : []))
+    .flatMap((s) => (s.set ? [s.set.completionDateTime] : []))
+    .sort((a, b) => a.compareTo(b));
+  const [first, last] = [completions.at(0), completions.at(-1)];
+  if (!first || !last) {
+    return existing;
+  }
+  const movedDays = existing.date.toEpochDay() - imported.date.toEpochDay();
+  return spreadSetCompletions(existing, first.plusDays(movedDays), last.plusDays(movedDays));
+}
+
 /** Shared by history and plan so both describe the exercise alike. */
 function exerciseBlueprintFor(exercise: NormalizedExercise): WeightedExerciseBlueprint {
   const rest =

@@ -26,6 +26,11 @@ there, LiftLog tells you nothing new was added.
   you already imported. Delete that workout in History and import again if you want the new
   version.
 - If you delete an imported workout and import the same file again, it comes back.
+- Importing a Strong export again also corrects the set times of the Strong workouts already in
+  History, so ones imported before LiftLog read `Duration (sec)` get their real length. Only the
+  times change: your edits to sets, weights, reps and notes stay, and a workout you moved to another
+  day stays there. Restoring a backup made before that brings the old times back; import the Strong
+  export once more to correct them.
 - Only weighted sets are imported. Cardio-only or timed-only rows are skipped.
 - Comments and notes from the file become exercise notes. 
 
@@ -120,7 +125,10 @@ the user-facing guide.
 Rows are parsed, grouped into sessions (see each format), then turned into `BackupData` and merged
 with the same path as Restore (`importBackupData`). Session IDs are grouping-key derived: UUID v5
 over the FitNotes calendar date, StrongLifts date + Workout id (A/B), or Strong
-`strong|<Workout #>|<Date>` - not Workout Name, and not sets or notes. Re-import skips IDs already in History (first import wins). Changing sets or comments
+`strong|<Workout #>|<Date>` - not Workout Name, and not sets or notes. Re-import skips IDs already in History (first import wins),
+except that a Strong re-import re-times the finished sessions it finds (`retimedLikeImport`: only set
+completion times, spread over the imported span on the session's current date) and writes them with
+the new ones. Changing sets or comments
 in the source app and exporting again does not create a second session for that day; delete the
 imported session and import again to refresh it. Stats invalidation (`setStatsIsDirty`) runs on the
 external-import path only, not inside full backup restore.

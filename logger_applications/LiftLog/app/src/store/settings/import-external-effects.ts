@@ -3,7 +3,10 @@ import { importBackupData, importFromExternal, selectPreferredWeightUnit } from 
 import { AddEffectFn, RootState } from '@/store/store';
 import { setStatsIsDirty } from '@/store/stats';
 import { getExternalImporter } from '@/services/csv-import';
-import { readExistingSessionIds } from '@/db/sessions';
+import { retimedLikeImport } from '@/services/csv-import/csv-to-sessions';
+import { readExistingSessionIds, readFinishedSessions } from '@/db/sessions';
+import { Session } from '@/models/session-models';
+import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { fetchUpcomingSessions, setActivePlan } from '@/store/program';
 import { BuiltInPrograms } from '@/models/built-in-programs';
 
@@ -28,7 +31,14 @@ export function addImportExternalEffects(addEffect: AddEffectFn) {
           backupData.workouts.map((w) => w.id),
         );
         const newWorkouts = backupData.workouts.filter((w) => !existingIds.has(w.id));
-        if (newWorkouts.length === 0) {
+        const retimed =
+          format === 'Strong'
+            ? retimedStrongWorkouts(
+                db,
+                backupData.workouts.filter((w) => existingIds.has(w.id)),
+              )
+            : [];
+        if (newWorkouts.length === 0 && retimed.length === 0) {
           dispatch(
             showSnackbar({
               text: tolgee.t('backup.import_from_other_apps.already_imported.message'),
@@ -46,11 +56,14 @@ export function addImportExternalEffects(addEffect: AddEffectFn) {
         const activateImportedPlan = importedPlanId !== undefined && activePlanIsReplaceable(getState());
         dispatch(
           importBackupData({
-            workouts: newWorkouts,
+            workouts: [...newWorkouts, ...retimed],
             programs: newPrograms,
-            successMessage: tolgee.t('backup.import_from_other_apps.complete.message', {
-              count: newWorkouts.length,
-            }),
+            successMessage: retimed.length
+              ? tolgee.t('backup.import_from_other_apps.complete_retimed.message', {
+                  count: newWorkouts.length,
+                  retimed: retimed.length,
+                })
+              : tolgee.t('backup.import_from_other_apps.complete.message', { count: newWorkouts.length }),
           }),
         );
         // importBackupData's effect upserts the plans synchronously within that dispatch, so the
@@ -73,6 +86,24 @@ export function addImportExternalEffects(addEffect: AddEffectFn) {
       }
     },
   );
+}
+
+/**
+ * Older imports timed Strong sets one second apart, so those workouts lasted seconds. Re-importing the
+ * export gives each already-imported, finished workout its real span and changes nothing else.
+ */
+function retimedStrongWorkouts(db: ExpoSQLiteDatabase, imported: Session[]): Session[] {
+  const existingById = new Map(
+    readFinishedSessions(
+      db,
+      imported.map((s) => s.id),
+    ).map((s) => [s.id, s]),
+  );
+  return imported.flatMap((fresh) => {
+    const existing = existingById.get(fresh.id);
+    const retimed = existing && retimedLikeImport(existing, fresh);
+    return retimed && !retimed.equals(existing) ? [retimed] : [];
+  });
 }
 
 /** An imported plan may take over only an empty active plan or an untouched built-in one. */

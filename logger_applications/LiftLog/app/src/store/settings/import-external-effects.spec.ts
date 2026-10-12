@@ -1,19 +1,19 @@
 import { importBackupData, importFromExternal, ExternalImportFormat } from '@/store/settings';
 import { addImportExternalEffects } from '@/store/settings/import-external-effects';
-import { getImportForFitNotes, getImportForStrongLifts } from '@/services/csv-import';
+import { getImportForFitNotes, getImportForStrong, getImportForStrongLifts } from '@/services/csv-import';
 import { programIdFromCsvImport } from '@/services/csv-import/csv-to-sessions';
 import { csvImportFixtureBytes } from '@/services/csv-import/__test__/fixtures';
 import { STRONG_EXPORT_KG } from '@/services/csv-import/__test__/strong-fixture';
 import { fetchUpcomingSessions, setActivePlan } from '@/store/program';
 import { ProgramBlueprint } from '@/models/blueprint-models';
 import { BuiltInPrograms } from '@/models/built-in-programs';
-import { LocalDate } from '@js-joda/core';
+import { LocalDate, LocalDateTime, ZoneId } from '@js-joda/core';
 import { createAddEffectTestBed } from '@/utils/__test__/add-effect-testbed';
 import { createTestDb } from '@/utils/__test__/test-db';
 import { describe, expect, it, vi } from 'vitest';
 import { showSnackbar } from '@/store/app';
 import { setStatsIsDirty } from '@/store/stats';
-import { Session } from '@/models/session-models';
+import { RecordedWeightedExercise, Session } from '@/models/session-models';
 
 type BedOpts = {
   format: ExternalImportFormat;
@@ -21,7 +21,7 @@ type BedOpts = {
   sessions?: Session[];
   imperial?: boolean;
   program?: { activePlanId: string; savedPrograms: Record<string, ProgramBlueprint> };
-  tolgee?: (key: string, params?: { count?: number; error?: string }) => string;
+  tolgee?: (key: string, params?: { count?: number; error?: string; retimed?: number }) => string;
 };
 
 async function makeExternalImportBed({
@@ -32,9 +32,12 @@ async function makeExternalImportBed({
   program = { activePlanId: '', savedPrograms: {} },
   tolgee,
 }: BedOpts) {
-  const defaultTolgee = (key: string, params?: { count?: number; error?: string }) => {
+  const defaultTolgee = (key: string, params?: { count?: number; error?: string; retimed?: number }) => {
     if (key === 'backup.import_from_other_apps.complete.message') {
       return `Imported ${params?.count} workout(s)`;
+    }
+    if (key === 'backup.import_from_other_apps.complete_retimed.message') {
+      return `Imported ${params?.count} workout(s) and corrected the times of ${params?.retimed}`;
     }
     if (key === 'backup.import_from_other_apps.already_imported.message') {
       return 'Those workouts are already in History';
@@ -186,6 +189,92 @@ describe('import-external-effects', () => {
     expect(imported.payload.programs).toEqual({});
     expect(imported.payload.successMessage).toBe('Imported 5 workout(s)');
     expect(testBed.getDispatchedAction(setStatsIsDirty).payload).toBe(true);
+  });
+
+  describe('re-importing Strong workouts imported with one-second set times', () => {
+    const fresh = () => getImportForStrong(new TextEncoder().encode(STRONG_EXPORT_KG)).workouts;
+    const starts = [
+      '2026-01-01T13:21:15',
+      '2026-01-03T18:00',
+      '2026-01-04T09:30',
+      '2026-01-05T19:40:44',
+      '2026-01-07T18:54:03',
+    ];
+    const legacyTimed = (session: Session, index: number) => {
+      let ordinal = 0;
+      const start = LocalDateTime.parse(starts[index]!).atZone(ZoneId.SYSTEM).toOffsetDateTime();
+      return session.with({
+        recordedExercises: session.recordedExercises.map((e) =>
+          (e as RecordedWeightedExercise).withAllSets((ps) =>
+            ps.with({ set: ps.set!.with({ completionDateTime: start.plusSeconds(ordinal++) }) }),
+          ),
+        ),
+      });
+    };
+    const times = (session: Session) =>
+      session.recordedExercises.flatMap((e) =>
+        (e as RecordedWeightedExercise).potentialSets.map((s) =>
+          s.set!.completionDateTime.toLocalDateTime().toString(),
+        ),
+      );
+
+    async function reimportOver(existing: Session[]) {
+      const testBed = await makeExternalImportBed({
+        format: 'Strong',
+        bytes: new TextEncoder().encode(STRONG_EXPORT_KG),
+        sessions: existing,
+      });
+      await testBed.dispatchHandled(importFromExternal({ format: 'Strong' }));
+      return testBed;
+    }
+
+    it('re-times them and keeps what the user changed', async () => {
+      const [first, ...rest] = fresh().map(legacyTimed);
+      const bench = first!.recordedExercises[0] as RecordedWeightedExercise;
+      const edited = first!.withExercise(
+        0,
+        bench.with({
+          notes: 'grip wider',
+          potentialSets: bench.potentialSets.map((ps, i) =>
+            i === 0 ? ps.with({ set: ps.set!.with({ repsCompleted: 11 }) }) : ps,
+          ),
+        }),
+      );
+
+      const testBed = await reimportOver([edited, ...rest]);
+
+      const imported = testBed.getDispatchedAction(importBackupData).payload;
+      expect(imported.successMessage).toBe('Imported 0 workout(s) and corrected the times of 5');
+      expect(imported.workouts.map((w) => w.date.toString())).toEqual([
+        '2026-01-01',
+        '2026-01-03',
+        '2026-01-04',
+        '2026-01-05',
+        '2026-01-07',
+      ]);
+      const retimed = imported.workouts[0]!;
+      expect(times(retimed)).toEqual(['2026-01-01T13:21:15', '2026-01-01T13:51:15', '2026-01-01T14:21:15']);
+      const retimedBench = retimed.recordedExercises[0] as RecordedWeightedExercise;
+      expect(retimedBench.notes).toBe('grip wider');
+      expect(retimedBench.potentialSets.map((ps) => ps.set!.repsCompleted)).toEqual([11, 8]);
+    });
+
+    it('keeps a moved workout on the date it was moved to', async () => {
+      const moved = legacyTimed(fresh()[2]!, 2).withUpdatedDate(LocalDate.of(2026, 1, 6));
+
+      const testBed = await reimportOver([moved]);
+
+      const retimed = testBed.getDispatchedAction(importBackupData).payload.workouts.find((w) => w.id === moved.id)!;
+      expect(retimed.date.toString()).toBe('2026-01-06');
+      expect(times(retimed)).toEqual(['2026-01-06T10:00']);
+    });
+
+    it('changes nothing once they are re-timed', async () => {
+      const testBed = await reimportOver(fresh());
+
+      testBed.expectNotDispatched(importBackupData);
+      expect(testBed.getDispatchedAction(showSnackbar).payload.text).toBe('Those workouts are already in History');
+    });
   });
 
   describe('Strong plan activation', () => {
