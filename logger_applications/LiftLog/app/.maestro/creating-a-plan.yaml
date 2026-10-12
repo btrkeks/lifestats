@@ -18,16 +18,12 @@ appId: com.limajuice.liftlog
 - assertVisible: 'Add exercise'
 - tapOn: 'Add exercise'
 
-# Drop reps 10 -> 9, raise sets 3 -> 4.
-# Sets and reps share child testIDs and sit side by side, so pick by render
-# order: sets is index 0, reps is index 1.
+# A plan exercise is only a set count: no rep mode, no rep target. Raise sets 3 -> 4.
 - assertVisible: 'Weighted'
-- tapOn:
-    id: 'fixed-decrement'
-    index: 1
+- assertNotVisible:
+    id: 'reps-mode-fixed'
 - tapOn:
     id: 'fixed-increment'
-    index: 0
 
 # Enable superset (further down the form, so scroll to it).
 # On Android the switch is a native Expo UI element with no testID, so tap the
@@ -38,44 +34,16 @@ appId: com.limajuice.liftlog
     direction: DOWN
 - tapOn: 'Superset next exercise'
 
-# A new exercise has no rules. The first one added moves weight; narrow it to the lowest sets via the
-# scope dropdown, then add a second: a weight rule never hands over, so the new rung goes in front of
-# it and the pair comes out as reps-then-weight without any further editing.
-- scrollUntilVisible:
-    element:
-      id: 'progression-add-rule'
-    direction: DOWN
-- tapOn:
-    id: 'progression-add-rule'
-- scrollUntilVisible:
-    element:
-      text: 'Amount to increase'
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      text: 'Every set'
-    direction: DOWN
-- tapOn: 'Every set'
-- tapOn: 'Every lowest'
-
-- scrollUntilVisible:
-    element:
-      id: 'progression-add-rule'
-    direction: DOWN
-- tapOn:
-    id: 'progression-add-rule'
-- assertVisible: 'Stop at a limit'
+# Weights are carried from last time and changed by hand, so there is no progression to set up
+- assertNotVisible: 'Progressive Overload'
 
 # Back to the workout; the exercise persisted
 - back
 - assertVisible: 'Exercise 1'
+- assertVisible: '4 sets'
 
 # Reopen it and confirm every edit was saved
 - tapOn: 'Exercise 1'
-# The two value inputs hold different numbers, so id + text identifies each
-- assertVisible:
-    id: 'fixed-value-input'
-    text: '9'
 - assertVisible:
     id: 'fixed-value-input'
     text: '4'
@@ -86,17 +54,6 @@ appId: com.limajuice.liftlog
 - assertVisible:
     checked: true
     rightOf: 'Superset next exercise'
-# Rule 1 is the reps rung added above and rule 2 the original weight rule, so both survived in order
-- scrollUntilVisible:
-    element:
-      text: 'Rule 2'
-    direction: DOWN
-- assertVisible: 'Limit'
-# Rule 2's own scope, which is the narrowing made before it was pushed down the list
-- scrollUntilVisible:
-    element:
-      text: 'Every lowest'
-    direction: DOWN
 
 # Back out to the plan list and remove the plan so the flow leaves no state behind
 - back

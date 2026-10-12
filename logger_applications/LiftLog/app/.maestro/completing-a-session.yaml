@@ -17,11 +17,16 @@ appId: com.limajuice.liftlog
     commands:
       - tapOn: 'Replace'
 
-# Add an exercise (defaults to "New Exercise", 3 sets x 10 reps) and leave it as-is
+# Add an exercise (defaults to "New Exercise", 3 sets) and leave it as-is
 - tapOn: 'Add exercise'
 - back
 
-# Log the first set with one tap: the row is prefilled with the 10-rep target. This starts the rest timer
+# Log the first set: type its reps, since a plan prescribes none, then check it. This starts the rest timer
+- tapOn:
+    id: 'set-row-reps'
+    index: 0
+- inputText: '10'
+- hideKeyboard
 - tapOn:
     id: 'set-row-check'
     index: 0

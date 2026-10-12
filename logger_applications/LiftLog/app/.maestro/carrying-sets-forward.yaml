@@ -1,0 +1,100 @@
+appId: com.limajuice.liftlog
+---
+# Each set remembers the last time its own index was completed, and a set added mid-workout is a
+# one-off: the next workout is back to the planned three sets.
+- launchApp
+# A cold dev-client launch can take up to a minute to fetch the bundle from Metro
+- extendedWaitUntil:
+    visible: 'Workout'
+    timeout: 60000
+- tapOn: 'Workout'
+# `(?-i)` pins this to the button's own casing, not the "Freeform Workout" cards in the list.
+- tapOn: '(?-i)Freeform workout'
+- runFlow:
+    when:
+      visible: 'Replace current workout?'
+    commands:
+      - tapOn: 'Replace'
+
+# "New Exercise", three sets
+- tapOn: 'Add exercise'
+- back
+
+# Set 1: 50kg x 8
+- tapOn:
+    id: 'set-row-weight'
+    index: 0
+- inputText: '50'
+- tapOn:
+    id: 'set-row-reps'
+    index: 0
+- inputText: '8'
+- hideKeyboard
+- tapOn:
+    id: 'set-row-check'
+    index: 0
+
+# Set 2 is skipped. Set 3: 60kg x 6
+- tapOn:
+    id: 'set-row-weight'
+    index: 2
+- eraseText
+- inputText: '60'
+- tapOn:
+    id: 'set-row-reps'
+    index: 2
+- inputText: '6'
+- hideKeyboard
+- tapOn:
+    id: 'set-row-check'
+    index: 2
+
+# A fourth set, added for today only: 60kg x 4
+- tapOn:
+    id: 'add-set'
+- tapOn:
+    id: 'set-row-reps'
+    index: 3
+- inputText: '4'
+- hideKeyboard
+- tapOn:
+    id: 'set-row-check'
+    index: 3
+
+- tapOn:
+    id: 'finish-session-button'
+- tapOn:
+    id: 'action-ok'
+- runFlow:
+    when:
+      visible: 'Would you like to save this workout to your plan?'
+    commands:
+      - back
+
+# The next workout has three sets again, each showing the last time its index was done
+- tapOn: 'Workout'
+- tapOn: '(?-i)Freeform workout'
+- runFlow:
+    when:
+      visible: 'Replace current workout?'
+    commands:
+      - tapOn: 'Replace'
+- tapOn: 'Add exercise'
+- back
+- assertVisible:
+    id: 'set-row'
+    index: 2
+- assertNotVisible:
+    id: 'set-row'
+    index: 3
+- assertVisible: '50.*× 8'
+- assertVisible: '60.*× 6'
+
+# Checking set 1 untouched logs last time's reps
+- tapOn:
+    id: 'set-row-check'
+    index: 0
+- assertVisible:
+    id: 'set-row-reps'
+    index: 0
+    text: '8'
