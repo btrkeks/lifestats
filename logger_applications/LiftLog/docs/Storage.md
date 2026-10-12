@@ -218,6 +218,8 @@ A session is spread over four tables, so its history can be queried in SQL:
   - `readSessionToContinueFrom` and `readLatestCardioExercises` (the most recently completed cardio
     performance per `progressionKey`, including the workout in progress), which `SessionService` builds
     upcoming sessions from;
+  - `readLastFinishedByName` (when each plan workout was last finished, timed like the other reads by its
+    last completed set), for the home screen's "Last done" line and its "Up next" card (`upNextIndex`);
   - `readStartedSessionVolumes` and `readPersonalRecords`, which read the whole history's summaries for
     the activity views. Each one has a spec that checks it against the JS it replaces (`sessionVolume`,
     `findPersonalRecords`) over generated sessions.

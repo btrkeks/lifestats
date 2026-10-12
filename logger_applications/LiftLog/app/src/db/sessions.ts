@@ -630,6 +630,23 @@ export function readSessionToContinueFrom(
 }
 
 /**
+ * When a workout of each name was last finished, in epoch milliseconds, timed like `readPreviousComparableSession`.
+ * A name never finished is left out.
+ */
+export function readLastFinishedByName(db: ExpoSQLiteDatabase, names: string[]): Map<string, number> {
+  if (!names.length) {
+    return new Map();
+  }
+  const rows = db
+    .select({ name: sessionsSchema.name, lastMs: sql<number>`max(${referenceMs})` })
+    .from(sessionsSchema)
+    .where(and(isFinished, inArray(sessionsSchema.name, names)))
+    .groupBy(sessionsSchema.name)
+    .all();
+  return new Map(rows.map((row) => [row.name, row.lastMs]));
+}
+
+/**
  * The finished session with the same name that was performed most recently before `before`, timed by its
  * last completed set, or the start of its date when it has none.
  */

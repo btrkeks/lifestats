@@ -1,4 +1,4 @@
-import { spacing } from '@/hooks/useAppTheme';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { Key, ReactElement, ReactNode } from 'react';
 import { View, ViewProps } from 'react-native';
 import { Card, CardProps } from 'react-native-paper';
@@ -33,6 +33,7 @@ export default function CardList<T>(props: CardListProps<T>) {
     emptyTemplate,
     ...rest
   } = props;
+  const { colors } = useAppTheme();
   return (
     <View
       {...rest}
@@ -58,7 +59,7 @@ export default function CardList<T>(props: CardListProps<T>) {
         return (
           <Card
             key={keySelector?.(item) ?? i}
-            style={[cardStyle, shouldHighlight?.(item, i) ? highlightStyle : undefined]}
+            style={[cardStyle, shouldHighlight?.(item, i) ? { backgroundColor: colors.secondaryContainer } : undefined]}
             mode={cardType}
             onLongPress={onLongPress ? () => onLongPress(item, i) : undefined}
             onPress={onPress ? () => onPress(item, i) : undefined}
@@ -70,5 +71,3 @@ export default function CardList<T>(props: CardListProps<T>) {
     </View>
   );
 }
-
-const highlightStyle = {};

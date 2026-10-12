@@ -18,7 +18,7 @@ import { Session } from '@/models/session-models';
 import { useAppSelector, useAppSelectorWhenFocused } from '@/store';
 import { deleteStoredSession, selectActiveSession } from '@/store/stored-sessions';
 import { fetchUpcomingSessions, selectActiveProgram } from '@/store/program';
-import { LocalDate } from '@js-joda/core';
+import { ChronoUnit, Instant, LocalDate } from '@js-joda/core';
 import { T, useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -27,6 +27,10 @@ import { Card, Icon as PaperIcon, Text, Tooltip } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/button';
 import { useDispatch } from 'react-redux';
 import { useStartWorkoutWithConfirmation } from '@/hooks/useStartWorkoutWithConfirmation';
+import { useSessionsQuery } from '@/hooks/useSessionsQuery';
+import { readLastFinishedByName } from '@/db/sessions';
+import { upNextIndex } from '@/models/up-next';
+import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 
 function ListUpcomingWorkouts({
   upcoming,
@@ -43,6 +47,11 @@ function ListUpcomingWorkouts({
   const { push } = useRouter();
   const dispatch = useDispatch();
   const [confirmDeleteSessionOpen, setConfirmDeleteSessionOpen] = useState(false);
+  const lastDoneLabel = useLastDoneLabel();
+  const names = plan.sessions.map((x) => x.name);
+  const lastFinished = useSessionsQuery((db) => readLastFinishedByName(db, names), names.join('\n'));
+  const upNext = lastFinished && upNextIndex(names, lastFinished, currentSession?.blueprint.name);
+  const planIndexOf = (session: Session) => plan.sessions.findIndex((x) => x.equals(session.blueprint));
   const clearCurrentSession = () => {
     if (currentSession) {
       dispatch(deleteStoredSession(currentSession.id));
@@ -94,15 +103,20 @@ function ListUpcomingWorkouts({
         cardType="contained"
         items={upcoming}
         emptyTemplate={currentSession ? undefined : <NoUpcomingWorkouts />}
+        shouldHighlight={(session) => planIndexOf(session) === upNext}
         renderItemContent={(session) => {
           return (
             <Card.Content>
-              <SessionCardContent session={session} />
+              <SessionCardContent
+                session={session}
+                lastDone={lastFinished && lastDoneLabel(lastFinished.get(session.blueprint.name))}
+                isUpNext={planIndexOf(session) === upNext}
+              />
             </Card.Content>
           );
         }}
         renderItemActions={(session) => {
-          const sessionPlanIndex = plan.sessions.findIndex((x) => x.equals(session.blueprint));
+          const sessionPlanIndex = planIndexOf(session);
           const handleEditPress = () => {
             push(`/plan-workout-editor/${planId}/${sessionPlanIndex}`);
           };
@@ -198,13 +212,70 @@ function NoUpcomingWorkouts() {
   );
 }
 
-function SessionCardContent({ session }: { session: Session }) {
+function SessionCardContent({
+  session,
+  lastDone,
+  isUpNext = false,
+}: {
+  session: Session;
+  lastDone?: string;
+  isUpNext?: boolean;
+}) {
   return (
     <SplitCardControl
-      titleContent={<SessionSummaryTitle session={session} />}
+      titleContent={
+        <SessionSummaryTitle
+          session={session}
+          byline={lastDone}
+          bylineLeading={isUpNext ? <UpNextChip /> : undefined}
+          color={isUpNext ? 'onSecondaryContainer' : undefined}
+        />
+      }
       mainContent={<SessionSummary session={session} isFilled={false} showWeight />}
     />
   );
+}
+
+function UpNextChip() {
+  const { t } = useTranslate();
+  const { colors } = useAppTheme();
+  return (
+    <View
+      style={{
+        backgroundColor: colors.primary,
+        borderRadius: 1000,
+        paddingHorizontal: spacing[2],
+        paddingVertical: spacing[0.5],
+      }}
+    >
+      <SurfaceText font="text-xs" weight="bold" color="onPrimary">
+        {t('workout.up_next.label')}
+      </SurfaceText>
+    </View>
+  );
+}
+
+/** "Last done 3 days ago · Thu", from when a plan workout was last finished. */
+function useLastDoneLabel() {
+  const { t } = useTranslate();
+  const formatDate = useFormatDate();
+  return (lastFinishedMs: number | undefined): string => {
+    if (lastFinishedMs === undefined) {
+      return t('workout.last_done.never.label');
+    }
+    const day = LocalDate.ofInstant(Instant.ofEpochMilli(lastFinishedMs));
+    const days = day.until(LocalDate.now(), ChronoUnit.DAYS);
+    if (days <= 0) {
+      return t('workout.last_done.today.label');
+    }
+    if (days === 1) {
+      return t('workout.last_done.yesterday.label');
+    }
+    return t('workout.last_done.days_ago.label', {
+      count: days.toString(),
+      day: formatDate(day, days < 7 ? { weekday: 'short' } : { day: 'numeric', month: 'short' }),
+    });
+  };
 }
 
 export default function Index() {

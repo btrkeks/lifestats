@@ -4,6 +4,7 @@ import {
   readActiveSession,
   readEarliestSessionDate,
   readExistingSessionIds,
+  readLastFinishedByName,
   readLatestCardioExercises,
   readPersonalRecords,
   readPreviousComparableSession,
@@ -690,6 +691,39 @@ describe('readWeightedHistory', () => {
 
     expect([...readWeightedHistory(db, { movementKeys: [squatKey] })]).toEqual([]);
     expect([...readWeightedHistory(db, { movementKeys: [] })]).toEqual([]);
+  });
+});
+
+describe('readLastFinishedByName', () => {
+  let db: ExpoSQLiteDatabase;
+  const store = (...sessions: Session[]) =>
+    db.transaction((tx) => sessions.forEach((session) => writeSession(tx, session)));
+
+  beforeEach(async () => {
+    db = await createDb();
+  });
+
+  it('times each name by its latest finished session, leaving out the workout in progress and other names', () => {
+    store(
+      sessionOf('DAY 1', [squatAt(tickAt(9, 0))]),
+      sessionOf('DAY 1', [squatAt(tickAt(18, 30))]),
+      sessionOf('DAY 2', [squatAt(tickAt(18, 0))]),
+      sessionOf('Legs', [squatAt(tickAt(20, 0))]),
+    );
+    db.transaction((tx) => setActiveSession(tx, sessionOf('DAY 2', [squatAt(tickAt(21, 0))])));
+
+    expect(readLastFinishedByName(db, ['DAY 1', 'DAY 2', 'DAY 3'])).toEqual(
+      new Map([
+        ['DAY 1', Date.parse('2025-04-05T18:30:00Z')],
+        ['DAY 2', Date.parse('2025-04-05T18:00:00Z')],
+      ]),
+    );
+  });
+
+  it('places a session with nothing completed at the local start of its date', () => {
+    store(sessionOf('DAY 1', [], LocalDate.of(2025, 4, 4)));
+
+    expect(readLastFinishedByName(db, ['DAY 1'])).toEqual(new Map([['DAY 1', new Date(2025, 3, 4).getTime()]]));
   });
 });
 
