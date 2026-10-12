@@ -84,8 +84,8 @@ class WorkoutUpdatedHandler(
         timer.stop()
 
         // The collapsed pill and the always-on-display outline only surface the title and the short
-        // critical text, not the content text - so the exercise goes in the title and its target in
-        // the critical slot, leaving the "start now" prompt for the expanded card.
+        // critical text, not the content text - so the exercise goes in the title and the upcoming set
+        // in the critical slot, leaving the "start now" prompt for the expanded card.
         val exerciseMessage = getCurrentExerciseMessage(translations, event)
         val criticalText = getCurrentExerciseCriticalText(event)
         val notifBuilder = notificationManager.createWorkoutNotificationBuilder()
@@ -283,11 +283,11 @@ class WorkoutUpdatedHandler(
         }
     }
 
-    // Compact, glanceable target for the always-on-display / status-bar chip, which only has room for
-    // a few characters: the upcoming reps for a weighted set, or the target for a cardio set.
+    // Compact, glanceable text for the always-on-display / status-bar chip, which only has room for
+    // a few characters: which set is next for a weighted exercise, or the target for a cardio set.
     private fun getCurrentExerciseCriticalText(event: WorkoutUpdatedEvent): String {
         return when (val currentExercise = event.currentExerciseDetails?.exercise) {
-            is RecordedWeightedExercise -> targetFor(currentExercise, nextSetIndexOf(currentExercise))
+            is RecordedWeightedExercise -> setPositionOf(currentExercise)
             is RecordedCardioExercise -> getCardioTarget(event)
             else -> ""
         }
@@ -307,13 +307,17 @@ class WorkoutUpdatedHandler(
 
         return when {
             event.currentExerciseDetails == null -> ""
-            currentExercise is RecordedWeightedExercise -> messageTemplate.replace(
-                "\$EXERCISE_DESCRIPTOR$", "${currentExercise.blueprint.name} - ${
-                    targetFor(currentExercise, nextSetIndexOf(currentExercise))
-                }${
-                    if (nextSet?.weight != null) "x${formatWeight(nextSet.weight)}" else ""
-                }"
-            )
+            currentExercise is RecordedWeightedExercise -> {
+                val upcoming = listOfNotNull(
+                    setPositionOf(currentExercise).takeIf { it.isNotEmpty() }?.let { "Set $it" },
+                    nextSet?.weight?.let { formatWeight(it) },
+                ).joinToString(" · ")
+                messageTemplate.replace(
+                    "\$EXERCISE_DESCRIPTOR$",
+                    if (upcoming.isEmpty()) currentExercise.blueprint.name
+                    else "${currentExercise.blueprint.name} - $upcoming",
+                )
+            }
 
             currentExercise is RecordedCardioExercise-> messageTemplate.replace(
                 "\$EXERCISE_DESCRIPTOR$", "${currentExercise.blueprint.name} - ${getCardioTarget(event)}"
@@ -323,20 +327,11 @@ class WorkoutUpdatedHandler(
         }
     }
 
-    private fun formatRepsTarget(min: Long, max: Long): String {
-        return if (min == max) "$max" else "$min-$max"
-    }
-
-    // Mirrors WeightedExerciseBlueprint.repsTargetForSet on the JS side, including its fall back to
-    // the last target when the index runs past the planned list.
-    private fun targetFor(exercise: RecordedWeightedExercise, setIndex: Int): String {
-        val plannedSets = exercise.blueprint.plannedSets
-        val target = (plannedSets.getOrNull(setIndex) ?: plannedSets.lastOrNull())?.reps ?: return ""
-        return formatRepsTarget(target.min, target.max)
-    }
-
-    private fun nextSetIndexOf(exercise: RecordedWeightedExercise): Int {
-        return exercise.potentialSets.indexOfFirst { it.set == null }.takeIf { it >= 0 } ?: 0
+    // The next unchecked set among all of this workout's sets, added ones included: "2/3". Empty once
+    // every set is checked.
+    private fun setPositionOf(exercise: RecordedWeightedExercise): String {
+        val next = exercise.potentialSets.indexOfFirst { it.set == null }.takeIf { it >= 0 } ?: return ""
+        return "${next + 1}/${exercise.potentialSets.size}"
     }
 
     private fun formatWeight(weight: Weight, truncateDecimals: Boolean = false): String {

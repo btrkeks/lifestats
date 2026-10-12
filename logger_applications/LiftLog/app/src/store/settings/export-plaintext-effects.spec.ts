@@ -25,6 +25,7 @@ import { SessionJSON } from '@/models/storage/versions/latest';
 
 const t = OffsetDateTime.of(2024, 1, 15, 10, 0, 0, 0, ZoneOffset.UTC);
 
+/** Exercises as stored before plans stopped prescribing reps, so the export has targets to leave out. */
 function makeBenchBlueprint(name = 'Bench Press', sets = 3, repsPerSet = 10) {
   return makeLegacyWeightedBlueprint({ name, targets: targets(sets, repsPerSet) });
 }
@@ -106,6 +107,26 @@ describe('export-plaintext-effects', () => {
       // 1 header + 6 data rows
       expect(lines).toHaveLength(7);
       expect(lines).toMatchSnapshot();
+    });
+
+    it('writes what was lifted, with no rep target column', async () => {
+      const fileExportService = makeFileExportService();
+      const session = makeSession([makeWeightedExercise('Deadlift', 1, 180, 5)]).with({ id: 'deadlift-day' });
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([session]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      expect(new TextDecoder().decode(bytes).split('\r\n')).toEqual([
+        'SessionId,Timestamp,Exercise,Weight,WeightUnit,Reps,Notes',
+        'deadlift-day,2024-01-15T10:00Z,Deadlift,180,kg,5,',
+      ]);
     });
 
     it('CSV rows contain the correct exercise name, weight, and reps', async () => {
@@ -302,6 +323,44 @@ describe('export-plaintext-effects', () => {
       const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
       const [session] = fromJsonBytes<SessionJSON[]>(bytes);
       expect((session!.blueprint as unknown as { exercises: [] }).exercises).toBeUndefined();
+    });
+
+    it('exports a weighted exercise as its set count and what was lifted, without legacy targets or rules', async () => {
+      const fileExportService = makeFileExportService();
+      const session = makeSession([makeWeightedExercise('Deadlift', 1, 180, 5)]);
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([session]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'JSON' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const [exported] = fromJsonBytes<{ recordedExercises: unknown[] }[]>(bytes);
+      expect(exported!.recordedExercises).toEqual([
+        {
+          type: 'RecordedWeightedExercise',
+          blueprint: {
+            type: 'WeightedExerciseBlueprint',
+            name: 'Deadlift',
+            sets: 1,
+            resistance: 'external',
+            restBetweenSets: { minRest: 'PT1M30S', maxRest: 'PT3M' },
+            supersetWithNext: false,
+            notes: '',
+            link: '',
+          },
+          potentialSets: [
+            {
+              weight: { value: '180', unit: 'kilograms' },
+              set: { repsCompleted: 5, completionDateTime: '2024-01-15T10:00:00Z' },
+            },
+          ],
+        },
+      ]);
     });
 
     it('JSON output includes session id and recorded exercises', async () => {

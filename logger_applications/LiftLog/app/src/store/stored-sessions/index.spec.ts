@@ -44,7 +44,7 @@ function createSessionWithCompletionTime(sessionDate: LocalDate, completionTime:
   const exerciseBlueprint = blueprint.exercises[0] as WeightedExerciseBlueprint;
   const recordedExercise = new RecordedWeightedExercise(
     exerciseBlueprint,
-    [filledPotentialSet(exerciseBlueprint.repsTargetForSet(0).max, completionTime, new Weight(100, 'kilograms'))],
+    [filledPotentialSet(5, completionTime, new Weight(100, 'kilograms'))],
     undefined,
   );
 

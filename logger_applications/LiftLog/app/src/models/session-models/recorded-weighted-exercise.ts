@@ -64,11 +64,6 @@ export class RecordedWeightedExercise {
     return this.blueprint.progressionKey();
   }
 
-  /** The performance's own target wins; the blueprint only seeds it when the exercise is created. */
-  repsTargetForSet(index: number): RepsTarget {
-    return this.potentialSets[index]?.target ?? this.blueprint.repsTargetForSet(index);
-  }
-
   /**
    * The plan's sets, all unchecked, sized by the plan alone however many sets were done last time. Each
    * set starts at the weight last completed at its index, else at the nearest earlier index that has

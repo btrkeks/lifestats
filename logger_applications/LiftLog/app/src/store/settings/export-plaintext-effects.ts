@@ -36,15 +36,41 @@ export function addExportPlaintextEffects(addEffect: AddEffectFn) {
 }
 
 async function exportToJson(sessions: Enumerable.IEnumerable<Session>): Promise<Uint8Array> {
-  const exportedSets = sessions
-    .select((x) => ({
-      // oxlint-disable-next-line typescript/no-misused-spread
-      ...x,
-      // oxlint-disable-next-line typescript/no-misused-spread
-      blueprint: { ...x.blueprint, exercises: undefined },
+  const exportedSessions = sessions
+    .select((session) => ({
+      id: session.id,
+      blueprint: { name: session.blueprint.name, notes: session.blueprint.notes },
+      date: session.date,
+      bodyweight: session.bodyweight,
+      recordedExercises: session.recordedExercises.map(exportedExercise),
     }))
     .toArray();
-  return new TextEncoder().encode(JSON.stringify(exportedSets));
+  return new TextEncoder().encode(JSON.stringify(exportedSessions));
+}
+
+/**
+ * What was planned and done, without the rep targets, progression rules and failure rest that stored
+ * weighted exercises still carry for compatibility.
+ */
+function exportedExercise(exercise: RecordedExercise) {
+  if (exercise instanceof RecordedCardioExercise) {
+    return exercise.toJSON();
+  }
+  const { blueprint, potentialSets, ...performed } = exercise.toJSON();
+  return {
+    ...performed,
+    blueprint: {
+      type: blueprint.type,
+      name: blueprint.name,
+      sets: blueprint.plannedSets.length,
+      resistance: blueprint.resistance,
+      restBetweenSets: { minRest: blueprint.restBetweenSets.minRest, maxRest: blueprint.restBetweenSets.maxRest },
+      supersetWithNext: blueprint.supersetWithNext,
+      notes: blueprint.notes,
+      link: blueprint.link,
+    },
+    potentialSets: potentialSets.map((set) => ({ weight: set.weight, set: set.set })),
+  };
 }
 
 async function exportToCsv(sessions: Enumerable.IEnumerable<Session>): Promise<Uint8Array> {
@@ -63,7 +89,6 @@ class ExportedSetCsvRow {
     public Weight: BigNumber | '',
     public WeightUnit: string,
     public Reps: number,
-    public TargetReps: number,
     public Notes: string,
   ) {}
   static fromModel(session: Session, exercise: RecordedExercise): ExportedSetCsvRow[] {
@@ -72,10 +97,9 @@ class ExportedSetCsvRow {
       return [];
     }
     return exercise.potentialSets
-      .map((set, index) => ({ set, index }))
-      .filter((x) => x.set.set)
+      .filter((set) => set.set)
       .map(
-        ({ set, index }) =>
+        (set) =>
           new ExportedSetCsvRow(
             session.id,
             set.set!.completionDateTime.toString(),
@@ -84,7 +108,6 @@ class ExportedSetCsvRow {
             exercise.tracksResistance ? set.weight.value : '',
             exercise.tracksResistance ? shortFormatWeightUnit(set.weight.unit) : '',
             set.set!.repsCompleted,
-            exercise.repsTargetForSet(index).max,
             exercise.notes ?? '',
           ),
       );

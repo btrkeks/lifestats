@@ -23,15 +23,11 @@ import {
   targets,
 } from './__test__/helpers';
 
-/** Checks the first set of an exercise at its planned weight and top-of-target reps. */
+/** Checks the first set of an exercise at its planned weight. */
 function logFirstSet(session: Session, exerciseIndex: number): Session {
   const exercise = session.recordedExercises[exerciseIndex] as RecordedWeightedExercise;
   const set = exercise.getSet(0);
-  return session.withWeightedChange(
-    exerciseIndex,
-    { kind: 'log', setIndex: 0, weight: set.weight, reps: exercise.repsTargetForSet(0).max },
-    tick(),
-  );
+  return session.withWeightedChange(exerciseIndex, { kind: 'log', setIndex: 0, weight: set.weight, reps: 10 }, tick());
 }
 
 describe('Session supersets', () => {

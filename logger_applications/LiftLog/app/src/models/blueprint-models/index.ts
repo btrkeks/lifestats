@@ -561,11 +561,6 @@ export class WeightedExerciseBlueprint {
     return (repsAreProgressed ? base : `${base}_${plannedSetsKey(this.plannedSets)}`) as ProgressionKey;
   }
 
-  repsTargetForSet(index: number): RepsTarget {
-    const target = this.plannedSets[index]?.reps ?? this.plannedSets.at(-1)?.reps ?? { min: 0, max: 0 };
-    return { min: target.min, max: target.max };
-  }
-
   /** At least one. Sets kept keep whatever they carried; sets added carry nothing. */
   withSets(value: number): WeightedExerciseBlueprint {
     const sets = Math.max(value, 1);
