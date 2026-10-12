@@ -4,6 +4,9 @@ import {
   RecordedSet,
   RecordedWeightedExercise,
   WeightedChange,
+  CompletedWeightedSet,
+  CompletedWeightedSets,
+  WeightedHistory,
 } from '@/models/session-models/recorded-weighted-exercise';
 import { RecordedCardioExercise, RecordedCardioExerciseSet } from '@/models/session-models/recorded-cardio-exercise';
 import { fromRecordedExerciseJSON, RecordedExercise } from '@/models/session-models/recorded-exercise';
@@ -22,4 +25,4 @@ export {
   freeformSessionName,
   fromRecordedExerciseJSON,
 };
-export type { WeightedChange };
+export type { WeightedChange, CompletedWeightedSet, CompletedWeightedSets, WeightedHistory };

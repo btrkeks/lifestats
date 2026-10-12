@@ -7,7 +7,14 @@ import {
 } from '@/db/schema';
 import { MovementKey, ProgressionKey } from '@/models/blueprint-models';
 import { TemporalComparer } from '@/models/comparers';
-import { freeformSessionName, fromRecordedExerciseJSON, RecordedExercise, Session } from '@/models/session-models';
+import {
+  CompletedWeightedSet,
+  freeformSessionName,
+  fromRecordedExerciseJSON,
+  RecordedExercise,
+  Session,
+  WeightedHistory,
+} from '@/models/session-models';
 import { Weight } from '@/models/weight';
 import {
   CardioExerciseSetBlueprintJSON,
@@ -617,6 +624,70 @@ export function readPreviousComparableSession(
     .limit(1)
     .get();
   return previous && readSession(db, previous.id);
+}
+
+/**
+ * The latest completed set at each index of each movement, across finished sessions only, so a set the
+ * newest performance skipped falls back to the last time that index was done. `lastNotes` belongs to
+ * the exercise holding the movement's newest completed set, even when they are empty.
+ */
+export function readWeightedHistory(
+  db: ExpoSQLiteDatabase,
+  query: { movementKeys: readonly MovementKey[]; excludeSessionId?: string },
+): ReadonlyMap<MovementKey, WeightedHistory> {
+  if (!query.movementKeys.length) {
+    return new Map();
+  }
+  const exercises = recordedExercisesSchema;
+  const sets = weightedSetsSchema;
+  const ranked = db
+    .select({
+      movementKey: exercises.movementKey,
+      sessionId: exercises.sessionId,
+      exerciseOrd: sql<number>`${exercises.ord}`.as('exerciseOrd'),
+      notes: exercises.notes,
+      setIndex: sql<number>`${sets.ord}`.as('setIndex'),
+      weightValue: sets.weightValue,
+      weightUnit: sets.weightUnit,
+      repsCompleted: sets.repsCompleted,
+      completedAtMs: sets.completedAtMs,
+      recency: sql<number>`row_number() over (
+        partition by ${exercises.movementKey}, ${sets.ord}
+        order by ${sets.completedAtMs} desc, ${exercises.sessionId}, ${exercises.ord}
+      )`.as('recency'),
+    })
+    .from(exercises)
+    .innerJoin(sessionsSchema, eq(sessionsSchema.id, exercises.sessionId))
+    .innerJoin(sets, ofExercise(sets))
+    .where(
+      and(
+        isFinished,
+        inArray(exercises.movementKey, [...query.movementKeys]),
+        isNotNull(sets.completedAtMs),
+        query.excludeSessionId === undefined ? undefined : ne(sessionsSchema.id, query.excludeSessionId),
+      ),
+    )
+    .as('ranked');
+  const rows = db
+    .select()
+    .from(ranked)
+    .where(eq(ranked.recency, 1))
+    .orderBy(ranked.movementKey, desc(ranked.completedAtMs), ranked.sessionId, sql`${ranked.exerciseOrd}`)
+    .all();
+
+  const history = new Map<MovementKey, { sets: Map<number, CompletedWeightedSet>; lastNotes: string | undefined }>();
+  for (const row of rows) {
+    let movement = history.get(row.movementKey);
+    if (!movement) {
+      movement = { sets: new Map(), lastNotes: row.notes ?? undefined };
+      history.set(row.movementKey, movement);
+    }
+    movement.sets.set(row.setIndex, {
+      weight: Weight.fromJSON({ value: row.weightValue, unit: row.weightUnit }),
+      reps: required(row.repsCompleted, 'repsCompleted'),
+    });
+  }
+  return history;
 }
 
 export function readLatestExercises(

@@ -14,6 +14,7 @@ import {
   readSessionsBetween,
   readSessionToContinueFrom,
   readStartedSessionVolumes,
+  readWeightedHistory,
   setActiveSession,
   writeSession,
 } from '@/db/sessions';
@@ -27,9 +28,12 @@ import {
 import {
   freeformSessionName,
   RecordedCardioExercise,
+  PotentialSet,
   RecordedExercise,
+  RecordedSet,
   RecordedWeightedExercise,
   Session,
+  WeightedHistory,
 } from '@/models/session-models';
 import {
   makeCardioBlueprint,
@@ -44,7 +48,7 @@ import { sessionVolume } from '@/store/activity/volume';
 import { findPersonalRecords } from '@/store/stats/personal-records';
 import { getSessionReferenceTime } from '@/store/stored-sessions';
 import { DatabaseMigrationService } from '@/services/database-migration-service';
-import { Weight } from '@/models/weight';
+import { Weight, WeightUnit } from '@/models/weight';
 import { Duration, LocalDate, OffsetDateTime, ZoneId } from '@js-joda/core';
 import BigNumber from 'bignumber.js';
 import { eq, sql } from 'drizzle-orm';
@@ -486,6 +490,182 @@ describe('readPreviousExercises', () => {
         }
       }),
     );
+  });
+});
+
+describe('readWeightedHistory', () => {
+  let db: ExpoSQLiteDatabase;
+  const store = (...sessions: Session[]) =>
+    db.transaction((tx) => sessions.forEach((session) => writeSession(tx, session)));
+  const squatKey = movementKeyFor('Squat', 'WeightedExerciseBlueprint');
+
+  /** One weighted exercise; `[weight, reps]` per set, `reps` undefined for a set left unchecked. */
+  function performed(
+    hour: number,
+    sets: [number, number | undefined][],
+    init: { name?: string; notes?: string; unit?: WeightUnit } = {},
+  ) {
+    return new RecordedWeightedExercise(
+      makeWeightedBlueprint({ name: init.name ?? 'Squat', sets: sets.length }),
+      sets.map(([weight, reps], index) =>
+        PotentialSet.of({
+          weight: new Weight(weight, init.unit ?? 'kilograms'),
+          set:
+            reps === undefined
+              ? undefined
+              : RecordedSet.of({ repsCompleted: reps, completionDateTime: tickAt(hour, index) }),
+        }),
+      ),
+      init.notes,
+    );
+  }
+
+  const describeSets = (history: WeightedHistory | undefined) =>
+    [...(history?.sets ?? [])]
+      .sort(([a], [b]) => a - b)
+      .map(([index, set]) => `${index}: ${set.weight.value.toString()} ${set.weight.unit} x ${set.reps}`);
+
+  beforeEach(async () => {
+    db = await createDb();
+  });
+
+  it('takes each set index from the last time that index was completed', () => {
+    store(
+      sessionOf('Old', [
+        performed(
+          8,
+          [
+            [50, 8],
+            [55, 7],
+            [60, 6],
+          ],
+          { notes: 'old cue' },
+        ),
+      ]),
+      sessionOf('New', [
+        performed(
+          9,
+          [
+            [52, 9],
+            [999, undefined],
+            [62, 5],
+            [65, 4],
+          ],
+          { notes: 'new cue' },
+        ),
+      ]),
+    );
+
+    const history = readWeightedHistory(db, { movementKeys: [squatKey] }).get(squatKey);
+
+    expect(describeSets(history)).toEqual([
+      '0: 52 kilograms x 9',
+      '1: 55 kilograms x 7',
+      '2: 62 kilograms x 5',
+      '3: 65 kilograms x 4',
+    ]);
+    expect(history?.lastNotes).toBe('new cue');
+  });
+
+  it('keeps the notes of the latest performance even when they are empty', () => {
+    store(
+      sessionOf('Old', [performed(8, [[50, 8]], { notes: 'old cue' })]),
+      sessionOf('New', [performed(9, [[52, 9]], { notes: '' })]),
+    );
+
+    expect(readWeightedHistory(db, { movementKeys: [squatKey] }).get(squatKey)?.lastNotes).toBe('');
+  });
+
+  it('leaves out the excluded session and the workout in progress', () => {
+    const excluded = sessionOf('Excluded', [performed(10, [[120, 5]])]);
+    store(excluded, sessionOf('Kept', [performed(8, [[100, 5]])]));
+    db.transaction((tx) => setActiveSession(tx, sessionOf('Now', [performed(11, [[140, 5]])])));
+
+    expect(describeSets(readWeightedHistory(db, { movementKeys: [squatKey] }).get(squatKey))).toEqual([
+      '0: 120 kilograms x 5',
+    ]);
+    expect(
+      describeSets(readWeightedHistory(db, { movementKeys: [squatKey], excludeSessionId: excluded.id }).get(squatKey)),
+    ).toEqual(['0: 100 kilograms x 5']);
+  });
+
+  it('counts a zero-rep set, keeps its unit, and ignores a weight that was never checked', () => {
+    store(
+      sessionOf('Old', [
+        performed(
+          8,
+          [
+            [100, 3],
+            [135, 2],
+          ],
+          { unit: 'pounds' },
+        ),
+      ]),
+      sessionOf('New', [
+        performed(
+          9,
+          [
+            [45, 0],
+            [500, undefined],
+          ],
+          { unit: 'pounds' },
+        ),
+      ]),
+    );
+
+    expect(describeSets(readWeightedHistory(db, { movementKeys: [squatKey] }).get(squatKey))).toEqual([
+      '0: 45 pounds x 0',
+      '1: 135 pounds x 2',
+    ]);
+  });
+
+  it('breaks a tie between two performances in one workout by their order', () => {
+    const first = performed(9, [[60, 5]], { notes: 'first' });
+    const second = performed(9, [[70, 5]], { notes: 'second' });
+    store(sessionOf('Twice', [first, second]));
+
+    const history = readWeightedHistory(db, { movementKeys: [squatKey] }).get(squatKey);
+
+    expect(describeSets(history)).toEqual(['0: 60 kilograms x 5']);
+    expect(history?.lastNotes).toBe('first');
+  });
+
+  it('matches by movement name whatever the set count or rep scheme, and keeps other names apart', () => {
+    const fiveByFive = new RecordedWeightedExercise(
+      makeWeightedBlueprint({
+        name: 'squats',
+        plannedSets: Array.from({ length: 5 }, () => ({ reps: { min: 5, max: 5 } })),
+      }),
+      [
+        PotentialSet.of({
+          weight: new Weight(100, 'kilograms'),
+          set: RecordedSet.of({ repsCompleted: 5, completionDateTime: tickAt(8, 0) }),
+        }),
+      ],
+      undefined,
+    );
+    store(
+      sessionOf('Old', [fiveByFive, performed(8, [[40, 10]], { name: 'Front Squat' })]),
+      sessionOf('New', [
+        performed(9, [
+          [80, 8],
+          [80, 8],
+        ]),
+      ]),
+    );
+    const frontSquatKey = movementKeyFor('Front Squat', 'WeightedExerciseBlueprint');
+
+    const history = readWeightedHistory(db, { movementKeys: [squatKey, frontSquatKey] });
+
+    expect(describeSets(history.get(squatKey))).toEqual(['0: 80 kilograms x 8', '1: 80 kilograms x 8']);
+    expect(describeSets(history.get(frontSquatKey))).toEqual(['0: 40 kilograms x 10']);
+  });
+
+  it('reads nothing for no movements, or for one never completed', () => {
+    store(sessionOf('Day', [performed(9, [[100, undefined]])]));
+
+    expect([...readWeightedHistory(db, { movementKeys: [squatKey] })]).toEqual([]);
+    expect([...readWeightedHistory(db, { movementKeys: [] })]).toEqual([]);
   });
 });
 

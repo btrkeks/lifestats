@@ -23,6 +23,20 @@ export type WeightedChange =
   | { kind: 'addSet' }
   | { kind: 'removeLastSet' };
 
+/** A set as it was performed: what is carried into the next time that set comes round. */
+export interface CompletedWeightedSet {
+  readonly weight: Weight;
+  readonly reps: number;
+}
+
+/** Keyed by zero-based set index, including sets added beyond the plan. */
+export type CompletedWeightedSets = ReadonlyMap<number, CompletedWeightedSet>;
+
+export interface WeightedHistory {
+  readonly sets: CompletedWeightedSets;
+  readonly lastNotes: string | undefined;
+}
+
 export class RecordedWeightedExercise {
   readonly type = 'RecordedWeightedExercise';
 
