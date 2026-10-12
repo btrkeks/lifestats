@@ -85,6 +85,13 @@
       "when": 1791329814586,
       "tag": "0011_session_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791811497582,
+      "tag": "0012_lifestats_sync_queue",
+      "breakpoints": true
     }
   ]
 }

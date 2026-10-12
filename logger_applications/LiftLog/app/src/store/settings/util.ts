@@ -28,6 +28,9 @@ export async function getBackupBytes(expoDb: SQLiteDatabase) {
     await clearTables(backupDatabase, await presentTablesLike(backupDatabase, 'backend%'));
     // The feed was removed, but its tables stay so older backups still restore; their rows are dead weight.
     await clearTables(backupDatabase, await presentTablesLike(backupDatabase, 'feed\\_%'));
+    // Which days lifestats is behind on is about this device and its sync URL, which preferences hold
+    // and a backup does not.
+    await clearTables(backupDatabase, await presentTablesLike(backupDatabase, 'lifestats\\_%'));
     await backupDatabase.execAsync('VACUUM');
 
     const bytes = await backupDatabase.serializeAsync();

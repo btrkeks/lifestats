@@ -3,8 +3,16 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { deserializeDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { gunzipSync } from 'zlib';
 import { DatabaseMigrationService } from '@/services/database-migration-service';
-import { backendAssignmentsSchema, backendHeadersSchema, backendsSchema, feedIdentitySchema } from '@/db/schema';
+import {
+  backendAssignmentsSchema,
+  backendHeadersSchema,
+  backendsSchema,
+  feedIdentitySchema,
+  lifestatsSyncQueueSchema,
+} from '@/db/schema';
 import { getBackupBytes } from '@/store/settings/util';
+import { toLocalDateJSON } from '@/models/storage/versions/libs';
+import { LocalDate } from '@js-joda/core';
 import 'compression-streams-polyfill';
 
 async function createSeededDb(): Promise<SQLiteDatabase> {
@@ -20,6 +28,7 @@ async function createSeededDb(): Promise<SQLiteDatabase> {
   await db.insert(backendHeadersSchema).values({ backendId: 'self', name: 'X-Api-Key', value: 'super-secret' });
   await db.insert(backendAssignmentsSchema).values({ feature: 'backup', backendId: 'self' });
   await db.insert(feedIdentitySchema).values({ id: 0, payload: {} as never });
+  await db.insert(lifestatsSyncQueueSchema).values({ date: toLocalDateJSON(LocalDate.of(2026, 10, 11)) });
 
   return expoDb;
 }
@@ -45,6 +54,16 @@ describe('getBackupBytes', () => {
     const restored = drizzle(await deserializeDatabaseAsync(gunzipSync(gzipped)));
 
     expect(await restored.select().from(feedIdentitySchema)).toEqual([]);
+  });
+
+  it('strips the days queued for lifestats', async () => {
+    const expoDb = await createSeededDb();
+
+    const gzipped = await getBackupBytes(expoDb);
+    const restored = drizzle(await deserializeDatabaseAsync(gunzipSync(gzipped)));
+
+    expect(await restored.select().from(lifestatsSyncQueueSchema)).toEqual([]);
+    expect(await drizzle(expoDb).select().from(lifestatsSyncQueueSchema)).toEqual([{ date: '2026-10-11', seq: 1 }]);
   });
 
   it('leaves the source database untouched', async () => {

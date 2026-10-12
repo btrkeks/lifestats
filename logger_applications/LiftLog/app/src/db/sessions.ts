@@ -385,11 +385,7 @@ function readSessionsWhere(db: ExpoSQLiteDatabase, where: SQL | undefined): Sess
 export function readSessions(db: ExpoSQLiteDatabase): { sessions: Session[]; activeSessionId: string | undefined } {
   return {
     sessions: readSessionsWhere(db, undefined),
-    activeSessionId: db
-      .select({ id: sessionsSchema.id })
-      .from(sessionsSchema)
-      .where(eq(sessionsSchema.active, true))
-      .get()?.id,
+    activeSessionId: readActiveSessionId(db),
   };
 }
 
@@ -416,6 +412,28 @@ export function readEarliestSessionDate(db: ExpoSQLiteDatabase): LocalDate | und
     .where(isFinished)
     .get()?.date;
   return earliest ? fromLocalDateJSON(earliest) : undefined;
+}
+
+export function readActiveSessionId(db: ExpoSQLiteDatabase): string | undefined {
+  return db.select({ id: sessionsSchema.id }).from(sessionsSchema).where(eq(sessionsSchema.active, true)).get()?.id;
+}
+
+/**
+ * The distinct dates of the sessions that put workout time on their day: finished, with a completed set.
+ * Limited to `ids` when given.
+ */
+export function readWorkoutDates(db: ExpoSQLiteDatabase, ids?: string[]): LocalDate[] {
+  if (ids?.length === 0) {
+    return [];
+  }
+  return db
+    .selectDistinct({ date: sessionsSchema.date })
+    .from(sessionsSchema)
+    .where(
+      and(isFinished, isNotNull(sessionsSchema.lastCompletedAtMs), ids ? inArray(sessionsSchema.id, ids) : undefined),
+    )
+    .all()
+    .map((row) => fromLocalDateJSON(row.date));
 }
 
 export function readFinishedSessions(db: ExpoSQLiteDatabase, ids: string[]): Session[] {

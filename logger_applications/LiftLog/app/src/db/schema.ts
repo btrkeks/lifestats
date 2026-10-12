@@ -307,3 +307,12 @@ export const backendAssignmentsSchema = sqliteTable('backend_assignment', {
   feature: text().primaryKey(),
   backendId: text().notNull(),
 });
+
+/**
+ * Days whose workout time lifestats may not have yet. `seq` moves on every enqueue, so a push only
+ * acknowledges the row it read and an edit landing mid-push stays queued.
+ */
+export const lifestatsSyncQueueSchema = sqliteTable('lifestats_sync_queue', {
+  date: text().$type<LocalDateJSON>().primaryKey(),
+  seq: integer().notNull().default(1),
+});

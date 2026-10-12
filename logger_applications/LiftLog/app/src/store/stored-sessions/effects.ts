@@ -24,7 +24,8 @@ import { fetchUpcomingSessions } from '@/store/program';
 import { setStatsIsDirty } from '@/store/stats';
 import { setPreferredLanguage } from '@/store/settings';
 import { exercisesSchema } from '@/db/schema';
-import { deleteSession, readActiveSession, setActiveSession, writeSession } from '@/db/sessions';
+import { deleteSession, readActiveSession, readActiveSessionId, setActiveSession, writeSession } from '@/db/sessions';
+import { queueDaysChangedBy } from '@/db/lifestats-sync';
 import { eq, sql } from 'drizzle-orm';
 import { toRecord } from '@/utils/reduce';
 import { fromExerciseDescriptorJSON, toExerciseDescriptorJSON } from '@/models/exercise-models';
@@ -95,6 +96,8 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       dispatch(setActiveSessionId(undefined));
     }
     // Written here rather than left to the persist effect, so whoever re-reads on the revision bump sees it.
+    // It queues no lifestats sync: the flag flip above queued a finished workout, and History edits were
+    // queued as they were made, so closing History without a change pushes nothing.
     db.transaction((tx) => writeSession(tx, workout));
     dispatch(sessionsChanged());
     dispatch(closeSession(workout.id));
@@ -104,7 +107,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
 
   addEffect(deleteStoredSession, async (action, { dispatch, extra: { logger, db } }) => {
     await logger.time('deleteStoredSession', async () => {
-      db.transaction((tx) => deleteSession(tx, action.payload));
+      db.transaction((tx) => queueDaysChangedBy(tx, [action.payload], () => deleteSession(tx, action.payload)));
     });
     dispatch(sessionsChanged());
   });
@@ -123,7 +126,8 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       return;
     }
     await logger.time('persistStoredSession', async () => {
-      db.transaction((tx) => writeSession(tx, session));
+      // Queues a History edit's days. The workout in progress is not finished, so it queues nothing.
+      db.transaction((tx) => queueDaysChangedBy(tx, [session.id], () => writeSession(tx, session)));
     });
   });
 
@@ -132,7 +136,11 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
   addEffect(setActiveSessionId, async (action, { getState, dispatch, extra: { db, logger } }) => {
     await logger.time('setActiveSessionId', async () => {
       const session = action.payload === undefined ? undefined : selectSession(getState(), action.payload);
-      db.transaction((tx) => setActiveSession(tx, session));
+      // Finishing a workout puts it on its day and resuming one takes it off, in the same commit as the flag.
+      db.transaction((tx) => {
+        const affected = [readActiveSessionId(tx), session?.id].filter((id) => id !== undefined);
+        queueDaysChangedBy(tx, affected, () => setActiveSession(tx, session));
+      });
     });
     dispatch(sessionsChanged());
   });
@@ -142,7 +150,13 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     await logger.time('upsertStoredSessions', async () => {
       // Restored sessions are never active - a backup should not resume someone else's workout, and an
       // in-progress workout on this device keeps its flag because writing content never touches it.
-      db.transaction((tx) => action.payload.forEach((session) => writeSession(tx, session)));
+      db.transaction((tx) =>
+        queueDaysChangedBy(
+          tx,
+          action.payload.map((session) => session.id),
+          () => action.payload.forEach((session) => writeSession(tx, session)),
+        ),
+      );
     });
     dispatch(sessionsChanged());
   });

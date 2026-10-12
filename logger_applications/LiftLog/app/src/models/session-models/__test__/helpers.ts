@@ -184,3 +184,16 @@ export function createSession(sessionBlueprint: SessionBlueprint, fillSets: numb
     undefined,
   );
 }
+
+/** A one-exercise workout on `date` (`YYYY-MM-DD`) with one set completed at 18:00 +02:00, id `workout-<date>`. */
+export function makeWorkoutOn(date: string): Session {
+  const blueprint = makeWeightedBlueprint();
+  return new Session(
+    `workout-${date}`,
+    new SessionBlueprint('Push', [blueprint], ''),
+    [makeRecordedExercise(blueprint, [5], undefined, () => OffsetDateTime.parse(`${date}T18:00:00+02:00`))],
+    LocalDate.parse(date),
+    undefined,
+    undefined,
+  );
+}
