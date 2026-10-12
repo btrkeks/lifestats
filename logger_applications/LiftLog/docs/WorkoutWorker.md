@@ -47,6 +47,10 @@ This event channel:
 
 The service is responsible only for execution concerns (notifications, timers, system UI), not workout progression.
 
+### Rest countdown pulses
+
+While a rest timer runs, the worker vibrates once for 120 ms when 3 s, 2 s, and 1 s are left until the minimum rest is over. This lets the user feel the rest ending with the phone in a pocket. The "rest over" notification marks 0 s. The pulses use alarm usage, so they also work in silent mode. They follow the same notifications setting as the rest notifications. On each 500 ms tick, `WorkoutUpdatedHandler` compares the time left with the value from the previous tick (`countdownSecondsCrossed` in `utils/RestCountdownVibrator.kt`). The handler keeps the previous value across workout updates while the rest end time stays the same. Thus an update during the countdown does not repeat or skip a pulse, and a restarted or resumed rest timer starts a new countdown. A paused rest timer sends no `restTimerInfo`, so it does not pulse.
+
 ---
 
 ## WorkoutMessages

@@ -15,8 +15,10 @@ import com.limajuice.liftlog.WeightUnit
 import com.limajuice.liftlog.WorkoutMessage
 import com.limajuice.liftlog.WorkoutUpdatedEvent
 import expo.modules.workoutworker.utils.RepeatingTimerAction
+import expo.modules.workoutworker.utils.RestCountdownVibrator
 import expo.modules.workoutworker.utils.RestWindow
 import expo.modules.workoutworker.utils.WorkoutNotificationManager
+import expo.modules.workoutworker.utils.countdownSecondsCrossed
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -24,11 +26,13 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.DurationUnit.SECONDS
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlin.time.toDuration
 
 
 class WorkoutUpdatedHandler(
-    private val notificationManager: WorkoutNotificationManager
+    private val notificationManager: WorkoutNotificationManager,
+    private val restCountdownVibrator: RestCountdownVibrator,
 ) : WorkoutMessageHandler {
     override fun canHandle(event: WorkoutMessage): Boolean {
         return event.payload is WorkoutUpdatedEvent && event.appConfiguration.notificationsEnabled
@@ -39,6 +43,11 @@ class WorkoutUpdatedHandler(
     // Every workout update restarts the timer callback, so "have we announced this target yet" has to
     // outlive it - otherwise a set left running past its target re-announces on every update.
     private var announcedCardioTarget: Pair<Int, Int>? = null
+
+    // Outlives the timer callback for the same reason: an update landing in the last seconds of rest
+    // must neither repeat nor swallow a pulse. Keyed by when rest is over, which restarting or resuming
+    // the rest timer moves, so either starts a fresh countdown.
+    private var lastRestCountdown: Pair<Instant, Long>? = null
 
     override suspend fun handle(
         event: WorkoutMessage,
@@ -115,7 +124,19 @@ class WorkoutUpdatedHandler(
             val timePartiallyEndSecs = restTimerInfo.partiallyEndAt.epochSeconds
             val timeEndSecs = restTimerInfo.endAt.epochSeconds
             val progress = getProgress()
-            val now = Clock.System.now().epochSeconds
+            val nowInstant = Clock.System.now()
+            val now = nowInstant.epochSeconds
+
+            val restOverAt = restTimerInfo.partiallyEndAt
+            val remainingMs = restOverAt.toEpochMilliseconds() - nowInstant.toEpochMilliseconds()
+            val previousRemainingMs =
+                lastRestCountdown?.takeIf { it.first == restOverAt }?.second ?: remainingMs
+            // Several marks only pass in one tick after a stall; overlapping buzzes would merge into one.
+            if (countdownSecondsCrossed(previousRemainingMs, remainingMs).isNotEmpty()) {
+                restCountdownVibrator.pulse()
+            }
+            lastRestCountdown = restOverAt to remainingMs
+
             val partialProgressMax = timePartiallyEndSecs - timeStartSecs
             val fullProgressMax = timeEndSecs - timeStartSecs
 

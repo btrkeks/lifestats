@@ -17,6 +17,7 @@ import expo.modules.workoutworker.handlers.WorkoutEndedHandler
 import expo.modules.workoutworker.handlers.WorkoutMessageHandler
 import expo.modules.workoutworker.handlers.WorkoutStartedHandler
 import expo.modules.workoutworker.handlers.WorkoutUpdatedHandler
+import expo.modules.workoutworker.utils.RestCountdownVibrator
 import expo.modules.workoutworker.utils.WorkoutNotificationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +51,7 @@ class WorkoutWorkerService : Service() {
     private val handlers: List<WorkoutMessageHandler> by lazy {
         listOf(
             WorkoutStartedHandler(notificationManager),
-            WorkoutUpdatedHandler(notificationManager),
+            WorkoutUpdatedHandler(notificationManager, RestCountdownVibrator(this)),
             WorkoutEndedHandler(notificationManager),
         )
     }
