@@ -138,7 +138,7 @@ curl -s -X POST http://localhost:3000/progress-items/1/checkpoints \
 
 Ebook reading syncs automatically via `POST /integrations/ebook/events` (idempotent by `event_id`) — don't log ebook progress manually unless asked.
 
-Gym workouts sync automatically via `POST /integrations/liftlog/backup` (the LiftLog Android app uploads its full backup snapshot; the server rewrites `[LiftLog] Workout Time` and `[LiftLog] Total Weight Lifted (kg)` per day, idempotently) — don't log LiftLog workouts manually unless asked.
+Gym workouts sync automatically via `PUT /integrations/liftlog/days` (the LiftLog app sends the finished workouts of every day it changed; the server replaces `[LiftLog] Workout Time` on exactly those days, and an empty `workouts` list clears a day) — don't log LiftLog workouts manually unless asked. `[LiftLog] Total Weight Lifted (kg)` is no longer written.
 
 ## Sessions (live activity timers)
 

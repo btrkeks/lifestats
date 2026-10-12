@@ -294,7 +294,7 @@ Heartbeat sessions track ongoing activity for a single statistic. Only one activ
 |--------|------|-------------|
 | `POST` | `/integrations/{source}` | Provision integration (e.g., Anki bundle) |
 | `POST` | `/integrations/ebook/events` | Ingest an idempotent ebook reading event and log per-book progress |
-| `POST` | `/integrations/liftlog/backup` | Ingest a LiftLog remote-backup snapshot and re-log workout statistics |
+| `PUT` | `/integrations/liftlog/days` | Replace LiftLog workout time on the named days (empty `workouts` clears a day) |
 | `GET` | `/integrations/fitbit/auth/begin` | Start Fitbit OAuth flow |
 | `GET` | `/integrations/fitbit/auth/callback` | OAuth callback handler |
 | `POST` | `/integrations/fitbit/sync` | Sync Fitbit data |
@@ -398,31 +398,60 @@ without adding the daily `delta` twice.
 }
 ```
 
-### Ingesting a LiftLog Backup
+### Syncing LiftLog Workout Days
 
-**Request:** `POST /integrations/liftlog/backup`
+**Request:** `PUT /integrations/liftlog/days`
 
-The body is the raw payload LiftLog's remote-backup feature sends: a gzipped, serialized SQLite
-snapshot of the app database (`Content-Type: application/octet-stream`, up to 32 MB). Point the
-LiftLog app's *Settings → Backup and restore → Remote backup* endpoint at this route; the app's
-optional `X-Api-Key` header is ignored.
+```json
+{
+  "days": [
+    {
+      "date": "2026-10-11",
+      "workouts": [
+        { "id": "7c1e2f", "start": "2026-10-11T18:02:11+02:00", "end": "2026-10-11T18:55:40+02:00" }
+      ]
+    },
+    { "date": "2026-10-09", "workouts": [] }
+  ]
+}
+```
 
-On each upload the server parses the `session` table, auto-provisions the `liftlog` bundle on
-first use (`[LiftLog] Workout Time` as `TimeSpans` and `[LiftLog] Total Weight Lifted (kg)` as
-`IntegerAmount`, both in category `LiftLog`), and rewrites the values for every day present in
-the snapshot: merged first-set→last-set time frames, and bodyweight-aware total weight in kg.
-Because every backup is a full snapshot, uploads are idempotent and edits to past workouts are
-propagated; deleted sessions only disappear from days that still have other workouts (a day is
-never cleared retroactively). Legacy protobuf exports are rejected with `400`.
+The LiftLog app sends the finished workouts for each day it changed. `start` and `end` are RFC 3339
+timestamps with the device's UTC offset. The server keeps their local wall-clock time and ignores the
+offset. `id` appears only in error messages.
+
+The server provisions the `liftlog` bundle on first use and replaces `[LiftLog] Workout Time`
+(`TimeSpans`, category `LiftLog`) on exactly the named days:
+
+- Each workout becomes one time frame, clamped to `date`, at least 60 seconds long. Touching or
+  overlapping frames merge.
+- A day with `workouts: []`, or with no workout that falls on `date`, loses its value, so
+  `GET /statistics/{id}/logged/{date}` returns `has_value: false`.
+- Days not named in the request keep their values.
+- Resending the same days changes nothing and reports them in `days_unchanged`.
+
+A `ValueUpdated` event is published only when a day was updated or cleared. The bundle also
+provisions `[LiftLog] Total Weight Lifted (kg)`, but no route writes it.
 
 **Response:** `200 OK`
 
 ```json
 {
-  "workouts_imported": 42,
-  "days_logged": 17
+  "statistic_id": 129,
+  "days_updated": 1,
+  "days_cleared": 1,
+  "days_unchanged": 0
 }
 ```
+
+`days_cleared` counts only days that had a value. Clearing a day without a value counts as
+unchanged.
+
+**Errors:** `400 Bad Request` with `{"error": "..."}` when the body is not valid JSON for this
+shape, `days` is empty, `days` has more than 500 entries, a date appears twice, a day has more
+than 100 workouts, a timestamp is not RFC 3339 with an offset, or a workout ends before it starts.
+Nothing is written when the request is rejected.
+
 
 ### Creating a Statistic
 

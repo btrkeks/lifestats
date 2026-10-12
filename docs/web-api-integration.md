@@ -610,6 +610,7 @@ package wraps common statistics and goal operations. See
 | --- | --- | --- |
 | `POST` | `/integrations/{source}` | Provision integration bundle |
 | `POST` | `/integrations/ebook/events` | Ingest ebook sync event |
+| `PUT` | `/integrations/liftlog/days` | Replace LiftLog workout time on the named days |
 | `GET` | `/integrations/fitbit/auth/begin` | Start Fitbit OAuth flow |
 | `GET` | `/integrations/fitbit/auth/callback` | Fitbit OAuth callback |
 | `POST` | `/integrations/fitbit/sync` | Sync Fitbit data |
