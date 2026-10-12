@@ -7,9 +7,10 @@ appId: com.limajuice.liftlog
     visible: 'Workout'
     timeout: 60000
 - tapOn: 'Workout'
-# Text matching is case-insensitive by default, which would also match the "Freeform Workout"
-# cards in the list, so `(?-i)` pins this to the button's own casing.
-- tapOn: '(?-i)Freeform workout'
+# Workouts outside the plan start from the plan menu.
+- tapOn:
+    id: 'plan-menu'
+- tapOn: 'Empty workout'
 # A session left in progress by an earlier run has to be replaced before a fresh one starts
 - runFlow:
     when:

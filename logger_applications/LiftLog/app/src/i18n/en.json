@@ -549,7 +549,7 @@
   "workout.edit_workouts.button": "Edit workouts",
   "workout.finish.confirm.title": "Finish workout?",
   "workout.finish.incomplete.body": "You have not filled out all exercises, are you sure you'd like to finish?",
-  "workout.freeform.title": "Freeform workout",
+  "workout.empty_workout.button": "Empty workout",
   "workout.freeform_session.title": "Freeform session",
   "workout.keep_screen_awake.label": "Keep screen awake",
   "workout.keep_screen_awake.subtitle": "Keeps the screen on during your workout",

@@ -8,8 +8,10 @@ appId: com.limajuice.liftlog
     visible: 'Workout'
     timeout: 60000
 - tapOn: 'Workout'
-# `(?-i)` pins this to the button's own casing, not the "Freeform Workout" cards in the list.
-- tapOn: '(?-i)Freeform workout'
+# Workouts outside the plan start from the plan menu.
+- tapOn:
+    id: 'plan-menu'
+- tapOn: 'Empty workout'
 - runFlow:
     when:
       visible: 'Replace current workout?'
@@ -73,7 +75,9 @@ appId: com.limajuice.liftlog
 
 # The next workout has three sets again, each showing the last time its index was done
 - tapOn: 'Workout'
-- tapOn: '(?-i)Freeform workout'
+- tapOn:
+    id: 'plan-menu'
+- tapOn: 'Empty workout'
 - runFlow:
     when:
       visible: 'Replace current workout?'

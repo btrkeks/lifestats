@@ -8,6 +8,6 @@ tags:
 # local `npm run e2e` loop - see README.
 - launchApp:
     clearState: true
-# The freeform button names itself via its icon's content description; matching is
-# case-insensitive by default, so `(?-i)` keeps this off the "Freeform Workout" cards.
-- assertVisible: '(?-i)Freeform workout'
+# The plan menu is how a fresh install starts its first workout outside a plan.
+- assertVisible:
+    id: 'plan-menu'

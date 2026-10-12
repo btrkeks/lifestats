@@ -4,6 +4,7 @@ import { useTranslate } from '@tolgee/react';
 import { useRouter } from 'expo-router';
 import Edit from '@expo/material-symbols/edit.xml';
 import Assignment from '@expo/material-symbols/assignment.xml';
+import FitnessCenter from '@expo/material-symbols/fitness_center.xml';
 
 export function usePlanNavigation() {
   const activeProgramId = useAppSelector((s) => s.program.activePlanId);
@@ -15,7 +16,8 @@ export function usePlanNavigation() {
   };
 }
 
-export default function PlanMenu() {
+/** `onStartEmptyWorkout` starts a workout outside the plan, for the odd one-off session. */
+export default function PlanMenu({ onStartEmptyWorkout }: { onStartEmptyWorkout: () => void }) {
   const { t } = useTranslate();
   const { choosePlan, editWorkouts } = usePlanNavigation();
 
@@ -23,6 +25,12 @@ export default function PlanMenu() {
     <PageMenu
       testID="plan-menu"
       items={[
+        {
+          label: t('workout.empty_workout.button'),
+          icon: FitnessCenter,
+          systemImage: 'dumbbell',
+          onPress: onStartEmptyWorkout,
+        },
         {
           label: t('plan.choose.button'),
           icon: Assignment,

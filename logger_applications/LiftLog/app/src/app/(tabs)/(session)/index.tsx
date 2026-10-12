@@ -3,8 +3,6 @@ import CardList from '@/components/presentation/foundation/card-list';
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
 import IconButton from '@/components/presentation/foundation/icon-button';
-import { PageActions } from '@/components/presentation/foundation/page-actions';
-import FitnessCenterIcon from '@expo/material-symbols/fitness_center.xml';
 import NativeButton from '@/components/presentation/foundation/native-button';
 import EditIcon from '@expo/material-symbols/edit.xml';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -281,7 +279,6 @@ function useLastDoneLabel() {
 export default function Index() {
   const upcomingSessions = useAppSelector((s) => s.program.upcomingSessions);
   const dispatch = useDispatch();
-  const { t } = useTranslate();
   const currentBodyweight = upcomingSessions.map((x) => x.at(0)?.bodyweight).unwrapOr(undefined);
   const { start, confirmationDialog } = useStartWorkoutWithConfirmation();
 
@@ -293,20 +290,8 @@ export default function Index() {
     start(Session.freeformSession(LocalDate.now(), currentBodyweight));
   };
 
-  const floatingBottomContainer = (
-    <PageActions
-      primary={{
-        label: t('workout.freeform.title'),
-        icon: FitnessCenterIcon,
-        systemImage: 'dumbbell',
-        onPress: createFreeformSession,
-      }}
-    />
-  );
-
   return (
     <FullHeightScrollView
-      floatingChildren={floatingBottomContainer}
       scrollStyle={{ paddingHorizontal: spacing.pageHorizontalMargin }}
       contentContainerStyle={{ flexGrow: 1 }}
     >
@@ -316,7 +301,7 @@ export default function Index() {
           headerBackVisible: false,
         }}
       />
-      <PlanMenu />
+      <PlanMenu onStartEmptyWorkout={createFreeformSession} />
       <Remote
         value={upcomingSessions}
         success={(upcoming) => {
