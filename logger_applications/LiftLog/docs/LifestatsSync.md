@@ -37,6 +37,10 @@ sends their days. See [CsvImport.md](./CsvImport.md).
 - A day whose last workout you delete, or move to another day, is cleared in lifestats.
 - A workout in progress is not sent. Resuming a finished workout removes it from its day until you
   finish it again.
+- A workout you forget to finish is finished for you. When the app starts or comes back to the
+  foreground, a workout in progress whose last completed set is more than 3 hours old is finished
+  as if you had tapped Finish, and its day is sent. The plan is not changed. A workout from an
+  earlier day with no completed set is discarded instead.
 - While sync is off, changed days keep waiting and are sent once you turn it on.
 
 ## Contributor notes
@@ -65,6 +69,9 @@ session write (stored-sessions effects)
   (`putStoredSession` / `updateStoredSession`), deletes, imports and restores
   (`upsertStoredSessions`), and finishing and resuming (`setActiveSessionId`, in the transaction that
   flips `active`). Starting a workout and closing History unchanged queue nothing.
+- **Automatic finishing** dispatches `sessionFinished`, so it queues the day through the same
+  `setActiveSessionId` transaction. The decision is `forgottenWorkoutAction`
+  (`store/stored-sessions/forgotten-workout.ts`), and the limit is `FORGOTTEN_WORKOUT_IDLE_LIMIT`.
 - **A new session write** that can change a finished session must go through `queueDaysChangedBy`
   in its transaction, or lifestats will not hear about it.
 - **Delivery order.** The queue protects acknowledgements, not the order in which lifestats applies

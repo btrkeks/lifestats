@@ -292,6 +292,10 @@ active one and nothing else. `activeSessionId` points at the live one.
 - `putStoredSession` / `updateStoredSession` mean "this session changed" and only write its content.
   `sessionFinished` means "the user is done with it". It is what marks stats dirty, clears the active
   pointer and closes the session. Keep completion work on `sessionFinished`, or it fires once per set.
+- A workout in progress that was forgotten is ended when the stored sessions finish hydrating and
+  whenever the app returns to the foreground. `forgottenWorkoutAction`
+  (`store/stored-sessions/forgotten-workout.ts`) finishes it through `sessionFinished` once its last
+  completed set is more than 3 hours old, and discards one from an earlier day with no completed set.
 
 The `active` column has a single writer, the `setActiveSessionId` effect (`setActiveSession`), in a
 transaction with a unique partial index (`single_active_session`) enforcing at most one - the same shape

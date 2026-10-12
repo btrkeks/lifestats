@@ -7,6 +7,7 @@ import {
   openSession,
   putStoredSession,
   restoreExercise,
+  selectActiveSession,
   selectSession,
   sessionFinished,
   sessionsChanged,
@@ -32,6 +33,10 @@ import { toRecord } from '@/utils/reduce';
 import { fromExerciseDescriptorJSON, toExerciseDescriptorJSON } from '@/models/exercise-models';
 import { loadBuiltInExercises } from '@/services/exercise-catalog';
 import { migrateLegacyCurrentSession } from '@/store/stored-sessions/legacy-current-session';
+import { forgottenWorkoutAction } from '@/store/stored-sessions/forgotten-workout';
+import { appForegroundChanged, showSnackbar } from '@/store/app';
+import { formatDate } from '@/utils/format-date';
+import { OffsetDateTime } from '@js-joda/core';
 
 // Built-ins the user deleted, so they stay hidden across restarts and locale switches.
 const hiddenBuiltInExerciseIdsStorageKey = 'HiddenBuiltInExerciseIdList';
@@ -104,6 +109,31 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     dispatch(closeSession(workout.id));
     dispatch(setStatsIsDirty(true));
     dispatch(fetchUpcomingSessions());
+  });
+
+  // A workout left open would otherwise count as hours of training. Both actions carry `true` when the
+  // stored workout has loaded or the app is back in the foreground.
+  addEffect([setIsHydrated, appForegroundChanged], (action, { getState, dispatch, extra: { tolgee } }) => {
+    const state = getState();
+    const session = selectActiveSession(state);
+    if (!action.payload || !state.storedSessions.isHydrated || !session) {
+      return;
+    }
+    const decision = forgottenWorkoutAction(session, OffsetDateTime.now());
+    if (decision === 'finish') {
+      // Not through `useFinishWorkout`: an automatic finish leaves the plan alone.
+      dispatch(sessionFinished(session.id));
+      const day = formatDate(state.settings.preferredLanguage, session.date, { weekday: 'short' });
+      dispatch(
+        showSnackbar({
+          text: tolgee.t('workout.auto_finished.message', { name: session.blueprint.name, day }),
+          duration: 8000,
+        }),
+      );
+    } else if (decision === 'discard') {
+      dispatch(deleteStoredSession(session.id));
+      dispatch(fetchUpcomingSessions());
+    }
   });
 
   addEffect(deleteStoredSession, async (action, { dispatch, extra: { logger, db } }) => {

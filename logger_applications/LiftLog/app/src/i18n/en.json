@@ -529,6 +529,7 @@
   "workout.add_workouts.button": "Add Workouts",
   "workout.added_to_plan.message": "Workout added to plan",
   "workout.all.title": "All workouts",
+  "workout.auto_finished.message": "Finished {name} from {day} automatically",
   "workout.average_length.label": "Average length",
   "workout.clear_current.button": "Clear current workout",
   "workout.clear_current.confirm.body": "This will clear the current workout without saving it to your history",

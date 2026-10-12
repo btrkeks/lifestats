@@ -13,6 +13,7 @@ import {
   sessionFinished,
   sessionsChanged,
   setActiveSessionId,
+  setIsHydrated,
   closeSession,
   openSession,
   upsertExercises,
@@ -28,6 +29,8 @@ import { makeWorkoutOn } from '@/models/session-models/__test__/helpers';
 import { Session } from '@/models/session-models';
 import { toJsonString } from '@/models/storage/versions/latest';
 import type { RootState } from '@/store/store';
+import { appForegroundChanged, showSnackbar } from '@/store/app';
+import { fetchUpcomingSessions } from '@/store/program';
 
 async function createTestDb(): Promise<ExpoSQLiteDatabase> {
   const expoDb = await openDatabaseAsync(':memory:');
@@ -79,6 +82,7 @@ describe('stored-sessions effects', () => {
         db,
         logger,
         keyValueStore: options.keyValueStore ?? makeKvStore(),
+        tolgee: { t: (key: string, params: object) => `${key} ${JSON.stringify(params)}` },
       },
     });
     applyStoredSessionsEffects(testBed.addEffect);
@@ -358,6 +362,39 @@ describe('stored-sessions effects', () => {
       expect(testBed.getDispatchedAction(openSession).payload.id).toBe(session.id);
       expect(testBed.dispatchedActions.filter((x) => openSession.match(x))).toHaveLength(1);
       expect(testBed.getDispatchedAction(setActiveSessionId).payload).toBe(session.id);
+    });
+  });
+  describe('a workout left open', () => {
+    const withActive = (session: Session) =>
+      ({
+        storedSessions: { isHydrated: true, openSessions: { [session.id]: session }, activeSessionId: session.id },
+      }) as Partial<RootState>;
+
+    it('is finished when the app returns to the foreground, not when it leaves', async () => {
+      const forgotten = makeWorkoutOn('2026-10-10');
+      const testBed = bed({ state: withActive(forgotten) });
+
+      await testBed.dispatchHandled(appForegroundChanged(false));
+      testBed.expectNotDispatched(sessionFinished);
+
+      await testBed.dispatchHandled(appForegroundChanged(true));
+      expect(testBed.getDispatchedAction(sessionFinished).payload).toBe('workout-2026-10-10');
+      expect(testBed.getDispatchedAction(showSnackbar).payload.text).toBe(
+        'workout.auto_finished.message {"name":"Push","day":"Sat"}',
+      );
+    });
+
+    it('is discarded once the stored workout loads when it never recorded a set on an earlier day', async () => {
+      const abandoned = makeWorkoutOn('2026-10-10').withNothingCompleted();
+      const testBed = bed({ state: withActive(abandoned) });
+
+      await testBed.dispatchHandled(setIsHydrated(true));
+
+      expect(testBed.getDispatchedAction(deleteStoredSession).payload).toBe('workout-2026-10-10');
+      expect(testBed.dispatchedActions.map((x) => x.type)).toEqual([
+        deleteStoredSession.type,
+        fetchUpcomingSessions.type,
+      ]);
     });
   });
 });

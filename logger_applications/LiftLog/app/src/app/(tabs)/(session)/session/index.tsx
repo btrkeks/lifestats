@@ -6,9 +6,9 @@ import { useDispatch } from 'react-redux';
 import { selectActiveSession, updateStoredSession } from '@/store/stored-sessions';
 import { useFinishWorkout } from '@/hooks/useFinishWorkout';
 import { useTranslate } from '@tolgee/react';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useIsFocused, useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function Index() {
   const session = useAppSelector(selectActiveSession);
@@ -19,6 +19,15 @@ export default function Index() {
   const { dismissTo, push } = useRouter();
   const { t } = useTranslate();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const isFocused = useIsFocused();
+  const finishingHere = useRef(false);
+
+  // The workout can also end from the notification, or when it is finished automatically as forgotten.
+  useEffect(() => {
+    if (!session && isFocused && !finishingHere.current) {
+      dismissTo('/');
+    }
+  }, [session, isFocused, dismissTo]);
 
   const save = (force = false) => {
     if (!session) {
@@ -33,6 +42,7 @@ export default function Index() {
       push(`/session/post-workout?sessionId=${encodeURIComponent(session.id)}&source=finished`);
       return;
     }
+    finishingHere.current = true;
     const hasDiff = finishWorkout();
     dismissTo('/');
     if (hasDiff) {
