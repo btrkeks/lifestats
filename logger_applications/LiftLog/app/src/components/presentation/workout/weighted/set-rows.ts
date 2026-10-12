@@ -1,5 +1,10 @@
-import { RepsTarget, Resistance } from '@/models/blueprint-models';
-import { RecordedWeightedExercise, WeightedChange } from '@/models/session-models';
+import { Resistance } from '@/models/blueprint-models';
+import {
+  CompletedWeightedSet,
+  CompletedWeightedSets,
+  RecordedWeightedExercise,
+  WeightedChange,
+} from '@/models/session-models';
 import { Weight, WeightUnit } from '@/models/weight';
 import { localeFormatBigNumber, localeParseBigNumber } from '@/utils/locale-bignumber';
 
@@ -7,11 +12,10 @@ export type RowStatus = { kind: 'checked'; reps: number } | { kind: 'unchecked';
 
 export interface SetRow {
   index: number;
-  /** Last time at this index; undefined when that set was absent or skipped. */
-  previous: { weight: Weight; reps: number } | undefined;
+  /** The last time this index was completed, in any finished session. */
+  previous: CompletedWeightedSet | undefined;
   /** Planned while unchecked, performed once checked. */
   weight: Weight;
-  target: RepsTarget;
   status: RowStatus;
 }
 
@@ -35,34 +39,19 @@ export type CheckOutcome =
   | { kind: 'uncheck'; change: Extract<WeightedChange, { kind: 'unlog' }>; keepRepsText: string }
   | { kind: 'focus'; field: 'weight' | 'reps' };
 
-export function setRows(exercise: RecordedWeightedExercise, previous: RecordedWeightedExercise | undefined): SetRow[] {
+/** History only suggests: the exercise's own weight is what the row shows and logs. */
+export function setRows(exercise: RecordedWeightedExercise, previous: CompletedWeightedSets | undefined): SetRow[] {
   return exercise.potentialSets.map((ps, index) => {
-    const previousSet = previous?.potentialSets[index];
-    const previousEntry = previousSet?.set
-      ? { weight: previousSet.weight, reps: previousSet.set.repsCompleted }
-      : undefined;
-    const target = exercise.repsTargetForSet(index);
+    const previousSet = previous?.get(index);
     return {
       index,
-      previous: previousEntry,
+      previous: previousSet,
       weight: ps.weight,
-      target,
       status: ps.set
         ? { kind: 'checked', reps: ps.set.repsCompleted }
-        : { kind: 'unchecked', suggestedReps: suggestedReps(previousEntry?.reps, target) },
+        : { kind: 'unchecked', suggestedReps: previousSet?.reps },
     };
   });
-}
-
-/**
- * Last time's reps verbatim, else a point target. A range like 1-20 says nothing about what to do
- * today, and 0-0 is the PotentialSet default meaning "no target".
- */
-export function suggestedReps(previousReps: number | undefined, target: RepsTarget): number | undefined {
-  if (previousReps !== undefined) {
-    return previousReps;
-  }
-  return target.min === target.max && target.max > 0 ? target.max : undefined;
 }
 
 /** Typed values parse into this unit; untouched weights are never re-parsed, so stored units do not drift. */

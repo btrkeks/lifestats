@@ -11,7 +11,6 @@ import {
   weightCellText,
 } from '@/components/presentation/workout/weighted/set-rows';
 import { rounding, spacing, useAppTheme } from '@/hooks/useAppTheme';
-import { formatRepsTarget } from '@/models/blueprint-models';
 import { WeightedChange } from '@/models/session-models';
 import { shortFormatWeightUnit } from '@/models/weight';
 import { useTranslate } from '@tolgee/react';
@@ -109,10 +108,7 @@ export function SetTableRow(props: {
 
   const weightText = draft.weightText ?? weightCellText(row.weight, column.unit);
   const repsText = draft.repsText ?? (row.status.kind === 'checked' ? String(row.status.reps) : '');
-  const repsPlaceholder =
-    row.status.kind === 'unchecked'
-      ? (row.status.suggestedReps?.toString() ?? (row.target.max > 0 ? formatRepsTarget(row.target) : '-'))
-      : undefined;
+  const repsPlaceholder = row.status.kind === 'unchecked' ? (row.status.suggestedReps?.toString() ?? '-') : undefined;
   const cellStyle = isChecked ? { backgroundColor: 'transparent', color: textColor, fontWeight: 'bold' as const } : {};
 
   return (

@@ -4,9 +4,16 @@ import { DatabaseMigrationService } from '@/services/database-migration-service'
 import { setActiveSession, writeSession } from '@/db/sessions';
 import { ProgressionRule, SessionBlueprint, WeightedExerciseBlueprint } from '@/models/blueprint-models';
 import BigNumber from 'bignumber.js';
-import { freeformSessionName, RecordedExercise, RecordedWeightedExercise, Session } from '@/models/session-models';
-import { makeRecordedExercise, makeWeightedBlueprint } from '@/models/session-models/__test__/helpers';
-import { Weight } from '@/models/weight';
+import {
+  freeformSessionName,
+  PotentialSet,
+  RecordedExercise,
+  RecordedSet,
+  RecordedWeightedExercise,
+  Session,
+} from '@/models/session-models';
+import { makeRecordedExercise, makeWeightedBlueprint, tick } from '@/models/session-models/__test__/helpers';
+import { Weight, WeightUnit } from '@/models/weight';
 import { LocalDate } from '@js-joda/core';
 import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { openDatabaseAsync } from 'expo-sqlite';
@@ -154,194 +161,154 @@ describe('SessionService.getUpcomingSessions', () => {
   });
 });
 
-describe('SessionService rep targets', () => {
-  async function upcoming(blueprint: WeightedExerciseBlueprint, latest?: RecordedWeightedExercise) {
-    if (latest) {
-      store(performed('Day', [latest]));
-    }
-    const [session] = await collect(
-      makeService().getUpcomingSessions([new SessionBlueprint('Day', [blueprint], '')]),
-      1,
+describe('SessionService weighted history', () => {
+  /** `[weight, reps]` per set, `reps` undefined for a set left unchecked; sets complete in order. */
+  function squat(sets: [number, number | undefined][], init: { name?: string; unit?: WeightUnit } = {}) {
+    return new RecordedWeightedExercise(
+      makeWeightedBlueprint({ name: init.name ?? 'Squat', sets: sets.length }),
+      sets.map(([weight, reps]) =>
+        PotentialSet.of({
+          weight: new Weight(weight, init.unit ?? 'kilograms'),
+          set: reps === undefined ? undefined : RecordedSet.of({ repsCompleted: reps, completionDateTime: tick() }),
+        }),
+      ),
+      undefined,
     );
+  }
+
+  async function upcoming(blueprint: WeightedExerciseBlueprint, service = makeService()) {
+    const [session] = await collect(service.getUpcomingSessions([new SessionBlueprint('Day', [blueprint], '')]), 1);
     return session!.recordedExercises[0] as RecordedWeightedExercise;
   }
+  const weightsOf = (exercise: RecordedWeightedExercise) =>
+    exercise.potentialSets.map((s) => `${s.weight.value.toString()} ${s.weight.unit}`);
 
-  it('seeds targets from the blueprint when the exercise has no history', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2, repsConfig: { type: 'range', min: 8, max: 12 } });
-
-    expect((await upcoming(blueprint)).potentialSets.map((s) => s.target)).toEqual([
-      { min: 8, max: 12 },
-      { min: 8, max: 12 },
-    ]);
-  });
-
-  it('carries last session’s targets forward alongside its weights', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2, resistance: 'none' });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10]).withAllSets((s) =>
-      s.with({ target: { min: 15, max: 15 } }),
+  function storeSkippedIndexHistory() {
+    store(
+      performed('Day', [
+        squat([
+          [50, 8],
+          [55, 7],
+          [60, 6],
+        ]),
+      ]),
+      performed('Day', [
+        squat([
+          [52, 9],
+          [999, undefined],
+          [62, 5],
+          [65, 4],
+        ]),
+      ]),
     );
-
-    expect((await upcoming(blueprint, lastWeek)).potentialSets.map((s) => s.target)).toEqual([
-      { min: 15, max: 15 },
-      { min: 15, max: 15 },
-    ]);
-  });
-
-  it('does not progress the load of an exercise that tracks none', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2, resistance: 'none' });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10], new Weight(60, 'kilograms'));
-
-    const weights = (await upcoming(blueprint, lastWeek)).potentialSets.map((s) => s.weight.value.toNumber());
-
-    expect(lastWeek.isSuccessForProgressiveOverload).toBe(true);
-    expect(weights).toEqual([60, 60]);
-  });
-
-  it('starts the new session with nothing recorded', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2 });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10]);
-
-    expect((await upcoming(blueprint, lastWeek)).potentialSets.every((s) => s.set === undefined)).toBe(true);
-  });
-
-  it('carries a target a reps rule won, even on an exercise that also carries load', async () => {
-    const blueprint = makeWeightedBlueprint({
-      sets: 2,
-      repsConfig: { type: 'fixed', reps: 8 },
-      progression: [
-        ProgressionRule.of({ axis: 'reps', step: new BigNumber(1), ceiling: new BigNumber(12) }),
-        ProgressionRule.load(new BigNumber(2.5)),
-      ],
-    });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10]).withAllSets((s) =>
-      s.with({ target: { min: 10, max: 10 } }),
-    );
-
-    // Climbed to 10 by the rule, so the next session starts from 10 and the rule takes it to 11.
-    expect((await upcoming(blueprint, lastWeek)).potentialSets.map((s) => s.target)).toEqual([
-      { min: 11, max: 11 },
-      { min: 11, max: 11 },
-    ]);
-  });
-
-  it('re-seeds the target from the plan when reps are a fixed prescription', async () => {
-    // Nothing but an edit to the plan could have moved this target, and that edit already had its
-    // own say in the save-changes dialog - carrying it would be a second, silent yes.
-    const blueprint = makeWeightedBlueprint({ sets: 2, repsConfig: { type: 'fixed', reps: 5 } });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10]).withAllSets((s) =>
-      s.with({ target: { min: 8, max: 8 } }),
-    );
-
-    expect((await upcoming(blueprint, lastWeek)).potentialSets.map((s) => s.target)).toEqual([
-      { min: 5, max: 5 },
-      { min: 5, max: 5 },
-    ]);
-  });
-
-  it('gives every set the edited target once the plan agrees, including one logged before the edit', async () => {
-    // Editing reps mid-exercise leaves already-logged sets chasing the old target, by design. Once
-    // the edit is saved to the plan the next session must not still be carrying that stale first set.
-    const edited = makeWeightedBlueprint({ sets: 3, repsConfig: { type: 'fixed', reps: 8 } });
-    const lastWeek = makeRecordedExercise(edited, [10, 10, 10]).with({
-      potentialSets: [
-        { min: 5, max: 5 },
-        { min: 8, max: 8 },
-        { min: 8, max: 8 },
-      ].map((target, index) => makeRecordedExercise(edited, [10, 10, 10]).potentialSets[index]!.with({ target })),
-    });
-
-    expect((await upcoming(edited, lastWeek)).potentialSets.map((s) => s.target)).toEqual([
-      { min: 8, max: 8 },
-      { min: 8, max: 8 },
-      { min: 8, max: 8 },
-    ]);
-  });
-
-  it('falls back to the last planned set when the previous session ran longer than the plan', async () => {
-    const blueprint = makeWeightedBlueprint({
-      sets: 2,
-      repsConfig: {
-        type: 'perSet',
-        targets: [
-          { min: 12, max: 12 },
-          { min: 10, max: 10 },
-        ],
-      },
-    });
-    const lastWeek = makeRecordedExercise(blueprint, [12, 10, 10]);
-
-    expect((await upcoming(blueprint, lastWeek)).potentialSets.map((s) => s.target)).toEqual([
-      { min: 12, max: 12 },
-      { min: 10, max: 10 },
-      { min: 10, max: 10 },
-    ]);
-  });
-});
-
-describe('SessionService progressive overload', () => {
-  async function upcomingWeights(blueprint: WeightedExerciseBlueprint, latest?: RecordedWeightedExercise) {
-    if (latest) {
-      store(performed('Day', [latest]));
-    }
-    const [session] = await collect(
-      makeService().getUpcomingSessions([new SessionBlueprint('Day', [blueprint], '')]),
-      1,
-    );
-    const exercise = session!.recordedExercises[0] as RecordedWeightedExercise;
-    return exercise.potentialSets.map((s) => s.weight.value.toNumber());
   }
 
-  it('raises the load after a session that hit every target', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2 });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10], new Weight(60, 'kilograms'));
+  it('sizes the workout by the plan and starts each set at the weight last completed at its index', async () => {
+    storeSkippedIndexHistory();
 
-    expect(lastWeek.isSuccessForProgressiveOverload).toBe(true);
-    expect(await upcomingWeights(blueprint, lastWeek)).toEqual([62.5, 62.5]);
+    const exercise = await upcoming(makeWeightedBlueprint({ sets: 3 }));
+
+    expect(weightsOf(exercise)).toEqual(['52 kilograms', '55 kilograms', '62 kilograms']);
+    expect(exercise.potentialSets.map((s) => s.set)).toEqual([undefined, undefined, undefined]);
   });
 
-  it('holds the load after a session that missed a target', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2 });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 9], new Weight(60, 'kilograms'));
-
-    expect(lastWeek.isSuccessForProgressiveOverload).toBe(false);
-    expect(await upcomingWeights(blueprint, lastWeek)).toEqual([60, 60]);
-  });
-
-  it('holds the load when a set was never filled out', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2 });
-    const lastWeek = makeRecordedExercise(blueprint, [10, undefined], new Weight(60, 'kilograms'));
-
-    expect(await upcomingWeights(blueprint, lastWeek)).toEqual([60, 60]);
-  });
-
-  it('starts a fresh exercise at zero rather than progressing from nothing', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2 });
-
-    expect(await upcomingWeights(blueprint)).toEqual([0, 0]);
-  });
-
-  it('starts a fresh exercise in the unit the user prefers', async () => {
-    const [session] = await collect(
-      makeService({ useImperialUnits: true }).getUpcomingSessions([
-        new SessionBlueprint('Day', [makeWeightedBlueprint({ sets: 1 })], ''),
+  it('starts a set never completed at the weight of the nearest earlier set that was', async () => {
+    store(
+      performed('Day', [
+        squat([
+          [52, 9],
+          [55, 7],
+        ]),
       ]),
-      1,
+    );
+    expect(weightsOf(await upcoming(makeWeightedBlueprint({ sets: 4 })))).toEqual([
+      '52 kilograms',
+      '55 kilograms',
+      '55 kilograms',
+      '55 kilograms',
+    ]);
+
+    storeSkippedIndexHistory();
+    expect(weightsOf(await upcoming(makeWeightedBlueprint({ sets: 5 })))).toEqual([
+      '52 kilograms',
+      '55 kilograms',
+      '62 kilograms',
+      '65 kilograms',
+      '65 kilograms',
+    ]);
+  });
+
+  it('never progresses a weight, even after an old plan with a load rule hit every target', async () => {
+    const blueprint = makeWeightedBlueprint({
+      sets: 2,
+      plannedSets: [{ reps: { min: 10, max: 10 } }, { reps: { min: 10, max: 10 } }],
+      progression: [ProgressionRule.load(new BigNumber(2.5))],
+    });
+    store(
+      performed('Day', [
+        new RecordedWeightedExercise(
+          blueprint,
+          [10, 10].map((reps) =>
+            PotentialSet.of({
+              weight: new Weight(60, 'kilograms'),
+              target: { min: 10, max: 10 },
+              set: RecordedSet.of({ repsCompleted: reps, completionDateTime: tick() }),
+            }),
+          ),
+          undefined,
+        ),
+      ]),
     );
 
-    expect((session!.recordedExercises[0] as RecordedWeightedExercise).potentialSets[0]!.weight.unit).toBe('pounds');
+    const exercise = await upcoming(blueprint);
+
+    expect(weightsOf(exercise)).toEqual(['60 kilograms', '60 kilograms']);
+    expect(exercise.potentialSets.map((s) => s.target)).toEqual([
+      { min: 0, max: 0 },
+      { min: 0, max: 0 },
+    ]);
   });
 
-  it('progresses a bodyweight exercise, which carries load on top of the lifter', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2, resistance: 'bodyweight' });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10], new Weight(10, 'kilograms'));
+  it('matches history by movement name, whatever the rep scheme or spelling', async () => {
+    store(
+      performed('Day', [
+        squat(
+          [
+            [100, 5],
+            [100, 5],
+            [100, 5],
+            [100, 5],
+            [100, 5],
+          ],
+          { name: 'squats' },
+        ),
+      ]),
+    );
 
-    expect(await upcomingWeights(blueprint, lastWeek)).toEqual([12.5, 12.5]);
+    expect(weightsOf(await upcoming(makeWeightedBlueprint({ name: 'Squat', sets: 2 })))).toEqual([
+      '100 kilograms',
+      '100 kilograms',
+    ]);
+    expect(weightsOf(await upcoming(makeWeightedBlueprint({ name: 'Front Squat', sets: 1 })))).toEqual(['0 kilograms']);
   });
 
-  it('leaves the load alone when the plan asks for no progression', async () => {
-    const blueprint = makeWeightedBlueprint({ sets: 2, progression: [] });
-    const lastWeek = makeRecordedExercise(blueprint, [10, 10], new Weight(60, 'kilograms'));
+  it('keeps the unit a weight was lifted in', async () => {
+    store(performed('Day', [squat([[135, 5]], { unit: 'pounds' })]));
 
-    expect(await upcomingWeights(blueprint, lastWeek)).toEqual([60, 60]);
+    expect(weightsOf(await upcoming(makeWeightedBlueprint({ sets: 1 })))).toEqual(['135 pounds']);
+  });
+
+  it('learns nothing from the workout in progress', async () => {
+    store(performed('Day', [squat([[60, 5]])]));
+    db.transaction((tx) => setActiveSession(tx, performed('Day', [squat([[100, 5]])])));
+
+    expect(weightsOf(await upcoming(makeWeightedBlueprint({ sets: 1 })))).toEqual(['60 kilograms']);
+  });
+
+  it('starts a fresh exercise at zero, in the unit the user prefers', async () => {
+    expect(weightsOf(await upcoming(makeWeightedBlueprint({ sets: 2 })))).toEqual(['0 kilograms', '0 kilograms']);
+    expect(
+      weightsOf(await upcoming(makeWeightedBlueprint({ sets: 1 }), makeService({ useImperialUnits: true }))),
+    ).toEqual(['0 pounds']);
   });
 });

@@ -7,7 +7,6 @@ import {
   resolveCheck,
   SetRow,
   setRows,
-  suggestedReps,
   WeightColumn,
   weightCellText,
 } from '@/components/presentation/workout/weighted/set-rows';
@@ -33,56 +32,65 @@ function uncheckedRow(suggested: number | undefined, weight = kg(70)): SetRow {
     index: 0,
     previous: undefined,
     weight,
-    target: { min: 1, max: 20 },
     status: { kind: 'unchecked', suggestedReps: suggested },
   };
 }
 
 function checkedRow(reps: number, weight = kg(70)): SetRow {
-  return { index: 0, previous: undefined, weight, target: { min: 1, max: 20 }, status: { kind: 'checked', reps } };
+  return { index: 0, previous: undefined, weight, status: { kind: 'checked', reps } };
 }
 
-describe('suggestedReps', () => {
-  it('uses last time verbatim, including below the target', () => {
-    expect(suggestedReps(6, { min: 1, max: 20 })).toBe(6);
-    expect(suggestedReps(4, { min: 6, max: 6 })).toBe(4);
-    expect(suggestedReps(0, { min: 5, max: 5 })).toBe(0);
-  });
-
-  it('falls back to a point target only', () => {
-    expect(suggestedReps(undefined, { min: 5, max: 5 })).toBe(5);
-    expect(suggestedReps(undefined, { min: 1, max: 20 })).toBeUndefined();
-    expect(suggestedReps(undefined, { min: 0, max: 0 })).toBeUndefined();
-  });
-});
-
 describe('setRows', () => {
-  it('pairs each set with last time at the same index and suggests from it', () => {
-    const t = tick();
-    const bp = makeWeightedBlueprint({ sets: 3, repsConfig: { type: 'range', min: 1, max: 20 } });
-    const range = { min: 1, max: 20 };
+  const history = new Map([
+    [0, { weight: kg(52), reps: 9 }],
+    [1, { weight: kg(55), reps: 7 }],
+    [2, { weight: kg(62), reps: 5 }],
+  ]);
+
+  it('pairs each set with the last time its index was completed and suggests those reps', () => {
     const today = new RecordedWeightedExercise(
-      bp,
-      [filledPotentialSet(8, t, kg(72.5), range), emptyPotentialSet(72.5, range), emptyPotentialSet(72.5, range)],
-      undefined,
-    );
-    const lastTime = new RecordedWeightedExercise(
-      bp,
-      [filledPotentialSet(7, t, kg(70), range), filledPotentialSet(6, t, kg(70), range), emptyPotentialSet(70, range)],
+      makeWeightedBlueprint({ sets: 3 }),
+      [emptyPotentialSet(52), emptyPotentialSet(55), emptyPotentialSet(62)],
       undefined,
     );
 
-    const rows = setRows(today, lastTime);
+    const rows = setRows(today, history);
+
+    expect(rows.map((r) => r.status)).toEqual([
+      { kind: 'unchecked', suggestedReps: 9 },
+      { kind: 'unchecked', suggestedReps: 7 },
+      { kind: 'unchecked', suggestedReps: 5 },
+    ]);
+    expect(rows.map((r) => r.previous && [r.previous.weight.value.toNumber(), r.previous.reps])).toEqual([
+      [52, 9],
+      [55, 7],
+      [62, 5],
+    ]);
+  });
+
+  it('shows what was performed over history, and keeps the exercise weight over the previous one', () => {
+    const t = tick();
+    const today = new RecordedWeightedExercise(
+      makeWeightedBlueprint({ sets: 2 }),
+      [filledPotentialSet(8, t, kg(57.5)), emptyPotentialSet(60), emptyPotentialSet(60)],
+      undefined,
+    );
+
+    const rows = setRows(today, history);
 
     expect(rows.map((r) => r.status)).toEqual([
       { kind: 'checked', reps: 8 },
-      { kind: 'unchecked', suggestedReps: 6 },
-      { kind: 'unchecked', suggestedReps: undefined },
+      { kind: 'unchecked', suggestedReps: 7 },
+      { kind: 'unchecked', suggestedReps: 5 },
     ]);
-    expect(rows.map((r) => r.previous && [r.previous.weight.value.toNumber(), r.previous.reps])).toEqual([
-      [70, 7],
-      [70, 6],
-      undefined,
+    expect(rows.map((r) => r.weight.value.toNumber())).toEqual([57.5, 60, 60]);
+  });
+
+  it('suggests nothing without history', () => {
+    const today = new RecordedWeightedExercise(makeWeightedBlueprint({ sets: 1 }), [emptyPotentialSet(0)], undefined);
+
+    expect(setRows(today, undefined)).toEqual([
+      { index: 0, previous: undefined, weight: kg(0), status: { kind: 'unchecked', suggestedReps: undefined } },
     ]);
   });
 });

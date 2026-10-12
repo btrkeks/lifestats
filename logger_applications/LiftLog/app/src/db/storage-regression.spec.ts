@@ -10,7 +10,7 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { deserializeDatabaseAsync } from 'expo-sqlite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { RecordedExercise, Session } from '@/models/session-models';
+import { RecordedExercise, Session, WeightedHistory } from '@/models/session-models';
 import { AnyVersionSessionJSON } from '@/models/storage/versions/any';
 import { sessionMigrations } from '@/models/storage/versions/migrations';
 import { Weight } from '@/models/weight';
@@ -85,6 +85,17 @@ function describeExercise(exercise: RecordedExercise | undefined): string {
           .join(' ')
       : `cardio ${exercise.sets.filter((set) => set.completionDateTime).length}/${exercise.sets.length}`;
   return `${exercise.blueprint.name} @${instant(exercise.latestTime)} ${sets} #${digest(exercise.toJSON())}`;
+}
+
+function describeHistory(history: WeightedHistory | undefined): string {
+  if (!history) {
+    return '-';
+  }
+  const sets = [...history.sets]
+    .sort(([a], [b]) => a - b)
+    .map(([index, set]) => `${index}:${weight(set.weight)}x${set.reps}`)
+    .join(' ');
+  return `${sets} notes ${JSON.stringify(history.lastNotes ?? null)}`;
 }
 
 const matchesSnapshot = (value: unknown, name: string) =>
@@ -203,16 +214,20 @@ for (const source of ['migrated', 'restored'] satisfies FixtureSource[]) {
       );
     });
 
-    it('picks the same latest performance of each lineage', async () => {
+    it('picks the same latest performance of each cardio lineage', async () => {
       const progressionKeys = [
         ...new Set([
-          ...fixture.sessions.flatMap((session) => session.recordedExercises.map((x) => x.progressionKey())),
+          ...fixture.sessions.flatMap((session) =>
+            session.recordedExercises.filter((x) => x.type === 'RecordedCardioExercise').map((x) => x.progressionKey()),
+          ),
           ...Object.values(fixture.programs).flatMap((program) =>
-            program.sessions.flatMap((session) => session.exercises.map((x) => x.progressionKey())),
+            program.sessions.flatMap((session) =>
+              session.exercises.filter((x) => x.type === 'CardioExerciseBlueprint').map((x) => x.progressionKey()),
+            ),
           ),
         ]),
       ].sort();
-      const latest = fixture.latestExercises(progressionKeys);
+      const latest = fixture.latestCardioExercises(progressionKeys);
 
       await matchesSnapshot(
         progressionKeys.map((key) => `${key} => ${describeExercise(latest[key])}`),
@@ -220,12 +235,41 @@ for (const source of ['migrated', 'restored'] satisfies FixtureSource[]) {
       );
     });
 
+    it('picks the same weighted history for every movement', async () => {
+      const movementKeys = [
+        ...new Set([
+          ...fixture.sessions.flatMap((session) =>
+            session.recordedExercises.filter((x) => x.type === 'RecordedWeightedExercise').map((x) => x.movementKey()),
+          ),
+          ...Object.values(fixture.programs).flatMap((program) =>
+            program.sessions.flatMap((session) =>
+              session.exercises.filter((x) => x.type === 'WeightedExerciseBlueprint').map((x) => x.movementKey()),
+            ),
+          ),
+        ]),
+      ].sort();
+      const history = fixture.weightedHistory(movementKeys);
+
+      await matchesSnapshot(
+        movementKeys.map((key) => `${key} => ${describeHistory(history.get(key))}`),
+        'weighted-history',
+      );
+    });
+
     it('picks the same previous performance of each exercise in every session', async () => {
       await matchesSnapshot(
         sessionsInOrder.map((session) => {
-          const previous = fixture.previousExercises(session);
+          const cardio = fixture.previousCardioExercises(session);
+          const weighted = fixture.weightedHistory(
+            [...new Set(session.recordedExercises.map((x) => x.movementKey()))],
+            session.id,
+          );
           const performances = session.recordedExercises.map((exercise) => {
-            const performance = previous[exercise.progressionKey()];
+            if (exercise.type === 'RecordedWeightedExercise') {
+              const history = weighted.get(exercise.movementKey());
+              return history ? `#${digest(describeHistory(history))}` : '-';
+            }
+            const performance = cardio[exercise.progressionKey()];
             return performance ? `${instant(performance.latestTime)}#${digest(performance.toJSON())}` : '-';
           });
           return `${short(session.id)} ${performances.join(' ')}`;

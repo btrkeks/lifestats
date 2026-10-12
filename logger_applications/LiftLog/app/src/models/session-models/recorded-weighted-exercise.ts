@@ -69,12 +69,22 @@ export class RecordedWeightedExercise {
     return this.potentialSets[index]?.target ?? this.blueprint.repsTargetForSet(index);
   }
 
-  static empty(b: WeightedExerciseBlueprint, unit: WeightUnit): RecordedWeightedExercise {
-    return new RecordedWeightedExercise(
-      b,
-      b.plannedSets.map((s) => new PotentialSet(undefined, new Weight(0, unit), s.reps)),
-      undefined,
-    );
+  /**
+   * The plan's sets, all unchecked, sized by the plan alone however many sets were done last time. Each
+   * set starts at the weight last completed at its index, else at the nearest earlier index that has
+   * one, else at zero.
+   */
+  static empty(
+    blueprint: WeightedExerciseBlueprint,
+    unit: WeightUnit,
+    previous?: CompletedWeightedSets,
+  ): RecordedWeightedExercise {
+    let weight = new Weight(0, unit);
+    const potentialSets = blueprint.plannedSets.map((_, index) => {
+      weight = previous?.get(index)?.weight ?? weight;
+      return new PotentialSet(undefined, weight);
+    });
+    return new RecordedWeightedExercise(blueprint, potentialSets, undefined);
   }
 
   getSet(index: number): PotentialSet {

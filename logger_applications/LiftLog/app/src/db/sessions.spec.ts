@@ -4,11 +4,11 @@ import {
   readActiveSession,
   readEarliestSessionDate,
   readExistingSessionIds,
-  readLatestExercises,
+  readLatestCardioExercises,
   readPersonalRecords,
   readPreviousComparableSession,
   readExerciseHistory,
-  readPreviousExercises,
+  readPreviousCardioExercises,
   readSession,
   readSessions,
   readSessionsBetween,
@@ -262,61 +262,39 @@ describe('readSessionToContinueFrom', () => {
   });
 });
 
-describe('readLatestExercises', () => {
+describe('readLatestCardioExercises', () => {
   let db: ExpoSQLiteDatabase;
   const store = (...sessions: Session[]) =>
     db.transaction((tx) => sessions.forEach((session) => writeSession(tx, session)));
-  const squatKey = makeWeightedBlueprint().progressionKey();
+  const row = makeCardioBlueprint(2);
+  const rowedAt = (at: OffsetDateTime, incline: number) =>
+    RecordedCardioExercise.empty(row).with({
+      sets: RecordedCardioExercise.empty(row).sets.map((set) =>
+        set.with({ completionDateTime: at, incline: BigNumber(incline) }),
+      ),
+    });
+  const inclines = (exercise: RecordedCardioExercise | undefined) => exercise?.sets.map((x) => x.incline?.toNumber());
 
   beforeEach(async () => {
     db = await createDb();
   });
 
-  it('reads the most recently completed performance of each lineage', () => {
+  it('reads the most recently completed performance of each lineage, including the workout in progress', () => {
     store(
-      sessionOf('Later', [squatAt(tickAt(10, 0), 110)], LocalDate.of(2025, 4, 1)),
-      sessionOf('Earlier', [squatAt(tickAt(9, 0), 90)], LocalDate.of(2025, 4, 9)),
+      sessionOf('Later', [rowedAt(tickAt(10, 0), 4)], LocalDate.of(2025, 4, 1)),
+      sessionOf('Earlier', [rowedAt(tickAt(9, 0), 3)], LocalDate.of(2025, 4, 9)),
     );
+    expect(inclines(readLatestCardioExercises(db, [row.progressionKey()])[row.progressionKey()])).toEqual([4, 4]);
 
-    const latest = readLatestExercises(db, [squatKey])[squatKey] as RecordedWeightedExercise;
-
-    expect(latest.potentialSets.map((x) => x.weight.value.toNumber())).toEqual([110]);
+    db.transaction((tx) => setActiveSession(tx, sessionOf('Now', [rowedAt(tickAt(11, 0), 5)])));
+    expect(inclines(readLatestCardioExercises(db, [row.progressionKey()])[row.progressionKey()])).toEqual([5, 5]);
   });
 
-  it('passes over a later performance with nothing completed', () => {
-    store(
-      sessionOf('Completed', [squatAt(tickAt(9, 0), 100)]),
-      sessionOf('Abandoned', [makeRecordedExercise(makeWeightedBlueprint(), [undefined], new Weight(0, 'kilograms'))]),
-    );
+  it('reads only cardio lineages, and nothing for one never completed', () => {
+    store(sessionOf('Day', [squatAt(tickAt(9, 0)), RecordedCardioExercise.empty(row)]));
 
-    const latest = readLatestExercises(db, [squatKey])[squatKey] as RecordedWeightedExercise;
-
-    expect(latest.potentialSets.map((x) => x.weight.value.toNumber())).toEqual([100]);
-  });
-
-  it('reads cardio alongside weighted lineages, and only the lineages asked for', () => {
-    const row = makeCardioBlueprint(2);
-    const rowed = RecordedCardioExercise.empty(row).with({
-      sets: RecordedCardioExercise.empty(row).sets.map((set) =>
-        set.with({ completionDateTime: tickAt(9, 0), incline: BigNumber(3) }),
-      ),
-    });
-    const bench = makeWeightedBlueprint({ name: 'Bench' });
-    store(sessionOf('Day', [squatAt(tickAt(9, 0)), rowed, makeRecordedExercise(bench, [10])]));
-
-    const latest = readLatestExercises(db, [squatKey, row.progressionKey()]);
-
-    expect(Object.keys(latest).sort()).toEqual([squatKey, row.progressionKey()].sort());
-    expect((latest[row.progressionKey()] as RecordedCardioExercise).sets.map((x) => x.incline?.toNumber())).toEqual([
-      3, 3,
-    ]);
-  });
-
-  it('reads nothing for a lineage that was never completed', () => {
-    store(sessionOf('Day', [makeRecordedExercise(makeWeightedBlueprint(), [undefined])]));
-
-    expect(readLatestExercises(db, [squatKey])).toEqual({});
-    expect(readLatestExercises(db, [])).toEqual({});
+    expect(readLatestCardioExercises(db, [makeWeightedBlueprint().progressionKey(), row.progressionKey()])).toEqual({});
+    expect(readLatestCardioExercises(db, [])).toEqual({});
   });
 });
 
@@ -424,46 +402,41 @@ describe('readExerciseHistory', () => {
   });
 });
 
-describe('readPreviousExercises', () => {
+describe('readPreviousCardioExercises', () => {
   let db: ExpoSQLiteDatabase;
   const store = (...sessions: Session[]) =>
     db.transaction((tx) => sessions.forEach((session) => writeSession(tx, session)));
   const forget = (...sessions: Session[]) =>
     db.transaction((tx) => sessions.forEach((session) => deleteSession(tx, session.id)));
-  const weightOf = (exercise: RecordedExercise | undefined) =>
-    (exercise as RecordedWeightedExercise | undefined)?.potentialSets[0]?.weight.value.toNumber();
+  const row = makeCardioBlueprint(1);
+  const rowedAt = (at: OffsetDateTime, seconds: number) =>
+    RecordedCardioExercise.empty(row).with({
+      sets: [
+        RecordedCardioExercise.empty(row).sets[0]!.with({
+          completionDateTime: at,
+          duration: Duration.ofSeconds(seconds),
+        }),
+      ],
+    });
+  const secondsOf = (exercise: RecordedCardioExercise | undefined) => exercise?.sets[0]?.duration?.seconds();
 
   beforeEach(async () => {
     db = await createDb();
   });
 
-  it('reads the latest performance of each lineage, not of the movement', () => {
-    const fiveByFive = makeWeightedBlueprint({ sets: 5, repsConfig: { type: 'fixed', reps: 5 } });
-    const threeByEight = makeWeightedBlueprint({ sets: 3, repsConfig: { type: 'fixed', reps: 8 } });
-    store(
-      sessionOf('Older', [makeRecordedExercise(fiveByFive, [5], new Weight(100, 'kilograms'), () => tickAt(8, 0))]),
-      sessionOf('Old', [makeRecordedExercise(fiveByFive, [5], new Weight(105, 'kilograms'), () => tickAt(9, 0))]),
-      sessionOf('New', [makeRecordedExercise(threeByEight, [8], new Weight(80, 'kilograms'), () => tickAt(10, 0))]),
-    );
-
-    const previous = readPreviousExercises(db, [fiveByFive.progressionKey(), threeByEight.progressionKey()], uuid());
-
-    expect(weightOf(previous[fiveByFive.progressionKey()])).toBe(105);
-    expect(weightOf(previous[threeByEight.progressionKey()])).toBe(80);
-  });
-
   it('leaves out the excluded session, the workout in progress, and performances with nothing completed', () => {
-    const excluded = sessionOf('Excluded', [squatAt(tickAt(9, 0), 120)]);
+    const excluded = sessionOf('Excluded', [rowedAt(tickAt(9, 0), 120)]);
     store(
       excluded,
-      sessionOf('Kept', [squatAt(tickAt(8, 0), 100)]),
-      sessionOf('Abandoned', [makeRecordedExercise(makeWeightedBlueprint(), [undefined])]),
+      sessionOf('Kept', [rowedAt(tickAt(8, 0), 100)]),
+      sessionOf('Abandoned', [RecordedCardioExercise.empty(row)]),
     );
-    db.transaction((tx) => setActiveSession(tx, sessionOf('Now', [squatAt(tickAt(10, 0), 140)])));
-    const squatKey = makeWeightedBlueprint().progressionKey();
+    db.transaction((tx) => setActiveSession(tx, sessionOf('Now', [rowedAt(tickAt(10, 0), 140)])));
 
-    expect(weightOf(readPreviousExercises(db, [squatKey], excluded.id)[squatKey])).toBe(100);
-    expect(readPreviousExercises(db, [], excluded.id)).toEqual({});
+    expect(secondsOf(readPreviousCardioExercises(db, [row.progressionKey()], excluded.id)[row.progressionKey()])).toBe(
+      100,
+    );
+    expect(readPreviousCardioExercises(db, [], excluded.id)).toEqual({});
   });
 
   it('agrees with the newest performance of each lineage in its history', () => {
@@ -472,8 +445,14 @@ describe('readPreviousExercises', () => {
         const sessions = generated.map(canonical);
         store(...sessions);
         try {
-          const exercises = sessions.flatMap((x) => x.recordedExercises);
-          const previous = readPreviousExercises(db, [...new Set(exercises.map((x) => x.progressionKey()))], uuid());
+          const exercises = sessions
+            .flatMap((x) => x.recordedExercises)
+            .filter((x) => x instanceof RecordedCardioExercise);
+          const previous = readPreviousCardioExercises(
+            db,
+            [...new Set(exercises.map((x) => x.progressionKey()))],
+            uuid(),
+          );
 
           for (const movementKey of new Set(exercises.map((x) => x.movementKey()))) {
             const history = readExerciseHistory(db, movementKey);
@@ -661,6 +640,52 @@ describe('readWeightedHistory', () => {
     expect(describeSets(history.get(frontSquatKey))).toEqual(['0: 40 kilograms x 10']);
   });
 
+  it('picks, at each index, a set completed latest at that index in the movement history', () => {
+    const forget = (...sessions: Session[]) =>
+      db.transaction((tx) => sessions.forEach((session) => deleteSession(tx, session.id)));
+    const describeSet = (weight: Weight, reps: number) => `${weight.value.toString()} ${weight.unit} x ${reps}`;
+    fc.assert(
+      fc.property(fc.uniqueArray(SessionGenerator, { selector: (x) => x.id, maxLength: 4 }), (generated) => {
+        const sessions = generated.map(canonical);
+        store(...sessions);
+        try {
+          const movementKeys = [
+            ...new Set(
+              sessions
+                .flatMap((x) => x.recordedExercises)
+                .filter((x) => x instanceof RecordedWeightedExercise)
+                .map((x) => x.movementKey()),
+            ),
+          ];
+          const history = readWeightedHistory(db, { movementKeys });
+
+          for (const movementKey of movementKeys) {
+            const completed = readExerciseHistory(db, movementKey).flatMap((exercise) =>
+              (exercise as RecordedWeightedExercise).potentialSets.flatMap((ps, index) =>
+                ps.set
+                  ? [{ index, at: ps.set.completionDateTime, text: describeSet(ps.weight, ps.set.repsCompleted) }]
+                  : [],
+              ),
+            );
+            const indices = [...new Set(completed.map((x) => x.index))].sort((a, b) => a - b);
+            const selected = history.get(movementKey)?.sets;
+            expect([...(selected?.keys() ?? [])].sort((a, b) => a - b)).toEqual(indices);
+            for (const index of indices) {
+              const atIndex = completed.filter((x) => x.index === index);
+              const latest = atIndex.reduce((a, b) => (b.at.isAfter(a.at) ? b : a));
+              const set = selected!.get(index)!;
+              expect(atIndex.filter((x) => x.at.isEqual(latest.at)).map((x) => x.text)).toContain(
+                describeSet(set.weight, set.reps),
+              );
+            }
+          }
+        } finally {
+          forget(...sessions);
+        }
+      }),
+    );
+  });
+
   it('reads nothing for no movements, or for one never completed', () => {
     store(sessionOf('Day', [performed(9, [[100, undefined]])]));
 
@@ -721,14 +746,14 @@ describe('reading previous performances across exercise types', () => {
     const weightedKey = movementKeyFor('New Exercise', 'WeightedExerciseBlueprint');
     const cardioKey = movementKeyFor('New Exercise', 'CardioExerciseBlueprint');
 
-    const weightedLineage = makeWeightedBlueprint({ name: 'New Exercise' }).progressionKey();
     const cardioLineage = cardioExercise.progressionKey();
-    const previous = readPreviousExercises(db, [weightedLineage, cardioLineage], uuid());
 
     expect(readExerciseHistory(db, weightedKey)).toEqual([]);
     expect(readExerciseHistory(db, cardioKey)).toHaveLength(1);
-    expect(previous[weightedLineage]).toBeUndefined();
-    expect(previous[cardioLineage]).toBeInstanceOf(RecordedCardioExercise);
+    expect([...readWeightedHistory(db, { movementKeys: [weightedKey, cardioKey] })]).toEqual([]);
+    expect(readPreviousCardioExercises(db, [cardioLineage], uuid())[cardioLineage]?.sets[0]?.duration?.seconds()).toBe(
+      45,
+    );
   });
 });
 

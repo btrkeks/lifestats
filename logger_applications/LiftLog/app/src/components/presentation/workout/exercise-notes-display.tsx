@@ -9,13 +9,13 @@ import IconButton from '@/components/presentation/foundation/icon-button';
 
 interface ExerciseNotesDisplayProps {
   exercise: RecordedExercise;
-  previousExercise: RecordedExercise | undefined;
+  previousNotes: string | undefined;
 }
 export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
   const expandByDefault = useAppSelector((x) => x.settings.notesExpandedByDefault);
   const notes = props.exercise.notes ?? '';
   const blueprintNotes = props.exercise.blueprint.notes ?? '';
-  const previousNotes = props.previousExercise?.notes ? 'Last time: ' + props.previousExercise.notes : '';
+  const previousNotes = props.previousNotes ? 'Last time: ' + props.previousNotes : '';
   const [expanded, setExpanded] = useState(expandByDefault);
   const [maxNumberOfLines, setMaxNumberOfLines] = useState(expandByDefault ? undefined : 1);
   const iconButtonHeight = 40;

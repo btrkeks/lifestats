@@ -27,7 +27,7 @@ import { Updater } from '@/utils/types';
 
 interface CardioExerciseProps {
   recordedExercise: RecordedCardioExercise;
-  previousLineageExercise: RecordedCardioExercise | undefined;
+  previousNotes: string | undefined;
   toStartNext: boolean;
   isReadonly: boolean;
   showPreviousButton: boolean;
@@ -45,7 +45,7 @@ export function CardioExercise(props: CardioExerciseProps) {
   return (
     <ExerciseSection
       recordedExercise={recordedExercise}
-      previousLineageExercise={props.previousLineageExercise}
+      previousNotes={props.previousNotes}
       toStartNext={props.toStartNext}
       isReadonly={props.isReadonly}
       showPreviousButton={props.showPreviousButton}

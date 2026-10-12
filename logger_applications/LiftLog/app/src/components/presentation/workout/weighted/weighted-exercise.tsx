@@ -4,14 +4,14 @@ import { SetTableHeader, SetTableRow } from '@/components/presentation/workout/w
 import { columnWeightUnit, setRows, WeightColumn } from '@/components/presentation/workout/weighted/set-rows';
 import { spacing } from '@/hooks/useAppTheme';
 import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
-import { RecordedWeightedExercise, WeightedChange } from '@/models/session-models';
+import { RecordedWeightedExercise, WeightedChange, WeightedHistory } from '@/models/session-models';
 import { Updater } from '@/utils/types';
 import { T } from '@tolgee/react';
 import { View } from 'react-native';
 
 interface WeightedExerciseProps {
   recordedExercise: RecordedWeightedExercise;
-  previousLineageExercise: RecordedWeightedExercise | undefined;
+  previous: WeightedHistory | undefined;
   toStartNext: boolean;
   isReadonly: boolean;
   showPreviousButton: boolean;
@@ -35,7 +35,7 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
   return (
     <ExerciseSection
       recordedExercise={recordedExercise}
-      previousLineageExercise={props.previousLineageExercise}
+      previousNotes={props.previous?.lastNotes}
       toStartNext={props.toStartNext}
       isReadonly={props.isReadonly}
       showPreviousButton={props.showPreviousButton}
@@ -45,7 +45,7 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
     >
       <View style={{ gap: spacing[1] }}>
         <SetTableHeader column={column} />
-        {setRows(recordedExercise, props.previousLineageExercise).map((row) => (
+        {setRows(recordedExercise, props.previous?.sets).map((row) => (
           <SetTableRow
             key={row.index}
             row={row}

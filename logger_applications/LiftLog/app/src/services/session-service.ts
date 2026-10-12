@@ -1,25 +1,25 @@
 import {
+  CardioExerciseBlueprint,
+  ExerciseBlueprint,
+  MovementKey,
   ProgressionKey,
   SessionBlueprint,
-  ExerciseBlueprint,
-  CardioExerciseBlueprint,
-  applyProgression,
+  WeightedExerciseBlueprint,
 } from '@/models/blueprint-models';
-import { Weight, WeightUnit } from '@/models/weight';
+import { WeightUnit } from '@/models/weight';
 import {
-  PotentialSet,
   RecordedCardioExercise,
   RecordedCardioExerciseSet,
   RecordedExercise,
   RecordedWeightedExercise,
   Session,
+  WeightedHistory,
 } from '@/models/session-models';
-import { readLatestExercises, readSessionToContinueFrom } from '@/db/sessions';
+import { readLatestCardioExercises, readSessionToContinueFrom, readWeightedHistory } from '@/db/sessions';
 import type { RootState } from '@/store';
 import { uuid } from '@/utils/uuid';
 import { LocalDate } from '@js-joda/core';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import { match } from 'ts-pattern';
 
 export class SessionService {
   constructor(
@@ -32,20 +32,28 @@ export class SessionService {
       return;
     }
 
-    const latestExercises = readLatestExercises(
+    const exercises = sessionBlueprints.flatMap((session) => session.exercises);
+    const weightedHistory = readWeightedHistory(this.db, {
+      movementKeys: [
+        ...new Set(
+          exercises.filter((e) => e instanceof WeightedExerciseBlueprint).map((exercise) => exercise.movementKey()),
+        ),
+      ],
+    });
+    const latestCardio = readLatestCardioExercises(
       this.db,
-      sessionBlueprints.flatMap((session) => session.exercises.map((exercise) => exercise.progressionKey())),
+      exercises.filter((e) => e instanceof CardioExerciseBlueprint).map((exercise) => exercise.progressionKey()),
     );
     const previousSession = readSessionToContinueFrom(this.db);
 
-    // Track the plan position by index so progression walks the plan in order.
+    // Track the plan position by index so the plan is walked in order.
     // Matching only by name would stall on duplicate-named workouts, always
     // resolving to the first one and never advancing past it.
     let index = previousSession ? sessionBlueprints.findIndex((x) => x.name === previousSession.name) : -1;
 
     while (true) {
       index = (index + 1) % sessionBlueprints.length;
-      yield this.createNewSession(sessionBlueprints[index]!, latestExercises).with({
+      yield this.createNewSession(sessionBlueprints[index]!, weightedHistory, latestCardio).with({
         bodyweight: previousSession?.bodyweight,
       });
     }
@@ -53,44 +61,24 @@ export class SessionService {
 
   private createNewSession(
     sessionBlueprint: SessionBlueprint,
-    latestRecordedExercises: Record<ProgressionKey, RecordedExercise | undefined>,
+    weightedHistory: ReadonlyMap<MovementKey, WeightedHistory>,
+    latestCardio: Record<ProgressionKey, RecordedCardioExercise | undefined>,
   ): Session {
-    // oxlint-disable-next-line typescript/no-this-alias
-    const $this = this;
-    function getNextExercise(e: ExerciseBlueprint): RecordedExercise {
-      const lastExercise = latestRecordedExercises[e.progressionKey()];
+    const unit = this.getDefaultWeightUnit();
+    const getNextExercise = (e: ExerciseBlueprint): RecordedExercise => {
       if (e instanceof CardioExerciseBlueprint) {
-        const cardioLastExercise = lastExercise instanceof RecordedCardioExercise ? lastExercise : undefined;
+        const lastExercise = latestCardio[e.progressionKey()];
         return RecordedCardioExercise.empty(e).with({
           sets: e.sets.map((s, i) =>
             RecordedCardioExerciseSet.empty(s).with({
-              incline: cardioLastExercise?.sets[i]?.incline,
-              resistance: cardioLastExercise?.sets[i]?.resistance,
+              incline: lastExercise?.sets[i]?.incline,
+              resistance: lastExercise?.sets[i]?.resistance,
             }),
           ),
         });
       }
-      const weightedLastExercise = lastExercise instanceof RecordedWeightedExercise ? lastExercise : undefined;
-      const potentialSets: PotentialSet[] = match(weightedLastExercise)
-        .returnType<PotentialSet[]>()
-        .with(undefined, () =>
-          e.plannedSets.map((s) => new PotentialSet(undefined, new Weight(0, $this.getDefaultWeightUnit()), s.reps)),
-        )
-        // Where reps are what advances, the target carries forward alongside the weight so the
-        // lineage keeps what a rule won for it. Where they are a fixed prescription it is re-seeded
-        // from the plan, because the only thing that could have changed it is an edit to the plan -
-        // and that edit already had its own say in the save-changes dialog.
-        .otherwise((x) =>
-          x.potentialSets.map(
-            (ps, index) =>
-              new PotentialSet(undefined, ps.weight, e.repsAreProgressed ? ps.target : e.repsTargetForSet(index)),
-          ),
-        );
-      const newExercise = new RecordedWeightedExercise(e, potentialSets, undefined);
-      return weightedLastExercise?.isSuccessForProgressiveOverload
-        ? applyProgression(e.progression, newExercise)
-        : newExercise;
-    }
+      return RecordedWeightedExercise.empty(e, unit, weightedHistory.get(e.movementKey())?.sets);
+    };
     return new Session(
       uuid(),
       sessionBlueprint,

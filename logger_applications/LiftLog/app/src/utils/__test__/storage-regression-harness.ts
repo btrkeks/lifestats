@@ -9,18 +9,19 @@ import { exercisesSchema, programsSchema } from '@/db/schema';
 import {
   readEarliestSessionDate,
   readExerciseHistory,
-  readLatestExercises,
+  readLatestCardioExercises,
   readPersonalRecords,
+  readPreviousCardioExercises,
   readPreviousComparableSession,
-  readPreviousExercises,
   readSessions,
   readSessionsBetween,
   readStartedSessionVolumes,
+  readWeightedHistory,
   writeSession,
 } from '@/db/sessions';
 import { MovementKey, ProgramBlueprint, ProgressionKey } from '@/models/blueprint-models';
 import { ExerciseDescriptor, fromExerciseDescriptorJSON } from '@/models/exercise-models';
-import { RecordedExercise, Session } from '@/models/session-models';
+import { RecordedCardioExercise, RecordedExercise, Session, WeightedHistory } from '@/models/session-models';
 import { exerciseDescriptorMigrations, programBlueprintMigrations } from '@/models/storage/versions/migrations';
 import { DatabaseImportService } from '@/services/database-import-service';
 import { DatabaseMigrationService } from '@/services/database-migration-service';
@@ -59,8 +60,9 @@ export interface RegressionFixture {
   programs: Record<string, ProgramBlueprint>;
   activeProgramId: string | undefined;
   exercises: Record<string, ExerciseDescriptor>;
-  latestExercises(progressionKeys: ProgressionKey[]): Record<ProgressionKey, RecordedExercise | undefined>;
-  previousExercises(session: Session): Record<ProgressionKey, RecordedExercise | undefined>;
+  latestCardioExercises(progressionKeys: ProgressionKey[]): Record<ProgressionKey, RecordedCardioExercise | undefined>;
+  previousCardioExercises(session: Session): Record<ProgressionKey, RecordedCardioExercise | undefined>;
+  weightedHistory(movementKeys: MovementKey[], excludeSessionId?: string): ReadonlyMap<MovementKey, WeightedHistory>;
   exerciseHistory(movementKey: MovementKey): RecordedExercise[];
   previousComparableSession(session: Session): Session | undefined;
   personalRecords(): PersonalRecordKg[];
@@ -143,10 +145,20 @@ export async function openRegressionFixture(source: FixtureSource): Promise<Regr
     activeProgramId: programRows.find((row) => row.active)?.id,
     exercises,
 
-    latestExercises: (progressionKeys) => readLatestExercises(db, progressionKeys),
+    latestCardioExercises: (progressionKeys) => readLatestCardioExercises(db, progressionKeys),
 
-    previousExercises: (session) =>
-      readPreviousExercises(db, [...new Set(session.recordedExercises.map((x) => x.progressionKey()))], session.id),
+    previousCardioExercises: (session) =>
+      readPreviousCardioExercises(
+        db,
+        [
+          ...new Set(
+            session.recordedExercises.filter((x) => x.type === 'RecordedCardioExercise').map((x) => x.progressionKey()),
+          ),
+        ],
+        session.id,
+      ),
+
+    weightedHistory: (movementKeys, excludeSessionId) => readWeightedHistory(db, { movementKeys, excludeSessionId }),
 
     exerciseHistory: (movementKey) => readExerciseHistory(db, movementKey),
 

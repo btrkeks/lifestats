@@ -11,6 +11,7 @@ import {
   CompletedWeightedSet,
   freeformSessionName,
   fromRecordedExerciseJSON,
+  RecordedCardioExercise,
   RecordedExercise,
   Session,
   WeightedHistory,
@@ -442,46 +443,41 @@ export function readExerciseHistory(db: ExpoSQLiteDatabase, movementKey: Movemen
     .toArray();
 }
 
-/** Each started exercise picked out by `where`, which may filter on the session and recorded exercise tables. */
-function lastCompletionPerExercise(db: ExpoSQLiteDatabase, where: SQL | undefined) {
-  const lastCompletion = (sets: SetsTable) =>
-    db
-      .select({
-        sessionId: recordedExercisesSchema.sessionId,
-        ord: recordedExercisesSchema.ord,
-        progressionKey: recordedExercisesSchema.progressionKey,
-        completedAtMs: max(sets.completedAtMs).as('completedAtMs'),
-      })
-      .from(recordedExercisesSchema)
-      .innerJoin(sets, ofExercise(sets))
-      .innerJoin(sessionsSchema, eq(sessionsSchema.id, recordedExercisesSchema.sessionId))
-      .where(and(where, isNotNull(sets.completedAtMs)))
-      .groupBy(recordedExercisesSchema.sessionId, recordedExercisesSchema.ord);
-  return lastCompletion(weightedSetsSchema).unionAll(lastCompletion(cardioSetsSchema)).as('performed');
+/** Each started cardio exercise picked out by `where`, which may filter on the session and recorded exercise tables. */
+function lastCardioCompletionPerExercise(db: ExpoSQLiteDatabase, where: SQL | undefined) {
+  const sets = cardioSetsSchema;
+  return db
+    .select({
+      sessionId: recordedExercisesSchema.sessionId,
+      ord: recordedExercisesSchema.ord,
+      progressionKey: recordedExercisesSchema.progressionKey,
+      completedAtMs: max(sets.completedAtMs).as('completedAtMs'),
+    })
+    .from(recordedExercisesSchema)
+    .innerJoin(sets, ofExercise(sets))
+    .innerJoin(sessionsSchema, eq(sessionsSchema.id, recordedExercisesSchema.sessionId))
+    .where(and(where, isNotNull(sets.completedAtMs)))
+    .groupBy(recordedExercisesSchema.sessionId, recordedExercisesSchema.ord)
+    .as('performed');
 }
 
 type ExerciseKey = { sessionId: string; ord: number };
 const exerciseKey = (x: ExerciseKey) => setKey({ sessionId: x.sessionId, exerciseOrd: x.ord });
 
-function readExercisesByKey(db: ExpoSQLiteDatabase, keys: ExerciseKey[]): Map<string, RecordedExercise> {
+function readCardioExercisesByKey(db: ExpoSQLiteDatabase, keys: ExerciseKey[]): Map<string, RecordedCardioExercise> {
   if (!keys.length) {
     return new Map();
   }
   const isKey = (sessionId: SQLiteColumn, exerciseOrd: SQLiteColumn) =>
     or(...keys.map((key) => and(eq(sessionId, key.sessionId), eq(exerciseOrd, key.ord))));
-  const sets = groupSetsByExercise(
-    db
-      .select()
-      .from(weightedSetsSchema)
-      .where(isKey(weightedSetsSchema.sessionId, weightedSetsSchema.exerciseOrd))
-      .orderBy(weightedSetsSchema.ord)
-      .all(),
+  const sets = groupBy(
     db
       .select()
       .from(cardioSetsSchema)
       .where(isKey(cardioSetsSchema.sessionId, cardioSetsSchema.exerciseOrd))
       .orderBy(cardioSetsSchema.ord)
       .all(),
+    setKey,
   );
   return new Map(
     db
@@ -489,21 +485,24 @@ function readExercisesByKey(db: ExpoSQLiteDatabase, keys: ExerciseKey[]): Map<st
       .from(recordedExercisesSchema)
       .where(isKey(recordedExercisesSchema.sessionId, recordedExercisesSchema.ord))
       .all()
-      .map((exercise) => [exerciseKey(exercise), fromRecordedExerciseJSON(exerciseFromRows(exercise, sets))]),
+      .map((exercise) => [
+        exerciseKey(exercise),
+        RecordedCardioExercise.fromJSON(cardioExerciseFromRows(exercise, sets.get(exerciseKey(exercise)) ?? [])),
+      ]),
   );
 }
 
 /**
- * The latest started performance of each lineage, before the session you are looking at. Only finished
- * sessions count, and `excludeSessionId` is left out too, because "previous" cannot mean the session you
- * are looking at.
+ * The latest started performance of each cardio lineage, before the session you are looking at. Only
+ * finished sessions count, and `excludeSessionId` is left out too, because "previous" cannot mean the
+ * session you are looking at.
  */
-export function readPreviousExercises(
+export function readPreviousCardioExercises(
   db: ExpoSQLiteDatabase,
   progressionKeys: ProgressionKey[],
   excludeSessionId: string,
-): Record<ProgressionKey, RecordedExercise | undefined> {
-  return readLatestOfLineages(db, progressionKeys, and(isFinished, ne(sessionsSchema.id, excludeSessionId)));
+): Record<ProgressionKey, RecordedCardioExercise | undefined> {
+  return readLatestOfCardioLineages(db, progressionKeys, and(isFinished, ne(sessionsSchema.id, excludeSessionId)));
 }
 
 /** When a session was performed: its last completed set, or the start of its date when it has none. */
@@ -690,23 +689,24 @@ export function readWeightedHistory(
   return history;
 }
 
-export function readLatestExercises(
+/** Includes the workout in progress, so an upcoming session can carry what was just done. */
+export function readLatestCardioExercises(
   db: ExpoSQLiteDatabase,
   progressionKeys: ProgressionKey[],
-): Record<ProgressionKey, RecordedExercise | undefined> {
-  return readLatestOfLineages(db, progressionKeys, undefined);
+): Record<ProgressionKey, RecordedCardioExercise | undefined> {
+  return readLatestOfCardioLineages(db, progressionKeys, undefined);
 }
 
 /** `where` may filter on the session and recorded exercise tables. */
-function readLatestOfLineages(
+function readLatestOfCardioLineages(
   db: ExpoSQLiteDatabase,
   progressionKeys: ProgressionKey[],
   where: SQL | undefined,
-): Record<ProgressionKey, RecordedExercise | undefined> {
+): Record<ProgressionKey, RecordedCardioExercise | undefined> {
   if (!progressionKeys.length) {
     return {};
   }
-  const performed = lastCompletionPerExercise(
+  const performed = lastCardioCompletionPerExercise(
     db,
     and(where, inArray(recordedExercisesSchema.progressionKey, progressionKeys)),
   );
@@ -723,7 +723,7 @@ function readLatestOfLineages(
     .from(performed)
     .as('ranked');
   const latest = db.select().from(ranked).where(eq(ranked.recency, 1)).all();
-  const exercises = readExercisesByKey(db, latest);
+  const exercises = readCardioExercisesByKey(db, latest);
   return Object.fromEntries(latest.map((row) => [row.progressionKey, exercises.get(exerciseKey(row))]));
 }
 
