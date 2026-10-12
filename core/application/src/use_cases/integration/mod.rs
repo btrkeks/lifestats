@@ -7,6 +7,7 @@ pub mod fitbit_bundle_factory;
 pub mod liftlog_bundle_factory;
 pub mod liftlog_days;
 pub mod service;
+pub mod yomikata_bundle_factory;
 
 pub use anki_bundle_factory::AnkiBundleFactory;
 pub use bundle_factory::{BundleFactory, ProvisionedStatistic};
@@ -23,3 +24,4 @@ pub use service::{
     EbookEventIngestionRequest, EbookEventIngestionResult, IntegrationService,
     IntegrationServiceTrait,
 };
+pub use yomikata_bundle_factory::YomikataBundleFactory;

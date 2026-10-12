@@ -398,6 +398,35 @@ without adding the daily `delta` twice.
 }
 ```
 
+### Provisioning the Yomikata Bundle
+
+**Request:** `POST /integrations/yomikata`
+
+```json
+{}
+```
+
+The Yomikata Android app calls this route before it pushes daily totals. Send `{}`. The factory
+reads no context. On the first call it creates two `IntegerAmount` statistics in category `Yomikata`, tagged
+`source=yomikata`, `metric=<key>`, and `bundle_version=1`:
+
+| Key | Name | Default goal |
+|---|---|---|
+| `cards_reviewed` | `[Yomikata] Cards Reviewed` | `{"target_amount": 400, "is_at_least": true}` |
+| `study_minutes` | `[Yomikata] Study Time (minutes)` | none |
+
+The default goal is valid from the server's local date at creation. Later calls find the
+statistics by tag and return the same IDs, so a goal edited afterwards stays as it is.
+
+**Response:** `200 OK`
+
+```json
+{
+  "cards_reviewed_id": 101,
+  "study_minutes_id": 102
+}
+```
+
 ### Syncing LiftLog Workout Days
 
 **Request:** `PUT /integrations/liftlog/days`

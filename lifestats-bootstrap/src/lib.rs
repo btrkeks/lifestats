@@ -14,7 +14,7 @@ use lifestats_application::use_cases::{
     integration::{
         AnkiBundleFactory, BundleFactory, EbookBundleFactory, EbookEventStore,
         EbookProgressService, EbookProgressServiceTrait, FitbitBundleFactory, IntegrationService,
-        LiftLogBundleFactory,
+        LiftLogBundleFactory, YomikataBundleFactory,
     },
 };
 use lifestats_application::SessionManager;
@@ -78,6 +78,7 @@ pub fn build_services() -> Result<Application> {
         Arc::new(EbookBundleFactory),
         Arc::new(FitbitBundleFactory),
         Arc::new(LiftLogBundleFactory),
+        Arc::new(YomikataBundleFactory),
     ];
     let ebook_event_store: Arc<dyn EbookEventStore> =
         Arc::new(SqliteEbookEventStore::new(Arc::clone(&pool)));

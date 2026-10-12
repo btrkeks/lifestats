@@ -138,6 +138,8 @@ curl -s -X POST http://localhost:3000/progress-items/1/checkpoints \
 
 Ebook reading syncs automatically via `POST /integrations/ebook/events` (idempotent by `event_id`) — don't log ebook progress manually unless asked.
 
+Yomikata (kanji-reading app) study syncs automatically: the app provisions `[Yomikata] Cards Reviewed` and `[Yomikata] Study Time (minutes)` via `POST /integrations/yomikata` with `{}`, then overwrites each day's totals. Don't log Yomikata study manually unless asked.
+
 Gym workouts sync automatically via `PUT /integrations/liftlog/days` (the LiftLog app sends the finished workouts of every day it changed; the server replaces `[LiftLog] Workout Time` on exactly those days, and an empty `workouts` list clears a day) — don't log LiftLog workouts manually unless asked. `[LiftLog] Total Weight Lifted (kg)` is no longer written.
 
 ## Sessions (live activity timers)
