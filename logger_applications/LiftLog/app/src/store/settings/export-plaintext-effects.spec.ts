@@ -8,8 +8,9 @@ import { RecordedWeightedExercise } from '@/models/session-models/recorded-weigh
 import {
   emptyPotentialSet,
   filledPotentialSet,
+  makeLegacyWeightedBlueprint,
   makeRecordedExercise,
-  makeWeightedBlueprint,
+  targets,
 } from '@/models/session-models/__test__/helpers';
 import { RecordedCardioExercise } from '@/models/session-models/recorded-cardio-exercise';
 import { exportPlainText } from '@/store/settings';
@@ -25,7 +26,7 @@ import { SessionJSON } from '@/models/storage/versions/latest';
 const t = OffsetDateTime.of(2024, 1, 15, 10, 0, 0, 0, ZoneOffset.UTC);
 
 function makeBenchBlueprint(name = 'Bench Press', sets = 3, repsPerSet = 10) {
-  return makeWeightedBlueprint({ name, sets, repsConfig: { type: 'fixed', reps: repsPerSet } });
+  return makeLegacyWeightedBlueprint({ name, targets: targets(sets, repsPerSet) });
 }
 
 function makeWeightedExercise(name = 'Bench Press', sets = 3, weightKg = 100, reps = 10): RecordedWeightedExercise {

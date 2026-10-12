@@ -1,6 +1,5 @@
 import { cell, parseCsvTable, parseOptionalNumber } from '@/services/csv-import/csv-parse-utils';
 import { CsvImportOptions, NormalizedExercise, NormalizedImportSession } from '@/services/csv-import/csv-to-sessions';
-import { RepsTarget } from '@/models/blueprint-models';
 import { WeightUnit } from '@/models/weight';
 import { LocalDateTime } from '@js-joda/core';
 
@@ -21,12 +20,6 @@ export type StrongCsvRow = {
 export type ParseStrongCsvResult =
   | { ok: true; rows: StrongCsvRow[]; weightUnit: WeightUnit | undefined }
   | { ok: false; error: string };
-
-/**
- * Strong records no rep targets. One range for every exercise keeps each exercise in a single lineage
- * across sessions, since the rep scheme is part of `progressionKey()`.
- */
-const STRONG_REPS_TARGET: RepsTarget = { min: 1, max: 20 };
 
 const REQUIRED_HEADERS = ['Date', 'Exercise Name', 'Set Order', 'Reps'] as const;
 
@@ -167,7 +160,6 @@ export function strongRowsToNormalized(
         name,
         notes: e.notes.length > 0 ? e.notes.join('\n') : undefined,
         sets: e.sets,
-        repsTarget: STRONG_REPS_TARGET,
         restSeconds: e.restSeconds,
       }));
     if (normalizedExercises.length === 0) {

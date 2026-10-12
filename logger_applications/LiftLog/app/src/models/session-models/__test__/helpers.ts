@@ -9,6 +9,8 @@ import {
   CardioExerciseBlueprint,
   CardioExerciseSetBlueprint,
   ProgressionRule,
+  Resistance,
+  Rest,
 } from '@/models/blueprint-models';
 import { Weight } from '@/models/weight';
 import { Session } from '@/models/session-models/session';
@@ -29,16 +31,39 @@ export function tickAt(h: number, m: number, s: number = 0): OffsetDateTime {
 }
 
 /**
- * The blueprint most specs want: a named 3×10 movement that progresses 2.5 a session. Override any
- * field by name. Every spec builds its blueprints through here rather than the constructor, so a
- * change to the blueprint's shape lands in one place.
+ * The blueprint most specs want: a named three-set movement. Override any field by name. Every spec
+ * builds its blueprints through here rather than the constructor, so a change to the blueprint's
+ * shape lands in one place.
  */
 export function makeWeightedBlueprint(init: WeightedExerciseBlueprintInit = {}) {
-  return WeightedExerciseBlueprint.of({
-    name: 'Squat',
-    progression: [ProgressionRule.load(BigNumber(2.5))],
-    ...init,
-  });
+  return WeightedExerciseBlueprint.of({ name: 'Squat', ...init });
+}
+
+/**
+ * A blueprint as plans were written before they stopped prescribing reps and rules: what old plans,
+ * sessions and backups still hold.
+ */
+export function makeLegacyWeightedBlueprint(init: {
+  name?: string;
+  targets: RepsTarget[];
+  progression?: ProgressionRule[];
+  resistance?: Resistance;
+}) {
+  return new WeightedExerciseBlueprint(
+    init.name ?? 'Squat',
+    init.targets.map((reps) => ({ reps: { ...reps } })),
+    init.progression ?? [ProgressionRule.load(BigNumber(2.5))],
+    Rest.medium,
+    false,
+    '',
+    '',
+    init.resistance ?? 'external',
+  );
+}
+
+/** `sets` copies of one rep target. */
+export function targets(sets: number, min: number, max = min): RepsTarget[] {
+  return Array.from({ length: sets }, () => ({ min, max }));
 }
 
 export function makeCardioSetBlueprint(
@@ -112,7 +137,7 @@ export function makeRecordedExercise(
   return new RecordedWeightedExercise(
     blueprint,
     reps.map((r, index) => {
-      const target = blueprint.repsTargetForSet(index);
+      const target = (blueprint.plannedSets[index] ?? blueprint.plannedSets.at(-1))?.reps;
       return r === undefined ? emptyPotentialSet(weight, target) : filledPotentialSet(r, at(index), weight, target);
     }),
     undefined,
@@ -134,7 +159,7 @@ export function createSession(sessionBlueprint: SessionBlueprint, fillSets: numb
       const potentialSets = exerciseBlueprint.plannedSets.map((planned, setIndex) =>
         fillSets.includes(exerciseIndex)
           ? filledPotentialSet(
-              planned.reps.max,
+              10,
               tick().plusSeconds(exerciseIndex * 60 + setIndex * 10),
               new Weight(100, 'kilograms'),
               planned.reps,

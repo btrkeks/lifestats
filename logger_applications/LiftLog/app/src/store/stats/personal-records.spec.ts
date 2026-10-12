@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { LocalDate, OffsetDateTime } from '@js-joda/core';
-import BigNumber from 'bignumber.js';
 import { findPersonalRecords } from '@/store/stats/personal-records';
 import { RecordedWeightedExercise, Session } from '@/models/session-models';
-import { ProgressionRule, Rest, SessionBlueprint } from '@/models/blueprint-models';
+import { Rest, SessionBlueprint } from '@/models/blueprint-models';
 import { Weight } from '@/models/weight';
 import {
   filledPotentialSet,
@@ -14,8 +13,6 @@ import {
 function exercise(name: string, weight: Weight, reps: number) {
   const blueprint = makeWeightedBlueprint({
     name,
-    repsConfig: { type: 'fixed', reps: 5 },
-    progression: [ProgressionRule.load(new BigNumber(2.5), { type: 'lowestSets', pick: 'middle' })],
     restBetweenSets: Rest.long,
   });
   const time = OffsetDateTime.parse('2026-01-01T10:00:00Z');
@@ -90,8 +87,6 @@ describe('findPersonalRecords', () => {
     // Same +10kg added both sessions, but a heavier bodyweight makes the effective 1RM a record.
     const blueprint = makeWeightedBlueprint({
       name: 'Pull Up',
-      repsConfig: { type: 'fixed', reps: 5 },
-      progression: [ProgressionRule.load(new BigNumber(2.5), { type: 'lowestSets', pick: 'middle' })],
       restBetweenSets: Rest.long,
       resistance: 'bodyweight',
     });

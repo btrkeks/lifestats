@@ -9,8 +9,6 @@ import { useTranslate } from '@tolgee/react';
 import {
   CardioExerciseBlueprint,
   ExerciseBlueprint,
-  formatRepsTarget,
-  uniformTarget,
   matchCardioTarget,
   WeightedExerciseBlueprint,
 } from '@/models/blueprint-models';
@@ -108,24 +106,10 @@ export { formatCardioTarget };
 
 function WeightedExerciseBlueprintSummary({ blueprint }: { blueprint: WeightedExerciseBlueprint }) {
   const sets = blueprint.plannedSets.length;
-  const uniform = uniformTarget(blueprint.plannedSets);
   return (
     <View style={{ gap: spacing[1], alignItems: 'flex-start' }}>
       <SurfaceText>
-        {uniform ? (
-          <>
-            <SurfaceText color="primary">{sets}</SurfaceText> {pluralize(sets, 'set')} of{' '}
-            <SurfaceText color="primary">{formatRepsTarget(uniform)}</SurfaceText> {pluralize(uniform.max, 'rep')}
-          </>
-        ) : (
-          <>
-            <SurfaceText color="primary">{sets}</SurfaceText> {pluralize(sets, 'set')}:{' '}
-            <SurfaceText color="primary">
-              {blueprint.plannedSets.map((s) => formatRepsTarget(s.reps)).join(' / ')}
-            </SurfaceText>{' '}
-            reps
-          </>
-        )}
+        <SurfaceText color="primary">{sets}</SurfaceText> {pluralize(sets, 'set')}
       </SurfaceText>
     </View>
   );

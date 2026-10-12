@@ -19,7 +19,6 @@ import {
   toDurationJSON,
   toLocalDateJSON,
 } from '../storage/versions/latest';
-import { RecordedWeightedExercise } from '@/models/session-models';
 
 export class ProgramBlueprint {
   constructor(
@@ -411,13 +410,8 @@ export interface ProgressionRuleInit {
 }
 
 /**
- * One step of automatic progression. An exercise carries an ordered list of these, and
- * {@link applyProgression} gives the move to the first rule that can still make one.
- *
- * `step` and `ceiling` are in the axis's own unit - whole reps, or plate increments in whatever unit
- * the lifter works in - and deliberately not a {@link Weight}. 2.5 in a kilogram gym and 5 in a pound
- * gym are the same step rather than conversions of one another, and a blueprint has no unit to be
- * expressed in: the unit is chosen per weight and carried forward through the lineage.
+ * A progression rule from before weights stopped moving on their own. Plans, sessions and backups still
+ * carry them, so they load and save unchanged, but nothing runs them.
  */
 export class ProgressionRule {
   readonly type = 'ProgressionRule';
@@ -460,253 +454,25 @@ export class ProgressionRule {
       trigger: this.trigger,
     };
   }
-
-  with(other: ProgressionRuleInit): ProgressionRule {
-    return new ProgressionRule(
-      other.axis ?? this.axis,
-      other.step ?? this.step,
-      other.scope ?? this.scope,
-      'ceiling' in other ? other.ceiling : this.ceiling,
-      'onCeiling' in other ? other.onCeiling : this.onCeiling,
-      other.trigger ?? this.trigger,
-    );
-  }
-
-  equals(other: ProgressionRule | undefined): boolean {
-    if (!other) {
-      return false;
-    }
-    if (other === this) {
-      return true;
-    }
-    return (
-      this.axis === other.axis &&
-      this.step.isEqualTo(other.step) &&
-      setScopeEquals(this.scope, other.scope) &&
-      (this.ceiling?.isEqualTo(other.ceiling ?? NaN) ?? other.ceiling === undefined) &&
-      this.onCeiling === other.onCeiling &&
-      this.trigger === other.trigger
-    );
-  }
-
-  /** The exercise with this rule's move made, or `undefined` when the rule has nothing left to move. */
-  applyTo(exercise: RecordedWeightedExercise): RecordedWeightedExercise | undefined {
-    // A load rule kept from before the load was turned off would climb a weight nothing displays.
-    if (this.axis === 'load' && !exercise.tracksResistance) {
-      return undefined;
-    }
-    const indices = this.indicesToMove(exercise);
-    if (!indices.length) {
-      return undefined;
-    }
-    return this.axis === 'load' ? this.moveLoad(exercise, indices) : this.moveReps(exercise, indices);
-  }
-
-  /** Undoes this rule's climb, putting the axis back to what the plan asks for. */
-  resetOn(exercise: RecordedWeightedExercise): RecordedWeightedExercise {
-    // Only reps have a planned value to return to; the plan never prescribes a load.
-    if (this.axis !== 'reps') {
-      return exercise;
-    }
-    return exercise.potentialSets.reduce(
-      (ex, _, index) => ex.withSet(index, (s) => s.with({ target: exercise.blueprint.repsTargetForSet(index) })),
-      exercise,
-    );
-  }
-
-  private moveLoad(exercise: RecordedWeightedExercise, indices: number[]): RecordedWeightedExercise {
-    return indices.reduce(
-      (ex, index) => ex.withSet(index, (s) => s.with({ weight: s.weight.plus(this.step) })),
-      exercise,
-    );
-  }
-
-  /**
-   * The band climbs as a whole, stopping when its top reaches the ceiling. Both ends move by the same
-   * amount even on the last rung, so a range keeps its width rather than closing up against the cap.
-   */
-  private moveReps(exercise: RecordedWeightedExercise, indices: number[]): RecordedWeightedExercise | undefined {
-    const moved = indices.flatMap((index) => {
-      const { min, max } = exercise.repsTargetForSet(index);
-      const step = this.stepUpTo(max);
-      return step === 0 ? [] : [{ index, target: { min: min + step, max: max + step } }];
-    });
-    if (!moved.length) {
-      return undefined;
-    }
-    return moved.reduce((ex, { index, target }) => ex.withSet(index, (s) => s.with({ target })), exercise);
-  }
-
-  /**
-   * How far reps may actually climb from `from`: the whole step, or whatever the ceiling leaves.
-   *
-   * Whole reps only - a target is an integer on the wire, and half a repetition is not a thing to ask
-   * anyone for. A rule with nowhere left to go returns zero, which is what hands the move on to the
-   * next rule in the list.
-   */
-  private stepUpTo(from: number): number {
-    const step = Math.floor(this.step.toNumber());
-    const reachable =
-      this.ceiling === undefined ? from + step : Math.min(from + step, Math.floor(this.ceiling.toNumber()));
-    return Math.max(reachable - from, 0);
-  }
-
-  private indicesToMove(exercise: RecordedWeightedExercise): number[] {
-    const sets = exercise.potentialSets;
-    if (this.scope.type === 'allSets') {
-      return sets.map((_, index) => index);
-    }
-    // Ranked by the rule's own axis: a reps rule that sorted by load would pick a set at random.
-    const matching =
-      this.axis === 'load'
-        ? lowestByWeight(exercise)
-        : lowestByNumber(sets.map((_, i) => exercise.repsTargetForSet(i).max));
-    return pickFrom(matching, this.scope.pick, sets.length);
-  }
-}
-
-function lowestByWeight(exercise: RecordedWeightedExercise): number[] {
-  const sets = exercise.potentialSets;
-  const lowest = [...sets].sort((a, b) => (a.weight.isGreaterThan(b.weight) ? 1 : -1))[0];
-  if (!lowest) {
-    return [];
-  }
-  return sets.flatMap((set, index) => (set.weight.equals(lowest.weight) ? [index] : []));
-}
-
-function lowestByNumber(values: number[]): number[] {
-  const lowest = Math.min(...values);
-  return values.flatMap((value, index) => (value === lowest ? [index] : []));
-}
-
-/** `middle` measures from the centre of *all* sets, not the centre of the matching ones. */
-function pickFrom(matching: number[], pick: IncreaseStrategy, setCount: number): number[] {
-  if (!matching.length) {
-    return [];
-  }
-  return match(pick)
-    .returnType<number[]>()
-    .with('all', () => matching)
-    .with('first', () => matching.slice(0, 1))
-    .with('last', () => matching.slice(-1))
-    .with('middle', () => {
-      const centre = (setCount - 1) / 2;
-      // A tie keeps the earlier candidate.
-      return [
-        matching.reduce((closest, index) => (Math.abs(index - centre) < Math.abs(closest - centre) ? index : closest)),
-      ];
-    })
-    .exhaustive();
-}
-
-function setScopeEquals(a: SetScope, b: SetScope): boolean {
-  return a.type === 'allSets' ? b.type === 'allSets' : b.type === 'lowestSets' && a.pick === b.pick;
-}
-
-export function progressionEquals(a: ProgressionRule[], b: ProgressionRule[]): boolean {
-  return a.length === b.length && a.every((rule, index) => rule.equals(b[index]));
 }
 
 /**
- * Ordered: the first rule that can still move is the one that moves. Every rule ahead of it has run
- * out of room, so any of those asking to `reset` gets put back to the plan on the way past - that
- * handoff is what makes double progression a ladder rather than a one-way climb.
+ * A rep target from before plans stopped prescribing reps. Stored sets and plans still carry one, so it
+ * loads and saves unchanged; new sets get `0-0`.
  */
-export function applyProgression(
-  progression: ProgressionRule[],
-  exercise: RecordedWeightedExercise,
-): RecordedWeightedExercise {
-  for (const [index, rule] of progression.entries()) {
-    const moved = rule.applyTo(exercise);
-    if (moved) {
-      return progression
-        .slice(0, index)
-        .filter((exhausted) => exhausted.onCeiling === 'reset')
-        .reduce((ex, exhausted) => exhausted.resetOn(ex), moved);
-    }
-  }
-  return exercise;
-}
-
-/**
- * Whether a rule can always find room to move, and so never hands over to the one behind it. Only a
- * ceiling bounds a rule, and a ceiling counts reps, which leaves a load rule terminal by construction.
- * A load rule on an exercise carrying no load is the opposite: it never moves at all, so it does hand
- * over.
- */
-function isTerminal(rule: ProgressionRule, tracksResistance: boolean): boolean {
-  return rule.axis === 'load' ? tracksResistance : rule.ceiling === undefined;
-}
-
-/**
- * The index from which the rules can never run, or `undefined` while every rule is reachable. Nothing
- * behind a terminal rule is ever consulted, so a chain authored that way silently does less than it
- * reads as doing.
- */
-export function unreachableFrom(progression: ProgressionRule[], tracksResistance: boolean): number | undefined {
-  const blocker = progression.findIndex((rule) => isTerminal(rule, tracksResistance));
-  return blocker >= 0 && blocker < progression.length - 1 ? blocker + 1 : undefined;
-}
-
-/** How far a reps rule climbs before handing over, when nobody has said otherwise. */
-const LADDER_SPAN = 4;
-
-/** The rung a reps rule should stop at, given where the plan starts it. */
-export function defaultCeilingFor(exercise: WeightedExerciseBlueprint): BigNumber {
-  const start = exercise.plannedSets.reduce((highest, set) => Math.max(highest, set.reps.max), 0);
-  return new BigNumber(start + LADDER_SPAN);
-}
-
-/**
- * The chain after adding a rule, arranged so the new rule can actually run.
- *
- * A load rule is terminal, so a new rule goes in front of it rather than behind it. A reps rule with
- * nothing to hand over at gets a ceiling on the way, since the only reason to put a rule behind one is
- * to have it take over. Both land on the same shape: reps climb a few rungs, the bar goes up, the reps
- * start again.
- */
-export function withAddedRule(exercise: WeightedExerciseBlueprint): ProgressionRule[] {
-  const progression = exercise.progression;
-  const tracksResistance = exercise.resistance !== 'none';
-  const ceiling = defaultCeilingFor(exercise);
-  const ladderRung = () => ProgressionRule.of({ axis: 'reps', step: new BigNumber(1), ceiling, onCeiling: 'reset' });
-  const fresh = () =>
-    tracksResistance
-      ? ProgressionRule.load(new BigNumber(2.5))
-      : ProgressionRule.of({ axis: 'reps', step: new BigNumber(1) });
-
-  const last = progression[progression.length - 1];
-  if (!last) {
-    return [fresh()];
-  }
-  // An inert load rule - one on an exercise carrying no load - hands over like anything else.
-  if (last.axis === 'load' && tracksResistance) {
-    return [...progression.slice(0, -1), ladderRung(), last];
-  }
-  if (last.axis === 'reps' && last.ceiling === undefined) {
-    return [...progression.slice(0, -1), last.with({ ceiling, onCeiling: 'reset' }), fresh()];
-  }
-  return [...progression, fresh()];
-}
-
-/**
- * How much the weight stepper in the set counter moves per tap. Falls back to a pair of the smallest
- * plates, which is what an exercise that progresses on something else still wants offered.
- */
-export function weightIncrementFor(progression: ProgressionRule[]): BigNumber {
-  const step = progression.find((rule) => rule.axis === 'load')?.step;
-  return step && !step.isZero() ? step : new BigNumber(2.5);
-}
-
-/** Always a band; `min === max` is a point target. */
 export interface RepsTarget {
   min: number;
   max: number;
 }
 
-/** What the plan asks for on one set. */
+/** One set of the plan. Only how many there are matters; see {@link RepsTarget}. */
 export interface PlannedSet {
   reps: RepsTarget;
+}
+
+/** A planned set with no rep target, which is every set the app creates. */
+function plannedSlots(count: number): PlannedSet[] {
+  return Array.from({ length: count }, () => ({ reps: { min: 0, max: 0 } }));
 }
 
 /**
@@ -716,39 +482,8 @@ export interface PlannedSet {
 export const LoadBases = ['none', 'external', 'bodyweight'] as const;
 export type Resistance = (typeof LoadBases)[number];
 
-/** How the editor lays rep targets out before projecting them onto a {@link PlannedSet} list. */
-export type RepsConfig =
-  | { type: 'fixed'; reps: number }
-  | { type: 'range'; min: number; max: number }
-  | { type: 'perSet'; targets: RepsTarget[] };
-
-export type RepsType = RepsConfig['type'];
-
 export function formatRepsTarget(target: RepsTarget): string {
   return target.min === target.max ? `${target.max}` : `${target.min}-${target.max}`;
-}
-
-/** How a whole list of planned sets reads: `10`, `8-12`, or `12, 10, 8` for a pyramid. */
-export function formatPlannedSets(plannedSets: PlannedSet[]): string {
-  const uniform = uniformTarget(plannedSets);
-  return uniform ? formatRepsTarget(uniform) : plannedSets.map((s) => formatRepsTarget(s.reps)).join(', ');
-}
-
-/** The target every set shares, or undefined when they differ. */
-export function uniformTarget(plannedSets: PlannedSet[]): RepsTarget | undefined {
-  const first = plannedSets[0]?.reps;
-  if (!first) {
-    return undefined;
-  }
-  return plannedSets.every((s) => s.reps.min === first.min && s.reps.max === first.max) ? first : undefined;
-}
-
-export function repsTargetsEqual(a: RepsTarget, b: RepsTarget): boolean {
-  return a.min === b.min && a.max === b.max;
-}
-
-export function plannedSetsEqual(a: PlannedSet[], b: PlannedSet[]): boolean {
-  return a.length === b.length && a.every((s, i) => repsTargetsEqual(s.reps, b[i]!.reps));
 }
 
 /**
@@ -757,16 +492,12 @@ export function plannedSetsEqual(a: PlannedSet[], b: PlannedSet[]): boolean {
  */
 export interface WeightedExerciseBlueprintInit {
   name?: string;
-  plannedSets?: PlannedSet[];
-  progression?: ProgressionRule[];
+  sets?: number;
   restBetweenSets?: Rest;
   supersetWithNext?: boolean;
   notes?: string;
   link?: string;
   resistance?: Resistance;
-  /** Authoring shorthand for `plannedSets`, projected through {@link plannedSetsOf}. */
-  sets?: number;
-  repsConfig?: RepsConfig;
 }
 
 export class WeightedExerciseBlueprint {
@@ -787,8 +518,8 @@ export class WeightedExerciseBlueprint {
   static of(init: WeightedExerciseBlueprintInit = {}): WeightedExerciseBlueprint {
     return new WeightedExerciseBlueprint(
       init.name ?? '',
-      init.plannedSets ?? plannedSetsOf(init.sets ?? 3, init.repsConfig ?? { type: 'fixed', reps: 10 }),
-      init.progression ?? [],
+      plannedSlots(Math.max(init.sets ?? 3, 1)),
+      [],
       init.restBetweenSets ?? Rest.medium,
       init.supersetWithNext ?? false,
       init.notes ?? '',
@@ -814,33 +545,20 @@ export class WeightedExerciseBlueprint {
     );
   }
 
-  /** See {@link weightIncrementFor}. */
-  get weightIncrement(): BigNumber {
-    return weightIncrementFor(this.progression);
-  }
-
   /** See {@link MovementKey}. */
   movementKey(): MovementKey {
     return movementKeyFor(this.name, this.type);
   }
 
   /**
-   * Whether reps are something this exercise advances on, rather than a fixed prescription: either it
-   * carries no load and so has nothing else to advance on, or a rule moves them outright.
-   *
-   * Two things hang off this. The rep scheme drops out of {@link progressionKey}, because where reps
-   * climb the plan's numbers are only the ladder's first rung and splitting on them would strand a
-   * lineage that had climbed past it. And the target carries session to session instead of being
-   * re-seeded, because otherwise the next session would undo whatever the rule just did.
+   * See {@link ProgressionKey}. Still stored with every recorded exercise, so it keeps the formula it was
+   * written with: the rep scheme drops out where a reps rule moved the targets or the exercise carries
+   * no load.
    */
-  get repsAreProgressed(): boolean {
-    return this.resistance === 'none' || this.progression.some((rule) => rule.axis === 'reps');
-  }
-
-  /** See {@link ProgressionKey} and {@link repsAreProgressed}. */
   progressionKey(): ProgressionKey {
+    const repsAreProgressed = this.resistance === 'none' || this.progression.some((rule) => rule.axis === 'reps');
     const base = `${this.name}_${this.type}_${this.plannedSets.length}`;
-    return (this.repsAreProgressed ? base : `${base}_${plannedSetsKey(this.plannedSets)}`) as ProgressionKey;
+    return (repsAreProgressed ? base : `${base}_${plannedSetsKey(this.plannedSets)}`) as ProgressionKey;
   }
 
   repsTargetForSet(index: number): RepsTarget {
@@ -848,20 +566,22 @@ export class WeightedExerciseBlueprint {
     return { min: target.min, max: target.max };
   }
 
+  /** At least one. Sets kept keep whatever they carried; sets added carry nothing. */
   withSets(value: number): WeightedExerciseBlueprint {
     const sets = Math.max(value, 1);
-    if (sets <= this.plannedSets.length) {
-      return this.with({ plannedSets: this.plannedSets.slice(0, sets) });
-    }
-    const last = this.plannedSets.at(-1)?.reps ?? { min: 10, max: 10 };
-    return this.with({
-      plannedSets: [
-        ...this.plannedSets,
-        ...Array.from({ length: sets - this.plannedSets.length }, () => ({ reps: { ...last } })),
-      ],
-    });
+    return new WeightedExerciseBlueprint(
+      this.name,
+      [...this.plannedSets.slice(0, sets), ...plannedSlots(sets - Math.min(sets, this.plannedSets.length))],
+      this.progression,
+      this.restBetweenSets,
+      this.supersetWithNext,
+      this.notes,
+      this.link,
+      this.resistance,
+    );
   }
 
+  /** Compares what the plan still means: legacy rep targets, rules and failure rest are left out. */
   equals(other: ExerciseBlueprint | undefined) {
     if (!other) {
       return false;
@@ -875,11 +595,9 @@ export class WeightedExerciseBlueprint {
 
     return (
       this.name === other.name &&
-      plannedSetsEqual(this.plannedSets, other.plannedSets) &&
-      progressionEquals(this.progression, other.progression) &&
+      this.plannedSets.length === other.plannedSets.length &&
       this.restBetweenSets.minRest.equals(other.restBetweenSets.minRest) &&
       this.restBetweenSets.maxRest.equals(other.restBetweenSets.maxRest) &&
-      this.restBetweenSets.failureRest.equals(other.restBetweenSets.failureRest) &&
       this.supersetWithNext === other.supersetWithNext &&
       this.notes === other.notes &&
       this.link === other.link &&
@@ -902,13 +620,11 @@ export class WeightedExerciseBlueprint {
   }
 
   with(other: WeightedExerciseBlueprintInit): WeightedExerciseBlueprint {
+    const resized = other.sets === undefined ? this : this.withSets(other.sets);
     return new WeightedExerciseBlueprint(
       other.name ?? this.name,
-      other.plannedSets ??
-        (other.sets !== undefined || other.repsConfig !== undefined
-          ? plannedSetsOf(other.sets ?? this.plannedSets.length, other.repsConfig ?? targetsAsRepsConfig(this))
-          : this.plannedSets),
-      other.progression ?? this.progression,
+      resized.plannedSets,
+      this.progression,
       other.restBetweenSets ?? this.restBetweenSets,
       other.supersetWithNext ?? this.supersetWithNext,
       other.notes ?? this.notes,
@@ -916,25 +632,6 @@ export class WeightedExerciseBlueprint {
       other.resistance ?? this.resistance,
     );
   }
-}
-
-/** Project an authoring layout onto the list of sets it describes. */
-export function plannedSetsOf(sets: number, repsConfig: RepsConfig): PlannedSet[] {
-  const targetAt = match(repsConfig)
-    .returnType<(index: number) => RepsTarget>()
-    .with({ type: 'fixed' }, (c) => () => ({ min: c.reps, max: c.reps }))
-    .with({ type: 'range' }, (c) => () => ({ min: c.min, max: c.max }))
-    .with({ type: 'perSet' }, (c) => (index: number) => c.targets[index] ?? c.targets.at(-1) ?? { min: 0, max: 0 })
-    .exhaustive();
-  return Array.from({ length: Math.max(sets, 0) }, (_, index) => {
-    const { min, max } = targetAt(index);
-    return { reps: { min, max } };
-  });
-}
-
-/** Existing targets in the form `with({ sets })` can resize without changing them. */
-function targetsAsRepsConfig(blueprint: WeightedExerciseBlueprint): RepsConfig {
-  return { type: 'perSet', targets: blueprint.plannedSets.map((s) => ({ ...s.reps })) };
 }
 
 /** The rep-scheme half of a load-based {@link ProgressionKey}, collapsing equal targets to one. */
@@ -952,8 +649,10 @@ function plannedSetsKey(plannedSets: PlannedSet[]): string {
  * question is being asked. Both keys are produced by methods on the blueprint (and mirrored on the
  * recorded exercise), so whichever one you have in hand offers both side by side.
  *
- *   movementKey()    - is this the same *movement*, for aggregating history?
- *   progressionKey() - is this the same *programmed slot*, so last session's numbers load into today's?
+ *   movementKey()    - is this the same *movement*, for aggregating history and for the weights and
+ *                      reps a weighted exercise starts from?
+ *   progressionKey() - is this the same *programmed slot*, so a cardio exercise's last settings load
+ *                      into today's?
  *
  * They are branded so that a map keyed by one cannot be indexed by the other.
  */
@@ -961,8 +660,8 @@ function plannedSetsKey(plannedSets: PlannedSet[]): string {
 /**
  * Identifies a movement across everything the user has ever logged. Blind to how the exercise is
  * programmed, and deliberately fuzzy about spelling - `Cable Flye`, `cable flies` and `Cable Flys`
- * all key alike - because stats, personal records and "recently completed" want one row per
- * movement however the user typed it that day.
+ * all key alike - because stats, personal records, "recently completed" and a weighted exercise's
+ * previous sets want one row per movement however the user typed it that day.
  *
  * Weighted and cardio are separate movements even under the same name: a rowing machine and a barbell
  * row share a word and nothing else, and their numbers are not comparable.
@@ -970,10 +669,10 @@ function plannedSetsKey(plannedSets: PlannedSet[]): string {
 export type MovementKey = string & { readonly __brand: 'MovementKey' };
 
 /**
- * Identifies one exercise slot in a program, so that its weights and rep targets carry from session
- * to session. Sensitive to the rep scheme, which is what lets a plan run Squats 5x5 on two days as a
- * single progressing lineage while Squats 3x8 on a third day climbs on its own. Split by type for the
- * same reason as {@link MovementKey}.
+ * Identifies one exercise slot in a program. A cardio exercise carries its incline and resistance
+ * along it, kept apart by target type. Every recorded exercise stores one, so the weighted formula,
+ * which is sensitive to the rep scheme, stays as written even though nothing weighted reads it any more.
+ * Split by type for the same reason as {@link MovementKey}.
  */
 export type ProgressionKey = string & { readonly __brand: 'ProgressionKey' };
 

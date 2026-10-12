@@ -10,6 +10,7 @@ import {
   filledPotentialSet,
   makeCardioBlueprint,
   makeSession,
+  makeLegacyWeightedBlueprint,
   makeRecordedExercise,
   makeWeightedBlueprint,
   tick,
@@ -103,16 +104,12 @@ describe('getTimerInfo', () => {
   });
 
   function sessionWithPyramidRestTimer(lastSetReps: number) {
-    const bp = makeWeightedBlueprint().with({
-      sets: 3,
-      repsConfig: {
-        type: 'perSet',
-        targets: [
-          { min: 12, max: 12 },
-          { min: 10, max: 10 },
-          { min: 8, max: 8 },
-        ],
-      },
+    const bp = makeLegacyWeightedBlueprint({
+      targets: [
+        { min: 12, max: 12 },
+        { min: 10, max: 10 },
+        { min: 8, max: 8 },
+      ],
     });
     // Set 0 stays open so a next exercise exists; the most recent completion is set 2 (target 8).
     const exercise = makeRecordedExercise(bp, [undefined, 10, lastSetReps]);

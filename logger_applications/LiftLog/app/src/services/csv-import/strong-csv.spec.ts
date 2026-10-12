@@ -34,7 +34,6 @@ function planSummary(plan: ProgramBlueprint) {
     (s.exercises as WeightedExerciseBlueprint[]).map((e) => ({
       name: e.name,
       sets: e.plannedSets.length,
-      reps: e.repsTargetForSet(0),
       restSeconds: [e.restBetweenSets.minRest, e.restBetweenSets.maxRest, e.restBetweenSets.failureRest].map((d) =>
         d.seconds(),
       ),
@@ -158,21 +157,28 @@ describe('getImportForStrong', () => {
     expect(times).toEqual(['2026-01-01T13:21:15', '2026-01-01T13:21:16', '2026-01-01T13:21:17']);
   });
 
-  it('gives every exercise the 1-20 rep target, so set count alone splits lineages', () => {
-    const keys = importStrong().workouts.map((s) => s.recordedExercises.map((e) => e.progressionKey()));
-    expect(keys).toEqual([
-      ['Bench Press (Barbell)_WeightedExerciseBlueprint_2_1-20', 'Chest Fly_WeightedExerciseBlueprint_1_1-20'],
+  it('writes no rep target into history or plan, only the reps actually done', () => {
+    const backup = importStrong();
+    const targets = new Set(
       [
-        'Shoulder Press (Plate Loaded)_WeightedExerciseBlueprint_2_1-20',
-        'Lateral Raise (Cable)_WeightedExerciseBlueprint_2_1-20',
-      ],
-      ['Squat (Barbell)_WeightedExerciseBlueprint_1_1-20'],
-      ['Bench Press (Barbell)_WeightedExerciseBlueprint_3_1-20', 'Chest Fly_WeightedExerciseBlueprint_2_1-20'],
-      [
-        'Shoulder Press (Plate Loaded)_WeightedExerciseBlueprint_2_1-20',
-        'Bicep Curl (Cable)_WeightedExerciseBlueprint_2_1-20',
-      ],
-    ]);
+        ...backup.workouts.flatMap((s) =>
+          s
+            .toJSON()
+            .recordedExercises.flatMap((e) =>
+              e.type === 'RecordedWeightedExercise'
+                ? [...e.potentialSets.map((p) => p.target), ...e.blueprint.plannedSets]
+                : [],
+            ),
+        ),
+        ...onlyPlan(backup.programs)[1]
+          .toJSON()
+          .sessions.flatMap((s) =>
+            s.exercises.flatMap((e) => (e.type === 'WeightedExerciseBlueprint' ? e.plannedSets : [])),
+          ),
+      ].map((x) => JSON.stringify(x)),
+    );
+
+    expect([...targets]).toEqual(['{"reps":{"min":0,"max":0}}']);
   });
 
   it('derives session ids from Workout # and start time, so importing again matches', () => {
@@ -191,29 +197,18 @@ describe('getImportForStrong', () => {
       [
         'DAY 1',
         [
-          { name: 'Bench Press (Barbell)', sets: 3, reps: { min: 1, max: 20 }, restSeconds: [120, 120, 120] },
-          { name: 'Chest Fly', sets: 2, reps: { min: 1, max: 20 }, restSeconds: [90, 90, 90] },
+          { name: 'Bench Press (Barbell)', sets: 3, restSeconds: [120, 120, 120] },
+          { name: 'Chest Fly', sets: 2, restSeconds: [90, 90, 90] },
         ],
       ],
       [
         'DAY 2',
         [
-          { name: 'Shoulder Press (Plate Loaded)', sets: 2, reps: { min: 1, max: 20 }, restSeconds: [90, 180, 300] },
-          { name: 'Bicep Curl (Cable)', sets: 2, reps: { min: 1, max: 20 }, restSeconds: [60, 60, 60] },
+          { name: 'Shoulder Press (Plate Loaded)', sets: 2, restSeconds: [90, 180, 300] },
+          { name: 'Bicep Curl (Cable)', sets: 2, restSeconds: [60, 60, 60] },
         ],
       ],
     ]);
-  });
-
-  it('gives plan exercises the same progression keys as the history they were copied from', () => {
-    const backup = importStrong();
-    const [, plan] = onlyPlan(backup.programs);
-    const latestOf = (name: string) => backup.workouts.findLast((s) => s.blueprint.name === name)!;
-    for (const planSession of plan.sessions) {
-      expect(planSession.exercises.map((e) => e.progressionKey())).toEqual(
-        latestOf(planSession.name).recordedExercises.map((e) => e.progressionKey()),
-      );
-    }
   });
 
   it('orders plan workouts by natural name order', () => {

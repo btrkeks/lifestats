@@ -12,7 +12,13 @@ import {
   RecordedWeightedExercise,
   Session,
 } from '@/models/session-models';
-import { makeRecordedExercise, makeWeightedBlueprint, tick } from '@/models/session-models/__test__/helpers';
+import {
+  makeLegacyWeightedBlueprint,
+  makeRecordedExercise,
+  makeWeightedBlueprint,
+  targets,
+  tick,
+} from '@/models/session-models/__test__/helpers';
 import { Weight, WeightUnit } from '@/models/weight';
 import { LocalDate } from '@js-joda/core';
 import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
@@ -239,9 +245,8 @@ describe('SessionService weighted history', () => {
   });
 
   it('never progresses a weight, even after an old plan with a load rule hit every target', async () => {
-    const blueprint = makeWeightedBlueprint({
-      sets: 2,
-      plannedSets: [{ reps: { min: 10, max: 10 } }, { reps: { min: 10, max: 10 } }],
+    const blueprint = makeLegacyWeightedBlueprint({
+      targets: targets(2, 10),
       progression: [ProgressionRule.load(new BigNumber(2.5))],
     });
     store(

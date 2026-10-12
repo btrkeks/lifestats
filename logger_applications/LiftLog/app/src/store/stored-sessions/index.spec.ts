@@ -37,8 +37,6 @@ function createSessionWithCompletionTime(sessionDate: LocalDate, completionTime:
       makeWeightedBlueprint({
         name: `${name} Exercise`,
         sets: 1,
-        repsConfig: { type: 'fixed', reps: 5 },
-        progression: [],
       }),
     ],
     '',
@@ -305,8 +303,6 @@ describe('getSessionReferenceTime', () => {
         makeWeightedBlueprint({
           name: 'Squat',
           sets: 1,
-          repsConfig: { type: 'fixed', reps: 5 },
-          progression: [],
         }),
       ],
       '',

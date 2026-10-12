@@ -55,14 +55,10 @@ function SessionEditor({ session, location }: { session: SessionBlueprint; locat
   const beginAddExercise = () => {
     updateSession((s) =>
       s.withAddedExercise(
-        WeightedExerciseBlueprint.empty().with({
+        WeightedExerciseBlueprint.of({
           name: `Exercise ${session.exercises.length + 1}`,
-          repsConfig: { type: 'fixed', reps: 10 },
           sets: 3,
-          link: '',
-          notes: '',
           restBetweenSets: Rest.medium,
-          supersetWithNext: false,
         }),
       ),
     );

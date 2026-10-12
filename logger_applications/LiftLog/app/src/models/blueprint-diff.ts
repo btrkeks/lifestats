@@ -5,13 +5,7 @@ import {
   CardioTarget,
   cardioTargetEquals,
   ExerciseBlueprint,
-  IncreaseStrategy,
   Resistance,
-  ProgressionRule,
-  progressionEquals,
-  formatPlannedSets,
-  PlannedSet,
-  plannedSetsEqual,
   Rest,
   SessionBlueprint,
   WeightedExerciseBlueprint,
@@ -19,7 +13,6 @@ import {
 import { TranslationKey, UseTranslateResult } from '@tolgee/react';
 import { uuid } from '@/utils/uuid';
 import { EmptySession } from '@/models/session-models';
-import { localeFormatBigNumber } from '@/utils/locale-bignumber';
 
 // ============================================================================
 // Change Types
@@ -95,23 +88,13 @@ interface ExerciseNameChange extends BaseChange {
   newValue: string;
 }
 
-/** Set count and rep targets are one list, so they change together. */
-interface ExercisePlannedSetsChange extends BaseChange {
-  kind: 'exercisePlannedSets';
+interface ExerciseSetCountChange extends BaseChange {
+  kind: 'exerciseSetCount';
   type: 'modified';
   exerciseName: string;
   exerciseIndex: number;
-  oldValue: PlannedSet[];
-  newValue: PlannedSet[];
-}
-
-interface ExerciseProgressionChange extends BaseChange {
-  kind: 'progression';
-  type: 'modified';
-  exerciseName: string;
-  exerciseIndex: number;
-  oldValue: ProgressionRule[];
-  newValue: ProgressionRule[];
+  oldValue: number;
+  newValue: number;
 }
 
 /** Grouped rest settings change */
@@ -226,8 +209,7 @@ interface ExerciseTypeChange extends BaseChange {
 
 type ExerciseFieldChange =
   | ExerciseNameChange
-  | ExercisePlannedSetsChange
-  | ExerciseProgressionChange
+  | ExerciseSetCountChange
   | ExerciseRestChange
   | ExerciseSupersetChange
   | ExerciseResistanceChange
@@ -404,7 +386,7 @@ function matchExercisesByName(
 }
 
 function restEquals(a: Rest, b: Rest): boolean {
-  return a.minRest.equals(b.minRest) && a.maxRest.equals(b.maxRest) && a.failureRest.equals(b.failureRest);
+  return a.minRest.equals(b.minRest) && a.maxRest.equals(b.maxRest);
 }
 
 function diffWeightedExercises(
@@ -426,27 +408,15 @@ function diffWeightedExercises(
     });
   }
 
-  if (!plannedSetsEqual(oldEx.plannedSets, newEx.plannedSets)) {
+  if (oldEx.plannedSets.length !== newEx.plannedSets.length) {
     changes.push({
       id: generateChangeId(),
-      kind: 'exercisePlannedSets',
+      kind: 'exerciseSetCount',
       type: 'modified',
       exerciseName,
       exerciseIndex,
-      oldValue: oldEx.plannedSets,
-      newValue: newEx.plannedSets,
-    });
-  }
-
-  if (!progressionEquals(oldEx.progression, newEx.progression)) {
-    changes.push({
-      id: generateChangeId(),
-      kind: 'progression',
-      type: 'modified',
-      exerciseName,
-      exerciseIndex,
-      oldValue: oldEx.progression,
-      newValue: newEx.progression,
+      oldValue: oldEx.plannedSets.length,
+      newValue: newEx.plannedSets.length,
     });
   }
 
@@ -905,11 +875,8 @@ export function applySessionBlueprintDiff(original: SessionBlueprint, diff: Sess
     for (const change of mod.changes) {
       exercise = match(change)
         .with({ kind: 'exerciseName' }, (c) => exercise.with({ name: c.newValue }))
-        .with({ kind: 'exercisePlannedSets' }, (c) =>
-          exercise instanceof WeightedExerciseBlueprint ? exercise.with({ plannedSets: c.newValue }) : exercise,
-        )
-        .with({ kind: 'progression' }, (c) =>
-          exercise instanceof WeightedExerciseBlueprint ? exercise.with({ progression: c.newValue }) : exercise,
+        .with({ kind: 'exerciseSetCount' }, (c) =>
+          exercise instanceof WeightedExerciseBlueprint ? exercise.withSets(c.newValue) : exercise,
         )
         .with({ kind: 'exerciseRest' }, (c) =>
           exercise instanceof WeightedExerciseBlueprint ? exercise.with({ restBetweenSets: c.newValue }) : exercise,
@@ -1066,16 +1033,10 @@ export function getChangeDescription(t: UseTranslateResult['t'], change: DiffCha
         newValue: c.newValue,
       }),
     )
-    .with({ kind: 'exercisePlannedSets' }, (c) =>
+    .with({ kind: 'exerciseSetCount' }, (c) =>
       t('plan.diff.generic_two_value_change.body', {
-        oldValue: formatPlannedSets(c.oldValue),
-        newValue: formatPlannedSets(c.newValue),
-      }),
-    )
-    .with({ kind: 'progression' }, (c) =>
-      t('plan.diff.generic_two_value_change.body', {
-        oldValue: stringifyProgression(t, c.oldValue),
-        newValue: stringifyProgression(t, c.newValue),
+        oldValue: formatSetCount(c.oldValue),
+        newValue: formatSetCount(c.newValue),
       }),
     )
     .with({ kind: 'exerciseRest' }, () => t('plan.diff.generic_updated.body'))
@@ -1135,11 +1096,8 @@ export function getChangeLabelKey(change: DiffChange): TranslatableString {
     .with({ kind: 'exerciseName' }, () => ({
       key: 'plan.diff.name.label',
     }))
-    .with({ kind: 'exercisePlannedSets' }, () => ({
+    .with({ kind: 'exerciseSetCount' }, () => ({
       key: 'plan.diff.sets.label',
-    }))
-    .with({ kind: 'progression' }, () => ({
-      key: 'plan.diff.progressive_overload.label',
     }))
     .with({ kind: 'exerciseRest' }, () => ({
       key: 'plan.diff.rest.label',
@@ -1180,36 +1138,6 @@ export function getChangeLabelKey(change: DiffChange): TranslatableString {
     .exhaustive();
 }
 
-function stringifyProgression(t: UseTranslateResult['t'], progression: ProgressionRule[]): string {
-  if (!progression.length) {
-    return t('exercise.progressive_overload.no.label');
-  }
-  return progression.map((rule) => stringifyProgressionRule(t, rule)).join(', ');
-}
-
-function stringifyProgressionRule(t: UseTranslateResult['t'], rule: ProgressionRule): string {
-  const amount = localeFormatBigNumber(rule.step);
-  const axis = t(
-    rule.axis === 'reps' ? 'exercise.progression.axis.reps.label' : 'exercise.progression.axis.load.label',
-  );
-  const move =
-    rule.scope.type === 'allSets'
-      ? t('plan.diff.progression_rule_all_sets.label', { amount, axis })
-      : t('plan.diff.progression_rule_lowest_sets.label', {
-          amount,
-          axis,
-          strategy: stringifyIncreaseStrategy(t, rule.scope.pick),
-        });
-  return rule.ceiling === undefined
-    ? move
-    : t('plan.diff.progression_rule_ceiling.label', { move, ceiling: localeFormatBigNumber(rule.ceiling) });
-}
-
-function stringifyIncreaseStrategy(t: UseTranslateResult['t'], strategy: IncreaseStrategy) {
-  return match(strategy)
-    .with('all', () => t('exercise.progressive_overload.increase_lowest_set.increase_strategy.all.label'))
-    .with('first', () => t('exercise.progressive_overload.increase_lowest_set.increase_strategy.first.label'))
-    .with('middle', () => t('exercise.progressive_overload.increase_lowest_set.increase_strategy.middle.label'))
-    .with('last', () => t('exercise.progressive_overload.increase_lowest_set.increase_strategy.last.label'))
-    .exhaustive();
+function formatSetCount(count: number): string {
+  return `${count} ${count === 1 ? 'set' : 'sets'}`;
 }

@@ -20,12 +20,10 @@ function makeOffset(date: LocalDate, hour = 10, minute = 0): OffsetDateTime {
   return LocalTime.of(hour, minute).atDate(date).atOffset(ZoneOffset.UTC);
 }
 
-function makeBlueprint(name: string, sets = 3, reps = 8, usesBodyweight = false): WeightedExerciseBlueprint {
+function makeBlueprint(name: string, sets = 3, usesBodyweight = false): WeightedExerciseBlueprint {
   return makeWeightedBlueprint({
     name,
     sets,
-    repsConfig: { type: 'fixed', reps },
-    progression: [],
     restBetweenSets: {
       maxRest: Duration.ofSeconds(0),
       minRest: Duration.ofSeconds(90),
@@ -67,7 +65,7 @@ function makeSession(
   bodyweightKg?: number,
   usesBodyweight = false,
 ): Session {
-  const blueprint = makeBlueprint(exerciseName, sets, reps, usesBodyweight);
+  const blueprint = makeBlueprint(exerciseName, sets, usesBodyweight);
   const sessionBlueprint = makeSessionBlueprint('Test Session', [blueprint]);
   const baseTime = makeOffset(date);
   const exercise = makeCompletedExercise(blueprint, weightKg, reps, baseTime);
@@ -175,7 +173,7 @@ describe('calculateStats', () => {
 
     it('tracks the best set on both axes, and says which one leads', () => {
       const date = LocalDate.of(2024, 4, 1);
-      const blueprint = makeBlueprint('Crunch', 3, 10);
+      const blueprint = makeBlueprint('Crunch', 3);
       const sessionBlueprint = makeSessionBlueprint('Core', [blueprint]);
       const baseTime = makeOffset(date);
       const exercise = new RecordedWeightedExercise(
@@ -199,7 +197,7 @@ describe('calculateStats', () => {
 
     it('reads an exercise that tracks no load on its reps', () => {
       const date = LocalDate.of(2024, 4, 1);
-      const blueprint = makeBlueprint('Crunch', 3, 10).with({ resistance: 'none' });
+      const blueprint = makeBlueprint('Crunch', 3).with({ resistance: 'none' });
       const exercise = makeRecordedExercise(blueprint, [20, 20, 20], new Weight(999, 'kilograms'));
       const session = new Session(
         'id',
@@ -221,7 +219,7 @@ describe('calculateStats', () => {
     it('reads a movement on how it is programmed now, not how it started', () => {
       const d1 = LocalDate.of(2024, 4, 1);
       const d2 = d1.plusDays(7);
-      const loaded = makeBlueprint('Crunch', 3, 10);
+      const loaded = makeBlueprint('Crunch', 3);
       const unloaded = loaded.with({ resistance: 'none' });
       const session = (id: string, date: LocalDate, blueprint: WeightedExerciseBlueprint) =>
         new Session(
@@ -261,7 +259,7 @@ describe('calculateStats', () => {
 
     it('accumulates reps breakdown correctly', () => {
       const date = LocalDate.of(2024, 4, 1);
-      const blueprint = makeBlueprint('OHP', 3, 8);
+      const blueprint = makeBlueprint('OHP', 3);
       const sessionBlueprint = makeSessionBlueprint('Push', [blueprint]);
       const baseTime = makeOffset(date);
 
@@ -437,7 +435,7 @@ describe('calculateStats', () => {
       // Sessions only have a duration if at least one exercise has timestamps.
       // An exercise with no completed sets has no timestamps → session.duration is undefined.
       const date = LocalDate.of(2024, 7, 1);
-      const blueprint = makeBlueprint('Press', 2, 5);
+      const blueprint = makeBlueprint('Press', 2);
       const sessionBlueprint = makeSessionBlueprint('S', [blueprint]);
       const noSets = [emptyPotentialSet(60), emptyPotentialSet(60)];
       const exercise = new RecordedWeightedExercise(blueprint, noSets, undefined);
@@ -450,7 +448,7 @@ describe('calculateStats', () => {
 
     it('computes average across sessions that have durations', () => {
       const date = LocalDate.of(2024, 7, 1);
-      const blueprint = makeBlueprint('Squat', 2, 5);
+      const blueprint = makeBlueprint('Squat', 2);
       const sessionBlueprint = makeSessionBlueprint('S', [blueprint]);
 
       function makeTimedSession(id: string, d: LocalDate, startMinute: number, endMinute: number) {

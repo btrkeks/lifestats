@@ -200,13 +200,12 @@ export class RecordedWeightedExercise {
     return this.getSet(index).set ? this.withSet(index, (s) => s.with({ set: undefined })) : this;
   }
 
-  /** Never touches the blueprint, so {@link progressionKey} stays stable and the next session carries the set. */
+  /** A one-off: the blueprint keeps its set count, so the next workout does not repeat it. */
   withSetAdded(): RecordedWeightedExercise {
-    const last = this.potentialSets.at(-1);
     return this.with({
       potentialSets: [
         ...this.potentialSets,
-        new PotentialSet(undefined, last?.weight ?? Weight.NIL, last?.target ?? this.blueprint.repsTargetForSet(0)),
+        new PotentialSet(undefined, this.potentialSets.at(-1)?.weight ?? Weight.NIL),
       ],
     });
   }
@@ -322,13 +321,6 @@ export class RecordedWeightedExercise {
   get isComplete(): boolean {
     return !this.potentialSets.some((x) => x.set === undefined);
   }
-
-  /// <summary>
-  /// An exercise is considered a success if ALL sets are successful
-  /// </summary>
-  get isSuccessForProgressiveOverload(): boolean {
-    return this.potentialSets.every((x, index) => x.set && x.set.repsCompleted >= this.repsTargetForSet(index).max);
-  }
 }
 
 export class RecordedSet {
@@ -376,7 +368,7 @@ export class PotentialSet {
   constructor(
     readonly set: RecordedSet | undefined,
     readonly weight: Weight,
-    /** The target this set is chasing, carried on the performance rather than re-read from the plan. */
+    /** Kept so stored sessions round-trip; see {@link RepsTarget}. */
     readonly target: RepsTarget = { min: 0, max: 0 },
   ) {}
 
@@ -399,12 +391,7 @@ export class PotentialSet {
     if (other === this) {
       return true;
     }
-    return (
-      (this.set?.equals(other.set) ?? other.set === undefined) &&
-      this.weight.equals(other.weight) &&
-      this.target.min === other.target.min &&
-      this.target.max === other.target.max
-    );
+    return (this.set?.equals(other.set) ?? other.set === undefined) && this.weight.equals(other.weight);
   }
 
   with(other: Partial<PotentialSet>): PotentialSet {

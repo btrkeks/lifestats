@@ -1,4 +1,3 @@
-import { formatRepsTarget, uniformTarget } from '@/models/blueprint-models';
 import { RecordedExercise, RecordedWeightedExercise, Session } from '@/models/session-models';
 import { Weight } from '@/models/weight';
 import { formatDistance } from '@/utils/distance';
@@ -94,12 +93,8 @@ function bodyweightWeightLabel(weight: Weight, bodyweightLabel: string): string 
 }
 
 /**
- * A plan is a shape, not a log, so it collapses to one line: `sets × reps` when every set shares a target,
- * or the per-set targets spelled out (`12/10/8`) for a pyramid. A rep range shows as `min–max`. The weight,
- * when shown, becomes a range if it steps between sets.
- *
- * Targets come off the sets rather than the blueprint, since a rule that has climbed the reps leaves the
- * plan's numbers behind and the card would otherwise promise a session you are not about to do.
+ * A plan is a count of sets, not a log, so it collapses to one line: `3 sets`. The weight, when shown,
+ * becomes a range if it steps between sets.
  */
 function formatPlanned(
   exercise: RecordedWeightedExercise,
@@ -108,10 +103,7 @@ function formatPlanned(
   bodyweightLabel: string,
 ): string {
   const sets = exercise.potentialSets;
-  const targets = sets.map((_, index) => exercise.repsTargetForSet(index));
-  const uniform = uniformTarget(targets.map((reps) => ({ reps })));
-  const shape =
-    uniform === undefined ? targets.map(formatRepsTarget).join('/') : `${sets.length} × ${formatRepsTarget(uniform)}`;
+  const shape = `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}`;
 
   if (usesBodyweight) {
     if (!showWeight) {

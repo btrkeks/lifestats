@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DayOfWeek, LocalDate, OffsetDateTime } from '@js-joda/core';
-import BigNumber from 'bignumber.js';
 import { calculateStreak } from '@/store/activity/streak';
 import { RecordedWeightedExercise, Session } from '@/models/session-models';
-import { ProgressionRule, Rest, SessionBlueprint } from '@/models/blueprint-models';
+import { Rest, SessionBlueprint } from '@/models/blueprint-models';
 import { filledPotentialSet, makeWeightedBlueprint } from '@/models/session-models/__test__/helpers';
 
 const MONDAY = DayOfWeek.MONDAY;
@@ -12,8 +11,6 @@ const MONDAY = DayOfWeek.MONDAY;
 function sessionOn(date: LocalDate, id = date.toString()): Session {
   const blueprint = makeWeightedBlueprint({
     name: 'Squat',
-    repsConfig: { type: 'fixed', reps: 5 },
-    progression: [ProgressionRule.load(new BigNumber(2.5), { type: 'lowestSets', pick: 'middle' })],
     restBetweenSets: Rest.long,
   });
   const time = OffsetDateTime.parse('2026-01-01T10:00:00Z');

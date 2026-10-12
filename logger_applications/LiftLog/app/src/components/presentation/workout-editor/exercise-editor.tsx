@@ -26,8 +26,13 @@ export function ExerciseEditor(props: ExerciseEditorProps) {
     setExercise(next);
     updatePropsExercise(next);
   };
+  // A whole blueprint commits as it is: `with()` takes authoring fields only, so it would drop a resize.
   const updateExercise = (ex: Partial<WeightedExerciseBlueprint | CardioExerciseBlueprint>) => {
-    commit(exercise.with(ex as unknown as Partial<WeightedExerciseBlueprint & CardioExerciseBlueprint>));
+    commit(
+      ex instanceof WeightedExerciseBlueprint || ex instanceof CardioExerciseBlueprint
+        ? ex
+        : exercise.with(ex as unknown as Partial<WeightedExerciseBlueprint & CardioExerciseBlueprint>),
+    );
   };
 
   const handleTypeChange = (type: string) => {

@@ -1,4 +1,4 @@
-import { ProgramBlueprint, RepsTarget, SessionBlueprint, WeightedExerciseBlueprint } from '@/models/blueprint-models';
+import { ProgramBlueprint, SessionBlueprint, WeightedExerciseBlueprint } from '@/models/blueprint-models';
 import { PotentialSet, RecordedSet, RecordedWeightedExercise, Session } from '@/models/session-models';
 import { Weight, WeightUnit } from '@/models/weight';
 import { uuidFromName } from '@/utils/uuid';
@@ -22,11 +22,6 @@ export type NormalizedExercise = {
   name: string;
   notes?: string;
   sets: NormalizedSet[];
-  /**
-   * One rep target for every set. Without it the first set's reps become a fixed target, which splits
-   * an exercise into a new lineage whenever that first set's reps differ.
-   */
-  repsTarget?: RepsTarget;
   restSeconds?: number;
 };
 export type NormalizedImportSession = {
@@ -71,11 +66,7 @@ export function sessionsFromNormalized(sessions: NormalizedImportSession[]): Ses
         // +1s per set keeps history order deterministic; CSV exports carry no per-set timestamps.
         const completionDateTime = start.plusSeconds(setOrdinal);
         setOrdinal += 1;
-        return new PotentialSet(
-          new RecordedSet(set.reps, completionDateTime),
-          new Weight(set.weight, set.unit),
-          exercise.repsTarget,
-        );
+        return new PotentialSet(new RecordedSet(set.reps, completionDateTime), new Weight(set.weight, set.unit));
       });
 
       recordedExercises.push(new RecordedWeightedExercise(blueprint, potentialSets, exercise.notes));
@@ -112,7 +103,7 @@ function sessionStart(session: NormalizedImportSession): OffsetDateTime {
     : session.date.atTime(LocalTime.NOON).atOffset(ZoneOffset.UTC);
 }
 
-/** Shared by history and plan so both produce the same `progressionKey()`. */
+/** Shared by history and plan so both describe the exercise alike. */
 function exerciseBlueprintFor(exercise: NormalizedExercise): WeightedExerciseBlueprint {
   const rest =
     exercise.restSeconds === undefined
@@ -122,14 +113,7 @@ function exerciseBlueprintFor(exercise: NormalizedExercise): WeightedExerciseBlu
           maxRest: Duration.ofSeconds(exercise.restSeconds),
           failureRest: Duration.ofSeconds(exercise.restSeconds),
         };
-  return WeightedExerciseBlueprint.empty().with({
-    name: exercise.name,
-    sets: exercise.sets.length,
-    repsConfig: exercise.repsTarget
-      ? { type: 'range', ...exercise.repsTarget }
-      : { type: 'fixed', reps: exercise.sets[0]?.reps ?? 10 },
-    restBetweenSets: rest,
-  });
+  return WeightedExerciseBlueprint.of({ name: exercise.name, sets: exercise.sets.length, restBetweenSets: rest });
 }
 
 /** Stable plan id from the plan name, so importing again replaces the plan instead of adding another. */

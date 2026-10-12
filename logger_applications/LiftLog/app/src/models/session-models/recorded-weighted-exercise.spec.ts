@@ -8,8 +8,10 @@ import {
 import {
   emptyPotentialSet,
   filledPotentialSet,
+  makeLegacyWeightedBlueprint,
   makeRecordedExercise,
   makeWeightedBlueprint,
+  targets,
   tick,
 } from '@/models/session-models/__test__/helpers';
 import { IndexOutOfBoundsError } from '@/utils/index-out-of-bounds';
@@ -152,18 +154,6 @@ describe('RecordedWeightedExercise derived values', () => {
     const exercise = RecordedWeightedExercise.empty(makeWeightedBlueprint(), 'kilograms');
     expect(exercise.duration).toBeUndefined();
   });
-
-  it('isSuccessForProgressiveOverload requires every set to hit the target reps', () => {
-    const t = tick();
-    const success = new RecordedWeightedExercise(
-      makeWeightedBlueprint(),
-      [filledPotentialSet(10, t), filledPotentialSet(11, t)],
-      undefined,
-    );
-    const failure = success.withRepCount(1, 9, t);
-    expect(success.isSuccessForProgressiveOverload).toBe(true);
-    expect(failure.isSuccessForProgressiveOverload).toBe(false);
-  });
 });
 
 // ─── bodyweight fold-in ────────────────────────────────────────────────────────
@@ -219,37 +209,6 @@ describe('RecordedWeightedExercise bodyweight fold-in', () => {
   });
 });
 
-// ─── rep schemes: ranges & pyramids ───────────────────────────────────────────
-
-describe('RecordedWeightedExercise.isSuccessForProgressiveOverload with rep schemes', () => {
-  it('requires the top of the range on every set', () => {
-    const bp = makeWeightedBlueprint().with({ sets: 2, repsConfig: { type: 'range', min: 10, max: 12 } });
-    const topOnAll = makeRecordedExercise(bp, [12, 12]);
-    const oneShort = makeRecordedExercise(bp, [12, 11]);
-    expect(topOnAll.isSuccessForProgressiveOverload).toBe(true);
-    expect(oneShort.isSuccessForProgressiveOverload).toBe(false);
-  });
-
-  it("uses each set's own target for a pyramid", () => {
-    const bp = makeWeightedBlueprint().with({
-      sets: 3,
-      repsConfig: {
-        type: 'perSet',
-        targets: [
-          { min: 12, max: 12 },
-          { min: 10, max: 10 },
-          { min: 8, max: 8 },
-        ],
-      },
-    });
-    const t = tick();
-    const hit = makeRecordedExercise(bp, [12, 10, 8]);
-    const miss = hit.withRepCount(2, 7, t);
-    expect(hit.isSuccessForProgressiveOverload).toBe(true);
-    expect(miss.isSuccessForProgressiveOverload).toBe(false);
-  });
-});
-
 // ─── JSON round-trips ─────────────────────────────────────────────────────────
 
 describe('RecordedWeightedExercise JSON', () => {
@@ -285,6 +244,42 @@ describe('RecordedWeightedExercise JSON', () => {
     expect(filled.equals(undefined)).toBe(false);
     expect(filled.equals(filled)).toBe(true);
     expect(filled.equals(empty)).toBe(false);
+  });
+
+  it('keeps a stored rep target through JSON, and compares sets without it', () => {
+    const t = tick();
+    const stored = filledPotentialSet(10, t, kg(60), { min: 8, max: 12 });
+
+    expect(PotentialSet.fromJSON(stored.toJSON()).toJSON().target).toEqual({ reps: { min: 8, max: 12 } });
+    expect(stored.equals(filledPotentialSet(10, t, kg(60), { min: 0, max: 0 }))).toBe(true);
+  });
+});
+
+describe('RecordedWeightedExercise.empty', () => {
+  const history = (weights: Record<number, number>) =>
+    new Map(Object.entries(weights).map(([index, weight]) => [Number(index), { weight: kg(weight), reps: 5 }]));
+  const weightsOfEmpty = (sets: number, previous?: Map<number, { weight: Weight; reps: number }>) =>
+    RecordedWeightedExercise.empty(makeWeightedBlueprint({ sets }), 'pounds', previous).potentialSets.map(
+      (s) => `${s.weight.value.toString()} ${s.weight.unit}`,
+    );
+
+  it('takes each weight from its own index, else the nearest earlier one', () => {
+    expect(weightsOfEmpty(4, history({ 0: 52, 1: 55 }))).toEqual([
+      '52 kilograms',
+      '55 kilograms',
+      '55 kilograms',
+      '55 kilograms',
+    ]);
+    expect(weightsOfEmpty(3, history({ 0: 52, 2: 62 }))).toEqual(['52 kilograms', '52 kilograms', '62 kilograms']);
+  });
+
+  it('starts at zero in the given unit until an index has history', () => {
+    expect(weightsOfEmpty(2)).toEqual(['0 pounds', '0 pounds']);
+    expect(weightsOfEmpty(2, history({ 1: 60 }))).toEqual(['0 pounds', '60 kilograms']);
+  });
+
+  it('is sized by the plan, never by history', () => {
+    expect(weightsOfEmpty(1, history({ 0: 50, 1: 55, 2: 60 }))).toEqual(['50 kilograms']);
   });
 });
 
@@ -360,16 +355,16 @@ describe('RecordedWeightedExercise.withSetUnlogged', () => {
 });
 
 describe('RecordedWeightedExercise added sets', () => {
-  const bp = makeWeightedBlueprint({ sets: 3, repsConfig: { type: 'range', min: 8, max: 12 } });
+  const bp = makeLegacyWeightedBlueprint({ targets: targets(3, 8, 12) });
   const threeSets = makeRecordedExercise(bp, [undefined, undefined, undefined], kg(70));
 
-  it('appends an unchecked copy of the last set and leaves the blueprint alone', () => {
+  it('appends an unchecked set at the last weight, with no target, and leaves the plan alone', () => {
     const result = threeSets.withSetAdded();
     expect(result.potentialSets).toHaveLength(4);
     expect(result.getSet(3).set).toBeUndefined();
     expect(result.getSet(3).weight).toEqual(kg(70));
-    expect(result.getSet(3).target).toEqual({ min: 8, max: 12 });
-    expect(result.progressionKey()).toBe('Squat_WeightedExerciseBlueprint_3_8-12');
+    expect(result.getSet(3).target).toEqual({ min: 0, max: 0 });
+    expect(result.blueprint).toBe(bp);
   });
 
   it('only removes a trailing unchecked set beyond the plan', () => {

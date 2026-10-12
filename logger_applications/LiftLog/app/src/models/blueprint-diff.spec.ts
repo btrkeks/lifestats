@@ -21,16 +21,11 @@ import {
   getChangeLabelKey,
 } from './blueprint-diff';
 import { UseTranslateResult } from '@tolgee/react';
-import { makeWeightedBlueprint } from '@/models/session-models/__test__/helpers';
+import { makeLegacyWeightedBlueprint, makeWeightedBlueprint, targets } from '@/models/session-models/__test__/helpers';
 
 describe('diffSessionBlueprints', () => {
   const createWeightedExercise = (name: string, sets = 3, reps = 10): WeightedExerciseBlueprint =>
-    makeWeightedBlueprint({
-      name,
-      sets,
-      repsConfig: { type: 'fixed', reps },
-      progression: [ProgressionRule.load(new BigNumber('2.5'))],
-    });
+    makeLegacyWeightedBlueprint({ name, targets: targets(sets, reps) });
 
   const createCardioSet = (
     durationMinutes = 30,
@@ -190,23 +185,25 @@ describe('diffSessionBlueprints', () => {
       expect(diff.modifiedExercises[0]!.exerciseName).toBe('Squat');
       expect(diff.modifiedExercises[0]!.changes).toHaveLength(1);
       expect(diff.modifiedExercises[0]!.changes[0]).toMatchObject({
-        kind: 'exercisePlannedSets',
-        oldValue: Array.from({ length: 3 }, () => ({ reps: { min: 10, max: 10 } })),
-        newValue: Array.from({ length: 5 }, () => ({ reps: { min: 10, max: 10 } })),
+        kind: 'exerciseSetCount',
+        oldValue: 3,
+        newValue: 5,
       });
+
+      const applied = applySessionBlueprintDiff(original, diff).exercises[0] as WeightedExerciseBlueprint;
+      expect(applied.plannedSets.map((s) => s.reps.max)).toEqual([10, 10, 10, 0, 0]);
     });
 
-    it('should detect reps change', () => {
+    it('ignores a change to rep targets, rules or failure rest alone', () => {
       const original = new SessionBlueprint('Workout', [createWeightedExercise('Squat', 3, 10)], '');
-      const modified = new SessionBlueprint('Workout', [createWeightedExercise('Squat', 3, 8)], '');
+      const retargeted = makeLegacyWeightedBlueprint({
+        name: 'Squat',
+        targets: targets(3, 8),
+        progression: [ProgressionRule.of({ axis: 'reps', step: BigNumber(1) })],
+      }).with({ restBetweenSets: { ...Rest.medium, failureRest: Duration.ofMinutes(20) } });
+      const modified = new SessionBlueprint('Workout', [retargeted], '');
 
-      const diff = diffSessionBlueprints(original, modified);
-
-      expect(diff.modifiedExercises[0]!.changes[0]).toMatchObject({
-        kind: 'exercisePlannedSets',
-        oldValue: Array.from({ length: 3 }, () => ({ reps: { min: 10, max: 10 } })),
-        newValue: Array.from({ length: 3 }, () => ({ reps: { min: 8, max: 8 } })),
-      });
+      expect(diffSessionBlueprints(original, modified).hasChanges).toBe(false);
     });
 
     it('should group rest changes as single change', () => {
@@ -215,8 +212,6 @@ describe('diffSessionBlueprints', () => {
         [
           makeWeightedBlueprint({
             name: 'Squat',
-            repsConfig: { type: 'fixed', reps: 10 },
-            progression: [ProgressionRule.load(BigNumber(2.5))],
             restBetweenSets: Rest.short,
           }),
         ],
@@ -227,8 +222,6 @@ describe('diffSessionBlueprints', () => {
         [
           makeWeightedBlueprint({
             name: 'Squat',
-            repsConfig: { type: 'fixed', reps: 10 },
-            progression: [ProgressionRule.load(BigNumber(2.5))],
             restBetweenSets: Rest.long,
           }),
         ],
@@ -249,8 +242,6 @@ describe('diffSessionBlueprints', () => {
     it('should detect bodyweight change', () => {
       const base = makeWeightedBlueprint({
         name: 'Pull Up',
-        repsConfig: { type: 'fixed', reps: 10 },
-        progression: [],
       });
       const original = new SessionBlueprint('Workout', [base], '');
       const modified = new SessionBlueprint('Workout', [base.with({ resistance: 'bodyweight' })], '');
@@ -275,9 +266,8 @@ describe('diffSessionBlueprints', () => {
 
       const diff = diffSessionBlueprints(original, modified);
 
-      // Set count and rep targets are one list, so changing both is a single change.
       expect(diff.modifiedExercises[0]!.changes).toHaveLength(1);
-      expect(diff.modifiedExercises[0]!.changes[0]!.kind).toBe('exercisePlannedSets');
+      expect(diff.modifiedExercises[0]!.changes[0]!.kind).toBe('exerciseSetCount');
     });
   });
 
@@ -304,27 +294,17 @@ describe('diffSessionBlueprints', () => {
       );
       const modified = new SessionBlueprint(
         'Workout',
-        [
-          createWeightedExercise('Squat', 3, 12), // First Squat modified
-          createWeightedExercise('Squat', 5, 8), // Second Squat modified
-        ],
+        [createWeightedExercise('Squat', 3, 12), createWeightedExercise('Squat', 5, 8)],
         '',
       );
 
       const diff = diffSessionBlueprints(original, modified);
 
-      expect(diff.modifiedExercises).toHaveLength(2);
-      // First Squat: reps 10 -> 12
-      const firstSquatChanges = diff.modifiedExercises.find((m) => m.exerciseIndex === 0)?.changes;
-      expect(firstSquatChanges?.find((c) => c.kind === 'exercisePlannedSets')).toMatchObject({
-        oldValue: Array.from({ length: 3 }, () => ({ reps: { min: 10, max: 10 } })),
-        newValue: Array.from({ length: 3 }, () => ({ reps: { min: 12, max: 12 } })),
-      });
-      // Second Squat: sets 4 -> 5
-      const secondSquatChanges = diff.modifiedExercises.find((m) => m.exerciseIndex === 1)?.changes;
-      expect(secondSquatChanges?.find((c) => c.kind === 'exercisePlannedSets')).toMatchObject({
-        oldValue: Array.from({ length: 4 }, () => ({ reps: { min: 8, max: 8 } })),
-        newValue: Array.from({ length: 5 }, () => ({ reps: { min: 8, max: 8 } })),
+      // The first Squat only changed its rep target, which is no change; the second went from 4 sets to 5.
+      expect(diff.modifiedExercises).toHaveLength(1);
+      expect(diff.modifiedExercises[0]).toMatchObject({
+        exerciseIndex: 1,
+        changes: [{ kind: 'exerciseSetCount', oldValue: 4, newValue: 5 }],
       });
     });
   });
@@ -455,12 +435,7 @@ describe('diffSessionBlueprints', () => {
 
 describe('applySessionBlueprintDiff', () => {
   const createWeightedExercise = (name: string, sets = 3, reps = 10): WeightedExerciseBlueprint =>
-    makeWeightedBlueprint({
-      name,
-      sets,
-      repsConfig: { type: 'fixed', reps },
-      progression: [ProgressionRule.load(BigNumber(2.5))],
-    });
+    makeLegacyWeightedBlueprint({ name, targets: targets(sets, reps) });
 
   it('should apply selected session name change', () => {
     const original = new SessionBlueprint('Workout A', [], '');
@@ -517,7 +492,7 @@ describe('applySessionBlueprintDiff', () => {
     expect(exercise.plannedSets).toHaveLength(5);
   });
 
-  it('should apply all selected changes correctly', () => {
+  it('applies a set count by resizing, keeping the stored targets of the sets kept', () => {
     const original = new SessionBlueprint('Workout', [createWeightedExercise('Squat', 3, 10)], '');
     const modified = new SessionBlueprint('Workout', [createWeightedExercise('Squat', 5, 8)], '');
 
@@ -526,7 +501,7 @@ describe('applySessionBlueprintDiff', () => {
     const result = applySessionBlueprintDiff(original, diff);
 
     const exercise = result.exercises[0]! as WeightedExerciseBlueprint;
-    expect(exercise.plannedSets).toEqual(Array.from({ length: 5 }, () => ({ reps: { min: 8, max: 8 } })));
+    expect(exercise.plannedSets.map((s) => s.reps.max)).toEqual([10, 10, 10, 0, 0]);
   });
 
   const createCardioSet = (
@@ -601,11 +576,7 @@ describe('applySessionBlueprintDiff', () => {
 
 describe('getChangeDescription', () => {
   const createWeightedExercise = (name: string): WeightedExerciseBlueprint =>
-    makeWeightedBlueprint({
-      name,
-      repsConfig: { type: 'fixed', reps: 10 },
-      progression: [ProgressionRule.load(BigNumber(2.5))],
-    });
+    makeLegacyWeightedBlueprint({ name, targets: targets(3, 10) });
 
   it('should return translation key for session name change', () => {
     const original = new SessionBlueprint('Workout A', [], '');
@@ -648,15 +619,13 @@ describe('getChangeDescription', () => {
         makeWeightedBlueprint({
           name: 'Squat',
           sets: 5,
-          repsConfig: { type: 'fixed', reps: 10 },
-          progression: [ProgressionRule.load(BigNumber(2.5))],
         }),
       ],
       '',
     );
 
     const diff = diffSessionBlueprints(original, modified);
-    const setsChange = diff.modifiedExercises[0]!.changes.find((c) => c.kind === 'exercisePlannedSets');
+    const setsChange = diff.modifiedExercises[0]!.changes.find((c) => c.kind === 'exerciseSetCount');
 
     const t: UseTranslateResult['t'] = (key, params?) => ({ key, params }) as unknown as string;
     const translatable = getChangeDescription(t, setsChange!) as unknown as {
@@ -666,8 +635,8 @@ describe('getChangeDescription', () => {
 
     expect(translatable.key).toBe('plan.diff.generic_two_value_change.body');
     expect(translatable.params).toEqual({
-      oldValue: '10',
-      newValue: '10',
+      oldValue: '3 sets',
+      newValue: '5 sets',
     });
   });
 });
@@ -676,20 +645,14 @@ describe('getChangeDescription', () => {
 
 describe('filterDiff', () => {
   const weighted = (name: string, sets = 3, reps = 10, notes = ''): WeightedExerciseBlueprint =>
-    makeWeightedBlueprint({
-      name,
-      sets,
-      repsConfig: { type: 'fixed', reps },
-      progression: [ProgressionRule.load(BigNumber(2.5))],
-      notes,
-    });
+    makeLegacyWeightedBlueprint({ name, targets: targets(sets, reps) }).with({ notes });
 
   it('keeps only the selected changes and recomputes hasChanges', () => {
     const original = new SessionBlueprint('Workout', [weighted('Squat', 3, 10)], 'old notes');
     const modified = new SessionBlueprint('Workout renamed', [weighted('Squat', 5, 8)], 'old notes');
 
     const diff = diffSessionBlueprints(original, modified);
-    const setsChange = diff.modifiedExercises[0]!.changes.find((c) => c.kind === 'exercisePlannedSets')!;
+    const setsChange = diff.modifiedExercises[0]!.changes.find((c) => c.kind === 'exerciseSetCount')!;
 
     const filtered = filterDiff(diff, new Set([setsChange.id]));
 
@@ -719,11 +682,7 @@ describe('filterDiff', () => {
 
 describe('applySessionBlueprintDiff additional branches', () => {
   const weighted = (name: string): WeightedExerciseBlueprint =>
-    makeWeightedBlueprint({
-      name,
-      repsConfig: { type: 'fixed', reps: 10 },
-      progression: [ProgressionRule.load(BigNumber(2.5))],
-    });
+    makeLegacyWeightedBlueprint({ name, targets: targets(3, 10) });
   const cardioSet = (durationMinutes: number, trackDuration = true): CardioExerciseSetBlueprint =>
     new CardioExerciseSetBlueprint(
       { type: 'time', value: Duration.ofMinutes(durationMinutes) },
@@ -775,8 +734,6 @@ describe('applySessionBlueprintDiff additional branches', () => {
         makeWeightedBlueprint({
           name: 'Squat',
           sets: 5,
-          repsConfig: { type: 'fixed', reps: 8 },
-          progression: [],
           restBetweenSets: Rest.long,
           supersetWithNext: true,
           notes: 'note',
@@ -803,14 +760,7 @@ describe('change label and description mapping', () => {
     notes = '',
     link = '',
   ): WeightedExerciseBlueprint =>
-    makeWeightedBlueprint({
-      name,
-      repsConfig: { type: 'fixed', reps: 10 },
-      progression,
-      supersetWithNext,
-      notes,
-      link,
-    });
+    makeLegacyWeightedBlueprint({ name, targets: targets(3, 10), progression }).with({ supersetWithNext, notes, link });
 
   it('produces a non-empty label key and description for every change kind', () => {
     const original = new SessionBlueprint('Workout', [weighted('Squat'), weighted('Bench')], 'notes');
@@ -836,30 +786,6 @@ describe('change label and description mapping', () => {
     for (const change of diff.allChanges) {
       const label = getChangeLabelKey(change) as unknown as { key: string };
       expect(label.key).toBeTruthy();
-      const description = getChangeDescription(t, change) as unknown as { key: string };
-      expect(description.key).toBeTruthy();
-    }
-  });
-
-  it('describes every progression arrangement, including a multi-rule ladder', () => {
-    const cases: ProgressionRule[][] = [
-      [],
-      [ProgressionRule.load(BigNumber(2.5))],
-      [ProgressionRule.load(BigNumber(5), { type: 'lowestSets', pick: 'all' })],
-      [ProgressionRule.load(BigNumber(5), { type: 'lowestSets', pick: 'first' })],
-      [ProgressionRule.load(BigNumber(5), { type: 'lowestSets', pick: 'middle' })],
-      [ProgressionRule.load(BigNumber(5), { type: 'lowestSets', pick: 'last' })],
-      [
-        ProgressionRule.of({ axis: 'reps', step: BigNumber(1), ceiling: BigNumber(12), onCeiling: 'reset' }),
-        ProgressionRule.load(BigNumber(2.5)),
-      ],
-    ];
-
-    for (const progression of cases) {
-      const original = new SessionBlueprint('W', [weighted('Squat', [ProgressionRule.load(BigNumber(1))])], '');
-      const modified = new SessionBlueprint('W', [weighted('Squat', progression)], '');
-      const diff = diffSessionBlueprints(original, modified);
-      const change = diff.modifiedExercises[0]!.changes.find((c) => c.kind === 'progression')!;
       const description = getChangeDescription(t, change) as unknown as { key: string };
       expect(description.key).toBeTruthy();
     }

@@ -37,9 +37,11 @@ import {
 } from '@/models/session-models';
 import {
   makeCardioBlueprint,
+  makeLegacyWeightedBlueprint,
   makeRecordedExercise,
   makeSession,
   makeWeightedBlueprint,
+  targets,
   tickAt,
 } from '@/models/session-models/__test__/helpers';
 import { SessionGenerator } from '@/models/storage/generators';
@@ -384,7 +386,7 @@ describe('readExerciseHistory', () => {
   });
 
   it('counts the same movement under another rep scheme', () => {
-    const threeByEight = makeWeightedBlueprint({ sets: 3, repsConfig: { type: 'fixed', reps: 8 } });
+    const threeByEight = makeLegacyWeightedBlueprint({ targets: targets(3, 8) });
     store(
       sessionOf('Day', [
         makeRecordedExercise(threeByEight, [8, 8, 8], new Weight(80, 'kilograms'), () => tickAt(9, 0)),
@@ -611,10 +613,7 @@ describe('readWeightedHistory', () => {
 
   it('matches by movement name whatever the set count or rep scheme, and keeps other names apart', () => {
     const fiveByFive = new RecordedWeightedExercise(
-      makeWeightedBlueprint({
-        name: 'squats',
-        plannedSets: Array.from({ length: 5 }, () => ({ reps: { min: 5, max: 5 } })),
-      }),
+      makeLegacyWeightedBlueprint({ name: 'squats', targets: targets(5, 5) }),
       [
         PotentialSet.of({
           weight: new Weight(100, 'kilograms'),
