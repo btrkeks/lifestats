@@ -7,7 +7,6 @@ members = [
     "core/infrastructure/persistence",
     "core/infrastructure/plotting",
     "core/infrastructure/fitbit_client",
-    "core/infrastructure/liftlog_backup",
     "core/infrastructure/system_clock",
     "core/infrastructure/web_api",
     "core/plot-domain",

@@ -4,8 +4,7 @@ use std::sync::Arc;
 use super::bundle_factory::BundleFactory;
 use super::ebook_event_store::{EbookEventStore, EbookSyncEvent};
 use super::ebook_progress_service::{EbookProgressServiceTrait, EbookProgressSyncRequest};
-use super::liftlog_backup_parser::{LiftLogBackupParser, LiftLogWorkout as BackupWorkout};
-use super::liftlog_bundle_factory::{LIFTLOG_SOURCE_TAG, METRIC_TOTAL_WEIGHT, METRIC_WORKOUT_TIME};
+use super::liftlog_bundle_factory::{LIFTLOG_SOURCE_TAG, METRIC_WORKOUT_TIME};
 use super::liftlog_days::{LiftLogDaysSyncResult, LiftLogWorkout};
 use crate::error::{ApplicationError, ApplicationResult};
 use chrono::{NaiveDate, NaiveTime, Utc};
@@ -43,16 +42,6 @@ pub trait IntegrationServiceTrait: Send + Sync {
         request: EbookEventIngestionRequest,
     ) -> ApplicationResult<EbookEventIngestionResult>;
 
-    /// Ingests a full LiftLog remote-backup snapshot and re-logs the workout
-    /// statistics for every day present in it.
-    ///
-    /// Each backup is a complete snapshot, so days are overwritten wholesale;
-    /// re-uploading the same backup is a no-op.
-    fn ingest_liftlog_backup(
-        &self,
-        gzipped_backup: &[u8],
-    ) -> ApplicationResult<LiftLogBackupIngestionResult>;
-
     /// Replaces `[LiftLog] Workout Time` on exactly the given days with the
     /// given workouts. A day with no workouts loses its value. Days not named
     /// are untouched, and resending the same days changes nothing.
@@ -80,16 +69,6 @@ pub struct EbookEventIngestionResult {
     pub statistic_id: StatisticId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiftLogBackupIngestionResult {
-    /// Number of completed workout sessions found in the snapshot.
-    pub workouts_imported: usize,
-    /// Number of distinct days whose statistics were (re)written or confirmed.
-    pub days_logged: usize,
-    /// Statistics whose stored values actually changed (for event publishing).
-    pub updated_statistic_ids: Vec<StatisticId>,
-}
-
 /// Service for provisioning integration bundles in an idempotent manner.
 ///
 /// This service ensures that multiple calls with the same source and context
@@ -99,7 +78,6 @@ pub struct IntegrationService {
     factories: HashMap<String, Arc<dyn BundleFactory>>,
     ebook_event_store: Option<Arc<dyn EbookEventStore>>,
     ebook_progress_service: Option<Arc<dyn EbookProgressServiceTrait>>,
-    liftlog_backup_parser: Option<Arc<dyn LiftLogBackupParser>>,
 }
 
 impl IntegrationService {
@@ -109,7 +87,6 @@ impl IntegrationService {
         factories: Vec<Arc<dyn BundleFactory>>,
         ebook_event_store: Option<Arc<dyn EbookEventStore>>,
         ebook_progress_service: Option<Arc<dyn EbookProgressServiceTrait>>,
-        liftlog_backup_parser: Option<Arc<dyn LiftLogBackupParser>>,
     ) -> Self {
         // Build a map from source_name to factory for O(1) lookup
         let factories_map = factories
@@ -122,7 +99,6 @@ impl IntegrationService {
             factories: factories_map,
             ebook_event_store,
             ebook_progress_service,
-            liftlog_backup_parser,
         }
     }
 
@@ -370,87 +346,6 @@ impl IntegrationServiceTrait for IntegrationService {
         })
     }
 
-    fn ingest_liftlog_backup(
-        &self,
-        gzipped_backup: &[u8],
-    ) -> ApplicationResult<LiftLogBackupIngestionResult> {
-        if gzipped_backup.is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "liftlog backup payload must not be empty".to_string(),
-            ));
-        }
-
-        let parser = self.liftlog_backup_parser.as_ref().ok_or_else(|| {
-            ApplicationError::InvalidInput(
-                "liftlog backup ingestion is not configured for this deployment".to_string(),
-            )
-        })?;
-
-        let workouts = parser.parse(gzipped_backup)?;
-
-        let statistic_ids = self.provision_bundle(LIFTLOG_SOURCE_TAG, HashMap::new())?;
-        let workout_time_id = *statistic_ids.get(METRIC_WORKOUT_TIME).ok_or_else(|| {
-            ApplicationError::Infrastructure(anyhow::anyhow!(
-                "liftlog bundle did not provision the workout_time statistic"
-            ))
-        })?;
-        let total_weight_id = *statistic_ids.get(METRIC_TOTAL_WEIGHT).ok_or_else(|| {
-            ApplicationError::Infrastructure(anyhow::anyhow!(
-                "liftlog bundle did not provision the total_weight statistic"
-            ))
-        })?;
-
-        let mut workouts_by_date: BTreeMap<NaiveDate, Vec<&BackupWorkout>> = BTreeMap::new();
-        for workout in &workouts {
-            workouts_by_date
-                .entry(workout.date)
-                .or_default()
-                .push(workout);
-        }
-
-        let mut workout_time_changed = false;
-        let mut total_weight_changed = false;
-
-        for (date, day_workouts) in &workouts_by_date {
-            let spans: Vec<LiftLogWorkout> = day_workouts
-                .iter()
-                .map(|w| LiftLogWorkout {
-                    started_at: w.started_at,
-                    finished_at: w.finished_at,
-                })
-                .collect();
-            let frames = day_time_frames(*date, &spans);
-            if !frames.is_empty() {
-                let value = serde_json::to_value(&frames).map_err(|e| {
-                    ApplicationError::Infrastructure(anyhow::anyhow!(
-                        "failed to serialize time frames: {e}"
-                    ))
-                })?;
-                workout_time_changed |=
-                    self.save_log_value_if_changed(workout_time_id, *date, value)?;
-            }
-
-            let total_weight_kg: f64 = day_workouts.iter().map(|w| w.total_weight_kg).sum();
-            let value = serde_json::Value::from(total_weight_kg.round() as i64);
-            total_weight_changed |=
-                self.save_log_value_if_changed(total_weight_id, *date, value)?;
-        }
-
-        let mut updated_statistic_ids = Vec::new();
-        if workout_time_changed {
-            updated_statistic_ids.push(workout_time_id);
-        }
-        if total_weight_changed {
-            updated_statistic_ids.push(total_weight_id);
-        }
-
-        Ok(LiftLogBackupIngestionResult {
-            workouts_imported: workouts.len(),
-            days_logged: workouts_by_date.len(),
-            updated_statistic_ids,
-        })
-    }
-
     fn sync_liftlog_days(
         &self,
         days: BTreeMap<NaiveDate, Vec<LiftLogWorkout>>,
@@ -500,7 +395,6 @@ impl IntegrationServiceTrait for IntegrationService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::use_cases::integration::liftlog_backup_parser::MockLiftLogBackupParser;
     use crate::use_cases::integration::liftlog_bundle_factory::LiftLogBundleFactory;
     use chrono::NaiveDateTime;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
@@ -513,22 +407,6 @@ mod tests {
             .unwrap()
             .and_hms_opt(time.0, time.1, time.2)
             .unwrap()
-    }
-
-    fn workout(
-        id: &str,
-        date: (i32, u32, u32),
-        start: (u32, u32, u32),
-        end: (u32, u32, u32),
-        total_weight_kg: f64,
-    ) -> BackupWorkout {
-        BackupWorkout {
-            session_id: id.to_string(),
-            date: NaiveDate::from_ymd_opt(date.0, date.1, date.2).unwrap(),
-            started_at: local(date, start),
-            finished_at: local(date, end),
-            total_weight_kg,
-        }
     }
 
     /// Makes provisioning resolve to fixed statistic IDs by returning an
@@ -555,19 +433,6 @@ mod tests {
         });
     }
 
-    fn service_with(
-        repository: MockStatisticRepository,
-        parser: MockLiftLogBackupParser,
-    ) -> IntegrationService {
-        IntegrationService::new(
-            Arc::new(repository),
-            vec![Arc::new(LiftLogBundleFactory)],
-            None,
-            None,
-            Some(Arc::new(parser)),
-        )
-    }
-
     fn day(d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 8, d).unwrap()
     }
@@ -583,7 +448,6 @@ mod tests {
         IntegrationService::new(
             Arc::new(repository),
             vec![Arc::new(LiftLogBundleFactory)],
-            None,
             None,
             None,
         )
@@ -684,164 +548,5 @@ mod tests {
             }
         );
         assert!(!result.changed());
-    }
-
-    #[test]
-    fn ingest_liftlog_backup_merges_overlapping_workouts_and_logs_days() {
-        let mut repository = MockStatisticRepository::new();
-        expect_provisioned_bundle(&mut repository);
-
-        repository
-            .expect_find_log_value()
-            .returning(|_, _| Ok(None));
-
-        repository
-            .expect_save_log_value()
-            .withf(|id, date, value| {
-                *id == WORKOUT_TIME_ID
-                    && *date == NaiveDate::from_ymd_opt(2026, 8, 12).unwrap()
-                    && value == &serde_json::json!([{"start": "18:00:00", "end": "18:45:00"}])
-            })
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-        repository
-            .expect_save_log_value()
-            .withf(|id, date, value| {
-                *id == TOTAL_WEIGHT_ID
-                    && *date == NaiveDate::from_ymd_opt(2026, 8, 12).unwrap()
-                    && value == &serde_json::json!(2001)
-            })
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-        repository
-            .expect_save_log_value()
-            .withf(|id, date, value| {
-                *id == WORKOUT_TIME_ID
-                    && *date == NaiveDate::from_ymd_opt(2026, 8, 13).unwrap()
-                    && value == &serde_json::json!([{"start": "07:00:00", "end": "07:30:00"}])
-            })
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-        repository
-            .expect_save_log_value()
-            .withf(|id, date, value| {
-                *id == TOTAL_WEIGHT_ID
-                    && *date == NaiveDate::from_ymd_opt(2026, 8, 13).unwrap()
-                    && value == &serde_json::json!(500)
-            })
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-
-        let mut parser = MockLiftLogBackupParser::new();
-        parser.expect_parse().returning(|_| {
-            Ok(vec![
-                workout("a", (2026, 8, 12), (18, 0, 0), (18, 30, 0), 1000.7),
-                // Overlaps with the first workout; frames must merge.
-                workout("b", (2026, 8, 12), (18, 20, 0), (18, 45, 0), 1000.0),
-                workout("c", (2026, 8, 13), (7, 0, 0), (7, 30, 0), 500.2),
-            ])
-        });
-
-        let service = service_with(repository, parser);
-        let result = service.ingest_liftlog_backup(b"\x1f\x8bfake").unwrap();
-
-        assert_eq!(result.workouts_imported, 3);
-        assert_eq!(result.days_logged, 2);
-        assert_eq!(
-            result.updated_statistic_ids,
-            vec![WORKOUT_TIME_ID, TOTAL_WEIGHT_ID]
-        );
-    }
-
-    #[test]
-    fn ingest_liftlog_backup_is_idempotent_when_values_match() {
-        let mut repository = MockStatisticRepository::new();
-        expect_provisioned_bundle(&mut repository);
-
-        repository.expect_find_log_value().returning(|id, _| {
-            if id == WORKOUT_TIME_ID {
-                Ok(Some(serde_json::json!([
-                    {"start": "18:00:00", "end": "18:30:00"}
-                ])))
-            } else {
-                Ok(Some(serde_json::json!(1001)))
-            }
-        });
-        repository.expect_save_log_value().times(0);
-
-        let mut parser = MockLiftLogBackupParser::new();
-        parser.expect_parse().returning(|_| {
-            Ok(vec![workout(
-                "a",
-                (2026, 8, 12),
-                (18, 0, 0),
-                (18, 30, 0),
-                1000.7,
-            )])
-        });
-
-        let service = service_with(repository, parser);
-        let result = service.ingest_liftlog_backup(b"\x1f\x8bfake").unwrap();
-
-        assert_eq!(result.workouts_imported, 1);
-        assert_eq!(result.days_logged, 1);
-        assert!(result.updated_statistic_ids.is_empty());
-    }
-
-    #[test]
-    fn ingest_liftlog_backup_gives_single_set_sessions_a_minimum_frame() {
-        let mut repository = MockStatisticRepository::new();
-        expect_provisioned_bundle(&mut repository);
-
-        repository
-            .expect_find_log_value()
-            .returning(|_, _| Ok(None));
-        repository
-            .expect_save_log_value()
-            .withf(|id, _, value| {
-                *id != WORKOUT_TIME_ID
-                    || value == &serde_json::json!([{"start": "09:15:00", "end": "09:16:00"}])
-            })
-            .times(2)
-            .returning(|_, _, _| Ok(()));
-
-        let mut parser = MockLiftLogBackupParser::new();
-        parser.expect_parse().returning(|_| {
-            Ok(vec![workout(
-                "a",
-                (2026, 8, 12),
-                (9, 15, 0),
-                (9, 15, 0),
-                80.0,
-            )])
-        });
-
-        let service = service_with(repository, parser);
-        service.ingest_liftlog_backup(b"\x1f\x8bfake").unwrap();
-    }
-
-    #[test]
-    fn ingest_liftlog_backup_requires_configured_parser() {
-        let repository = MockStatisticRepository::new();
-        let service = IntegrationService::new(
-            Arc::new(repository),
-            vec![Arc::new(LiftLogBundleFactory)],
-            None,
-            None,
-            None,
-        );
-
-        let error = service.ingest_liftlog_backup(b"\x1f\x8bfake").unwrap_err();
-        assert!(matches!(error, ApplicationError::InvalidInput(_)));
-    }
-
-    #[test]
-    fn ingest_liftlog_backup_rejects_empty_payload() {
-        let repository = MockStatisticRepository::new();
-        let parser = MockLiftLogBackupParser::new();
-        let service = service_with(repository, parser);
-
-        let error = service.ingest_liftlog_backup(b"").unwrap_err();
-        assert!(matches!(error, ApplicationError::InvalidInput(_)));
     }
 }

@@ -37,7 +37,6 @@ fn server() -> TestServer {
         factories,
         None,
         None,
-        None,
     ));
     let app_state = AppState::new(
         repo.clone(),

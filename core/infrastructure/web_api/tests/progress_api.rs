@@ -44,7 +44,6 @@ fn progress_server() -> TestServer {
         factories,
         None,
         None,
-        None,
     ));
     let session_manager = Arc::new(SessionManager::new(statistic_repo.clone()));
 

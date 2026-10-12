@@ -14,14 +14,13 @@ use lifestats_application::use_cases::{
     integration::{
         AnkiBundleFactory, BundleFactory, EbookBundleFactory, EbookEventStore,
         EbookProgressService, EbookProgressServiceTrait, FitbitBundleFactory, IntegrationService,
-        LiftLogBackupParser, LiftLogBundleFactory,
+        LiftLogBundleFactory,
     },
 };
 use lifestats_application::SessionManager;
 use lifestats_core::progress::ports::progress_repository::ProgressRepository;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_fitbit_client::{HttpFitbitDataClient, HttpFitbitOAuthClient};
-use lifestats_liftlog_backup::SqliteLiftLogBackupParser;
 use lifestats_persistence::{
     ebook_event_store::SqliteEbookEventStore, pool::get_database_pool,
     progress_repository::SqliteProgressRepository, repository::SqliteStatisticRepository,
@@ -84,13 +83,11 @@ pub fn build_services() -> Result<Application> {
         Arc::new(SqliteEbookEventStore::new(Arc::clone(&pool)));
     let ebook_progress_service: Arc<dyn EbookProgressServiceTrait> =
         Arc::new(EbookProgressService::new(Arc::clone(&progress_repo)));
-    let liftlog_backup_parser: Arc<dyn LiftLogBackupParser> = Arc::new(SqliteLiftLogBackupParser);
     let integration_service = Arc::new(IntegrationService::new(
         statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
         Some(ebook_event_store),
         Some(ebook_progress_service),
-        Some(liftlog_backup_parser),
     ));
 
     // 2. Instantiate Fitbit integration components
