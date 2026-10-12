@@ -137,6 +137,25 @@ async fn liftlog_days_replace_exactly_the_named_days() {
 }
 
 #[tokio::test]
+async fn liftlog_days_accepts_a_workout_across_the_dst_fall_back() {
+    let server = server();
+    let (status, body) = put_days(
+        &server,
+        json!([{
+            "date": "2026-10-25",
+            "workouts": [workout("dst", "2026-10-25T02:50:00+02:00", "2026-10-25T02:10:00+01:00")]
+        }]),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let id = body["statistic_id"].as_u64().unwrap();
+    assert_eq!(
+        logged(&server, id, "2026-10-25").await["value"],
+        json!([{ "start": "02:50:00", "end": "02:51:00" }])
+    );
+}
+
+#[tokio::test]
 async fn liftlog_days_rejects_invalid_requests() {
     let server = server();
     let late = workout(

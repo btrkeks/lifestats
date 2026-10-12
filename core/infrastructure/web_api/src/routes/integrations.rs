@@ -110,23 +110,23 @@ fn parse_liftlog_days(
             .into_iter()
             .map(|workout| {
                 let parse = |field: &str, value: &str| {
-                    DateTime::parse_from_rfc3339(value)
-                        .map(|timestamp| timestamp.naive_local())
-                        .map_err(|_| {
-                            format!(
-                                "workout {}: {field} is not an RFC 3339 timestamp: {value}",
-                                workout.id
-                            )
-                        })
+                    DateTime::parse_from_rfc3339(value).map_err(|_| {
+                        format!(
+                            "workout {}: {field} is not an RFC 3339 timestamp: {value}",
+                            workout.id
+                        )
+                    })
                 };
-                let started_at = parse("start", &workout.start)?;
-                let finished_at = parse("end", &workout.end)?;
-                if finished_at < started_at {
+                let start = parse("start", &workout.start)?;
+                let end = parse("end", &workout.end)?;
+                // Compared as instants: across a DST change the local end can
+                // precede the local start.
+                if end < start {
                     return Err(format!("workout {}: end is before start", workout.id));
                 }
                 Ok(LiftLogWorkout {
-                    started_at,
-                    finished_at,
+                    started_at: start.naive_local(),
+                    finished_at: end.naive_local(),
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
