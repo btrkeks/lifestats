@@ -1,6 +1,7 @@
 import {
   CardioExerciseBlueprint,
   ExerciseBlueprint,
+  Rest,
   SessionBlueprint,
   WeightedExerciseBlueprint,
 } from '@/models/blueprint-models';
@@ -29,6 +30,9 @@ import { RestTimer } from '@/models/session-models/rest-timer';
 import { IndexOutOfBoundsError } from '@/utils/index-out-of-bounds';
 
 export const freeformSessionName = 'Freeform Workout';
+
+/** The rest between sets, from as soon as you may go to when you should. */
+export type RestWindow = Readonly<Pick<Rest, 'minRest' | 'maxRest'>>;
 
 export class Session {
   constructor(
@@ -496,26 +500,22 @@ export class Session {
     return result;
   }
 
+  /** What the last completed set earns: a weighted exercise rests per exercise, cardio per set, if at all. */
+  get restWindow(): RestWindow | undefined {
+    const exercise = this.lastExercise;
+    if (exercise instanceof RecordedWeightedExercise) {
+      return exercise.blueprint.restBetweenSets;
+    }
+    return exercise?.lastCompletedSet?.blueprint.restBetweenSets;
+  }
+
+  /** When the next weighted set is due; cardio schedules no next-set notification. */
   get restTimerEndTime(): OffsetDateTime | undefined {
-    if (!this.restTimer || this.restTimer.isPaused) {
+    if (!this.restTimer || this.restTimer.isPaused || !this.nextExercise) {
       return undefined;
     }
-    const exercise = this.lastExercise;
-    if (this.nextExercise && exercise && exercise.latestTime && exercise instanceof RecordedWeightedExercise) {
-      const { minRest, failureRest } = exercise.blueprint.restBetweenSets;
-
-      const lastSet = exercise.lastRecordedSet;
-      const targetMin = lastSet?.set
-        ? exercise.repsTargetForSet(exercise.potentialSets.indexOf(lastSet)).min
-        : undefined;
-      const rest =
-        targetMin === undefined ? Duration.ZERO : lastSet!.set!.repsCompleted >= targetMin ? minRest : failureRest;
-
-      if (rest.equals(Duration.ZERO)) {
-        return undefined;
-      }
-      return this.restTimer.startedAt.plus(rest);
-    }
+    const rest = this.lastExercise instanceof RecordedWeightedExercise ? this.restWindow?.minRest : undefined;
+    return rest && !rest.equals(Duration.ZERO) ? this.restTimer.startedAt.plus(rest) : undefined;
   }
 
   get lastExercise(): RecordedExercise | undefined {

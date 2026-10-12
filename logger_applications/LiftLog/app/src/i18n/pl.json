@@ -53,7 +53,6 @@
   "exercise.no_exercises_added.message": "Nie dodano jeszcze żadnych ćwiczeń",
   "exercise.no_exercises_found.message": "Nie znaleziono ćwiczeń.",
   "exercise.previous_sessions_for.title": "Poprzednie treningi dla {exercise}",
-  "exercise.progressive_overload.label": "Stopniowe zwiększanie obciążenia",
   "exercise.remove.confirm.body": "Ćwiczenie zostanie usunięte z bieżącego treningu, przyszłe treningi w planie nie zostaną zmienione.",
   "exercise.remove.confirm.title": "Usunąć ćwiczenie?",
   "exercise.remove_from_workout.confirm.body": "Spowoduje to usunięcie ćwiczenia <em>{exercise}</em> z <em>{session}</em>.",

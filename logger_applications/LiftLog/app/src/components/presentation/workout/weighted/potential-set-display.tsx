@@ -1,5 +1,5 @@
 import { PotentialSet } from '@/models/session-models';
-import { formatRepsTarget, Resistance, RepsTarget } from '@/models/blueprint-models';
+import { Resistance } from '@/models/blueprint-models';
 import { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import WeightFormat from '@/components/presentation/foundation/weight-format';
@@ -12,7 +12,6 @@ export type PotentialSetSize = 'default' | 'compact';
 
 interface PotentialSetDisplayProps {
   set: PotentialSet;
-  repsTarget: RepsTarget;
   resistance: Resistance;
   previousRepCount?: number | undefined;
   size?: PotentialSetSize;
@@ -28,7 +27,6 @@ const metrics = {
     minWidth: spacing[15],
     maxWidth: undefined,
     repsFont: font['text-xl'],
-    targetFont: font['text-base'],
     weightFont: font['text-sm'],
     weightPadding: spacing[2],
   },
@@ -37,7 +35,6 @@ const metrics = {
     minWidth: spacing[11],
     maxWidth: spacing[16],
     repsFont: font['text-lg'],
-    targetFont: font['text-xs'],
     weightFont: font['text-xs'],
     weightPadding: spacing[1],
   },
@@ -98,7 +95,6 @@ export function PotentialSetDisplay(props: PotentialSetDisplayProps) {
               }}
             >
               <Text style={{ fontWeight: isFilled ? 'bold' : undefined }}>{repCountValue ?? '-'}</Text>
-              <Text style={{ ...size.targetFont, verticalAlign: 'top' }}>/{formatRepsTarget(props.repsTarget)}</Text>
             </Text>
             {props.previousRepCount !== undefined && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[0.5] }}>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LocalDate } from '@js-joda/core';
+import { Duration, LocalDate, OffsetDateTime } from '@js-joda/core';
 import { SessionBlueprint } from '@/models/blueprint-models';
 import { Session } from '@/models/session-models/session';
 import { RestTimer } from '@/models/session-models/rest-timer';
@@ -98,37 +98,33 @@ describe('getTimerInfo', () => {
     expect(info.endAt).toBeDefined();
   });
 
-  it('returns equal partial and full rest after a failed set', () => {
-    const info = getTimerInfo(sessionWithRestTimer(3))!;
-    expect(info.partiallyEndAt).toEqual(info.endAt);
-  });
-
-  function sessionWithPyramidRestTimer(lastSetReps: number) {
+  it('rests from the minimum to the maximum after any set, however short of an old target it fell', () => {
     const bp = makeLegacyWeightedBlueprint({
       targets: [
-        { min: 12, max: 12 },
         { min: 10, max: 10 },
-        { min: 8, max: 8 },
+        { min: 10, max: 10 },
       ],
+    }).with({
+      restBetweenSets: {
+        minRest: Duration.ofSeconds(60),
+        maxRest: Duration.ofSeconds(90),
+        failureRest: Duration.ofSeconds(180),
+      },
     });
-    // Set 0 stays open so a next exercise exists; the most recent completion is set 2 (target 8).
-    const exercise = makeRecordedExercise(bp, [undefined, 10, lastSetReps]);
-    return new Session(
+    const exercise = makeRecordedExercise(bp, [2, undefined]);
+    const session = new Session(
       uuid(),
       new SessionBlueprint('Test', [bp], ''),
       [exercise],
       LocalDate.of(2025, 4, 5),
       undefined,
-      new RestTimer(tick()),
+      new RestTimer(OffsetDateTime.parse('2025-04-05T12:00:00Z')),
     );
-  }
 
-  it("judges rest against the last completed set's own pyramid target", () => {
-    // Last completed set targets 8; hitting it is a success even though it is below the earlier sets' targets.
-    const success = getTimerInfo(sessionWithPyramidRestTimer(8))!;
-    expect(success.partiallyEndAt).not.toEqual(success.endAt);
-
-    const failure = getTimerInfo(sessionWithPyramidRestTimer(7))!;
-    expect(failure.partiallyEndAt).toEqual(failure.endAt);
+    expect(getTimerInfo(session)).toEqual({
+      startedAt: '2025-04-05T12:00:00Z',
+      partiallyEndAt: '2025-04-05T12:01:00Z',
+      endAt: '2025-04-05T12:01:30Z',
+    });
   });
 });

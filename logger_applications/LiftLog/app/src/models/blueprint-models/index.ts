@@ -482,7 +482,7 @@ function plannedSlots(count: number): PlannedSet[] {
 export const LoadBases = ['none', 'external', 'bodyweight'] as const;
 export type Resistance = (typeof LoadBases)[number];
 
-export function formatRepsTarget(target: RepsTarget): string {
+function formatRepsTarget(target: RepsTarget): string {
   return target.min === target.max ? `${target.max}` : `${target.min}-${target.max}`;
 }
 

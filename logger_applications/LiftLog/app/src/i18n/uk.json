@@ -49,7 +49,6 @@
   "exercise.no_exercises_added.message": "Вправ ще не додано",
   "exercise.no_exercises_found.message": "Вправ не знайдено.",
   "exercise.previous_sessions_for.title": "Попередні тренування для {exercise}",
-  "exercise.progressive_overload.label": "Прогресивне навантаження",
   "exercise.remove.confirm.body": "Вправа буде видалена з поточного тренування, майбутні тренування у плані не постраждають.",
   "exercise.remove.confirm.title": "Видалити вправу?",
   "exercise.remove_from_workout.confirm.body": "Це видалить вправу <em>{exercise}</em> з <em>{session}</em>.",
@@ -205,7 +204,6 @@
   "plan.will_be_updated.message": "План буде оновлено відповідно до вправ поточного тренування.",
   "rating.enjoying.title": "Вам подобається LiftLog?",
   "rating.enjoying_message.body": "Якщо так, чи не могли б ви витратити хвилину, щоб залишити {type} на {store}?",
-  "rest.failure.label": "Відпочинок до відмови",
   "rest.long.label": "Довгий",
   "rest.max.label": "Макс. Відпочинок",
   "rest.medium.label": "Середній",
@@ -319,7 +317,6 @@
   "exercise.cardio_set.add.button": "Додати підхід",
   "exercise.cardio_set.remove.button": "Видалити підхід",
   "exercise.steps.label": "Кроки",
-  "exercise.progressive_overload.example.label": "Приклад",
   "exercise.target_distance.label": "Ціль у відстані",
   "exercise.target_time.label": "Ціль у часі"
 }

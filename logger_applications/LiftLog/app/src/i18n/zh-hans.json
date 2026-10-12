@@ -1,7 +1,6 @@
 {
   "ai.planner.subtitle": "使用AI生成一份可达成您目标的完整的训练计划",
   "ai.planner.title": "AI 训练规划",
-  "exercise.progressive_overload.label": "渐进超负荷",
   "ai.restart_chat.button": "重置会话",
   "ai.type_your_message.placeholder": "请输入对话内容",
   "ai.upgrade_to_pro.button": "升级Pro版",
@@ -267,7 +266,6 @@
   "plan.diff.generic_disabled.body": "已禁用",
   "plan.diff.generic_enabled.body": "已启用",
   "plan.diff.generic_two_value_change.body": "{oldValue} → {newValue}",
-  "plan.diff.progressive_overload.label": "渐进超负荷",
   "plan.diff.cardio_set_added.label": "+ {setNumber} 组",
   "plan.diff.cardio_set_added.body": "增加 {setNumber} 组",
   "plan.diff.cardio_set_removed.label": "- {setNumber} 组",
@@ -295,7 +293,6 @@
   "plan.will_be_updated.message": "将当前训练更新至训练计划。",
   "rating.enjoying.title": "您是否喜欢 LiftLog？",
   "rating.enjoying_message.body": "可否占用几分钟时间在 {store} 中留下 {type}？",
-  "rest.failure.label": "力竭后休息",
   "rest.long.label": "长",
   "rest.max.label": "最大休息",
   "rest.medium.label": "中等",

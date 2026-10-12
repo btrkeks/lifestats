@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ColorChoice } from '@/hooks/useAppTheme';
-import { Rest } from '@/models/blueprint-models';
+import { RestWindow } from '@/models/session-models';
 import { Duration, OffsetDateTime } from '@js-joda/core';
 import { ViewStyle } from 'react-native';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
@@ -10,10 +10,9 @@ import { useTranslate } from '@tolgee/react';
 import { useDerivedState } from '@/hooks/useDerivedState';
 
 interface RestTimerProps {
-  rest: Rest;
+  rest: RestWindow;
   startTime: OffsetDateTime;
   pausedAt: OffsetDateTime | undefined;
-  failed: boolean;
   style?: ViewStyle;
   onRestart: () => void;
   onDismiss: () => void;
@@ -32,7 +31,6 @@ export default function RestTimer({
   rest,
   startTime,
   pausedAt,
-  failed,
   style,
   onRestart,
   onDismiss,
@@ -45,10 +43,9 @@ export default function RestTimer({
   const getTimerState = useCallback(() => {
     const now = pausedAt ?? OffsetDateTime.now();
     const elapsed = Duration.between(startTime, now).toMillis();
-    // A failed set earns a single, longer rest, and a fixed rest has min === max. Both are a
-    // target rather than a window, so they have no second segment to fill.
-    const windowStart = (failed ? rest.failureRest : rest.minRest).toMillis();
-    const windowEnd = failed || rest.minRest.equals(rest.maxRest) ? undefined : rest.maxRest.toMillis();
+    // A fixed rest has min === max: a target rather than a window, so no second segment to fill.
+    const windowStart = rest.minRest.toMillis();
+    const windowEnd = rest.minRest.equals(rest.maxRest) ? undefined : rest.maxRest.toMillis();
 
     if (elapsed < windowStart) {
       return {
@@ -78,7 +75,7 @@ export default function RestTimer({
       restProgress: 1,
       windowProgress: 1,
     };
-  }, [startTime, pausedAt, rest, failed]);
+  }, [startTime, pausedAt, rest]);
 
   const [timerState, setTimerState] = useState(getTimerState());
   const [jiggling, setJiggling] = useState(false);

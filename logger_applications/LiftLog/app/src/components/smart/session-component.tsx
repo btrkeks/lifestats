@@ -225,29 +225,13 @@ export default function SessionComponent(props: {
     </Card>
   ) : null;
 
-  const lastExercise = session.lastExercise;
-  const lastRecordedSet = lastExercise instanceof RecordedWeightedExercise ? lastExercise?.lastRecordedSet : undefined;
-  const nextExercise = session.nextExercise;
-
-  // A weighted exercise rests per exercise; cardio rests per set, and may not rest at all.
-  const restBetweenSets = match(lastExercise)
-    .with(P.instanceOf(RecordedWeightedExercise), (exercise) => exercise.blueprint.restBetweenSets)
-    .with(P.instanceOf(RecordedCardioExercise), (exercise) => exercise.lastCompletedSet?.blueprint.restBetweenSets)
-    .otherwise(() => undefined);
-
-  const showRestTimer = restTimersEnabled && isActiveWorkout && nextExercise && restBetweenSets && session.restTimer;
-  // Only a weighted set can be failed - cardio has no rep count to fall short of.
-  const lastSetFailed =
-    lastRecordedSet?.set &&
-    lastExercise instanceof RecordedWeightedExercise &&
-    lastRecordedSet.set.repsCompleted <
-      lastExercise.repsTargetForSet(lastExercise.potentialSets.indexOf(lastRecordedSet)).min;
+  const restWindow = session.restWindow;
+  const showRestTimer = restTimersEnabled && isActiveWorkout && session.nextExercise && restWindow && session.restTimer;
   const restTimer = showRestTimer ? (
     <RestTimer
-      rest={restBetweenSets}
+      rest={restWindow}
       startTime={session.restTimer.startedAt}
       pausedAt={session.restTimer.pausedAt}
-      failed={!!lastSetFailed}
       onRestart={() => resetTimer(OffsetDateTime.now())}
       onDismiss={dismissTimer}
       onTogglePause={toggleRestTimerPaused}

@@ -1,4 +1,4 @@
-import { RecordedCardioExercise, RecordedExercise, RecordedWeightedExercise, Session } from '@/models/session-models';
+import { Session } from '@/models/session-models';
 import { toDurationJSON, toInstantJson } from '@/models/storage/versions/latest';
 import { CardioTimerInfo, CurrentExerciseDetails, RestTimerInfo } from '@/models/workout-worker-messages';
 import { Duration } from '@js-joda/core';
@@ -48,36 +48,13 @@ export function getTimerInfo(session: Session): RestTimerInfo | undefined {
     return undefined;
   }
 
-  const rest = getRestWindow(lastExercise);
-  if (!rest || rest.partialRest.equals(Duration.ZERO)) {
+  const rest = session.restWindow;
+  if (!rest || rest.minRest.equals(Duration.ZERO)) {
     return;
   }
   return {
     startedAt: toInstantJson(session.restTimer.startedAt.toInstant()),
-    partiallyEndAt: toInstantJson(session.restTimer.startedAt.plus(rest.partialRest).toInstant()),
-    endAt: toInstantJson(session.restTimer.startedAt.plus(rest.fullRest).toInstant()),
+    partiallyEndAt: toInstantJson(session.restTimer.startedAt.plus(rest.minRest).toInstant()),
+    endAt: toInstantJson(session.restTimer.startedAt.plus(rest.maxRest).toInstant()),
   };
-}
-
-/** Cardio rests per set and has nothing to fail; a weighted exercise rests per exercise. */
-function getRestWindow(lastExercise: RecordedExercise) {
-  if (lastExercise instanceof RecordedCardioExercise) {
-    const rest = lastExercise.lastCompletedSet?.blueprint.restBetweenSets;
-    return rest && { partialRest: rest.minRest, fullRest: rest.maxRest };
-  }
-  if (!(lastExercise instanceof RecordedWeightedExercise)) {
-    return undefined;
-  }
-
-  const { minRest, maxRest, failureRest } = lastExercise.blueprint.restBetweenSets;
-
-  const lastSet = lastExercise.lastRecordedSet;
-  if (!lastSet?.set) {
-    return { partialRest: Duration.ZERO, fullRest: Duration.ZERO };
-  }
-
-  const targetMin = lastExercise.repsTargetForSet(lastExercise.potentialSets.indexOf(lastSet)).min;
-  return lastSet.set.repsCompleted >= targetMin
-    ? { partialRest: minRest, fullRest: maxRest }
-    : { partialRest: failureRest, fullRest: failureRest };
 }

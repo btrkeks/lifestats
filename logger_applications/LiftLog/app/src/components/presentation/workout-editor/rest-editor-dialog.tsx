@@ -5,7 +5,6 @@ import { Duration } from '@js-joda/core';
 import { useTranslate } from '@tolgee/react';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { match } from 'ts-pattern';
 import { Dialog } from 'react-native-paper';
 import { Portal } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/button';
@@ -24,13 +23,10 @@ export function RestEditorDialog(props: RestEditorDialogProps) {
   const { t } = useTranslate();
 
   const { onRestUpdated, rest } = props;
-  const [buttonValue, setButtonValue] = useState(
-    match(rest)
-      .returnType<ButtonValues>()
-      .with(Rest.short, () => 'short')
-      .with(Rest.medium, () => 'medium')
-      .with(Rest.long, () => 'long')
-      .otherwise(() => 'custom'),
+  const [buttonValue, setButtonValue] = useState<ButtonValues>(
+    (['short', 'medium', 'long'] as const).find(
+      (preset) => rest.minRest.equals(Rest[preset].minRest) && rest.maxRest.equals(Rest[preset].maxRest),
+    ) ?? 'custom',
   );
   const handleValueChange = (val: ButtonValues) => {
     setButtonValue(val);
@@ -40,7 +36,8 @@ export function RestEditorDialog(props: RestEditorDialogProps) {
     }
   };
 
-  const updateRest = (type: keyof Rest) => (duration: Duration) => onRestUpdated({ ...rest, [type]: duration });
+  const updateRest = (type: 'minRest' | 'maxRest') => (duration: Duration) =>
+    onRestUpdated({ ...rest, [type]: duration });
 
   const customView = (
     <View
@@ -52,11 +49,6 @@ export function RestEditorDialog(props: RestEditorDialogProps) {
     >
       <DurationEditor label={t('rest.min.label')} duration={rest.minRest} onDurationUpdated={updateRest('minRest')} />
       <DurationEditor label={t('rest.max.label')} duration={rest.maxRest} onDurationUpdated={updateRest('maxRest')} />
-      <DurationEditor
-        label={t('rest.failure.label')}
-        duration={rest.failureRest}
-        onDurationUpdated={updateRest('failureRest')}
-      />
     </View>
   );
   return (

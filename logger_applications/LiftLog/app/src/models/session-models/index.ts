@@ -1,4 +1,4 @@
-import { EmptySession, freeformSessionName, Session } from '@/models/session-models/session';
+import { EmptySession, freeformSessionName, RestWindow, Session } from '@/models/session-models/session';
 import {
   PotentialSet,
   RecordedSet,
@@ -25,4 +25,4 @@ export {
   freeformSessionName,
   fromRecordedExerciseJSON,
 };
-export type { WeightedChange, CompletedWeightedSet, CompletedWeightedSets, WeightedHistory };
+export type { WeightedChange, CompletedWeightedSet, CompletedWeightedSets, WeightedHistory, RestWindow };
