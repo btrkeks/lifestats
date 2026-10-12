@@ -22,6 +22,12 @@ function setsOf(session: Session) {
   });
 }
 
+function completionTimes(session: Session) {
+  return session.recordedExercises.flatMap((e) =>
+    (e as RecordedWeightedExercise).potentialSets.map((s) => s.set!.completionDateTime.toLocalDateTime().toString()),
+  );
+}
+
 function onlyPlan(programs: Record<string, ProgramBlueprint>): [string, ProgramBlueprint] {
   const entries = Object.entries(programs);
   expect(entries).toHaveLength(1);
@@ -149,12 +155,32 @@ describe('getImportForStrong', () => {
     expect(backup.workouts[3]!.recordedExercises[0]!.notes).toBe('felt strong');
   });
 
-  it('timestamps sets from the workout start, one second apart', () => {
-    const session = importStrong().workouts[0]!;
-    const times = session.recordedExercises.flatMap((e) =>
-      (e as RecordedWeightedExercise).potentialSets.map((s) => s.set!.completionDateTime.toLocalDateTime().toString()),
-    );
-    expect(times).toEqual(['2026-01-01T13:21:15', '2026-01-01T13:21:16', '2026-01-01T13:21:17']);
+  it('spreads set completions from the workout start across its duration', () => {
+    expect(completionTimes(importStrong().workouts[0]!)).toEqual([
+      '2026-01-01T13:21:15',
+      '2026-01-01T13:51:15',
+      '2026-01-01T14:21:15',
+    ]);
+  });
+
+  it('completes a lone set when the workout ended', () => {
+    const csv = `Workout #,Date,Workout Name,Duration (sec),Exercise Name,Set Order,Weight (kg),Reps
+1,2026-03-01 10:00:00,Legs,1800,Squat,1,100,5
+`;
+    expect(completionTimes(importStrong(csv).workouts[0]!)).toEqual(['2026-03-01T10:30']);
+  });
+
+  it.each([
+    ['negative', '-227720'],
+    ['longer than six hours', '103678'],
+    ['shorter than a minute', '59'],
+    ['missing', ''],
+  ])('gives a workout whose duration is %s 52 minutes', (_, duration) => {
+    const csv = `Workout #,Date,Workout Name,Duration (sec),Exercise Name,Set Order,Weight (kg),Reps
+37,2026-03-28 13:40:20,Back,${duration},Row,1,50,10
+37,2026-03-28 13:40:20,Back,${duration},Row,2,50,9
+`;
+    expect(completionTimes(importStrong(csv).workouts[0]!)).toEqual(['2026-03-28T13:40:20', '2026-03-28T14:32:20']);
   });
 
   it('writes no rep target into history or plan, only the reps actually done', () => {

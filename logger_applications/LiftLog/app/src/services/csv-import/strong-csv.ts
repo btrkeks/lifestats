@@ -13,6 +13,8 @@ export type StrongCsvRow = {
   date: string;
   startedAt: LocalDateTime;
   workoutName: string;
+  /** `Duration (sec)`, the workout's length as Strong recorded it; may be absent or nonsense. */
+  durationSeconds: number | undefined;
   exercise: string;
   entry: StrongEntry;
 };
@@ -102,6 +104,7 @@ export function parseStrongCsv(csvText: string): ParseStrongCsvResult {
       date,
       startedAt,
       workoutName: cell(raw, 'Workout Name'),
+      durationSeconds: parseStrongNumber(cell(raw, 'Duration (sec)')),
       exercise,
       entry,
     });
@@ -112,6 +115,20 @@ export function parseStrongCsv(csvText: string): ParseStrongCsvResult {
   }
 
   return { ok: true, rows, weightUnit: weightColumn?.unit };
+}
+
+/**
+ * Strong's `Duration (sec)` is wrong for workouts it never stopped (days long) or whose clock moved
+ * (negative). Those get the median length of the plausible workouts in
+ * the export this was written against instead.
+ */
+export const FALLBACK_WORKOUT_SECONDS = 52 * 60;
+const MAX_PLAUSIBLE_WORKOUT_SECONDS = 6 * 60 * 60;
+
+export function plausibleWorkoutSeconds(seconds: number | undefined): number {
+  return seconds !== undefined && seconds >= 60 && seconds <= MAX_PLAUSIBLE_WORKOUT_SECONDS
+    ? seconds
+    : FALLBACK_WORKOUT_SECONDS;
 }
 
 /**
@@ -169,6 +186,7 @@ export function strongRowsToNormalized(
       contentDateKey: key,
       date: first.startedAt.toLocalDate(),
       startedAt: first.startedAt,
+      durationSeconds: plausibleWorkoutSeconds(first.durationSeconds),
       sessionName: first.workoutName || options.sessionName || 'Imported',
       exercises: normalizedExercises,
     });

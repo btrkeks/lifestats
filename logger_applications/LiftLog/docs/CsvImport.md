@@ -44,7 +44,10 @@ the `,`-delimited one that other Strong versions write. The weight header sets t
 unit preference.
 
 - Each `Workout #` becomes one session. The workout name becomes the session name.
-- The session starts at the workout's `Date` in your device's time zone.
+- The session starts at the workout's `Date` in your device's time zone and lasts its
+  `Duration (sec)`: the sets are spaced evenly from the start to the end, since Strong does not
+  record when each set was done. A duration under a minute, over six hours, negative, or missing
+  counts as 52 minutes. Strong writes days-long durations for workouts that were left running.
 - Numbered sets, drop sets (`D`), and failure sets (`F`) are imported. Warm-up sets (`W`) are not.
 - Rows with empty reps are skipped, so timed or distance-only work is left out. A set with reps and
   no weight is imported at 0.
@@ -68,8 +71,9 @@ included.
 | Workout name → session name | Warm-up sets (`W`) |
 | Date → session date and start time | RPE |
 | Exercise name, reps, weight | Distance and seconds of timed sets |
-| Drop and failure sets | Duration |
-| Set notes → exercise notes | Workout notes |
+| Drop and failure sets | Workout notes |
+| Duration → set times from start to end | |
+| Set notes → exercise notes | |
 | Rest timer → plan rest time | |
 
 ### FitNotes-style CSV
@@ -124,9 +128,10 @@ external-import path only, not inside full backup restore.
 Internal format ids (UI dropdown / `importFromExternal`): `Strong` | `FitNotes` | `StrongLifts`. These
 are unrelated to plaintext export’s own `CSV` value.
 
-Strong imports set `restSeconds` on each `NormalizedExercise` and `startedAt` on each
-`NormalizedImportSession`. FitNotes and StrongLifts leave them unset, which gives default rest and noon
-UTC timestamps. Every format writes set counts only: no rep targets and no progression rules. History
+Strong imports set `restSeconds` on each `NormalizedExercise` and `startedAt` and `durationSeconds`
+on each `NormalizedImportSession`; `spreadSetCompletions` spaces the set completions over that span.
+FitNotes and StrongLifts leave them unset, which gives default rest and noon UTC timestamps one
+second apart. Every format writes set counts only: no rep targets and no progression rules. History
 and plan build each exercise blueprint through the same function. The plan id is UUID v5 over the plan
 name (`programIdFromCsvImport`).
 

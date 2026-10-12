@@ -30,6 +30,8 @@ export type NormalizedImportSession = {
   date: LocalDate;
   /** Wall-clock start in the device's zone, when the file records one. */
   startedAt?: LocalDateTime;
+  /** How long the workout took, when the file records it. Set completions are spread across it. */
+  durationSeconds?: number;
   sessionName: string;
   bodyweight?: Weight;
   exercises: NormalizedExercise[];
@@ -53,6 +55,7 @@ export function sessionsFromNormalized(sessions: NormalizedImportSession[]): Ses
     }
 
     const recordedExercises: RecordedWeightedExercise[] = [];
+    const start = sessionStart(normalized);
     let setOrdinal = 0;
 
     for (const exercise of normalized.exercises) {
@@ -60,10 +63,10 @@ export function sessionsFromNormalized(sessions: NormalizedImportSession[]): Ses
         continue;
       }
       const blueprint = exerciseBlueprintFor(exercise);
-      const start = sessionStart(normalized);
 
       const potentialSets = exercise.sets.map((set) => {
-        // +1s per set keeps history order deterministic; CSV exports carry no per-set timestamps.
+        // +1s per set keeps history order deterministic; CSV exports carry no per-set timestamps. A
+        // known duration re-times them below.
         const completionDateTime = start.plusSeconds(setOrdinal);
         setOrdinal += 1;
         return new PotentialSet(new RecordedSet(set.reps, completionDateTime), new Weight(set.weight, set.unit));
@@ -82,19 +85,48 @@ export function sessionsFromNormalized(sessions: NormalizedImportSession[]): Ses
       '',
     );
 
+    const session = new Session(
+      sessionIdFromCsvContent(normalized.contentDateKey),
+      sessionBlueprint,
+      recordedExercises,
+      normalized.date,
+      normalized.bodyweight,
+      undefined,
+    );
     result.push(
-      new Session(
-        sessionIdFromCsvContent(normalized.contentDateKey),
-        sessionBlueprint,
-        recordedExercises,
-        normalized.date,
-        normalized.bodyweight,
-        undefined,
-      ),
+      normalized.durationSeconds === undefined
+        ? session
+        : spreadSetCompletions(session, start, start.plusSeconds(normalized.durationSeconds)),
     );
   }
 
   return result;
+}
+
+/**
+ * Re-times the completed weighted sets, in order, evenly from `start` to `end`, so the session's
+ * first and last set mark when the workout began and ended. A lone set completes at `end`.
+ */
+export function spreadSetCompletions(session: Session, start: OffsetDateTime, end: OffsetDateTime): Session {
+  const total = session.recordedExercises
+    .filter((e) => e instanceof RecordedWeightedExercise)
+    .reduce((count, e) => count + e.potentialSets.filter((s) => s.set).length, 0);
+  const seconds = Duration.between(start, end).seconds();
+  let ordinal = 0;
+  const completionAt = () => {
+    const offset = total === 1 ? seconds : Math.round((seconds * ordinal) / (total - 1));
+    ordinal += 1;
+    return start.plusSeconds(offset);
+  };
+  return session.with({
+    recordedExercises: session.recordedExercises.map((exercise) =>
+      exercise instanceof RecordedWeightedExercise
+        ? exercise.withAllSets((ps) =>
+            ps.set ? ps.with({ set: ps.set.with({ completionDateTime: completionAt() }) }) : ps,
+          )
+        : exercise,
+    ),
+  });
 }
 
 function sessionStart(session: NormalizedImportSession): OffsetDateTime {
