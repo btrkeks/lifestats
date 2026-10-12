@@ -1,5 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { SessionService } from '@/services/session-service';
+import { BuiltInPrograms } from '@/models/built-in-programs';
 import { DatabaseMigrationService } from '@/services/database-migration-service';
 import { setActiveSession, writeSession } from '@/db/sessions';
 import { ProgressionRule, SessionBlueprint, WeightedExerciseBlueprint } from '@/models/blueprint-models';
@@ -272,6 +273,35 @@ describe('SessionService weighted history', () => {
       { min: 0, max: 0 },
       { min: 0, max: 0 },
     ]);
+  });
+
+  it('keeps the load rule of a bundled plan from moving anything', async () => {
+    const workoutA = BuiltInPrograms['ac80c322-3c0f-42ba-b837-cd998adee25a']!.sessions[0]!;
+    const squat = workoutA.exercises[0] as WeightedExerciseBlueprint;
+    expect(squat.toJSON().progression).toEqual([
+      { axis: 'load', step: '2.5', scope: { type: 'allSets' }, trigger: 'allSetsMetTarget' },
+    ]);
+    store(
+      performed('Workout A', [
+        new RecordedWeightedExercise(
+          squat,
+          squat.plannedSets.map((planned) =>
+            PotentialSet.of({
+              weight: new Weight(100, 'kilograms'),
+              target: planned.reps,
+              set: RecordedSet.of({ repsCompleted: planned.reps.max, completionDateTime: tick() }),
+            }),
+          ),
+          undefined,
+        ),
+      ]),
+    );
+
+    const [session] = await collect(makeService().getUpcomingSessions([workoutA]), 1);
+
+    expect(weightsOf(session!.recordedExercises[0] as RecordedWeightedExercise)).toEqual(
+      Array.from({ length: 5 }, () => '100 kilograms'),
+    );
   });
 
   it('matches history by movement name, whatever the rep scheme or spelling', async () => {
