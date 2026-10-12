@@ -1,0 +1,43 @@
+name: Build Android
+on:
+  push:
+    paths:
+      - app/**
+      - .github/**
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: ./app/package-lock.json
+
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK Tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - name: Install
+        run: npm ci
+        working-directory: ./app
+      - name: Prebuild
+        run: npm run prebuild
+        working-directory: ./app
+
+      - name: Build Android
+        run: ./gradlew build -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+        working-directory: ./app/android

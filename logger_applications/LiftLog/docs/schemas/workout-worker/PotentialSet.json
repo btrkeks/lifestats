@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "target": {
+      "$ref": "./PlannedSet.json",
+      "description": "The target this session is chasing for the set, seeded from the blueprint and then its own."
+    },
+    "set": {
+      "$ref": "./RecordedSet.json"
+    },
+    "weight": {
+      "$ref": "./Weight.json"
+    }
+  },
+  "required": [
+    "target",
+    "weight"
+  ]
+}

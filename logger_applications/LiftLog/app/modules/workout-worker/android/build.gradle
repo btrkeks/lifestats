@@ -1,0 +1,88 @@
+import net.pwall.json.kotlin.codegen.gradle.JSONSchemaCodegenPlugin
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'net.pwall.json:json-kotlin-gradle:0.121'
+    }
+}
+
+
+repositories {
+    mavenCentral()
+}
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.workoutworker'
+version = '0.7.6'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: JSONSchemaCodegenPlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+
+// If you want to use the managed Android SDK versions from expo-modules-core, set this to true.
+// The Android SDK versions will be bumped from time to time in SDK releases and may introduce breaking changes in your module code.
+// Most of the time, you may like to manage the Android SDK versions yourself.
+def useManagedAndroidSdkVersions = false
+if (useManagedAndroidSdkVersions) {
+  useDefaultAndroidSdkVersions()
+} else {
+  buildscript {
+    // Simple helper that allows the root project to override versions declared by this library.
+    ext.safeExtGet = { prop, fallback ->
+      rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+    }
+  }
+  project.android {
+    compileSdkVersion safeExtGet("compileSdkVersion", 36)
+    defaultConfig {
+      minSdkVersion safeExtGet("minSdkVersion", 24)
+      targetSdkVersion safeExtGet("targetSdkVersion", 36)
+    }
+  }
+}
+
+
+jsonSchemaCodegen {
+    inputFile = file('src/main/resources/schema')
+    configFile = file('src/main/resources/schema-codegen-config.json')
+    packageName = 'com.limajuice.liftlog'
+    outputDir = file('./build/generated-sources/kotlin')
+}
+
+tasks.withType(KotlinCompile).configureEach {
+    kotlinOptions {
+        freeCompilerArgs += ["-opt-in=kotlin.time.ExperimentalTime"]
+    }
+}
+
+
+android {
+  namespace "expo.modules.workoutworker"
+  defaultConfig {
+    versionCode 1
+    versionName "0.7.6"
+    consumerProguardFiles "proguard-rules.pro"
+  }
+  lintOptions {
+    abortOnError false
+  }
+
+  sourceSets {
+    main.kotlin.srcDirs += 'build/generated-sources/kotlin'
+  }
+}
+
+dependencies {
+    implementation "androidx.core:core:1.18.0"
+    implementation "com.squareup.moshi:moshi:1.15.2"
+    implementation "com.squareup.moshi:moshi-adapters:1.15.2"
+    implementation "com.squareup.moshi:moshi-kotlin:1.15.2"
+}

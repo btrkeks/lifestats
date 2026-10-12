@@ -1,0 +1,40 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: Format Dotnet
+
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check-format:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Commit csharpier formatting on renovate branches
+
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Install csharpier
+        run: dotnet tool restore
+      - name: Format with csharpier
+        # If branch is renovate we want to format and commit the changes
+        if: startsWith(github.event.ref, 'refs/heads/renovate')
+        run: dotnet tool run csharpier format .
+      - name: Commit changes
+        # If branch is renovate we want to format and commit the changes
+        if: startsWith(github.event.ref, 'refs/heads/renovate')
+        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7
+        with:
+          commit_message: "chore: format code with csharpier"
+          commit_author: "Renovate Bot <renovate[bot]@users.noreply.github.com>"
+        # If branch is not renovate we just want to check the formatting
+      - name: Check formatting with csharpier
+        run: dotnet tool run csharpier check .

@@ -1,0 +1,41 @@
+name: Publish BackupServer docker image to GitHub Container Registry
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+permissions:
+  contents: read
+jobs:
+  upload:
+    permissions:
+      contents: read
+      packages: write
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image
+        run: dotnet publish --os linux --arch x64 /t:PublishContainer -c Release
+        working-directory: ./examples/remote-backup/reference-server-implementation/LiftLog.BackupServer
+      - name: Tag image
+        run: docker tag liftlog-backupserver:latest ghcr.io/liammorrow/liftlog:backupserver
+      - name: Push image
+        run: docker push ghcr.io/liammorrow/liftlog:backupserver

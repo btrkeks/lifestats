@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+      "module": "commonjs",
+      "target": "ES2024",
+      "lib": ["ES2024"],
+      "rootDir": "./src",
+      "types": ["node"],
+      "outDir": "./dist",
+      "strict": true,
+      "esModuleInterop": true
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules"]
+  }

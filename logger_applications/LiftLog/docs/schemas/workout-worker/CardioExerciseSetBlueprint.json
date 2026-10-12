@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "target": {
+      "$ref": "./CardioTarget.json"
+    },
+    "trackDuration": {
+      "type": "boolean"
+    },
+    "trackDistance": {
+      "type": "boolean"
+    },
+    "trackResistance": {
+      "type": "boolean"
+    },
+    "trackIncline": {
+      "type": "boolean"
+    },
+    "trackWeight": {
+      "type": "boolean"
+    },
+    "trackSteps": {
+      "type": "boolean"
+    },
+    "restBetweenSets": {
+      "$ref": "./Rest.json",
+      "description": "Absent when the set has no rest - steady-state cardio does not need one."
+    }
+  },
+  "required": [
+    "target",
+    "trackDuration",
+    "trackDistance",
+    "trackResistance",
+    "trackIncline",
+    "trackWeight",
+    "trackSteps"
+  ]
+}

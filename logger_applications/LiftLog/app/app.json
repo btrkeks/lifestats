@@ -1,0 +1,134 @@
+{
+  "expo": {
+    "name": "LiftLog",
+    "slug": "liftlog",
+    "version": "1.0.0",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#fcfdf6",
+    "primaryColor": "#046F03",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-dev-client",
+        {
+          "launchMode": "most-recent"
+        }
+      ],
+      "expo-localization",
+      "expo-sharing",
+      "./plugins/android-signing.js",
+      "./plugins/android-gradle-properties.js",
+      "./plugins/android-react-native-feature-flags.js",
+      "./plugins/android-nav-bar-contrast.js",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification.png"
+        }
+      ],
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#fcfdf6",
+          "image": "./assets/splash.png",
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "scheme": "liftlog",
+    "android": {
+      "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 1",
+      "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.0.0\"}",
+      "package": "com.limajuice.liftlog",
+      "softwareKeyboardLayoutMode": "pan",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [
+            { "scheme": "content", "mimeType": "application/octet-stream" },
+            { "scheme": "content", "mimeType": "application/json" },
+            { "scheme": "content", "mimeType": "text/plain" },
+            { "scheme": "file", "mimeType": "application/octet-stream" },
+            { "scheme": "file", "mimeType": "application/json" },
+            { "scheme": "file", "mimeType": "text/plain" }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\.liftlogplan" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\.liftlogplan" }
+          ]
+        }
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#dfedda",
+        "foregroundImage": "./assets/icon_foreground.png",
+        "monochromeImage": "./assets/icon_monochrome.png"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.limajuice.liftlog",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIViewControllerBasedStatusBarAppearance": true,
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "LiftLog Plan",
+            "LSHandlerRank": "Owner",
+            "LSItemContentTypes": ["com.limajuice.liftlog.plan"]
+          }
+        ],
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "com.limajuice.liftlog.plan",
+            "UTTypeDescription": "LiftLog Plan",
+            "UTTypeConformsTo": ["public.json"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["liftlogplan"]
+            }
+          }
+        ],
+        "CFBundleLocalizations": [
+          "ar",
+          "cs",
+          "de",
+          "en",
+          "es",
+          "fi",
+          "fr",
+          "hu",
+          "it",
+          "ko",
+          "nl",
+          "pl",
+          "pt",
+          "ru",
+          "sr",
+          "sv",
+          "tr",
+          "uk",
+          "zh-hans"
+        ]
+      },
+      "appleTeamId": "",
+      "version": "$(APP_DISPLAY_VERSION)",
+      "buildNumber": "$(APP_VERSION)"
+    }
+  }
+}

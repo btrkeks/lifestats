@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 7
+    },
+    "id": {
+      "type": "string"
+    },
+    "blueprint": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "notes"
+      ]
+    },
+    "recordedExercises": {
+      "type": "array",
+      "items": {
+        "$ref": "./RecordedExercise.json"
+      }
+    },
+    "date": {
+      "$ref": "./LocalDate.json"
+    },
+    "bodyweight": {
+      "$ref": "./Weight.json"
+    }
+  },
+  "required": [
+    "version",
+    "id",
+    "blueprint",
+    "recordedExercises",
+    "date"
+  ]
+}

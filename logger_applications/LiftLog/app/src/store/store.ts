@@ -1,0 +1,118 @@
+import {
+  configureStore,
+  combineReducers,
+  ActionCreator,
+  addListener,
+  createListenerMiddleware,
+  UnknownAction,
+} from '@reduxjs/toolkit';
+import { settingsReducer } from './settings';
+import programReducer from './program';
+import appReducer from './app';
+import { storedSessionsReducer } from './stored-sessions';
+import { statsReducer } from '@/store/stats';
+import { createServices, Services } from '@/services';
+import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
+import { SQLiteDatabase } from 'expo-sqlite';
+
+const rootReducer = combineReducers({
+  settings: settingsReducer,
+  program: programReducer,
+  app: appReducer,
+  storedSessions: storedSessionsReducer,
+  stats: statsReducer,
+});
+
+export type RootState = ReturnType<typeof rootReducer>;
+
+export function createStore(db: ExpoSQLiteDatabase, expoDb: SQLiteDatabase) {
+  let services: Services;
+  const listenerMiddleware = createListenerMiddleware({
+    extra: () => services,
+  });
+
+  const store = configureStore({
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware({
+        // We manually do persistence
+        serializableCheck: false,
+        immutableCheck: false,
+      }).prepend(listenerMiddleware.middleware),
+    reducer: rootReducer,
+  });
+
+  services = createServices(store, db, expoDb);
+
+  const startAppListening = listenerMiddleware.startListening;
+
+  type EffectFn<T> = (
+    action: T,
+    listenerApi: {
+      extra: Services;
+      signal: AbortSignal;
+      onFail: (cb: () => void) => void;
+      cancelActiveListeners: () => void;
+      throwIfCancelled: () => void;
+      dispatch: AppDispatch;
+      getState: () => RootState;
+      stateAfterReduce: RootState;
+      stateBeforeReduce: RootState;
+    },
+  ) => void | Promise<void>;
+
+  function addEffect(allActions: undefined, effect: EffectFn<UnknownAction>): void;
+  function addEffect<TAction extends { type: string }>(action: TAction[], effect: EffectFn<UnknownAction>): void;
+  function addEffect<TAction extends { type: string }>(
+    action: TAction,
+    effect: EffectFn<TAction extends ActionCreator<infer U> ? U : TAction>,
+  ): void;
+  function addEffect(
+    actionPredicate: { type: string } | { type: string }[] | undefined,
+    effect: EffectFn<UnknownAction>,
+  ) {
+    startAppListening({
+      predicate: (action) => !actionPredicate || [actionPredicate].flat().some((x) => x.type === action.type),
+      effect: async (action, listenerApi) => {
+        const failureHandlers: (() => void)[] = [];
+        const stateBeforeReduce = listenerApi.getOriginalState() as RootState;
+        const stateAfterReduce = listenerApi.getState() as RootState;
+        const services = listenerApi.extra();
+        try {
+          await effect(action, {
+            ...listenerApi,
+            // oxlint-disable-next-line typescript/no-unsafe-assignment
+            dispatch: listenerApi.dispatch as any,
+            getState: listenerApi.getState as () => RootState,
+            onFail: (cb) => failureHandlers.push(cb),
+            stateBeforeReduce,
+            stateAfterReduce,
+            extra: services,
+          });
+        } catch (e) {
+          services.logger.error(`Error during effect [${action.type}]:`, e);
+          for (const handler of failureHandlers) {
+            try {
+              handler();
+            } catch (err) {
+              services.logger.error(`Error during failure handler for effect [${action.type}]:`, err);
+            }
+          }
+          return;
+        }
+      },
+    });
+  }
+  const addAppListener = addListener;
+
+  return {
+    store,
+    services,
+    addAppListener,
+    addEffect,
+  };
+}
+
+type AppStore = ReturnType<typeof createStore>['store'];
+
+export type AppDispatch = AppStore['dispatch'];
+export type AddEffectFn = ReturnType<typeof createStore>['addEffect'];

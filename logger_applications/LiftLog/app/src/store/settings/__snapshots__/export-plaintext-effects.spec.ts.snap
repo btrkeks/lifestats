@@ -1,0 +1,236 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`export-plaintext-effects > addExportPlaintextEffects - CSV > CSV output includes header row and one row per completed set 1`] = `
+[
+  "SessionId,Timestamp,Exercise,Weight,WeightUnit,Reps,TargetReps,Notes
+",
+  "124,2024-01-15T10:00Z,Bench Press,100,kg,10,10,
+",
+  "124,2024-01-15T10:01Z,Bench Press,100,kg,10,10,
+",
+  "124,2024-01-15T10:02Z,Bench Press,100,kg,10,10,
+",
+  "124,2024-01-15T10:00Z,Squat,140,kg,8,8,
+",
+  "124,2024-01-15T10:01Z,Squat,140,kg,8,8,
+",
+  "124,2024-01-15T10:02Z,Squat,140,kg,8,8,",
+]
+`;
+
+exports[`export-plaintext-effects > addExportPlaintextEffects - JSON > JSON output contains one entry per session 1`] = `
+[
+  {
+    "blueprint": {
+      "name": "Push Day",
+      "notes": "",
+    },
+    "date": "2024-01-15",
+    "id": "123",
+    "recordedExercises": [
+      {
+        "blueprint": {
+          "link": "",
+          "name": "Bench Press",
+          "notes": "",
+          "plannedSets": [
+            {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+          ],
+          "progression": [
+            {
+              "axis": "load",
+              "scope": {
+                "type": "allSets",
+              },
+              "step": "2.5",
+              "trigger": "allSetsMetTarget",
+            },
+          ],
+          "resistance": "external",
+          "restBetweenSets": {
+            "failureRest": "PT5M",
+            "maxRest": "PT3M",
+            "minRest": "PT1M30S",
+          },
+          "supersetWithNext": false,
+          "type": "WeightedExerciseBlueprint",
+        },
+        "potentialSets": [
+          {
+            "set": {
+              "completionDateTime": "2024-01-15T10:00:00Z",
+              "repsCompleted": 10,
+            },
+            "target": {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            "weight": {
+              "unit": "kilograms",
+              "value": "100",
+            },
+          },
+          {
+            "set": {
+              "completionDateTime": "2024-01-15T10:01:00Z",
+              "repsCompleted": 10,
+            },
+            "target": {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            "weight": {
+              "unit": "kilograms",
+              "value": "100",
+            },
+          },
+          {
+            "set": {
+              "completionDateTime": "2024-01-15T10:02:00Z",
+              "repsCompleted": 10,
+            },
+            "target": {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            "weight": {
+              "unit": "kilograms",
+              "value": "100",
+            },
+          },
+        ],
+        "type": "RecordedWeightedExercise",
+      },
+    ],
+  },
+  {
+    "blueprint": {
+      "name": "Push Day",
+      "notes": "",
+    },
+    "date": "2024-01-15",
+    "id": "1234",
+    "recordedExercises": [
+      {
+        "blueprint": {
+          "link": "",
+          "name": "Squat",
+          "notes": "",
+          "plannedSets": [
+            {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+          ],
+          "progression": [
+            {
+              "axis": "load",
+              "scope": {
+                "type": "allSets",
+              },
+              "step": "2.5",
+              "trigger": "allSetsMetTarget",
+            },
+          ],
+          "resistance": "external",
+          "restBetweenSets": {
+            "failureRest": "PT5M",
+            "maxRest": "PT3M",
+            "minRest": "PT1M30S",
+          },
+          "supersetWithNext": false,
+          "type": "WeightedExerciseBlueprint",
+        },
+        "potentialSets": [
+          {
+            "set": {
+              "completionDateTime": "2024-01-15T10:00:00Z",
+              "repsCompleted": 10,
+            },
+            "target": {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            "weight": {
+              "unit": "kilograms",
+              "value": "100",
+            },
+          },
+          {
+            "set": {
+              "completionDateTime": "2024-01-15T10:01:00Z",
+              "repsCompleted": 10,
+            },
+            "target": {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            "weight": {
+              "unit": "kilograms",
+              "value": "100",
+            },
+          },
+          {
+            "set": {
+              "completionDateTime": "2024-01-15T10:02:00Z",
+              "repsCompleted": 10,
+            },
+            "target": {
+              "reps": {
+                "max": 10,
+                "min": 10,
+              },
+            },
+            "weight": {
+              "unit": "kilograms",
+              "value": "100",
+            },
+          },
+        ],
+        "type": "RecordedWeightedExercise",
+      },
+    ],
+  },
+]
+`;

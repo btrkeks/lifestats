@@ -1,0 +1,41 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: UI Unit Tests
+
+on:
+  push:
+    paths:
+      - app/**
+      - .github/**
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: ./app/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: ./app
+      - name: Generate Expo types
+        run: npx expo customize tsconfig.json
+        working-directory: ./app
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: ./app
+      - name: Lint
+        run: npm run lint
+        working-directory: ./app
+      - name: Test
+        run: npm test
+        working-directory: ./app

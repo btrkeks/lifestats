@@ -1,0 +1,159 @@
+name: Release iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "Version code (e.g., 1.0.0)"
+        required: true
+        type: string
+      release_notes:
+        description: "Release notes to display in the store"
+        required: true
+        type: string
+      commit_sha:
+        description: "Commit SHA to checkout (optional, defaults to the branch head)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    env:
+      # App Store Connect API auth (required for automatic signing)
+      APPSTORE_CONNECT_API_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+      APPSTORE_CONNECT_API_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      APPSTORE_CONNECT_API_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.commit_sha || github.ref }}
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Set build number
+        uses: mlilback/build-number@81a5eb0abae9b77d036138284ba1094d49acbc32 # v1
+        id: buildNumber
+        with:
+          base: 100
+          run-id: ${{ github.run_number }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+
+      - name: Install JS dependencies
+        working-directory: ./app
+        run: npm ci
+      - name: Generate Expo types
+        run: npx expo customize tsconfig.json
+        working-directory: ./app
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: ./app
+      - name: Lint
+        run: npm run lint
+        working-directory: ./app
+      - name: Test
+        run: npm test
+        working-directory: ./app
+      - name: Prebuild
+        run: npm run prebuild
+        working-directory: ./app
+
+      - name: Build JS bundle (optional)
+        working-directory: ./app
+        run: npx expo export --platform ios || echo "Skipped"
+
+      - name: Install CocoaPods
+        working-directory: ./app
+        run: |
+          cd ios
+          pod install
+
+      - name: Create App Store Connect API key file
+        run: |
+          mkdir -p ~/private_keys
+          echo "$APPSTORE_CONNECT_API_KEY" > ~/private_keys/AuthKey_${APPSTORE_CONNECT_API_KEY_ID}.p8
+
+      - name: Generate exportOptions.plist (automatic signing)
+        working-directory: ./app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > exportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>destination</key>
+            <string>export</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>thinning</key>
+            <string>&lt;none&gt;</string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Archive iOS app (automatic signing)
+        working-directory: ./app
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          APP_DISPLAY_VERSION: ${{ inputs.version_code }}
+          APP_VERSION: ${{ steps.buildNumber.outputs.build-number }}
+        run: |
+          mkdir -p ios/build
+          xcodebuild archive \
+            -workspace ios/LiftLog.xcworkspace \
+            -scheme LiftLog \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath "${PWD}/ios/build/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${APPSTORE_CONNECT_API_KEY_ID}.p8 \
+            -authenticationKeyID ${APPSTORE_CONNECT_API_KEY_ID} \
+            -authenticationKeyIssuerID ${APPSTORE_CONNECT_API_ISSUER_ID} \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            APP_DISPLAY_VERSION="$APP_DISPLAY_VERSION" \
+            APP_VERSION="$APP_VERSION"
+
+      - name: Export IPA
+        working-directory: ./app
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "${PWD}/ios/build/App.xcarchive" \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath "${PWD}/ios/build/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${APPSTORE_CONNECT_API_KEY_ID}.p8 \
+            -authenticationKeyID ${APPSTORE_CONNECT_API_KEY_ID} \
+            -authenticationKeyIssuerID ${APPSTORE_CONNECT_API_ISSUER_ID}
+
+      - name: Upload to App Store Connect
+        env:
+          APPLE_UPLOAD_USER: ${{ secrets.APPLE_UPLOAD_USER }}
+          APPLE_UPLOAD_PASS: ${{ secrets.APPLE_UPLOAD_PASS }}
+        run: |
+          xcrun altool \
+            --upload-app \
+            -f app/ios/build/export/LiftLog.ipa \
+            -t ios \
+            -u "$APPLE_UPLOAD_USER" \
+            -p "@env:APPLE_UPLOAD_PASS"

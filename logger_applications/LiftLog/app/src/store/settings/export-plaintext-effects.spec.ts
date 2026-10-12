@@ -1,0 +1,358 @@
+import { describe, it, expect, vi, MockedObject } from 'vitest';
+import { LocalDate, OffsetDateTime, ZoneOffset } from '@js-joda/core';
+import { v4 as uuid } from 'uuid';
+import { SessionBlueprint, CardioExerciseBlueprint, CardioExerciseSetBlueprint } from '@/models/blueprint-models';
+import { Weight } from '@/models/weight';
+import { Session } from '@/models/session-models/session';
+import { RecordedWeightedExercise } from '@/models/session-models/recorded-weighted-exercise';
+import {
+  emptyPotentialSet,
+  filledPotentialSet,
+  makeRecordedExercise,
+  makeWeightedBlueprint,
+} from '@/models/session-models/__test__/helpers';
+import { RecordedCardioExercise } from '@/models/session-models/recorded-cardio-exercise';
+import { exportPlainText } from '@/store/settings';
+import { createAddEffectTestBed } from '@/utils/__test__/add-effect-testbed';
+import { createTestDb } from '@/utils/__test__/test-db';
+import { addExportPlaintextEffects } from '@/store/settings/export-plaintext-effects';
+import { FileExportService } from '@/services/file-export-service';
+import { fromJsonBytes } from '@/utils/json-bytes';
+import { SessionJSON } from '@/models/storage/versions/latest';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const t = OffsetDateTime.of(2024, 1, 15, 10, 0, 0, 0, ZoneOffset.UTC);
+
+function makeBenchBlueprint(name = 'Bench Press', sets = 3, repsPerSet = 10) {
+  return makeWeightedBlueprint({ name, sets, repsConfig: { type: 'fixed', reps: repsPerSet } });
+}
+
+function makeWeightedExercise(name = 'Bench Press', sets = 3, weightKg = 100, reps = 10): RecordedWeightedExercise {
+  const bp = makeBenchBlueprint(name, sets, reps);
+  return makeRecordedExercise(
+    bp,
+    Array.from({ length: sets }, () => reps),
+    new Weight(weightKg, 'kilograms'),
+    (i) => t.plusSeconds(i * 60),
+  );
+}
+
+function makeCardioExercise(name = 'Treadmill') {
+  const bp = new CardioExerciseBlueprint(name, [CardioExerciseSetBlueprint.empty()], '', '');
+  return RecordedCardioExercise.empty(bp);
+}
+
+function makeSession(exercises: RecordedWeightedExercise[] | ReturnType<typeof makeCardioExercise>[]): Session {
+  const blueprintExercises = exercises.map((e) => e.blueprint);
+  return new Session(
+    uuid(),
+    new SessionBlueprint('Push Day', blueprintExercises, ''),
+    exercises,
+    LocalDate.of(2024, 1, 15),
+    undefined,
+    undefined,
+  );
+}
+
+function makeFileExportService(): MockedObject<FileExportService> {
+  return {
+    exportBytes: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+describe('export-plaintext-effects', () => {
+  // ─── CSV export ───────────────────────────────────────────────────────────────
+  describe('addExportPlaintextEffects - CSV', () => {
+    it('calls exportBytes with a .csv filename and text/csv content type', async () => {
+      const fileExportService = makeFileExportService();
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([makeSession([makeWeightedExercise()])]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      expect(fileExportService.exportBytes).toHaveBeenCalledOnce();
+      const [fileName, , contentType] = fileExportService.exportBytes.mock.calls[0]!;
+      expect(fileName).toMatch(/^liftlog-export\.\d{8}_\d{6}\.csv$/);
+      expect(contentType).toBe('text/csv');
+    });
+
+    it('CSV output includes header row and one row per completed set', async () => {
+      const fileExportService = makeFileExportService();
+      // 2 exercises × 3 sets each = 6 data rows
+      const session = makeSession([
+        makeWeightedExercise('Bench Press', 3, 100, 10),
+        makeWeightedExercise('Squat', 3, 140, 8),
+      ]).with({ id: '124' });
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([session]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const csv = new TextDecoder().decode(bytes);
+      const lines = csv.trim().split('\n');
+      // 1 header + 6 data rows
+      expect(lines).toHaveLength(7);
+      expect(lines).toMatchSnapshot();
+    });
+
+    it('CSV rows contain the correct exercise name, weight, and reps', async () => {
+      const fileExportService = makeFileExportService();
+      const session = makeSession([makeWeightedExercise('Deadlift', 1, 180, 5)]);
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([session]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const csv = new TextDecoder().decode(bytes);
+      expect(csv).toContain('Deadlift');
+      expect(csv).toContain('180');
+      expect(csv).toContain('5');
+      expect(csv).toContain('kg');
+    });
+
+    it('skips cardio exercises entirely', async () => {
+      const fileExportService = makeFileExportService();
+      const session = makeSession([makeCardioExercise('Treadmill')]);
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([session]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const csv = new TextDecoder().decode(bytes);
+      const lines = csv.trim().split('\n').filter(Boolean);
+      // no data rows for cardio, and no header
+      expect(lines).toHaveLength(0);
+    });
+
+    it('skips uncompleted sets (set === undefined)', async () => {
+      const fileExportService = makeFileExportService();
+      const bp = makeBenchBlueprint('OHP', 3, 8);
+      const exercise = new RecordedWeightedExercise(
+        bp,
+        [
+          filledPotentialSet(8, t, new Weight(60, 'kilograms')),
+          emptyPotentialSet(60), // incomplete
+          emptyPotentialSet(60), // incomplete
+        ],
+        undefined,
+      );
+      const session = makeSession([exercise]);
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([session]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const csv = new TextDecoder().decode(bytes);
+      const lines = csv.trim().split('\n').filter(Boolean);
+      // header + 1 completed set
+      expect(lines).toHaveLength(2);
+    });
+
+    it('includes exercise notes in the CSV', async () => {
+      const fileExportService = makeFileExportService();
+      const bp = makeBenchBlueprint('Curl', 1, 12);
+      const exercise = new RecordedWeightedExercise(
+        bp,
+        [filledPotentialSet(12, t, new Weight(20, 'kilograms'))],
+        'slow eccentric',
+      );
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([makeSession([exercise])]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const csv = new TextDecoder().decode(bytes);
+      expect(csv).toContain('slow eccentric');
+    });
+
+    it('exports rows across multiple sessions', async () => {
+      const fileExportService = makeFileExportService();
+      const sessions = [
+        makeSession([makeWeightedExercise('Bench Press', 2, 100, 10)]),
+        makeSession([makeWeightedExercise('Squat', 2, 120, 8)]),
+      ];
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb(sessions),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const csv = new TextDecoder().decode(bytes);
+      const lines = csv.trim().split('\n').filter(Boolean);
+      // header + 4 data rows (2 sets × 2 sessions)
+      expect(lines).toHaveLength(5);
+    });
+  });
+
+  // ─── JSON export ──────────────────────────────────────────────────────────────
+
+  describe('addExportPlaintextEffects - JSON', () => {
+    it('calls exportBytes with a .json filename and application/json content type', async () => {
+      const fileExportService = makeFileExportService();
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([makeSession([makeWeightedExercise()])]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'JSON' }));
+
+      expect(fileExportService.exportBytes).toHaveBeenCalledOnce();
+      const [fileName, , contentType] = fileExportService.exportBytes.mock.calls[0]!;
+      expect(fileName).toMatch(/^liftlog-export\.\d{8}_\d{6}\.json$/);
+      expect(contentType).toBe('application/json');
+    });
+
+    it('JSON output is valid and parseable', async () => {
+      const fileExportService = makeFileExportService();
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([makeSession([makeWeightedExercise()])]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'JSON' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const text = new TextDecoder().decode(bytes);
+      // oxlint-disable-next-line typescript/no-unsafe-return
+      expect(() => JSON.parse(text)).not.toThrow();
+    });
+
+    it('JSON output contains one entry per session', async () => {
+      const fileExportService = makeFileExportService();
+      const sessions = [
+        makeSession([makeWeightedExercise('Bench Press')]).with({ id: '123' }),
+        makeSession([makeWeightedExercise('Squat')]).with({ id: '1234' }),
+      ];
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb(sessions),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'JSON' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const parsed = fromJsonBytes<SessionJSON[]>(bytes);
+      expect(parsed).toHaveLength(2);
+      expect(parsed).toMatchSnapshot();
+    });
+
+    it('JSON output strips blueprint exercises to avoid duplication', async () => {
+      const fileExportService = makeFileExportService();
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([makeSession([makeWeightedExercise()])]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'JSON' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const [session] = fromJsonBytes<SessionJSON[]>(bytes);
+      expect((session!.blueprint as unknown as { exercises: [] }).exercises).toBeUndefined();
+    });
+
+    it('JSON output includes session id and recorded exercises', async () => {
+      const fileExportService = makeFileExportService();
+      const session = makeSession([makeWeightedExercise('Deadlift', 2, 180, 5)]);
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([session]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'JSON' }));
+
+      const [, bytes] = fileExportService.exportBytes.mock.calls[0]!;
+      const [exported] = fromJsonBytes<SessionJSON[]>(bytes);
+      expect(exported!.id).toBe(session.id);
+      expect(exported!.recordedExercises).toHaveLength(1);
+    });
+  });
+
+  // ─── Shared behaviour ─────────────────────────────────────────────────────────
+
+  describe('addExportPlaintextEffects - shared', () => {
+    it('does not dispatch any actions', async () => {
+      const fileExportService = makeFileExportService();
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([makeSession([makeWeightedExercise()])]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await testBed.dispatchHandled(exportPlainText({ format: 'CSV' }));
+
+      expect(testBed.dispatchedActions).toHaveLength(0);
+    });
+
+    it('handles an empty session list without throwing', async () => {
+      const fileExportService = makeFileExportService();
+      const testBed = createAddEffectTestBed({
+        services: {
+          db: await createTestDb([]),
+          fileExportService,
+        },
+      });
+      addExportPlaintextEffects(testBed.addEffect);
+
+      await expect(testBed.dispatchHandled(exportPlainText({ format: 'CSV' }))).resolves.not.toThrow();
+      await expect(testBed.dispatchHandled(exportPlainText({ format: 'JSON' }))).resolves.not.toThrow();
+    });
+  });
+});

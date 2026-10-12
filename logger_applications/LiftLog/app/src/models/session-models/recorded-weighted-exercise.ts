@@ -1,0 +1,401 @@
+import { MovementKey, ProgressionKey, RepsTarget, WeightedExerciseBlueprint } from '@/models/blueprint-models';
+import { RecordedExercise } from '@/models/session-models/recorded-exercise';
+
+import {
+  PotentialSetJSON,
+  RecordedSetJSON,
+  RecordedWeightedExerciseJSON,
+  fromOffsetDateTimeJSON,
+  toOffsetDateTimeJSON,
+} from '@/models/storage/versions/latest';
+import { Weight, WeightUnit } from '@/models/weight';
+import { IndexOutOfBoundsError } from '@/utils/index-out-of-bounds';
+import { Duration, OffsetDateTime } from '@js-joda/core';
+import { match } from 'ts-pattern';
+
+/** Everything the set table can ask of an exercise. Time is supplied by the applier, never the UI. */
+export type WeightedChange =
+  /** Check a set or re-log a checked one. The completion time is set once, when the set first becomes checked. */
+  | { kind: 'log'; setIndex: number; weight: Weight; reps: number }
+  | { kind: 'unlog'; setIndex: number }
+  /** Planned or performed weight; carries forward to later unchecked sets. */
+  | { kind: 'weight'; setIndex: number; weight: Weight }
+  | { kind: 'addSet' }
+  | { kind: 'removeLastSet' };
+
+export class RecordedWeightedExercise {
+  readonly type = 'RecordedWeightedExercise';
+
+  constructor(
+    readonly blueprint: WeightedExerciseBlueprint,
+    readonly potentialSets: PotentialSet[],
+    readonly notes: string | undefined,
+  ) {}
+
+  static fromJSON(json: RecordedWeightedExerciseJSON): RecordedWeightedExercise {
+    return new RecordedWeightedExercise(
+      WeightedExerciseBlueprint.fromJSON(json.blueprint),
+      json.potentialSets.map((x) => PotentialSet.fromJSON(x)),
+      json.notes,
+    );
+  }
+
+  /** See {@link MovementKey}. */
+  movementKey(): MovementKey {
+    return this.blueprint.movementKey();
+  }
+
+  /** See {@link ProgressionKey}. */
+  progressionKey(): ProgressionKey {
+    return this.blueprint.progressionKey();
+  }
+
+  /** The performance's own target wins; the blueprint only seeds it when the exercise is created. */
+  repsTargetForSet(index: number): RepsTarget {
+    return this.potentialSets[index]?.target ?? this.blueprint.repsTargetForSet(index);
+  }
+
+  static empty(b: WeightedExerciseBlueprint, unit: WeightUnit): RecordedWeightedExercise {
+    return new RecordedWeightedExercise(
+      b,
+      b.plannedSets.map((s) => new PotentialSet(undefined, new Weight(0, unit), s.reps)),
+      undefined,
+    );
+  }
+
+  getSet(index: number): PotentialSet {
+    const set = this.potentialSets[index];
+    if (!set) {
+      throw new IndexOutOfBoundsError(index, this.potentialSets);
+    }
+    return set;
+  }
+
+  equals(other: RecordedExercise | undefined) {
+    if (!other) {
+      return false;
+    }
+    if (other === this) {
+      return true;
+    }
+    if (other.type !== this.type) {
+      return false;
+    }
+
+    return (
+      this.blueprint.equals(other.blueprint) &&
+      this.notes === other.notes &&
+      this.potentialSets.length === other.potentialSets.length &&
+      this.potentialSets.every((set, index) => {
+        const otherSet = other.potentialSets[index];
+        return set.equals(otherSet);
+      })
+    );
+  }
+
+  with(other: Partial<RecordedWeightedExercise>) {
+    return new RecordedWeightedExercise(
+      'blueprint' in other ? (other.blueprint ?? this.blueprint) : this.blueprint,
+      'potentialSets' in other ? (other.potentialSets ?? this.potentialSets) : this.potentialSets,
+      'notes' in other ? other.notes : this.notes,
+    );
+  }
+
+  withNothingCompleted(): RecordedWeightedExercise {
+    return this.with({
+      notes: undefined,
+      potentialSets: this.potentialSets.map((ps) => ps.with({ set: undefined })),
+    });
+  }
+
+  withRepCount(setIndex: number, reps: number | undefined, time: OffsetDateTime): RecordedWeightedExercise {
+    return this.withSet(setIndex, (s) =>
+      s.with({
+        set: reps === undefined ? undefined : new RecordedSet(reps, time),
+      }),
+    );
+  }
+
+  withSet(setIndex: number, reducer: (s: PotentialSet) => PotentialSet) {
+    const existingSet = this.potentialSets[setIndex];
+    if (!existingSet) {
+      throw new IndexOutOfBoundsError(setIndex, this.potentialSets);
+    }
+    return this.with({
+      potentialSets: this.potentialSets.with(setIndex, reducer(existingSet)),
+    });
+  }
+
+  withAllSets(reducer: (s: PotentialSet) => PotentialSet) {
+    return this.with({
+      potentialSets: this.potentialSets.map(reducer),
+    });
+  }
+
+  withChange(change: WeightedChange, time: OffsetDateTime): RecordedWeightedExercise {
+    return match(change)
+      .with({ kind: 'log' }, (c) => this.withSetLogged(c.setIndex, c, time))
+      .with({ kind: 'unlog' }, (c) => this.withSetUnlogged(c.setIndex))
+      .with({ kind: 'weight' }, (c) => this.withWeightFrom(c.setIndex, c.weight))
+      .with({ kind: 'addSet' }, () => this.withSetAdded())
+      .with({ kind: 'removeLastSet' }, () => this.withLastSetRemoved())
+      .exhaustive();
+  }
+
+  /**
+   * Sets `index` and every later unchecked set to `weight`; earlier sets and later checked sets keep
+   * theirs. Nothing carries when the weight is unchanged, so confirming a planned pyramid set does not
+   * flatten the sets after it.
+   */
+  withWeightFrom(index: number, weight: Weight): RecordedWeightedExercise {
+    if (this.getSet(index).weight.equals(weight, true)) {
+      return this;
+    }
+    return this.with({
+      potentialSets: this.potentialSets.map((s, i) => (i === index || (i > index && !s.set) ? s.with({ weight }) : s)),
+    });
+  }
+
+  /** Keeps an already-checked set's completion time, so editing its reps does not move the rest timer. */
+  withSetLogged(
+    index: number,
+    entry: { weight: Weight; reps: number },
+    time: OffsetDateTime,
+  ): RecordedWeightedExercise {
+    const weighted = this.withWeightFrom(index, entry.weight);
+    const existing = weighted.getSet(index).set;
+    if (existing?.repsCompleted === entry.reps) {
+      return weighted;
+    }
+    return weighted.withSet(index, (s) =>
+      s.with({ set: existing ? existing.with({ repsCompleted: entry.reps }) : new RecordedSet(entry.reps, time) }),
+    );
+  }
+
+  withSetUnlogged(index: number): RecordedWeightedExercise {
+    return this.getSet(index).set ? this.withSet(index, (s) => s.with({ set: undefined })) : this;
+  }
+
+  /** Never touches the blueprint, so {@link progressionKey} stays stable and the next session carries the set. */
+  withSetAdded(): RecordedWeightedExercise {
+    const last = this.potentialSets.at(-1);
+    return this.with({
+      potentialSets: [
+        ...this.potentialSets,
+        new PotentialSet(undefined, last?.weight ?? Weight.NIL, last?.target ?? this.blueprint.repsTargetForSet(0)),
+      ],
+    });
+  }
+
+  /** Only a set added beyond the plan can go, and only while it is unchecked. */
+  get canRemoveLastSet(): boolean {
+    const last = this.potentialSets.at(-1);
+    return this.potentialSets.length > this.blueprint.plannedSets.length && !!last && !last.set;
+  }
+
+  withLastSetRemoved(): RecordedWeightedExercise {
+    return this.canRemoveLastSet ? this.with({ potentialSets: this.potentialSets.slice(0, -1) }) : this;
+  }
+
+  toJSON(): RecordedWeightedExerciseJSON {
+    return {
+      type: 'RecordedWeightedExercise',
+      blueprint: this.blueprint.toJSON(),
+      potentialSets: this.potentialSets.map((x) => x.toJSON()),
+      notes: this.notes,
+    };
+  }
+
+  /** False for a movement that tracks no load, so nothing sums a volume or computes a 1RM for it. */
+  get tracksResistance(): boolean {
+    return this.blueprint.resistance !== 'none';
+  }
+
+  /**
+   * The load actually moved for a set: the stored weight for a plain exercise, or the
+   * bodyweight plus the stored (added/assisted) weight for a bodyweight exercise. When the
+   * session bodyweight is unknown the bodyweight contribution is treated as zero.
+   */
+  effectiveWeight(set: PotentialSet, bodyweight: Weight | undefined): Weight {
+    if (!this.tracksResistance) {
+      return Weight.NIL;
+    }
+    return this.blueprint.resistance === 'bodyweight' ? (bodyweight ?? Weight.NIL).plus(set.weight) : set.weight;
+  }
+
+  get maxWeight(): Weight {
+    return (
+      this.potentialSets.reduce(
+        (max, set) => {
+          return !max || set.weight.isGreaterThan(max) ? set.weight : max;
+        },
+        undefined as Weight | undefined,
+      ) ?? new Weight(0, 'kilograms')
+    );
+  }
+
+  maxWeightWith(bodyweight: Weight | undefined): Weight {
+    return (
+      this.potentialSets.reduce(
+        (max, set) => {
+          const weight = this.effectiveWeight(set, bodyweight);
+          return !max || weight.isGreaterThan(max) ? weight : max;
+        },
+        undefined as Weight | undefined,
+      ) ?? new Weight(0, 'kilograms')
+    );
+  }
+
+  get totalWeightLifted(): Weight {
+    return this.totalWeightLiftedWith(undefined);
+  }
+
+  totalWeightLiftedWith(bodyweight: Weight | undefined): Weight {
+    return this.potentialSets.reduce(
+      (accum, set) => accum.plus(this.effectiveWeight(set, bodyweight).multipliedBy(set.set?.repsCompleted ?? 0)),
+      Weight.NIL,
+    );
+  }
+
+  get isStarted() {
+    return this.potentialSets.some((x) => x.set !== undefined);
+  }
+
+  get lastRecordedSet(): PotentialSet | undefined {
+    let best: PotentialSet | undefined;
+    for (const ps of this.potentialSets) {
+      if (!ps.set) continue;
+      if (!best || ps.set.completionDateTime.isAfter(best.set!.completionDateTime)) best = ps;
+    }
+    return best;
+  }
+
+  get firstRecordedSet(): PotentialSet | undefined {
+    let best: PotentialSet | undefined;
+    for (const ps of this.potentialSets) {
+      if (!ps.set) continue;
+      if (!best || ps.set.completionDateTime.isBefore(best.set!.completionDateTime)) best = ps;
+    }
+    return best;
+  }
+
+  get currentSetIndex() {
+    return this.potentialSets.findIndex((x) => !x.set);
+  }
+
+  get duration(): Duration | undefined {
+    return this.latestTime && this.earliestTime ? Duration.between(this.earliestTime, this.latestTime) : undefined;
+  }
+
+  get latestTime(): OffsetDateTime | undefined {
+    return this.lastRecordedSet?.set?.completionDateTime;
+  }
+
+  get earliestTime(): OffsetDateTime | undefined {
+    return this.firstRecordedSet?.set?.completionDateTime;
+  }
+
+  get isComplete(): boolean {
+    return !this.potentialSets.some((x) => x.set === undefined);
+  }
+
+  /// <summary>
+  /// An exercise is considered a success if ALL sets are successful
+  /// </summary>
+  get isSuccessForProgressiveOverload(): boolean {
+    return this.potentialSets.every((x, index) => x.set && x.set.repsCompleted >= this.repsTargetForSet(index).max);
+  }
+}
+
+export class RecordedSet {
+  constructor(
+    readonly repsCompleted: number,
+    readonly completionDateTime: OffsetDateTime,
+  ) {}
+
+  /** Build a recorded set from named fields. See {@link PotentialSet.of}. */
+  static of(init: { repsCompleted: number; completionDateTime: OffsetDateTime }): RecordedSet {
+    return new RecordedSet(init.repsCompleted, init.completionDateTime);
+  }
+
+  static fromJSON(json: RecordedSetJSON): RecordedSet {
+    return new RecordedSet(json.repsCompleted, fromOffsetDateTimeJSON(json.completionDateTime));
+  }
+
+  equals(other: RecordedSet | undefined): boolean {
+    if (!other) {
+      return false;
+    }
+    if (other === this) {
+      return true;
+    }
+    return this.repsCompleted === other.repsCompleted && this.completionDateTime.equals(other.completionDateTime);
+  }
+
+  with(other: Partial<RecordedSet>): RecordedSet {
+    return new RecordedSet(
+      'repsCompleted' in other ? other.repsCompleted! : this.repsCompleted,
+      'completionDateTime' in other ? other.completionDateTime! : this.completionDateTime,
+    );
+  }
+
+  toJSON(): RecordedSetJSON {
+    return {
+      repsCompleted: this.repsCompleted,
+      completionDateTime: toOffsetDateTimeJSON(this.completionDateTime),
+    };
+  }
+}
+
+export class PotentialSet {
+  readonly type = 'PotentialSet';
+  constructor(
+    readonly set: RecordedSet | undefined,
+    readonly weight: Weight,
+    /** The target this set is chasing, carried on the performance rather than re-read from the plan. */
+    readonly target: RepsTarget = { min: 0, max: 0 },
+  ) {}
+
+  /** Build a set from named fields; preferred over the constructor, which leads with the absent one. */
+  static of(init: { set?: RecordedSet | undefined; weight: Weight; target?: RepsTarget }): PotentialSet {
+    return new PotentialSet(init.set, init.weight, init.target);
+  }
+
+  static fromJSON(json: PotentialSetJSON): PotentialSet {
+    return new PotentialSet(json.set ? RecordedSet.fromJSON(json.set) : undefined, Weight.fromJSON(json.weight), {
+      min: json.target.reps.min,
+      max: json.target.reps.max,
+    });
+  }
+
+  equals(other: PotentialSet | undefined): boolean {
+    if (!other) {
+      return false;
+    }
+    if (other === this) {
+      return true;
+    }
+    return (
+      (this.set?.equals(other.set) ?? other.set === undefined) &&
+      this.weight.equals(other.weight) &&
+      this.target.min === other.target.min &&
+      this.target.max === other.target.max
+    );
+  }
+
+  with(other: Partial<PotentialSet>): PotentialSet {
+    return new PotentialSet(
+      'set' in other ? other.set : this.set,
+      'weight' in other ? other.weight! : this.weight,
+      other.target ?? this.target,
+    );
+  }
+
+  toJSON(): PotentialSetJSON {
+    return {
+      target: { reps: { min: this.target.min, max: this.target.max } },
+      set: this.set?.toJSON(),
+      weight: this.weight.toJSON(),
+    };
+  }
+}

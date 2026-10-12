@@ -1,0 +1,21 @@
+{
+  "name": "scripts",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "create-release": "./create-release.ts patch",
+    "release-plan-builder-skill": "./release-plan-builder-skill.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "zx": "8.8.5"
+  },
+  "peerDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
+    "@types/semver": "^7.7.0",
+    "semver": "^7.7.2"
+  }
+}

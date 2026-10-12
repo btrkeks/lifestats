@@ -1,0 +1,296 @@
+import { useAppSelector } from '@/store';
+import { Material3Scheme, useMaterial3Theme } from '@pchmn/expo-material3-theme';
+import React, { createContext, ReactNode, useContext, useEffect } from 'react';
+import { Appearance, Platform, useColorScheme } from 'react-native';
+import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
+import { DarkTheme, ThemeProvider as NavigationThemeProvider, DefaultTheme } from 'expo-router';
+import { MsIconSrc } from '@/components/presentation/foundation/ms-icon-source';
+import { argbFromHex, Blend, Hct, hexFromArgb } from '@material/material-color-utilities';
+
+export const rounding = {
+  roundedRectangleRadius: 10,
+  roundedRectangleFocusRingRadius: 15,
+  segmentedBetweenRadius: 2,
+};
+
+export const spacing = {
+  pageHorizontalMargin: 16, // spacing[4]
+  0: 0,
+  0.5: 2,
+  1: 4,
+  2: 8,
+  3: 12,
+  4: 16,
+  5: 20,
+  6: 24,
+  7: 28,
+  8: 32,
+  9: 36,
+  10: 40,
+  11: 44,
+  12: 48,
+  14: 56,
+  15: 60,
+  16: 64,
+  20: 80,
+  24: 96,
+  28: 112,
+  32: 128,
+  36: 144,
+  40: 160,
+  44: 176,
+  48: 192,
+  52: 208,
+  56: 224,
+  60: 240,
+  64: 256,
+} as const;
+
+export const font = {
+  'text-2xs': {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  'text-xs': {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  'text-sm': {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  'text-base': {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  'text-lg': {
+    fontSize: 18,
+    lineHeight: 28,
+  },
+  'text-xl': {
+    fontSize: 20,
+    lineHeight: 28,
+  },
+  'text-2xl': {
+    fontSize: 24,
+    lineHeight: 32,
+  },
+  'text-3xl': {
+    fontSize: 30,
+    lineHeight: 40,
+  },
+  'text-4xl': {
+    fontSize: 40,
+    lineHeight: 50,
+  },
+} as const;
+
+export type FontChoice = keyof typeof font;
+
+type ColorPair<T extends string> = { [k in T | `on${Capitalize<T>}`]: string };
+
+/** Level 0 is the absence of a session, so it has no fill of its own and no entry here. */
+export type ActivityRampColors = ColorPair<'activityLevel1'> &
+  ColorPair<'activityLevel2'> &
+  ColorPair<'activityLevel3'> &
+  ColorPair<'activityLevel4'>;
+
+export type AppThemeColors = Material3Scheme &
+  ActivityRampColors & {
+    orange: string;
+    onOrange: string;
+    red: string;
+    onRed: string;
+    green: string;
+    onGreen: string;
+    blue: string;
+    onBlue: string;
+    yellow: string;
+    onYellow: string;
+    purple: string;
+    onPurple: string;
+    pink: string;
+    onPink: string;
+    teal: string;
+    onTeal: string;
+    cyan: string;
+    onCyan: string;
+    brown: string;
+    onBrown: string;
+    indigo: string;
+    onIndigo: string;
+    lime: string;
+    onLime: string;
+    amber: string;
+    onAmber: string;
+
+    seedColor: string | undefined;
+
+    scheme: 'dark' | 'light' | undefined;
+  };
+
+export type ColorChoice = keyof {
+  [K in keyof AppThemeColors as AppThemeColors[K] extends string ? K : never]: AppThemeColors[K];
+};
+
+export interface AppTheme {
+  colors: AppThemeColors;
+  colorScheme: 'light' | 'dark';
+}
+
+const AppThemeContext = createContext<AppTheme | undefined>(undefined);
+
+export const useAppTheme = (): AppTheme => {
+  const context = useContext(AppThemeContext);
+  if (!context) {
+    throw new Error('useAppTheme must be used within a AppThemeProvider');
+  }
+  return context;
+};
+
+interface AppThemeProviderProps {
+  children: ReactNode;
+}
+
+export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({ children }) => {
+  const colorSchemeSeed = useAppSelector((state) => state.settings.colorSchemeSeed);
+  const trueBlack = useAppSelector((state) => state.settings.trueBlackDarkTheme);
+  const themeMode = useAppSelector((state) => state.settings.themeMode);
+
+  const systemColorScheme = useColorScheme();
+  // Native views (expo-ui hosts, system dialogs, the status bar) read the platform appearance rather
+  // than anything we compute here, so the override has to be pushed down to it too.
+  useEffect(() => {
+    Appearance.setColorScheme(themeMode === 'system' ? 'unspecified' : themeMode);
+  }, [themeMode]);
+
+  const colorScheme = themeMode === 'system' ? (systemColorScheme === 'dark' ? 'dark' : 'light') : themeMode;
+  const isDark = colorScheme === 'dark';
+  // If the device is not compatible, it will return a theme based on the fallback source color (optional, default to #6750A4)
+  const sourceColor = colorSchemeSeed === 'default' ? undefined : colorSchemeSeed;
+  const { theme, updateTheme, resetTheme } = useMaterial3Theme({
+    fallbackSourceColor: '0x005500',
+    sourceColor,
+  });
+  let newTheme = theme;
+  if (trueBlack) {
+    newTheme = {
+      ...newTheme,
+      dark: { ...theme.dark, background: '#000000', surface: '#000000' },
+    };
+  }
+  useEffect(() => {
+    if (colorSchemeSeed === 'default') {
+      resetTheme();
+    } else {
+      updateTheme(colorSchemeSeed);
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorSchemeSeed]);
+  const schemedTheme = colorScheme === 'dark' ? newTheme.dark : newTheme.light;
+
+  const paperTheme = isDark ? { ...MD3DarkTheme, colors: newTheme.dark } : { ...MD3LightTheme, colors: newTheme.light };
+  /* The seedColor is passed into the expo ui host to and is platform dependent
+   * On android, the seedColor is used to generate the tonal pallette, and therefore should be the same as the source color.
+   * If it is undefined, it will use the system's theme which matches our useMaterialTheme pallette in that case.
+   * On IOS we just want to use the primary color as that is what it represents.
+   */
+  const seedColor = Platform.select({
+    android: sourceColor,
+    ios: schemedTheme.primary,
+  });
+  const appTheme = {
+    colors: {
+      ...schemedTheme,
+      ...colorPair('orange', 'ffffa500', schemedTheme.primary, isDark),
+      ...colorPair('red', 'ffff0000', schemedTheme.primary, isDark),
+      ...colorPair('yellow', 'ffffff00', schemedTheme.primary, isDark),
+      ...colorPair('blue', 'ff0000aa', schemedTheme.primary, isDark),
+      ...colorPair('green', 'ff00aa00', schemedTheme.primary, isDark),
+      ...colorPair('purple', 'ff800080', schemedTheme.primary, isDark),
+      ...colorPair('pink', 'ffff69b4', schemedTheme.primary, isDark),
+      ...colorPair('teal', 'ff008080', schemedTheme.primary, isDark),
+      ...colorPair('cyan', 'ff00ffff', schemedTheme.primary, isDark),
+      ...colorPair('brown', 'ff8b4513', schemedTheme.primary, isDark),
+      ...colorPair('indigo', 'ff4b0082', schemedTheme.primary, isDark),
+      ...colorPair('lime', 'ffcddc39', schemedTheme.primary, isDark),
+      ...colorPair('amber', 'ffffc107', schemedTheme.primary, isDark),
+      ...activityRamp(schemedTheme.primary, isDark),
+      seedColor: seedColor,
+      scheme: colorScheme,
+    } satisfies AppThemeColors,
+    colorScheme,
+  };
+
+  const baseNavigationThem = isDark ? DarkTheme : DefaultTheme;
+  const navigationTheme = {
+    ...baseNavigationThem,
+    colors: {
+      background: paperTheme.colors.background,
+      border: paperTheme.colors.outline,
+      card: paperTheme.colors.surfaceContainer,
+      notification: paperTheme.colors.surface,
+      primary: paperTheme.colors.primary,
+      text: paperTheme.colors.onSurface,
+    },
+  };
+
+  return (
+    <AppThemeContext.Provider value={appTheme}>
+      <PaperProvider
+        theme={paperTheme}
+        settings={{
+          icon: (props) => <MsIconSrc {...props} color={props.color ?? appTheme.colors.onSurface} />,
+        }}
+      >
+        <NavigationThemeProvider value={navigationTheme}>{children}</NavigationThemeProvider>
+      </PaperProvider>
+    </AppThemeContext.Provider>
+  );
+};
+
+/**
+ * Tones for the activity ramp, walking from "barely there" to "full primary". Light and dark move in
+ * opposite directions: on a light surface intensity reads as *darker*, on a dark surface as *brighter*.
+ */
+const ACTIVITY_TONES_LIGHT = [92, 80, 62, 45];
+const ACTIVITY_TONES_DARK = [28, 40, 55, 72];
+
+/**
+ * The graded fills the activity calendar shades its days with. Derived here, with the rest of the theme,
+ * because each one costs an iterative CAM16 solve -- far too much to pay once per cell, per render.
+ */
+function activityRamp(primary: string, isDark: boolean): ActivityRampColors {
+  const seed = Hct.fromInt(argbFromHex(primary));
+  const tones = isDark ? ACTIVITY_TONES_DARK : ACTIVITY_TONES_LIGHT;
+
+  return Object.assign(
+    {},
+    ...tones.map((tone, index) => ({
+      [`activityLevel${index + 1}`]: hexFromArgb(Hct.from(seed.hue, seed.chroma, tone).toInt()),
+      // Text stays legible against the fill: the same tone inversion `colorPair` uses.
+      [`onActivityLevel${index + 1}`]: hexFromArgb(Hct.from(seed.hue, seed.chroma, tone > 60 ? 10 : 100).toInt()),
+    })),
+  ) as ActivityRampColors;
+}
+
+function colorPair<T extends string>(name: T, hex: string, primary: string, isDark: boolean): ColorPair<T> {
+  // Step 1: Harmonize the input with the seed
+  const harmonized = Blend.harmonize(argbFromHex(hex), argbFromHex(primary));
+  const baseHct = Hct.fromInt(harmonized);
+
+  // Step 2: Adjust tone based on theme context
+  baseHct.tone = isDark ? 80 : 40; // Material-like defaults
+
+  // Step 3: Derive on-color from tone inversion
+  const onTone = baseHct.tone > 60 ? 10 : 100;
+  const onColor = Hct.from(baseHct.hue, baseHct.chroma, onTone);
+
+  // Step 4: Material-style return shape
+  const onName = `on${name.charAt(0).toUpperCase()}${name.slice(1)}` as const;
+
+  return {
+    [name]: hexFromArgb(baseHct.toInt()),
+    [onName]: hexFromArgb(onColor.toInt()),
+  } as ColorPair<T>;
+}

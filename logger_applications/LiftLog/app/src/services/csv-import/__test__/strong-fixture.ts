@@ -1,0 +1,31 @@
+/**
+ * Synthetic Strong export in the shape the app writes: `;`-delimited, every field quoted, one row per
+ * set plus `Rest Timer` rows. Five workouts; `DAY 1` and `DAY 2` repeat, `New template` does not.
+ */
+export const STRONG_EXPORT_KG = `"Workout #";"Date";"Workout Name";"Duration (sec)";"Exercise Name";"Set Order";"Weight (kg)";"Reps";"RPE";"Distance (meters)";"Seconds";"Notes";"Workout Notes"
+"1";"2026-01-01 13:21:15";"DAY 1";"3600";"Bench Press (Barbell)";"1";"60.0";"10";"";"";"";"";""
+"1";"2026-01-01 13:21:15";"DAY 1";"3600";"Bench Press (Barbell)";"Rest Timer";"";"";"";"";"120.0";"";""
+"1";"2026-01-01 13:21:15";"DAY 1";"3600";"Bench Press (Barbell)";"2";"60.0";"8";"";"";"";"";""
+"1";"2026-01-01 13:21:15";"DAY 1";"3600";"Chest Fly";"W";"10.0";"15";"";"";"";"";""
+"1";"2026-01-01 13:21:15";"DAY 1";"3600";"Chest Fly";"1";"25.0";"12";"";"";"";"";""
+"1";"2026-01-01 13:21:15";"DAY 1";"3600";"Chest Fly";"Rest Timer";"";"";"";"";"90.0";"";""
+"2";"2026-01-03 18:00:00";"DAY 2";"3000";"Shoulder Press (Plate Loaded)";"1";"40.0";"10";"";"";"";"";""
+"2";"2026-01-03 18:00:00";"DAY 2";"3000";"Shoulder Press (Plate Loaded)";"2";"40.0";"9";"";"";"";"";""
+"2";"2026-01-03 18:00:00";"DAY 2";"3000";"Lateral Raise (Cable)";"1";"7.5";"15";"";"";"";"";""
+"2";"2026-01-03 18:00:00";"DAY 2";"3000";"Lateral Raise (Cable)";"D";"5.0";"10";"";"";"";"";""
+"3";"2026-01-04 09:30:00";"New template";"1800";"Squat (Barbell)";"1";"80.0";"5";"";"";"";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Bench Press (Barbell)";"1";"62.5";"10";"8.0";"";"";"felt strong";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Bench Press (Barbell)";"Rest Timer";"";"";"";"";"120.0";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Bench Press (Barbell)";"2";"62.5";"9";"";"";"";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Bench Press (Barbell)";"Rest Timer";"";"";"";"";"150.0";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Bench Press (Barbell)";"3";"62.5";"8";"";"";"";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Chest Fly";"1";"27.5";"12";"";"";"";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Chest Fly";"F";"27.5";"9";"";"";"";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Chest Fly";"Rest Timer";"";"";"";"";"90.0";"";""
+"4";"2026-01-05 19:40:44";"DAY 1";"3700";"Plank";"1";"";"";"";"";"60";"";""
+"5";"2026-01-07 18:54:03";"DAY 2";"3100";"Shoulder Press (Plate Loaded)";"1";"42.5";"8";"";"";"";"";""
+"5";"2026-01-07 18:54:03";"DAY 2";"3100";"Shoulder Press (Plate Loaded)";"2";"42.5";"8";"";"";"";"";""
+"5";"2026-01-07 18:54:03";"DAY 2";"3100";"Bicep Curl (Cable)";"1";"20.0";"12";"";"";"";"";""
+"5";"2026-01-07 18:54:03";"DAY 2";"3100";"Bicep Curl (Cable)";"Rest Timer";"";"";"";"";"60.0";"";""
+"5";"2026-01-07 18:54:03";"DAY 2";"3100";"Bicep Curl (Cable)";"2";"20.0";"11";"";"";"";"";""
+`;

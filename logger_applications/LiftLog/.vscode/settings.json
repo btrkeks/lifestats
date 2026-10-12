@@ -1,0 +1,35 @@
+{
+  "debug.internalConsoleOptions": "neverOpen",
+  "cSpell.words": ["Fluxor", "kilometre", "Oaep", "oxlint", "Sqids", "Tolgee", "Unfollow"],
+  "typescript.preferences.autoImportSpecifierExcludeRegexes": [
+    "vitest/dist/chunks.*",
+    "react-native/Libraries/TurboModule/TurboModuleRegistry",
+    "react-native-reanimated/lib/typescript/Animated",
+    "react-native/types_generated/index",
+    "^@material-symbols-react-native/outlined-400$",
+    "react-native-paper-dates",
+    "assert",
+    "fast-match",
+    "inspector",
+    "node:inspector",
+    "node:sqlite",
+    "node"
+  ],
+  "search.exclude": {
+    "app/gen/*": true,
+    "app/modules/workout-worker/android/src/main/proto/**": true,
+    "backend/RevenueCat/**": true
+  },
+  "js/ts.preferences.autoImportFileExcludePatterns": ["assert", "fast-match"],
+  "oxc.configPath": "app/.oxlintrc.json",
+  "oxc.tsConfigPath": "app/tsconfig.json",
+  "oxc.path.tsgolint": "app/node_modules/.bin/tsgolint",
+  "oxc.enable": true,
+
+  "[typescript]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+  },
+}
