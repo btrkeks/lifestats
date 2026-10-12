@@ -30,6 +30,9 @@ work to find the docs relevant to your area, and update it whenever you add, rem
   are included. Explicitly _not_ a backup mechanism; LiftLog cannot read these files back.
 - [CsvImport.md](./CsvImport.md) — user guide for Import from other apps (Strong CSV with its plan,
   FitNotes-style and StrongLifts-style CSV); contributor notes at the end. Separate from plaintext export.
+- [LifestatsSync.md](./LifestatsSync.md) - pushing each day's workout time to lifestats: setup, when
+  days are sent and retried, what a day's time is, and for contributors the queue table, which writes
+  queue a day, and the request contract.
 
 ## Generated
 

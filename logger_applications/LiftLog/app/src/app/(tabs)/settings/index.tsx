@@ -65,6 +65,11 @@ export default function SettingsPageIndex() {
           icon={'settingsBackupRestore'}
           onPress={() => push('/settings/backup-and-restore')}
         />
+        <SegmentedListLink
+          label={t('settings.lifestats_sync.title')}
+          icon={'cloudUpload'}
+          onPress={() => push('/settings/lifestats-sync')}
+        />
       </SegmentedGroup>
 
       <SegmentedGroup>
