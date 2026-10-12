@@ -8,7 +8,7 @@ pub mod sessions;
 pub mod statistics;
 
 use axum::{
-    routing::{get, patch, post},
+    routing::{get, patch, post, put},
     Router,
 };
 use events::event_port::EventPublisher;
@@ -154,6 +154,10 @@ where
             "/integrations/liftlog/backup",
             post(integrations::ingest_liftlog_backup)
                 .layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)),
+        )
+        .route(
+            "/integrations/liftlog/days",
+            put(integrations::sync_liftlog_days),
         )
         .route(
             "/integrations/{source}",
