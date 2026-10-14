@@ -13,8 +13,20 @@ Automatic activity tracking integrations for the LifeStats platform. Each logger
 | [MPV Logger](#mpv-logger) | Video playback time | MPV Lua script | Lua |
 | [E-book Reader](#e-book-reader) | Reading time | Web application | TypeScript/Svelte |
 | [Web Activity Tracker](#web-activity-time-tracker) | Browsing time per site | Browser extension | TypeScript |
+| [Bedtime Watch](#bedtime-watch) | Bedtime (one tap) | Wear OS tile | Kotlin |
 
 ## Logger Applications
+
+### Bedtime Watch
+
+**Tracks:** Bedtime (`就寝時間`), filed under the evening's date
+
+**How it works:**
+- A Pixel Watch tile logs the current time with one tap
+- Saves on the watch first, then uploads with retries, so it works with the phone off
+- Reaches the API over the home LAN, with the tailnet URL as a fallback
+
+See [`bedtime_watch/README.md`](bedtime_watch/README.md) for build, install and emulator testing.
 
 ### Clef Sync
 
