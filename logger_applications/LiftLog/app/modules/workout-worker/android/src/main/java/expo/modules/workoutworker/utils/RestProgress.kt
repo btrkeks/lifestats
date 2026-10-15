@@ -23,6 +23,7 @@ data class RestProgress(val elapsed: Long, val minRest: Long, val maxRest: Long)
 
     // The bar drains, but a ProgressStyle only fills from its start. So it shows the time left, and
     // the minimum-rest mark is mirrored to the far end, the stretch that empties first.
+    val barMax: Int get() = maxRest.toInt()
     val barProgress: Int get() = (maxRest - elapsed).coerceIn(0L, maxRest).toInt()
     val barMinRestMark: Int? get() = (maxRest - minRest).toInt().takeIf { it > 0 }
 }

@@ -50,7 +50,8 @@ export type CheckOutcome =
   | { kind: 'focus'; field: CellField };
 
 export interface SubmitOutcome {
-  change: WeightedChange | undefined;
+  /** Set only when Enter logs the row as ✓ would; any other edit commits on the blur the focus move causes. */
+  log: Extract<WeightedChange, { kind: 'log' }> | undefined;
   next: ({ kind: 'focus' } & CellAddress) | { kind: 'dismiss' };
 }
 
@@ -174,9 +175,9 @@ export function resolveBlur(
 }
 
 /**
- * Enter in a cell, as in Strong. kg commits as a blur would and moves to the row's reps. Reps act as ✓
- * on an unchecked row (as a blur on a checked one) and move to the next row's first cell, or close the
- * keyboard after the exercise's last row; when ✓ would refuse, focus goes to the field to fix instead.
+ * Enter in a cell, as in Strong. kg moves to the row's reps. Reps log an unchecked row as ✓ would and
+ * move to the next row's first cell, or close the keyboard after the exercise's last row; when ✓ would
+ * refuse, focus goes to the field to fix instead.
  */
 export function resolveSubmit(
   row: SetRow,
@@ -185,19 +186,22 @@ export function resolveSubmit(
   column: WeightColumn,
   isLastRow: boolean,
 ): SubmitOutcome {
-  const advance: SubmitOutcome['next'] =
-    field === 'weight'
-      ? { kind: 'focus', setIndex: row.index, field: 'reps' }
-      : isLastRow
-        ? { kind: 'dismiss' }
-        : { kind: 'focus', setIndex: row.index + 1, field: column.resistance === 'none' ? 'reps' : 'weight' };
-  if (field === 'weight' || row.status.kind === 'checked') {
-    return { change: resolveBlur(row, field, draft, column), next: advance };
+  if (field === 'weight') {
+    return { log: undefined, next: { kind: 'focus', setIndex: row.index, field: 'reps' } };
+  }
+  const advance: SubmitOutcome['next'] = isLastRow
+    ? { kind: 'dismiss' }
+    : { kind: 'focus', setIndex: row.index + 1, field: column.resistance === 'none' ? 'reps' : 'weight' };
+  if (row.status.kind === 'checked') {
+    return { log: undefined, next: advance };
   }
   const check = resolveCheck(row, draft, column);
-  return check.kind === 'focus'
-    ? { change: undefined, next: { kind: 'focus', setIndex: row.index, field: check.field } }
-    : { change: check.change, next: advance };
+  return check.kind === 'commit'
+    ? { log: check.change, next: advance }
+    : {
+        log: undefined,
+        next: check.kind === 'focus' ? { kind: 'focus', setIndex: row.index, field: check.field } : advance,
+      };
 }
 
 /**

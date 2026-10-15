@@ -302,11 +302,13 @@ export class Session {
       return this;
     }
     const updated = this.withExercise(exerciseIndex, after);
-    if (checkedIndices(before) === checkedIndices(after)) {
-      return updated;
-    }
-    const latest = updated.lastExercise?.latestTime;
-    return updated.with({ restTimer: latest ? new RestTimer(latest) : undefined });
+    return checkedIndices(before) === checkedIndices(after) ? updated : updated.withRestTimerAtLatest();
+  }
+
+  /** Restarts the rest timer at the newest remaining completion, or stops it when nothing is checked. */
+  private withRestTimerAtLatest(): Session {
+    const latest = this.lastExercise?.latestTime;
+    return this.with({ restTimer: latest ? new RestTimer(latest) : undefined });
   }
 
   withExercise(exerciseIndex: number, exercise: RecordedExercise): Session {
@@ -337,19 +339,14 @@ export class Session {
           })
         : renamed;
     let after = createEmptyRecordedExercise(blueprint, unit, history);
-    const addedSets =
-      before instanceof RecordedWeightedExercise
-        ? before.potentialSets.length - before.blueprint.plannedSets.length
-        : 0;
-    for (let i = 0; i < addedSets && after instanceof RecordedWeightedExercise; i++) {
-      after = after.withSetAdded();
+    if (before instanceof RecordedWeightedExercise && after instanceof RecordedWeightedExercise) {
+      const addedSets = before.potentialSets.length - before.blueprint.plannedSets.length;
+      for (let i = 0; i < addedSets; i++) {
+        after = after.withSetAdded();
+      }
     }
     const replaced = this.withExercise(exerciseIndex, after);
-    if (!before.isStarted) {
-      return replaced;
-    }
-    const latest = replaced.lastExercise?.latestTime;
-    return replaced.with({ restTimer: latest ? new RestTimer(latest) : undefined });
+    return before.isStarted ? replaced.withRestTimerAtLatest() : replaced;
   }
 
   withRemovedExercise(exerciseIndex: number): Session {

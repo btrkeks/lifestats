@@ -171,13 +171,11 @@ class WorkoutUpdatedHandler(
             }
             val rest = RestProgress(progress, minRest = partialProgressMax, maxRest = fullProgressMax)
             val window = rest.window
-            val criticalText =
-                if (rest.windowLeft > 0) formatDuration(rest.windowLeft.toDuration(SECONDS)) else ""
-            val subText = when (window) {
-                RestWindow.DONE -> "+${formatDuration(rest.overtime.toDuration(SECONDS))}"
-                else -> "${formatDuration(rest.windowLeft.toDuration(SECONDS))}/${
-                    formatDuration(rest.windowLength.toDuration(SECONDS))
-                }"
+            val (criticalText, subText) = when (window) {
+                RestWindow.DONE -> "" to "+${formatDuration(rest.overtime.toDuration(SECONDS))}"
+                else -> formatDuration(rest.windowLeft.toDuration(SECONDS)).let { left ->
+                    left to "$left/${formatDuration(rest.windowLength.toDuration(SECONDS))}"
+                }
             }
             val notifBuilder =
                 notificationManager.createWorkoutNotificationBuilder()
@@ -189,7 +187,7 @@ class WorkoutUpdatedHandler(
                     .setStyle(
                         notificationManager.timerProgressStyle(
                             progress = rest.barProgress,
-                            max = fullProgressMax.toInt(),
+                            max = rest.barMax,
                             partialThreshold = rest.barMinRestMark,
                         )
                     )

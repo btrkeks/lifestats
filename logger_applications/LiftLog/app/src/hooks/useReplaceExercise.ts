@@ -4,25 +4,30 @@ import { useExerciseSearch } from '@/hooks/useExerciseSearch';
 import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
 import { Session } from '@/models/session-models';
 import { Updater } from '@/utils/types';
-import { useState } from 'react';
+import { useRef } from 'react';
 
 /** Returns a function that opens the exercise search and puts the pick in the slot at `index`. */
 export function useReplaceExercise(session: Session, updateSession: (update: Updater<Session>) => void) {
   const { db } = useServices();
   const unit = usePreferredWeightUnit();
-  const [exerciseIndex, setExerciseIndex] = useState<number>();
+  // Only the search result reads it, so a ref spares the session a re-render before navigating away.
+  const exerciseIndex = useRef<number>(undefined);
   const openSearch = useExerciseSearch((exercise) => {
-    const slot = exerciseIndex === undefined ? undefined : session.recordedExercises[exerciseIndex];
-    if (!slot || exerciseIndex === undefined) {
+    const index = exerciseIndex.current;
+    if (index === undefined) {
+      return;
+    }
+    const slot = session.recordedExercises[index];
+    if (!slot) {
       return;
     }
     // Read here rather than inside the update, which runs in a reducer.
     const history = readStartingHistory(db, [slot.blueprint.with({ name: exercise.name })]);
-    updateSession((s) => s.withReplacedExercise(exerciseIndex, exercise.name, unit, history));
+    updateSession((s) => s.withReplacedExercise(index, exercise.name, unit, history));
   });
 
   return (index: number) => {
-    setExerciseIndex(index);
+    exerciseIndex.current = index;
     openSearch('');
   };
 }

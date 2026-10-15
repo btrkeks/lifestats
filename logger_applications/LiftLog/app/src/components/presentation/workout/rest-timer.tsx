@@ -8,7 +8,7 @@ import { RestTimerControls } from '@/components/presentation/workout/rest-timer-
 import { formatTimeSpan, TimerPane, TimerSegment } from '@/components/presentation/workout/timer-pane';
 import { useTranslate } from '@tolgee/react';
 import { useDerivedState } from '@/hooks/useDerivedState';
-import { getRestTimerState, RestPhase } from '@/components/presentation/workout/rest-timer-state';
+import { getRestTimerState, restBounds, RestPhase } from '@/components/presentation/workout/rest-timer-state';
 
 interface RestTimerProps {
   rest: RestWindow;
@@ -68,7 +68,8 @@ export default function RestTimer({
     return () => clearInterval(timer);
   }, [getTimerState, triggerJiggle]);
 
-  const { phase, windowStart, windowEnd } = timerState;
+  const { phase } = timerState;
+  const { windowStart, windowEnd } = restBounds(rest);
   const accent = phaseColor[phase];
 
   const status = paused
@@ -79,12 +80,8 @@ export default function RestTimer({
         ? t('rest_timer.status.ready')
         : t('rest_timer.status.over');
 
+  // Laid out last-to-first so the bar drains from its end like the notification's, the rest first.
   const segments: TimerSegment[] = [
-    {
-      flex: windowStart,
-      progress: timerState.restLeft,
-      color: phase === 'over' && windowEnd === undefined ? phaseColor['over'] : phaseColor['resting'],
-    },
     ...(windowEnd !== undefined
       ? [
           {
@@ -94,6 +91,11 @@ export default function RestTimer({
           },
         ]
       : []),
+    {
+      flex: windowStart,
+      progress: timerState.restLeft,
+      color: phase === 'over' && windowEnd === undefined ? phaseColor['over'] : phaseColor['resting'],
+    },
   ];
 
   return (
@@ -103,7 +105,6 @@ export default function RestTimer({
       status={status}
       accent={accent}
       segments={segments}
-      drains
       jiggling={jiggling}
       style={style}
       controls={

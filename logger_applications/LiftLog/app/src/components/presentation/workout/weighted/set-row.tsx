@@ -87,11 +87,15 @@ export function SetTableRow(props: {
   const isChecked = row.status.kind === 'checked';
   const textColor = isChecked ? colors.onPrimaryContainer : colors.onSurface;
 
+  const log = (change: WeightedChange) => {
+    onChange(change);
+    setDraft({});
+  };
+
   const onCheckPress = () =>
     match(resolveCheck(row, draft, column))
       .with({ kind: 'commit' }, ({ change }) => {
-        onChange(change);
-        setDraft({});
+        log(change);
         Keyboard.dismiss();
       })
       .with({ kind: 'uncheck' }, ({ change, keepRepsText }) => {
@@ -101,12 +105,12 @@ export function SetTableRow(props: {
       .with({ kind: 'focus' }, ({ field }) => props.focusCell({ setIndex: row.index, field }))
       .exhaustive();
 
-  // The focus move or dismiss blurs this cell, and that blur clears the draft.
   const onSubmit = (field: CellField) => {
-    const { change, next } = resolveSubmit(row, field, draft, column, props.isLast);
-    if (change) {
-      onChange(change);
+    const outcome = resolveSubmit(row, field, draft, column, props.isLast);
+    if (outcome.log) {
+      log(outcome.log);
     }
+    const { next } = outcome;
     if (next.kind === 'focus') {
       props.focusCell(next);
     } else {

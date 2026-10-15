@@ -120,12 +120,12 @@ a longer rest after a failed set, because there is no target to fail.
 
 The timer counts down. The number shows the time left until the minimum rest is over, then the time
 left until the maximum rest is over. After the maximum it counts up the time over it, as `+0:12`. The
-bar under it starts full and empties from the left as the rest runs. The first part is the minimum
-rest, and the second part is the time between the minimum and the maximum. After the maximum the bar
-is empty. On Android the workout notification counts down the same way: its subtext shows the time
-left and the length of the current part, as `0:45/1:00`, or `+0:12` after the maximum. Its bar also
-empties as the rest runs. A notification bar can only fill from the left, so it empties toward the
-left, and the minimum rest is the part at the right end.
+bar under it starts full and empties toward the left as the rest runs. The minimum rest is the part
+at the right end, so it empties first, and the time between the minimum and the maximum is the part
+on the left. After the maximum the bar is empty. On Android the workout notification counts down the
+same way: its subtext shows the time left and the length of the current part, as `0:45/1:00`, or
+`+0:12` after the maximum, and its bar empties in the same direction. A notification bar can only
+fill from the left, which is why both bars put the minimum rest at the right end.
 
 ## Plans and data from before
 
