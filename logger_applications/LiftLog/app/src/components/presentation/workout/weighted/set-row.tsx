@@ -76,7 +76,6 @@ export function SetTableRow(props: {
   /** Set only in the live workout, where the row aims at and judges against its Previous. */
   context: LoadContext | undefined;
   onChange: (change: WeightedChange) => void;
-  /** The exercise's cell registry, so Enter and ✓ can focus any row. */
   cellRef: (cell: CellAddress) => Ref<CellInputHandle>;
   focusCell: (cell: CellAddress) => void;
 }) {

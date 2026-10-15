@@ -6,11 +6,9 @@ import { Session } from '@/models/session-models';
 import { Updater } from '@/utils/types';
 import { useRef } from 'react';
 
-/** Returns a function that opens the exercise search and puts the pick in the slot at `index`. */
 export function useReplaceExercise(session: Session, updateSession: (update: Updater<Session>) => void) {
   const { db } = useServices();
   const unit = usePreferredWeightUnit();
-  // Only the search result reads it, so a ref spares the session a re-render before navigating away.
   const exerciseIndex = useRef<number>(undefined);
   const openSearch = useExerciseSearch((exercise) => {
     const index = exerciseIndex.current;
@@ -21,7 +19,6 @@ export function useReplaceExercise(session: Session, updateSession: (update: Upd
     if (!slot) {
       return;
     }
-    // Read here rather than inside the update, which runs in a reducer.
     const history = readStartingHistory(db, [slot.blueprint.with({ name: exercise.name })]);
     updateSession((s) => s.withReplacedExercise(index, exercise.name, unit, history));
   });

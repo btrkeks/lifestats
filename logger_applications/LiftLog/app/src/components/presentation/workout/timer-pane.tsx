@@ -125,7 +125,6 @@ function ProgressBar({ segments, colors, trackColor }: ProgressBarProps) {
   // Segments fill in order, so the filled length is the flex-weighted sum of their individual progress.
   const progress =
     totalFlex > 0 ? segments.reduce((sum, segment) => sum + segment.flex * segment.progress, 0) / totalFlex : 0;
-  // Starting at the target keeps a bar that is already part-way from sweeping in from empty when it shows.
   const cover = useAnimatedValue(1 - progress);
 
   useEffect(() => {

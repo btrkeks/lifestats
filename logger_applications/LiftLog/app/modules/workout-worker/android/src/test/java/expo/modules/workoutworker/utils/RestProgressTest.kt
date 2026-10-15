@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RestProgressTest {
-    private fun rest(elapsed: Long) = RestProgress(elapsed, minRest = 60, maxRest = 90)
+    private fun rest(elapsed: Long) = RestProgress(elapsed, minRestSecs = 60, maxRestSecs = 90)
 
     @Test
     fun theBarStartsFullWithTheMinimumRestMarkedFromTheFarEnd() {
@@ -26,19 +26,19 @@ class RestProgressTest {
 
     @Test
     fun aFixedRestHasNoMark() {
-        assertEquals(null, RestProgress(0, minRest = 60, maxRest = 60).barMinRestMark)
+        assertEquals(null, RestProgress(0, minRestSecs = 60, maxRestSecs = 60).barMinRestMark)
     }
 
     @Test
     fun theCountdownIsTheTimeLeftInTheCurrentWindow() {
-        assertEquals(45L to 60L, rest(15).let { it.windowLeft to it.windowLength })
-        assertEquals(15L to 30L, rest(75).let { it.windowLeft to it.windowLength })
-        assertEquals(0L to 0L, rest(100).let { it.windowLeft to it.windowLength })
+        assertEquals(45L to 60L, rest(15).let { it.windowLeftSecs to it.windowLengthSecs })
+        assertEquals(15L to 30L, rest(75).let { it.windowLeftSecs to it.windowLengthSecs })
+        assertEquals(0L to 0L, rest(100).let { it.windowLeftSecs to it.windowLengthSecs })
     }
 
     @Test
     fun overtimeCountsUpPastTheMaximumRest() {
-        assertEquals(0L, rest(75).overtime)
-        assertEquals(10L, rest(100).overtime)
+        assertEquals(0L, rest(75).overtimeSecs)
+        assertEquals(10L, rest(100).overtimeSecs)
     }
 }

@@ -836,7 +836,6 @@ export function readLatestCardioExercises(
   return readLatestOfCardioLineages(db, progressionKeys, undefined);
 }
 
-/** What each of `blueprints` starts from when a workout opens it. */
 export function readStartingHistory(db: ExpoSQLiteDatabase, blueprints: readonly ExerciseBlueprint[]): StartingHistory {
   const weighted = blueprints.filter((e) => e instanceof WeightedExerciseBlueprint);
   const cardio = blueprints.filter((e) => e instanceof CardioExerciseBlueprint);

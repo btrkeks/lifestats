@@ -56,6 +56,10 @@ export interface WeightedHistory {
   readonly lastNotes: string | undefined;
 }
 
+export function previousResistance(history: WeightedHistory | undefined): Resistance | undefined {
+  return history?.sets.values().next().value?.context.resistance;
+}
+
 export class RecordedWeightedExercise {
   readonly type = 'RecordedWeightedExercise';
 

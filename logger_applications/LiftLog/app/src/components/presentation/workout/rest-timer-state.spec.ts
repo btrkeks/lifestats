@@ -6,8 +6,12 @@ const window = { minRest: Duration.ofSeconds(60), maxRest: Duration.ofSeconds(90
 const fixed = { minRest: Duration.ofSeconds(60), maxRest: Duration.ofSeconds(60) };
 
 const at = (rest: typeof window, seconds: number) => {
-  const { phase, timeMs, restLeft, windowLeft } = getRestTimerState(rest, seconds * 1000);
-  return { phase, timeMs, left: [restLeft, windowLeft] };
+  const state = getRestTimerState(rest, seconds * 1000);
+  return {
+    phase: state.phase,
+    timeMs: state.phase === 'over' ? state.overtimeMs : state.leftMs,
+    left: [state.restFractionLeft, state.windowFractionLeft],
+  };
 };
 
 describe('getRestTimerState', () => {

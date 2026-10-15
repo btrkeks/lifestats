@@ -80,20 +80,19 @@ export default function RestTimer({
         ? t('rest_timer.status.ready')
         : t('rest_timer.status.over');
 
-  // Laid out last-to-first so the bar drains from its end like the notification's, the rest first.
   const segments: TimerSegment[] = [
     ...(windowEnd !== undefined
       ? [
           {
             flex: windowEnd - windowStart,
-            progress: timerState.windowLeft,
+            progress: timerState.windowFractionLeft,
             color: phaseColor[phase],
           },
         ]
       : []),
     {
       flex: windowStart,
-      progress: timerState.restLeft,
+      progress: timerState.restFractionLeft,
       color: phase === 'over' && windowEnd === undefined ? phaseColor['over'] : phaseColor['resting'],
     },
   ];
@@ -101,7 +100,9 @@ export default function RestTimer({
   return (
     <TimerPane
       testID="rest-timer"
-      time={phase === 'over' ? `+${formatTimeSpan(timerState.timeMs)}` : formatTimeSpan(timerState.timeMs)}
+      time={
+        timerState.phase === 'over' ? `+${formatTimeSpan(timerState.overtimeMs)}` : formatTimeSpan(timerState.leftMs)
+      }
       status={status}
       accent={accent}
       segments={segments}

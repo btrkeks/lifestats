@@ -207,7 +207,6 @@ export class RecordedCardioExercise {
     );
   }
 
-  /** Every set unchecked, starting at the incline and resistance of the same set in `previous`. */
   static empty(blueprint: CardioExerciseBlueprint, previous?: RecordedCardioExercise): RecordedCardioExercise {
     return new RecordedCardioExercise(
       blueprint,

@@ -1040,8 +1040,6 @@ describe('Session.withEditedExercise with sets added during the workout', () => 
   });
 });
 
-// ─── withReplacedExercise ─────────────────────────────────────────────────────
-
 describe('Session.withReplacedExercise', () => {
   const kg = (value: number) => new Weight(value, 'kilograms');
   const external = { resistance: 'external' } as const;
@@ -1080,7 +1078,6 @@ describe('Session.withReplacedExercise', () => {
   const repsOf = (session: Session, index: number) =>
     slotOf(session, index).potentialSets.map((s) => s.set?.repsCompleted);
 
-  /** Bench with two sets checked and one added, after a row whose first set was checked earlier. */
   function midWorkout() {
     return makeSession([bench, makeWeightedBlueprint({ name: 'Row' })])
       .withWeightedChange(1, { kind: 'log', setIndex: 0, weight: kg(50), reps: 10 }, tickAt(11, 0))

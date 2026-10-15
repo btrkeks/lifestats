@@ -169,12 +169,12 @@ class WorkoutUpdatedHandler(
                 now in timePartiallyEndSecs..timeEndSecs -> translations.workoutPersistentNotificationStartSoonMessage
                 else -> translations.workoutPersistentNotificationStartNowMessage
             }
-            val rest = RestProgress(progress, minRest = partialProgressMax, maxRest = fullProgressMax)
+            val rest = RestProgress(progress, minRestSecs = partialProgressMax, maxRestSecs = fullProgressMax)
             val window = rest.window
             val (criticalText, subText) = when (window) {
-                RestWindow.DONE -> "" to "+${formatDuration(rest.overtime.toDuration(SECONDS))}"
-                else -> formatDuration(rest.windowLeft.toDuration(SECONDS)).let { left ->
-                    left to "$left/${formatDuration(rest.windowLength.toDuration(SECONDS))}"
+                RestWindow.DONE -> "" to "+${formatDuration(rest.overtimeSecs.toDuration(SECONDS))}"
+                else -> formatDuration(rest.windowLeftSecs.toDuration(SECONDS)).let { left ->
+                    left to "$left/${formatDuration(rest.windowLengthSecs.toDuration(SECONDS))}"
                 }
             }
             val notifBuilder =

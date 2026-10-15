@@ -38,7 +38,6 @@ export interface WeightColumn {
 
 export type CellField = 'weight' | 'reps';
 
-/** One input in an exercise's set table. */
 export interface CellAddress {
   setIndex: number;
   field: CellField;
@@ -50,7 +49,6 @@ export type CheckOutcome =
   | { kind: 'focus'; field: CellField };
 
 export interface SubmitOutcome {
-  /** Set only when Enter logs the row as ✓ would; any other edit commits on the blur the focus move causes. */
   log: Extract<WeightedChange, { kind: 'log' }> | undefined;
   next: ({ kind: 'focus' } & CellAddress) | { kind: 'dismiss' };
 }
@@ -174,11 +172,6 @@ export function resolveBlur(
     : undefined;
 }
 
-/**
- * Enter in a cell, as in Strong. kg moves to the row's reps. Reps log an unchecked row as ✓ would and
- * move to the next row's first cell, or close the keyboard after the exercise's last row; when ✓ would
- * refuse, focus goes to the field to fix instead.
- */
 export function resolveSubmit(
   row: SetRow,
   field: CellField,

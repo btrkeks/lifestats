@@ -20,13 +20,11 @@ export function fromRecordedExerciseJSON(json: RecordedExerciseJSON): RecordedEx
     .exhaustive();
 }
 
-/** The last performance of each movement a workout can start from, keyed as the blueprints key them. */
 export interface StartingHistory {
   readonly weighted: ReadonlyMap<MovementKey, WeightedHistory>;
   readonly cardio: Readonly<Record<ProgressionKey, RecordedCardioExercise | undefined>>;
 }
 
-/** Nothing checked, seeded from `history` the way a workout opens each exercise. */
 export function createEmptyRecordedExercise(
   blueprint: ExerciseBlueprint,
   unit: WeightUnit,

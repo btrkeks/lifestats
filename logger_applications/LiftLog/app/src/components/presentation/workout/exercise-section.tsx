@@ -35,7 +35,6 @@ interface ExerciseSectionProps<T extends RecordedExercise> {
 
   updateExercise: (update: Updater<T>) => void;
   onEditExercise: (() => void) | undefined;
-  /** Absent outside the workout in progress, where clearing logged sets would rewrite history. */
   onReplaceExercise: (() => void) | undefined;
   onRemoveExercise: () => void;
 }

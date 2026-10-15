@@ -24,6 +24,7 @@ import {
 } from '@/models/session-models/recorded-exercise';
 import {
   PotentialSet,
+  previousResistance,
   RecordedWeightedExercise,
   WeightedChange,
 } from '@/models/session-models/recorded-weighted-exercise';
@@ -305,7 +306,6 @@ export class Session {
     return checkedIndices(before) === checkedIndices(after) ? updated : updated.withRestTimerAtLatest();
   }
 
-  /** Restarts the rest timer at the newest remaining completion, or stops it when nothing is checked. */
   private withRestTimerAtLatest(): Session {
     const latest = this.lastExercise?.latestTime;
     return this.with({ restTimer: latest ? new RestTimer(latest) : undefined });
@@ -320,12 +320,6 @@ export class Session {
     });
   }
 
-  /**
-   * Puts another movement in the slot as if the workout had opened with it: every set unchecked, as many
-   * as before, seeded from `history` for the new name. Rest, superset link and cardio targets belong to
-   * the slot and stay; notes and link described the old movement and go. A weighted slot takes the
-   * resistance last used for the new movement. The rest timer re-anchors when checked sets disappear.
-   */
   withReplacedExercise(exerciseIndex: number, name: string, unit: WeightUnit, history: StartingHistory): Session {
     const before = this.recordedExercises[exerciseIndex];
     if (!before) {
@@ -335,7 +329,7 @@ export class Session {
     const blueprint =
       renamed instanceof WeightedExerciseBlueprint
         ? renamed.with({
-            resistance: history.weighted.get(renamed.movementKey())?.sets.values().next().value?.context.resistance,
+            resistance: previousResistance(history.weighted.get(renamed.movementKey())),
           })
         : renamed;
     let after = createEmptyRecordedExercise(blueprint, unit, history);

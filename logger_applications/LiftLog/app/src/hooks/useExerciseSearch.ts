@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react';
 import { Keyboard } from 'react-native';
 import { useDispatch } from 'react-redux';
 
-/** Returns a function that opens the exercise search; the exercise picked there is passed to `onSelect`. */
 export function useExerciseSearch(onSelect: (exercise: ExerciseDescriptor) => void) {
   const { push } = useRouter();
   const dispatch = useDispatch();
