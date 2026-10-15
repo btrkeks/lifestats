@@ -1,7 +1,13 @@
 import Button from '@/components/presentation/foundation/button';
 import ExerciseSection from '@/components/presentation/workout/exercise-section';
+import { CellInputHandle } from '@/components/presentation/foundation/editors/cell-input';
 import { SetTableHeader, SetTableRow } from '@/components/presentation/workout/weighted/set-row';
-import { columnWeightUnit, setRows, WeightColumn } from '@/components/presentation/workout/weighted/set-rows';
+import {
+  CellAddress,
+  columnWeightUnit,
+  setRows,
+  WeightColumn,
+} from '@/components/presentation/workout/weighted/set-rows';
 import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 import { rounding, spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
@@ -10,6 +16,7 @@ import { isStalled, SessionPeak } from '@/models/set-progress';
 import { Weight } from '@/models/weight';
 import { Updater } from '@/utils/types';
 import { T, useTranslate } from '@tolgee/react';
+import { useRef } from 'react';
 import { View } from 'react-native';
 
 interface WeightedExerciseProps {
@@ -38,6 +45,19 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
     unit: columnWeightUnit(recordedExercise, preferredUnit),
     resistance: recordedExercise.blueprint.resistance,
   };
+  const cells = useRef({ weight: new Map<number, CellInputHandle>(), reps: new Map<number, CellInputHandle>() });
+  const cellRef =
+    ({ setIndex, field }: CellAddress) =>
+    (handle: CellInputHandle | null) => {
+      if (!handle) {
+        return;
+      }
+      cells.current[field].set(setIndex, handle);
+      return () => {
+        cells.current[field].delete(setIndex);
+      };
+    };
+  const focusCell = ({ setIndex, field }: CellAddress) => cells.current[field].get(setIndex)?.focus();
   const nextSetIndex = props.toStartNext && !props.isReadonly ? recordedExercise.currentSetIndex : -1;
   const live = props.progress && {
     context: loadContextOf(recordedExercise.blueprint.resistance, props.progress.bodyweight),
@@ -69,15 +89,18 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
     >
       <View style={{ gap: spacing[1] }}>
         <SetTableHeader column={column} />
-        {setRows(recordedExercise, props.previous?.sets).map((row) => (
+        {setRows(recordedExercise, props.previous?.sets).map((row, _, rows) => (
           <SetTableRow
             key={row.index}
             row={row}
             column={column}
             isReadonly={props.isReadonly}
             isNext={row.index === nextSetIndex}
+            isLast={row.index === rows.length - 1}
             context={live?.context}
             onChange={onChange}
+            cellRef={cellRef}
+            focusCell={focusCell}
           />
         ))}
         {!props.isReadonly && (

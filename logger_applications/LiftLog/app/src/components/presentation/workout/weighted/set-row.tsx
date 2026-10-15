@@ -1,10 +1,13 @@
-import { CellInput } from '@/components/presentation/foundation/editors/cell-input';
+import { CellInput, CellInputHandle } from '@/components/presentation/foundation/editors/cell-input';
 import Icon from '@/components/presentation/foundation/icon';
 import IconButton from '@/components/presentation/foundation/icon-button';
 import WeightFormat from '@/components/presentation/foundation/weight-format';
 import {
+  CellAddress,
+  CellField,
   resolveBlur,
   resolveCheck,
+  resolveSubmit,
   RowDraft,
   rowCue,
   SetRow,
@@ -15,8 +18,8 @@ import { rounding, spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { LoadContext, WeightedChange } from '@/models/session-models';
 import { shortFormatWeightUnit } from '@/models/weight';
 import { useTranslate } from '@tolgee/react';
-import { useRef, useState } from 'react';
-import { Keyboard, Platform, TextInput, View } from 'react-native';
+import { Ref, useState } from 'react';
+import { Keyboard, Platform, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { match } from 'ts-pattern';
 
@@ -69,16 +72,18 @@ export function SetTableRow(props: {
   column: WeightColumn;
   isReadonly: boolean;
   isNext: boolean;
+  isLast: boolean;
   /** Set only in the live workout, where the row aims at and judges against its Previous. */
   context: LoadContext | undefined;
   onChange: (change: WeightedChange) => void;
+  /** The exercise's cell registry, so Enter and ✓ can focus any row. */
+  cellRef: (cell: CellAddress) => Ref<CellInputHandle>;
+  focusCell: (cell: CellAddress) => void;
 }) {
   const { row, column, onChange } = props;
   const { t } = useTranslate();
   const { colors } = useAppTheme();
   const [draft, setDraft] = useState<RowDraft>({});
-  const weightRef = useRef<TextInput>(null);
-  const repsRef = useRef<TextInput>(null);
   const isChecked = row.status.kind === 'checked';
   const textColor = isChecked ? colors.onPrimaryContainer : colors.onSurface;
 
@@ -93,11 +98,23 @@ export function SetTableRow(props: {
         onChange(change);
         setDraft((d) => ({ ...d, repsText: keepRepsText }));
       })
-      .with({ kind: 'focus', field: 'weight' }, () => weightRef.current?.focus())
-      .with({ kind: 'focus', field: 'reps' }, () => repsRef.current?.focus())
+      .with({ kind: 'focus' }, ({ field }) => props.focusCell({ setIndex: row.index, field }))
       .exhaustive();
 
-  const onBlur = (field: 'weight' | 'reps') => {
+  // The focus move or dismiss blurs this cell, and that blur clears the draft.
+  const onSubmit = (field: CellField) => {
+    const { change, next } = resolveSubmit(row, field, draft, column, props.isLast);
+    if (change) {
+      onChange(change);
+    }
+    if (next.kind === 'focus') {
+      props.focusCell(next);
+    } else {
+      Keyboard.dismiss();
+    }
+  };
+
+  const onBlur = (field: CellField) => {
     const change = resolveBlur(row, field, draft, column);
     if (change) {
       onChange(change);
@@ -179,7 +196,7 @@ export function SetTableRow(props: {
       </View>
       {column.resistance !== 'none' && (
         <CellInput
-          ref={weightRef}
+          ref={props.cellRef({ setIndex: row.index, field: 'weight' })}
           testID="set-row-weight"
           style={[columns.weight, cellStyle]}
           value={weightText}
@@ -191,10 +208,12 @@ export function SetTableRow(props: {
           editable={!props.isReadonly}
           onChangeText={(text) => setDraft((d) => ({ ...d, weightText: text }))}
           onBlur={() => onBlur('weight')}
+          returnKeyType="next"
+          onSubmitEditing={() => onSubmit('weight')}
         />
       )}
       <CellInput
-        ref={repsRef}
+        ref={props.cellRef({ setIndex: row.index, field: 'reps' })}
         testID="set-row-reps"
         style={[columns.reps, cellStyle]}
         value={repsText}
@@ -203,6 +222,8 @@ export function SetTableRow(props: {
         editable={!props.isReadonly}
         onChangeText={(text) => setDraft((d) => ({ ...d, repsText: text }))}
         onBlur={() => onBlur('reps')}
+        returnKeyType={props.isLast ? 'done' : 'next'}
+        onSubmitEditing={() => onSubmit('reps')}
       />
       <View style={columns.check}>
         {props.isReadonly ? (

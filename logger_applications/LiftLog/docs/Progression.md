@@ -27,6 +27,13 @@ Each set row shows **Previous**: the weight and reps from the last time that set
 also appear as the hint in the reps cell. Tapping ✓ without typing logs the hinted reps at the row's
 weight; with no hint, ✓ moves you to the reps cell instead.
 
+The keyboard's Enter key moves through a set the way Strong does. Enter in the weight cell saves the
+weight and moves to the same set's reps. Enter in the reps cell does what ✓ does, then moves to the next
+set's weight with the keyboard still open. If ✓ would refuse, focus goes to the cell to fix instead. On a
+set that is already checked, Enter saves the edited reps and moves on without unchecking it. On the
+exercise's last set, Enter logs it and closes the keyboard; it does not move to the next exercise. A cell
+reached with Enter has its text selected, so typing replaces it.
+
 **+ Add set** adds a set for today only. The plan keeps its set count, so the next workout has the
 planned number of sets again. The extra set still counts as history for its position: if you add a
 fourth set to a three-set plan and later change the plan to four sets, set 4 starts from it.

@@ -36,10 +36,23 @@ export interface WeightColumn {
   resistance: Resistance;
 }
 
+export type CellField = 'weight' | 'reps';
+
+/** One input in an exercise's set table. */
+export interface CellAddress {
+  setIndex: number;
+  field: CellField;
+}
+
 export type CheckOutcome =
   | { kind: 'commit'; change: Extract<WeightedChange, { kind: 'log' }> }
   | { kind: 'uncheck'; change: Extract<WeightedChange, { kind: 'unlog' }>; keepRepsText: string }
-  | { kind: 'focus'; field: 'weight' | 'reps' };
+  | { kind: 'focus'; field: CellField };
+
+export interface SubmitOutcome {
+  change: WeightedChange | undefined;
+  next: ({ kind: 'focus' } & CellAddress) | { kind: 'dismiss' };
+}
 
 /** History only suggests: the exercise's own weight is what the row shows and logs. */
 export function setRows(exercise: RecordedWeightedExercise, previous: CompletedWeightedSets | undefined): SetRow[] {
@@ -141,7 +154,7 @@ export function resolveCheck(row: SetRow, draft: RowDraft, column: WeightColumn)
  */
 export function resolveBlur(
   row: SetRow,
-  field: 'weight' | 'reps',
+  field: CellField,
   draft: RowDraft,
   column: WeightColumn,
 ): WeightedChange | undefined {
@@ -158,6 +171,33 @@ export function resolveBlur(
   return reps !== undefined && reps !== row.status.reps
     ? { kind: 'log', setIndex: row.index, weight: row.weight, reps }
     : undefined;
+}
+
+/**
+ * Enter in a cell, as in Strong. kg commits as a blur would and moves to the row's reps. Reps act as ✓
+ * on an unchecked row (as a blur on a checked one) and move to the next row's first cell, or close the
+ * keyboard after the exercise's last row; when ✓ would refuse, focus goes to the field to fix instead.
+ */
+export function resolveSubmit(
+  row: SetRow,
+  field: CellField,
+  draft: RowDraft,
+  column: WeightColumn,
+  isLastRow: boolean,
+): SubmitOutcome {
+  const advance: SubmitOutcome['next'] =
+    field === 'weight'
+      ? { kind: 'focus', setIndex: row.index, field: 'reps' }
+      : isLastRow
+        ? { kind: 'dismiss' }
+        : { kind: 'focus', setIndex: row.index + 1, field: column.resistance === 'none' ? 'reps' : 'weight' };
+  if (field === 'weight' || row.status.kind === 'checked') {
+    return { change: resolveBlur(row, field, draft, column), next: advance };
+  }
+  const check = resolveCheck(row, draft, column);
+  return check.kind === 'focus'
+    ? { change: undefined, next: { kind: 'focus', setIndex: row.index, field: check.field } }
+    : { change: check.change, next: advance };
 }
 
 /**

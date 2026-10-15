@@ -9,16 +9,23 @@ interface CellInputProps {
   editable: boolean;
   onChangeText: (text: string) => void;
   onBlur: () => void;
+  /** Enter keeps focus and the keyboard; the caller moves focus or dismisses. */
+  onSubmitEditing: () => void;
+  returnKeyType: 'next' | 'done';
   testID?: string;
   style?: StyleProp<TextStyle>;
-  ref?: Ref<TextInput>;
+  ref?: Ref<CellInputHandle>;
+}
+
+export interface CellInputHandle {
+  /** Focuses the cell with its text selected, so typing replaces it. */
+  focus: () => void;
 }
 
 /** A compact, chrome-free numeric cell for table rows; Paper's TextInput is too tall to sit in one. */
 export function CellInput({ ref, value, style, ...rest }: CellInputProps) {
   const { colors } = useAppTheme();
   const inputRef = useRef<TextInput>(null);
-  useImperativeHandle(ref, () => inputRef.current as TextInput);
 
   // Android's back gesture hides the keyboard but keeps focus, so the cell would never commit.
   useEffect(() => {
@@ -31,16 +38,27 @@ export function CellInput({ ref, value, style, ...rest }: CellInputProps) {
   }, []);
 
   // When a focused cell blurs, Android hands focus to another cell in the table. Only a cell the user
-  // touched selects its text, or that stray focus leaves a selection highlight behind.
-  const touched = useRef(false);
+  // touched or moved to selects its text, or that stray focus leaves a selection highlight behind.
+  const selectOnFocus = useRef(false);
   const selectAllOnFocus = () => {
-    const wasTouched = touched.current;
-    touched.current = false;
-    if (Platform.OS === 'android' && value && wasTouched) {
+    const shouldSelect = selectOnFocus.current;
+    selectOnFocus.current = false;
+    if (Platform.OS === 'android' && value && shouldSelect) {
       // Android resets the cursor once the keyboard lays out; selecting after a short delay survives it.
       setTimeout(() => inputRef.current?.setSelection(0, value.length), 50);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      // A focused cell gets no focus event, so the flag would wait for the next stray focus.
+      if (inputRef.current?.isFocused()) {
+        return;
+      }
+      selectOnFocus.current = true;
+      inputRef.current?.focus();
+    },
+  }));
 
   return (
     <TextInput
@@ -48,11 +66,10 @@ export function CellInput({ ref, value, style, ...rest }: CellInputProps) {
       ref={inputRef}
       value={value}
       placeholderTextColor={colors.onSurfaceVariant + '99'}
-      onPressIn={() => (touched.current = true)}
+      onPressIn={() => (selectOnFocus.current = true)}
       onFocus={selectAllOnFocus}
       selectTextOnFocus={Platform.OS === 'ios'}
-      submitBehavior="blurAndSubmit"
-      returnKeyType="done"
+      submitBehavior="submit"
       textAlign="center"
       style={[
         {

@@ -5,6 +5,7 @@ import {
   parseWeightText,
   resolveBlur,
   resolveCheck,
+  resolveSubmit,
   rowCue,
   SetRow,
   setRows,
@@ -208,6 +209,68 @@ describe('resolveBlur', () => {
     expect(resolveBlur(uncheckedRow(6), 'weight', { weightText: '70' }, external)).toBeUndefined();
     expect(resolveBlur(uncheckedRow(6), 'weight', {}, external)).toBeUndefined();
     expect(resolveBlur(uncheckedRow(6), 'weight', { weightText: '' }, external)).toBeUndefined();
+  });
+});
+
+describe('resolveSubmit', () => {
+  const second = (row: SetRow): SetRow => ({ ...row, index: 1 });
+  const notLast = false;
+  const last = true;
+
+  it('commits kg as a blur does and moves to the same row reps', () => {
+    expect(resolveSubmit(second(uncheckedRow(6)), 'weight', { weightText: '75' }, external, notLast)).toEqual({
+      change: { kind: 'weight', setIndex: 1, weight: kg(75) },
+      next: { kind: 'focus', setIndex: 1, field: 'reps' },
+    });
+    expect(resolveSubmit(second(uncheckedRow(6)), 'weight', { weightText: 'abc' }, external, last)).toEqual({
+      change: undefined,
+      next: { kind: 'focus', setIndex: 1, field: 'reps' },
+    });
+  });
+
+  it('logs the set from reps and moves to the next row kg', () => {
+    expect(resolveSubmit(second(uncheckedRow(6)), 'reps', { repsText: '8' }, external, notLast)).toEqual({
+      change: { kind: 'log', setIndex: 1, weight: kg(70), reps: 8 },
+      next: { kind: 'focus', setIndex: 2, field: 'weight' },
+    });
+  });
+
+  it('moves to the next row reps when the exercise has no kg column', () => {
+    const none: WeightColumn = { unit: 'kilograms', resistance: 'none' };
+
+    expect(resolveSubmit(uncheckedRow(6, kg(0)), 'reps', {}, none, notLast)).toEqual({
+      change: { kind: 'log', setIndex: 0, weight: kg(0), reps: 6 },
+      next: { kind: 'focus', setIndex: 1, field: 'reps' },
+    });
+  });
+
+  it('logs the last row and closes the keyboard instead of moving to the next exercise', () => {
+    expect(resolveSubmit(second(uncheckedRow(6)), 'reps', {}, external, last)).toEqual({
+      change: { kind: 'log', setIndex: 1, weight: kg(70), reps: 6 },
+      next: { kind: 'dismiss' },
+    });
+  });
+
+  it('stays on the row and focuses the field ✓ would refuse', () => {
+    expect(resolveSubmit(uncheckedRow(6), 'reps', { weightText: 'abc', repsText: '8' }, external, notLast)).toEqual({
+      change: undefined,
+      next: { kind: 'focus', setIndex: 0, field: 'weight' },
+    });
+    expect(resolveSubmit(uncheckedRow(undefined), 'reps', {}, external, last)).toEqual({
+      change: undefined,
+      next: { kind: 'focus', setIndex: 0, field: 'reps' },
+    });
+  });
+
+  it('commits edited reps on a checked row without unchecking it, then advances', () => {
+    expect(resolveSubmit(checkedRow(7), 'reps', { repsText: '9' }, external, notLast)).toEqual({
+      change: { kind: 'log', setIndex: 0, weight: kg(70), reps: 9 },
+      next: { kind: 'focus', setIndex: 1, field: 'weight' },
+    });
+    expect(resolveSubmit(checkedRow(7), 'reps', {}, external, last)).toEqual({
+      change: undefined,
+      next: { kind: 'dismiss' },
+    });
   });
 });
 
