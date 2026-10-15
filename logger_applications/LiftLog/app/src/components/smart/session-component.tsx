@@ -36,6 +36,7 @@ import { CardioExercise } from '@/components/presentation/workout/cardio/cardio-
 import WeightFormat from '../presentation/foundation/weight-format';
 import { formatDuration } from '@/utils/format-date';
 import { useAddExercise } from '@/hooks/useAddExercise';
+import { useReplaceExercise } from '@/hooks/useReplaceExercise';
 
 function withRestTimerAt(session: Session, time: OffsetDateTime | undefined) {
   return session.with({ restTimer: time ? new RestTimerModel(time) : undefined });
@@ -86,6 +87,9 @@ export default function SessionComponent(props: {
   );
   const addExercise = useAddExercise(editableSessionId);
   const updateSession = (reducer: (session: Session) => Session) => props.updateSession?.(reducer);
+  const replaceExercise = useReplaceExercise(session, updateSession);
+  const onReplaceExercise = (index: number) =>
+    isActiveWorkout && !isReadonly ? () => replaceExercise(index) : undefined;
   const resetTimer = (time: OffsetDateTime | undefined) => {
     updateSession((s) => withRestTimerAt(s, time));
   };
@@ -173,6 +177,7 @@ export default function SessionComponent(props: {
           onEditExercise={
             editableSessionId ? () => push(getSessionExerciseEditorHref(editableSessionId, index)) : undefined
           }
+          onReplaceExercise={onReplaceExercise(index)}
           onRemoveExercise={() => updateSession((s) => s.withRemovedExercise(index))}
           isReadonly={isReadonly}
           showPreviousButton={!!isActiveWorkout}
@@ -196,6 +201,7 @@ export default function SessionComponent(props: {
           onEditExercise={
             editableSessionId ? () => push(getSessionExerciseEditorHref(editableSessionId, index)) : undefined
           }
+          onReplaceExercise={onReplaceExercise(index)}
           onRemoveExercise={() => updateSession((s) => s.withRemovedExercise(index))}
           isReadonly={isReadonly}
           showPreviousButton={!!isActiveWorkout}

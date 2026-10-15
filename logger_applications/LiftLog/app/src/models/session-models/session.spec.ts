@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Duration, LocalDate, OffsetDateTime, ZoneOffset } from '@js-joda/core';
 import { v4 as uuid } from 'uuid';
-import { SessionBlueprint, CardioExerciseBlueprint } from '@/models/blueprint-models';
+import { SessionBlueprint, CardioExerciseBlueprint, Rest, movementKeyFor } from '@/models/blueprint-models';
 import { Weight } from '@/models/weight';
+import BigNumber from 'bignumber.js';
 import { Session } from '@/models/session-models/session';
+import { StartingHistory } from '@/models/session-models/recorded-exercise';
 import { RestTimer } from '@/models/session-models/rest-timer';
 import { RecordedCardioExercise } from '@/models/session-models/recorded-cardio-exercise';
 import { RecordedWeightedExercise } from '@/models/session-models/recorded-weighted-exercise';
@@ -1035,5 +1037,141 @@ describe('Session.withEditedExercise with sets added during the workout', () => 
   it('places the added sets after the newly planned ones', () => {
     const edited = sessionWithAddedCheckedSet().withEditedExercise(0, makeWeightedBlueprint({ sets: 4 }), false);
     expect(repsOf(edited)).toEqual([undefined, undefined, undefined, undefined, 6]);
+  });
+});
+
+// ─── withReplacedExercise ─────────────────────────────────────────────────────
+
+describe('Session.withReplacedExercise', () => {
+  const kg = (value: number) => new Weight(value, 'kilograms');
+  const external = { resistance: 'external' } as const;
+  const history: StartingHistory = {
+    weighted: new Map([
+      [
+        movementKeyFor('Incline Press', 'WeightedExerciseBlueprint'),
+        {
+          sets: new Map([
+            [0, { weight: kg(40), reps: 8, context: external }],
+            [1, { weight: kg(42.5), reps: 6, context: external }],
+          ]),
+          lastNotes: 'felt heavy',
+        },
+      ],
+      [
+        movementKeyFor('Pull Up', 'WeightedExerciseBlueprint'),
+        {
+          sets: new Map([[0, { weight: kg(5), reps: 8, context: { resistance: 'bodyweight', bodyweight: kg(80) } }]]),
+          lastNotes: undefined,
+        },
+      ],
+    ]),
+    cardio: {},
+  };
+  const bench = makeWeightedBlueprint({
+    name: 'Bench Press',
+    restBetweenSets: Rest.short,
+    supersetWithNext: true,
+    notes: 'Pause at the chest',
+    link: 'https://example.com/bench',
+  });
+  const slotOf = (session: Session, index: number) => session.recordedExercises[index] as RecordedWeightedExercise;
+  const weightsOf = (session: Session, index: number) =>
+    slotOf(session, index).potentialSets.map((s) => s.weight.value.toNumber());
+  const repsOf = (session: Session, index: number) =>
+    slotOf(session, index).potentialSets.map((s) => s.set?.repsCompleted);
+
+  /** Bench with two sets checked and one added, after a row whose first set was checked earlier. */
+  function midWorkout() {
+    return makeSession([bench, makeWeightedBlueprint({ name: 'Row' })])
+      .withWeightedChange(1, { kind: 'log', setIndex: 0, weight: kg(50), reps: 10 }, tickAt(11, 0))
+      .withWeightedChange(0, { kind: 'log', setIndex: 0, weight: kg(80), reps: 5 }, tickAt(11, 5))
+      .withWeightedChange(0, { kind: 'log', setIndex: 1, weight: kg(80), reps: 5 }, tickAt(11, 8))
+      .withWeightedChange(0, { kind: 'addSet' }, tickAt(11, 9));
+  }
+
+  it('puts the new movement in the slot with every set unchecked and seeded from its history', () => {
+    const replaced = midWorkout().withReplacedExercise(0, 'Incline Press', 'kilograms', history);
+
+    expect(slotOf(replaced, 0).blueprint.name).toBe('Incline Press');
+    expect(repsOf(replaced, 0)).toEqual([undefined, undefined, undefined, undefined]);
+    expect(weightsOf(replaced, 0)).toEqual([40, 42.5, 42.5, 42.5]);
+  });
+
+  it('keeps the slot rest, superset link and plan size, and drops its notes and link', () => {
+    const { blueprint } = slotOf(midWorkout().withReplacedExercise(0, 'Incline Press', 'kilograms', history), 0);
+
+    expect(blueprint.restBetweenSets).toBe(Rest.short);
+    expect(blueprint.supersetWithNext).toBe(true);
+    expect(blueprint.plannedSets).toHaveLength(3);
+    expect(blueprint.notes).toBe('');
+    expect(blueprint.link).toBe('');
+  });
+
+  it('leaves the other exercises alone and keeps the plan aligned with the recorded exercises', () => {
+    const replaced = midWorkout().withReplacedExercise(0, 'Incline Press', 'kilograms', history);
+
+    expect(repsOf(replaced, 1)).toEqual([10, undefined, undefined]);
+    expect(weightsOf(replaced, 1)).toEqual([50, 50, 50]);
+    expect(replaced.blueprint.exercises.map((e) => e.name)).toEqual(['Incline Press', 'Row']);
+    expect(replaced.blueprint.exercises[0]).toBe(replaced.recordedExercises[0]!.blueprint);
+  });
+
+  it('re-anchors the rest timer at the newest completion left when checked sets go', () => {
+    const before = midWorkout();
+    const replaced = before.withReplacedExercise(0, 'Incline Press', 'kilograms', history);
+
+    expect(before.restTimer?.startedAt).toEqual(tickAt(11, 8));
+    expect(replaced.restTimer?.startedAt).toEqual(tickAt(11, 0));
+  });
+
+  it('clears the rest timer when the replaced slot held the only checked sets', () => {
+    const before = makeSession([bench]).withWeightedChange(
+      0,
+      { kind: 'log', setIndex: 0, weight: kg(80), reps: 5 },
+      tickAt(11, 5),
+    );
+
+    expect(before.restTimer?.startedAt).toEqual(tickAt(11, 5));
+    expect(before.withReplacedExercise(0, 'Incline Press', 'kilograms', history).restTimer).toBeUndefined();
+  });
+
+  it('leaves the rest timer alone when the replaced slot had nothing checked', () => {
+    const before = makeSession([bench, makeWeightedBlueprint({ name: 'Row' })]).withWeightedChange(
+      1,
+      { kind: 'log', setIndex: 0, weight: kg(50), reps: 10 },
+      tickAt(11, 0),
+    );
+    const paused = before.with({ restTimer: before.restTimer?.togglePause(tickAt(11, 1)) });
+
+    expect(paused.withReplacedExercise(0, 'Incline Press', 'kilograms', history).restTimer).toBe(paused.restTimer);
+  });
+
+  it('starts a never-done movement at zero in the given unit', () => {
+    const replaced = makeSession([bench]).withReplacedExercise(0, 'Lateral Raise', 'pounds', history);
+
+    expect(weightsOf(replaced, 0)).toEqual([0, 0, 0]);
+    expect(slotOf(replaced, 0).potentialSets.map((s) => s.weight.unit)).toEqual(['pounds', 'pounds', 'pounds']);
+    expect(slotOf(replaced, 0).blueprint.resistance).toBe('external');
+  });
+
+  it('takes the resistance the new movement was last done with', () => {
+    const replaced = makeSession([bench]).withReplacedExercise(0, 'Pull Up', 'kilograms', history);
+
+    expect(slotOf(replaced, 0).blueprint.resistance).toBe('bodyweight');
+    expect(weightsOf(replaced, 0)).toEqual([5, 5, 5]);
+  });
+
+  it('keeps a cardio slot cardio, with its sets seeded from the new movement', () => {
+    const lastBike = RecordedCardioExercise.empty(makeCardioBlueprint(2).with({ name: 'Bike' }));
+    const previous = lastBike.with({ sets: lastBike.sets.map((s, i) => s.with({ incline: BigNumber(i + 2) })) });
+    const replaced = makeSession([makeCardioBlueprint(2)]).withReplacedExercise(0, 'Bike', 'kilograms', {
+      weighted: new Map(),
+      cardio: { [previous.progressionKey()]: previous },
+    });
+    const slot = replaced.recordedExercises[0] as RecordedCardioExercise;
+
+    expect(slot.blueprint.name).toBe('Bike');
+    expect(slot.sets.map((s) => s.incline?.toNumber())).toEqual([2, 3]);
+    expect(slot.sets.map((s) => s.completionDateTime)).toEqual([undefined, undefined]);
   });
 });

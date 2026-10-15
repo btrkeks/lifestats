@@ -5,7 +5,13 @@ import {
   sessionsSchema,
   weightedSetsSchema,
 } from '@/db/schema';
-import { MovementKey, ProgressionKey } from '@/models/blueprint-models';
+import {
+  CardioExerciseBlueprint,
+  ExerciseBlueprint,
+  MovementKey,
+  ProgressionKey,
+  WeightedExerciseBlueprint,
+} from '@/models/blueprint-models';
 import { TemporalComparer } from '@/models/comparers';
 import {
   CompletedWeightedSet,
@@ -15,6 +21,7 @@ import {
   RecordedCardioExercise,
   RecordedExercise,
   Session,
+  StartingHistory,
   WeightedHistory,
 } from '@/models/session-models';
 import { SessionPeak, stallWindow } from '@/models/set-progress';
@@ -827,6 +834,19 @@ export function readLatestCardioExercises(
   progressionKeys: ProgressionKey[],
 ): Record<ProgressionKey, RecordedCardioExercise | undefined> {
   return readLatestOfCardioLineages(db, progressionKeys, undefined);
+}
+
+/** What each of `blueprints` starts from when a workout opens it. */
+export function readStartingHistory(db: ExpoSQLiteDatabase, blueprints: readonly ExerciseBlueprint[]): StartingHistory {
+  const weighted = blueprints.filter((e) => e instanceof WeightedExerciseBlueprint);
+  const cardio = blueprints.filter((e) => e instanceof CardioExerciseBlueprint);
+  return {
+    weighted: readWeightedHistory(db, { movementKeys: [...new Set(weighted.map((e) => e.movementKey()))] }),
+    cardio: readLatestCardioExercises(
+      db,
+      cardio.map((e) => e.progressionKey()),
+    ),
+  };
 }
 
 /** `where` may filter on the session and recorded exercise tables. */

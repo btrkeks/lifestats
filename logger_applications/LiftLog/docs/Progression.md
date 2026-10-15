@@ -38,6 +38,25 @@ reached with Enter has its text selected, so typing replaces it.
 planned number of sets again. The extra set still counts as history for its position: if you add a
 fourth set to a three-set plan and later change the plan to four sets, set 4 starts from it.
 
+## Replacing an exercise
+
+**Replace exercise** in an exercise's ⋯ menu opens the exercise search. The exercise you pick takes the
+old one's place in the workout in progress, as if the workout had opened with it:
+
+- **Every set is cleared, including sets you already checked.** The exercise keeps its number of sets,
+  including sets you added, and each set starts from the new exercise's history as described above.
+  Previous, the reps hint and `Aim` follow the new exercise.
+- **The rest time and the superset link stay.** The old exercise's notes and link go, because they
+  described the old exercise. A weighted exercise takes the resistance (external, bodyweight or none) of
+  the last time you did the new one, and keeps the old one's if you never have.
+- **A cardio exercise stays cardio** and keeps its set targets; incline and resistance come from the new
+  exercise's latest time.
+- **When checked sets disappear, the rest timer restarts from your newest remaining set**, or stops if
+  there is none.
+
+The plan does not change. Finishing the workout offers the swap as a plan change like any other edit.
+Replace is not offered when you edit a past workout in History.
+
 ## Beating last time
 
 In the workout in progress, each set row says how to beat its Previous. Nothing changes your weights or
@@ -117,5 +136,6 @@ distance), including the workout in progress.
 For the code behind this: `readWeightedHistory` and `readRecentProgress` in `app/src/db/sessions.ts`,
 the targets, ▲ and the stall rule in `app/src/models/set-progress.ts`,
 `RecordedWeightedExercise.empty` in `app/src/models/session-models/recorded-weighted-exercise.ts`,
-session start in `app/src/services/session-service.ts`, and the set rows in
-`app/src/components/presentation/workout/weighted/set-rows.ts`.
+session start in `app/src/services/session-service.ts`, `Session.withReplacedExercise` in
+`app/src/models/session-models/session.ts` with its picker in `app/src/hooks/useReplaceExercise.ts`,
+and the set rows in `app/src/components/presentation/workout/weighted/set-rows.ts`.

@@ -141,6 +141,7 @@
   "exercise.remove.confirm.body": "Exercise will be removed from the current workout, future workouts in the plan will not be impacted.",
   "exercise.remove.confirm.title": "Remove exercise?",
   "exercise.remove_from_workout.confirm.body": "This will remove the exercise <em>{exercise}</em> from <em>{session}</em>.",
+  "exercise.replace.button": "Replace exercise",
   "exercise.reps.label": "Reps",
   "exercise.set.label": "Set",
   "exercise.set_better.accessibility_label": "Better than last time",

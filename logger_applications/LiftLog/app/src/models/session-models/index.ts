@@ -11,7 +11,7 @@ import {
   loadContextOf,
 } from '@/models/session-models/recorded-weighted-exercise';
 import { RecordedCardioExercise, RecordedCardioExerciseSet } from '@/models/session-models/recorded-cardio-exercise';
-import { fromRecordedExerciseJSON, RecordedExercise } from '@/models/session-models/recorded-exercise';
+import { fromRecordedExerciseJSON, RecordedExercise, StartingHistory } from '@/models/session-models/recorded-exercise';
 import { RestTimer } from '@/models/session-models/rest-timer';
 
 export {
@@ -28,4 +28,12 @@ export {
   fromRecordedExerciseJSON,
   loadContextOf,
 };
-export type { WeightedChange, CompletedWeightedSet, CompletedWeightedSets, WeightedHistory, LoadContext, RestWindow };
+export type {
+  StartingHistory,
+  WeightedChange,
+  CompletedWeightedSet,
+  CompletedWeightedSets,
+  WeightedHistory,
+  LoadContext,
+  RestWindow,
+};

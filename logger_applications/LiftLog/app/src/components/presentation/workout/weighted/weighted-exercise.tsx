@@ -35,6 +35,7 @@ interface WeightedExerciseProps {
   onChange: (change: WeightedChange) => void;
   updateExercise: (update: Updater<RecordedWeightedExercise>) => void;
   onEditExercise: (() => void) | undefined;
+  onReplaceExercise: (() => void) | undefined;
   onRemoveExercise: () => void;
 }
 
@@ -85,6 +86,7 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
       belowTitle={stalled && <StallChip />}
       updateExercise={props.updateExercise}
       onEditExercise={props.onEditExercise}
+      onReplaceExercise={props.onReplaceExercise}
       onRemoveExercise={props.onRemoveExercise}
     >
       <View style={{ gap: spacing[1] }}>

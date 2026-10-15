@@ -19,6 +19,7 @@ import Edit from '@expo/material-symbols/edit.xml';
 import Notes from '@expo/material-symbols/notes.xml';
 import Delete from '@expo/material-symbols/delete.xml';
 import OpenInBrowser from '@expo/material-symbols/open_in_browser.xml';
+import SwapHoriz from '@expo/material-symbols/swap_horiz.xml';
 
 interface ExerciseSectionProps<T extends RecordedExercise> {
   recordedExercise: T;
@@ -34,6 +35,8 @@ interface ExerciseSectionProps<T extends RecordedExercise> {
 
   updateExercise: (update: Updater<T>) => void;
   onEditExercise: (() => void) | undefined;
+  /** Absent outside the workout in progress, where clearing logged sets would rewrite history. */
+  onReplaceExercise: (() => void) | undefined;
   onRemoveExercise: () => void;
 }
 
@@ -100,6 +103,16 @@ export default function ExerciseSection<T extends RecordedExercise>(props: Exerc
                       `/stats/expanded-weighted-exercise?exerciseName=${encodeURIComponent(recordedExercise.blueprint.name)}`,
                       { withAnchor: true },
                     ),
+                } satisfies MenuItem,
+              ]
+            : []),
+          ...(props.onReplaceExercise
+            ? [
+                {
+                  label: t('exercise.replace.button'),
+                  icon: SwapHoriz,
+                  systemImage: 'arrow.left.arrow.right',
+                  onPress: props.onReplaceExercise,
                 } satisfies MenuItem,
               ]
             : []),

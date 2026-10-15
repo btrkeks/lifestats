@@ -18,6 +18,7 @@ import { equal } from '@/models/session-models/helpers';
 import { RecordedCardioExercise, RecordedCardioExerciseSet } from '@/models/session-models/recorded-cardio-exercise';
 import {
   RecordedExercise,
+  StartingHistory,
   createEmptyRecordedExercise,
   fromRecordedExerciseJSON,
 } from '@/models/session-models/recorded-exercise';
@@ -315,6 +316,40 @@ export class Session {
         exercises: this.blueprint.exercises.with(exerciseIndex, exercise.blueprint),
       }),
     });
+  }
+
+  /**
+   * Puts another movement in the slot as if the workout had opened with it: every set unchecked, as many
+   * as before, seeded from `history` for the new name. Rest, superset link and cardio targets belong to
+   * the slot and stay; notes and link described the old movement and go. A weighted slot takes the
+   * resistance last used for the new movement. The rest timer re-anchors when checked sets disappear.
+   */
+  withReplacedExercise(exerciseIndex: number, name: string, unit: WeightUnit, history: StartingHistory): Session {
+    const before = this.recordedExercises[exerciseIndex];
+    if (!before) {
+      throw new IndexOutOfBoundsError(exerciseIndex, this.recordedExercises);
+    }
+    const renamed = before.blueprint.with({ name, notes: '', link: '' });
+    const blueprint =
+      renamed instanceof WeightedExerciseBlueprint
+        ? renamed.with({
+            resistance: history.weighted.get(renamed.movementKey())?.sets.values().next().value?.context.resistance,
+          })
+        : renamed;
+    let after = createEmptyRecordedExercise(blueprint, unit, history);
+    const addedSets =
+      before instanceof RecordedWeightedExercise
+        ? before.potentialSets.length - before.blueprint.plannedSets.length
+        : 0;
+    for (let i = 0; i < addedSets && after instanceof RecordedWeightedExercise; i++) {
+      after = after.withSetAdded();
+    }
+    const replaced = this.withExercise(exerciseIndex, after);
+    if (!before.isStarted) {
+      return replaced;
+    }
+    const latest = replaced.lastExercise?.latestTime;
+    return replaced.with({ restTimer: latest ? new RestTimer(latest) : undefined });
   }
 
   withRemovedExercise(exerciseIndex: number): Session {

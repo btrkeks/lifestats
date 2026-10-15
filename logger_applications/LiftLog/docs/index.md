@@ -22,8 +22,8 @@ work to find the docs relevant to your area, and update it whenever you add, rem
 - [Progression.md](./Progression.md) - how weights carry from one workout to the next: plans hold a
   set count only, each set starts at the weight last completed at its position (matched by exercise
   name), reps are suggested from history, and nothing progresses on its own. Covers the rep target and
-  ▲ each set shows against its Previous in the live workout, the "no gain in 3 workouts" flag, which
-  history counts, the rest timer, and how old rep targets and rules are kept but ignored. Ends with
+  ▲ each set shows against its Previous in the live workout, replacing an exercise mid-workout, the
+  "no gain in 3 workouts" flag, which history counts, the rest timer, and how old rep targets and rules are kept but ignored. Ends with
   pointers to the code.
 - [PlanFileFormat.md](./PlanFileFormat.md) - the `.liftlogplan` file format, how plans are imported and
   exported, and the Claude skill that authors plan files against the schema.
