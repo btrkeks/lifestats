@@ -16,6 +16,7 @@ import com.limajuice.liftlog.WorkoutMessage
 import com.limajuice.liftlog.WorkoutUpdatedEvent
 import expo.modules.workoutworker.utils.RepeatingTimerAction
 import expo.modules.workoutworker.utils.RestCountdownVibrator
+import expo.modules.workoutworker.utils.RestProgress
 import expo.modules.workoutworker.utils.RestWindow
 import expo.modules.workoutworker.utils.WorkoutNotificationManager
 import expo.modules.workoutworker.utils.countdownSecondsCrossed
@@ -141,12 +142,6 @@ class WorkoutUpdatedHandler(
             val partialProgressMax = timePartiallyEndSecs - timeStartSecs
             val fullProgressMax = timeEndSecs - timeStartSecs
 
-            // max
-            val progressMax = if (now < timePartiallyEndSecs)
-                partialProgressMax else
-                fullProgressMax
-
-
             val restNotif: Notification? = when {
                 partialProgressMax in (previousProgress + 1)..progress && partialProgressMax != 0L -> notificationManager.createRestNotificationBuilder()
                     .setContentTitle(translations.workoutPersistentNotificationMinRestOverMessage)
@@ -174,32 +169,28 @@ class WorkoutUpdatedHandler(
                 now in timePartiallyEndSecs..timeEndSecs -> translations.workoutPersistentNotificationStartSoonMessage
                 else -> translations.workoutPersistentNotificationStartNowMessage
             }
-            // The pill counts down within the current rest window - first toward the minimum rest,
-            // then between minimum and maximum - and the small icon marks which window it's in.
-            val window = RestWindow.of(now, timePartiallyEndSecs, timeEndSecs)
-            val windowRemaining = when (window) {
-                RestWindow.RESTING -> timePartiallyEndSecs - now
-                RestWindow.READY -> timeEndSecs - now
-                RestWindow.DONE -> 0L
-            }
+            val rest = RestProgress(progress, minRest = partialProgressMax, maxRest = fullProgressMax)
+            val window = rest.window
             val criticalText =
-                if (windowRemaining > 0) formatDuration(windowRemaining.toDuration(SECONDS)) else ""
+                if (rest.windowLeft > 0) formatDuration(rest.windowLeft.toDuration(SECONDS)) else ""
+            val subText = when (window) {
+                RestWindow.DONE -> "+${formatDuration(rest.overtime.toDuration(SECONDS))}"
+                else -> "${formatDuration(rest.windowLeft.toDuration(SECONDS))}/${
+                    formatDuration(rest.windowLength.toDuration(SECONDS))
+                }"
+            }
             val notifBuilder =
                 notificationManager.createWorkoutNotificationBuilder()
                     .apply { if (currentExerciseMessage.isNotEmpty()) setContentTitle(currentExerciseMessage) }
                     .setSmallIcon(window.icon)
                     .setContentText(message)
                     .setShortCriticalText(criticalText)
-                    .setSubText(
-                        "${formatDuration(progress.toDuration(SECONDS))}/${
-                            formatDuration(progressMax.toDuration(SECONDS))
-                        }"
-                    )
+                    .setSubText(subText)
                     .setStyle(
                         notificationManager.timerProgressStyle(
-                            progress = progress.toInt(),
+                            progress = rest.barProgress,
                             max = fullProgressMax.toInt(),
-                            partialThreshold = partialProgressMax.toInt().takeIf { it > 0 },
+                            partialThreshold = rest.barMinRestMark,
                         )
                     )
 

@@ -47,6 +47,10 @@ This event channel:
 
 The service is responsible only for execution concerns (notifications, timers, system UI), not workout progression.
 
+### Rest timer notification
+
+While a rest timer runs, the persistent notification counts down. The short critical text (the status bar chip) and the subtext show the time left in the current part of the rest: first until the minimum rest is over, then until the maximum rest is over. The subtext adds the length of that part, as `0:45/1:00`. After the maximum rest, the subtext shows the time over it, as `+0:12`, and the critical text is empty. The `ProgressStyle` bar drains. `ProgressStyle` only fills from its start, so the bar's progress is the time left, and the minimum-rest segment and its point are at the far end, which empties first. The math is in `RestProgress` (`utils/RestProgress.kt`).
+
 ### Rest countdown pulses
 
 While a rest timer runs, the worker vibrates once for 120 ms when 3 s, 2 s, and 1 s are left until the minimum rest is over, then for 400 ms when it is over. This lets the user feel the rest ending with the phone in a pocket. The pulses use alarm usage, so they also work in silent mode, where the "rest over" notification does not vibrate. They follow the same notifications setting as the rest notifications. On each 500 ms tick, `WorkoutUpdatedHandler` compares the time left with the value from the previous tick (`countdownSecondsCrossed` in `utils/RestCountdownVibrator.kt`). The handler keeps the previous value across workout updates while the rest end time stays the same. Thus an update during the countdown does not repeat or skip a pulse, and a restarted or resumed rest timer starts a new countdown. A paused rest timer sends no `restTimerInfo`, so it does not pulse.

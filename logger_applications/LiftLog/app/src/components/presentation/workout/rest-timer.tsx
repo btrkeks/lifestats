@@ -8,6 +8,7 @@ import { RestTimerControls } from '@/components/presentation/workout/rest-timer-
 import { formatTimeSpan, TimerPane, TimerSegment } from '@/components/presentation/workout/timer-pane';
 import { useTranslate } from '@tolgee/react';
 import { useDerivedState } from '@/hooks/useDerivedState';
+import { getRestTimerState, RestPhase } from '@/components/presentation/workout/rest-timer-state';
 
 interface RestTimerProps {
   rest: RestWindow;
@@ -18,8 +19,6 @@ interface RestTimerProps {
   onDismiss: () => void;
   onTogglePause: () => void;
 }
-
-type RestPhase = 'resting' | 'ready' | 'over';
 
 const phaseColor: Record<RestPhase, ColorChoice> = {
   resting: 'onSurfaceVariant',
@@ -42,39 +41,7 @@ export default function RestTimer({
 
   const getTimerState = useCallback(() => {
     const now = pausedAt ?? OffsetDateTime.now();
-    const elapsed = Duration.between(startTime, now).toMillis();
-    // A fixed rest has min === max: a target rather than a window, so no second segment to fill.
-    const windowStart = rest.minRest.toMillis();
-    const windowEnd = rest.minRest.equals(rest.maxRest) ? undefined : rest.maxRest.toMillis();
-
-    if (elapsed < windowStart) {
-      return {
-        phase: 'resting' as const,
-        windowStart,
-        windowEnd,
-        remaining: formatTimeSpan(windowStart - elapsed),
-        restProgress: elapsed / windowStart,
-        windowProgress: 0,
-      };
-    }
-    if (windowEnd !== undefined && elapsed < windowEnd) {
-      return {
-        phase: 'ready' as const,
-        windowStart,
-        windowEnd,
-        remaining: formatTimeSpan(windowEnd - elapsed),
-        restProgress: 1,
-        windowProgress: (elapsed - windowStart) / (windowEnd - windowStart),
-      };
-    }
-    return {
-      phase: 'over' as const,
-      windowStart,
-      windowEnd,
-      remaining: `+${formatTimeSpan(elapsed - (windowEnd ?? windowStart))}`,
-      restProgress: 1,
-      windowProgress: 1,
-    };
+    return getRestTimerState(rest, Duration.between(startTime, now).toMillis());
   }, [startTime, pausedAt, rest]);
 
   const [timerState, setTimerState] = useState(getTimerState());
@@ -115,14 +82,14 @@ export default function RestTimer({
   const segments: TimerSegment[] = [
     {
       flex: windowStart,
-      progress: timerState.restProgress,
+      progress: timerState.restLeft,
       color: phase === 'over' && windowEnd === undefined ? phaseColor['over'] : phaseColor['resting'],
     },
     ...(windowEnd !== undefined
       ? [
           {
             flex: windowEnd - windowStart,
-            progress: timerState.windowProgress,
+            progress: timerState.windowLeft,
             color: phaseColor[phase],
           },
         ]
@@ -132,10 +99,11 @@ export default function RestTimer({
   return (
     <TimerPane
       testID="rest-timer"
-      time={timerState.remaining}
+      time={phase === 'over' ? `+${formatTimeSpan(timerState.timeMs)}` : formatTimeSpan(timerState.timeMs)}
       status={status}
       accent={accent}
       segments={segments}
+      drains
       jiggling={jiggling}
       style={style}
       controls={

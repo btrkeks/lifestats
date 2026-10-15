@@ -118,6 +118,15 @@ reps for a movement with no resistance. Doing the exercise twice in one workout 
 The rest timer runs from the exercise's minimum to its maximum rest after every set. There is no longer
 a longer rest after a failed set, because there is no target to fail.
 
+The timer counts down. The number shows the time left until the minimum rest is over, then the time
+left until the maximum rest is over. After the maximum it counts up the time over it, as `+0:12`. The
+bar under it starts full and empties from the left as the rest runs. The first part is the minimum
+rest, and the second part is the time between the minimum and the maximum. After the maximum the bar
+is empty. On Android the workout notification counts down the same way: its subtext shows the time
+left and the length of the current part, as `0:45/1:00`, or `+0:12` after the maximum. Its bar also
+empties as the rest runs. A notification bar can only fill from the left, so it empties toward the
+left, and the minimum rest is the part at the right end.
+
 ## Plans and data from before
 
 Plans, workouts and backups written by older versions still store rep targets, progression rules and a
@@ -138,4 +147,5 @@ the targets, ▲ and the stall rule in `app/src/models/set-progress.ts`,
 `RecordedWeightedExercise.empty` in `app/src/models/session-models/recorded-weighted-exercise.ts`,
 session start in `app/src/services/session-service.ts`, `Session.withReplacedExercise` in
 `app/src/models/session-models/session.ts` with its picker in `app/src/hooks/useReplaceExercise.ts`,
-and the set rows in `app/src/components/presentation/workout/weighted/set-rows.ts`.
+the set rows in `app/src/components/presentation/workout/weighted/set-rows.ts`, and the rest timer's
+countdown and bar in `app/src/components/presentation/workout/rest-timer-state.ts`.

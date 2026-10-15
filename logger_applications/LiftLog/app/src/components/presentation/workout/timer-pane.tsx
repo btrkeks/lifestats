@@ -13,6 +13,7 @@ const pipWidth = 2;
 export interface TimerSegment {
   /** Sized in proportion to how long this part of the window lasts. */
   flex: number;
+  /** The fraction of this segment shown filled. */
   progress: number;
   color: ColorChoice;
 }
@@ -23,13 +24,28 @@ interface TimerPaneProps {
   accent: ColorChoice;
   segments: TimerSegment[];
   controls: ReactNode;
+  /**
+   * Counts down: the fill runs out from the start of the bar, so each segment's progress is the part
+   * of it still ahead, and segments empty in order.
+   */
+  drains?: boolean;
   jiggling?: boolean;
   testID?: string;
   style?: ViewStyle;
 }
 
 /** The chrome shared by every timer that runs against a target. */
-export function TimerPane({ time, status, accent, segments, controls, jiggling, testID, style }: TimerPaneProps) {
+export function TimerPane({
+  time,
+  status,
+  accent,
+  segments,
+  controls,
+  drains,
+  jiggling,
+  testID,
+  style,
+}: TimerPaneProps) {
   const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -89,7 +105,7 @@ export function TimerPane({ time, status, accent, segments, controls, jiggling, 
           {controls}
         </View>
         <View style={{ paddingBottom: spacing[2] }}>
-          <ProgressBar segments={segments} colors={colors} trackColor={colors.outlineVariant} />
+          <ProgressBar segments={segments} drains={!!drains} colors={colors} trackColor={colors.outlineVariant} />
         </View>
       </View>
     </View>
@@ -112,20 +128,23 @@ export function formatTimeSpan(ms: number): string {
 
 interface ProgressBarProps {
   segments: TimerSegment[];
+  drains: boolean;
   colors: ReturnType<typeof useAppTheme>['colors'];
   trackColor: string;
 }
 
 /**
  * One continuous track. The segments are its colours laid end to end, each sized by its `flex`, and a
- * single curtain hides whatever the combined progress has not yet reached.
+ * single curtain hides whatever is not filled: the end the fill has not reached yet, or, when the bar
+ * drains, the start it has already run out of.
  */
-function ProgressBar({ segments, colors, trackColor }: ProgressBarProps) {
+function ProgressBar({ segments, drains, colors, trackColor }: ProgressBarProps) {
   const totalFlex = segments.reduce((sum, segment) => sum + segment.flex, 0);
-  // Segments fill in order, so the filled length is the flex-weighted sum of their individual progress.
+  // Segments fill or drain in order, so the filled length is the flex-weighted sum of their individual progress.
   const progress =
     totalFlex > 0 ? segments.reduce((sum, segment) => sum + segment.flex * segment.progress, 0) / totalFlex : 0;
-  const cover = useAnimatedValue(1);
+  // Starting at the target keeps a draining bar from sweeping in from empty when it first shows.
+  const cover = useAnimatedValue(1 - progress);
 
   useEffect(() => {
     Animated.timing(cover, {
@@ -158,7 +177,7 @@ function ProgressBar({ segments, colors, trackColor }: ProgressBarProps) {
           left: 0,
           backgroundColor: trackColor,
           transform: [{ scaleX: cover }],
-          transformOrigin: 'right',
+          transformOrigin: drains ? 'left' : 'right',
         }}
       />
       {/* Now we create a pip at each spot by making a container which is the width of the segment (segment.flex)
