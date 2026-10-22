@@ -2,10 +2,8 @@ use crate::state::AppState;
 use axum::{
     extract::{rejection::JsonRejection, Path, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
     Json,
 };
-use chrono::NaiveDate;
 use events::event_port::{Event, EventPublisher};
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::{
@@ -15,7 +13,6 @@ use lifestats_core::{
 use plot_domain::plot::renderer::PlotRenderer;
 use serde::Deserialize;
 use serde_json::value::RawValue;
-use std::collections::BTreeMap;
 use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -29,8 +26,7 @@ pub struct YomikataDayRequest {
 }
 impl YomikataDayRequest {
     fn parse(value: &RawValue) -> Result<Self, DayApiError> {
-        let object: BTreeMap<String, Box<RawValue>> = serde_json::from_str(value.get())
-            .map_err(|_| DayApiError::invalid(None, "Expected a JSON object"))?;
+        let object = super::integration_error::parse_strict_object(value)?;
         let integer = |field: &'static str| {
             object
                 .get(field)
@@ -52,52 +48,9 @@ impl YomikataDayRequest {
 
 pub use super::integration_error::{
     ErrorBody as DayErrorBody, ErrorCode as DayErrorCode, ErrorEnvelope as DayErrorEnvelope,
+    IntegrationApiError as DayApiError,
 };
 
-pub struct DayApiError {
-    status: StatusCode,
-    body: DayErrorEnvelope,
-}
-impl DayApiError {
-    fn new(code: DayErrorCode, field: Option<&str>, message: &str) -> Self {
-        Self {
-            status: code.status(),
-            body: DayErrorEnvelope {
-                error: DayErrorBody {
-                    code,
-                    field: field.map(str::to_owned),
-                    message: message.into(),
-                },
-            },
-        }
-    }
-    fn invalid(field: Option<&str>, message: &str) -> Self {
-        Self::new(DayErrorCode::InvalidField, field, message)
-    }
-    fn json(error: JsonRejection) -> Self {
-        match error {
-            JsonRejection::MissingJsonContentType(_) => Self::new(
-                DayErrorCode::UnsupportedMediaType,
-                None,
-                "Content-Type must be application/json",
-            ),
-            JsonRejection::JsonSyntaxError(_) => {
-                Self::new(DayErrorCode::MalformedJson, None, "Malformed JSON")
-            }
-            JsonRejection::JsonDataError(_) => Self::invalid(None, "Invalid JSON data"),
-            _ => Self::new(
-                DayErrorCode::InvalidBody,
-                None,
-                "Unable to read request body",
-            ),
-        }
-    }
-}
-impl IntoResponse for DayApiError {
-    fn into_response(self) -> Response {
-        (self.status, Json(self.body)).into_response()
-    }
-}
 impl From<YomikataDayError> for DayApiError {
     fn from(error: YomikataDayError) -> Self {
         match error {
@@ -153,12 +106,7 @@ where
 {
     let Json(value) = body.map_err(DayApiError::json)?;
     let request = YomikataDayRequest::parse(&value)?;
-    let parsed = NaiveDate::parse_from_str(&day, "%Y-%m-%d")
-        .ok()
-        .filter(|date| date.format("%Y-%m-%d").to_string() == day && day.len() == 10);
-    let day = parsed.ok_or_else(|| {
-        DayApiError::invalid(Some("day"), "Expected a valid YYYY-MM-DD calendar date")
-    })?;
+    let day = super::integration_error::parse_day(&day)?;
     let totals = YomikataDayTotals::new(request.cards_reviewed, request.study_time_seconds)?;
     let result = state
         .integration_service
