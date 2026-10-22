@@ -36,7 +36,8 @@ work to find the docs relevant to your area, and update it whenever you add, rem
   queue a day, and the request contract.
 - [CalendarSync.md](./CalendarSync.md) - moving the day's Gym event in the phone's calendar (Android)
   to each finished workout: setup, which workouts move which event, what Needs attention means, and for
-  contributors the two tables, enrollment, one sync run, and the native occurrence writes.
+  contributors the two tables, enrollment, one sync run, native occurrence writes, and explicit history
+  preview, selection, and pinned backfill delivery.
 
 ## Generated
 
