@@ -849,6 +849,14 @@ async fn yomikata_error_bodies_match_byte_snapshots() {
         .await;
     response.assert_status(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
     snapshots.insert("storage_error", response.text());
+    let response = f
+        .server
+        .put(&path(DAY))
+        .text(" ".repeat(2 * 1024 * 1024 + 1))
+        .content_type("application/json")
+        .await;
+    response.assert_status(axum::http::StatusCode::BAD_REQUEST);
+    snapshots.insert("invalid_body", response.text());
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/yomikata-errors.json"

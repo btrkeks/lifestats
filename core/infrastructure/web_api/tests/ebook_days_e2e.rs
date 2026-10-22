@@ -518,6 +518,8 @@ async fn concurrent_four_threads_two_producers_equal_sequential_application() {
             put(&sequential, &p, &d, &b).await;
         }
     }
+    assert_eq!(amount(&concurrent, MON).await, 1988);
+    assert_eq!(amount(&concurrent, TUE).await, 0);
     for day in [MON, TUE] {
         assert_eq!(
             amount(&concurrent, day).await,
@@ -811,4 +813,52 @@ async fn live_backup_adoption_preserves_43507_and_item_one() {
         .iter()
         .any(|i| i["id"] != 1 && i["name"] == "Different phone book 1"));
     println!("VERIFIED live-copy: 2026 total 43507 before and after adoption; item 1 survives; pending gate clears; phone book independent; F={furthest}");
+}
+
+#[tokio::test]
+async fn manual_overwrite_below_source_preserves_signed_residual_when_credit_moves() {
+    let f = fixture();
+    put(&f, P1, TUE, &body(json!([[0, 100]]))).await;
+    f.server
+        .post(&format!("/statistics/{}/log/{TUE}", statistic(&f)))
+        .json(&json!({"value":"40","update_policy":"overwrite"}))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    put(&f, P1, TUE, &body(json!([[0, 150]]))).await;
+    assert_eq!(amount(&f, TUE).await, 90);
+    put(&f, P2, MON, &body(json!([[0, 100]]))).await;
+    assert_eq!(amount(&f, MON).await, 100);
+    assert_eq!(amount(&f, TUE).await, -10);
+    let credits = query(
+        &f,
+        "SELECT json_group_object(day,characters) AS value FROM ebook_day_credits",
+    );
+    assert_eq!(credits, json!({MON:100,TUE:50}));
+    assert_eq!(amount(&f, TUE).await, -60 + credits[TUE].as_i64().unwrap());
+}
+
+#[tokio::test]
+async fn ambiguous_or_wrongly_typed_statistic_binding_fails_without_writes() {
+    for wrong_type in [false, true] {
+        let f = fixture();
+        put(&f, P1, MON, &body(json!([[0, 100]]))).await;
+        if wrong_type {
+            f.pool.get().unwrap().batch_execute("UPDATE statistics SET statistic_type='Habit' WHERE json_extract(tags,'$.source')='ebook';").unwrap();
+        } else {
+            let metadata = f
+                .repo
+                .find_metadata_by_id(lifestats_core::shared::ids::StatisticId(statistic(&f)))
+                .unwrap();
+            f.repo.create_metadata(metadata).unwrap();
+        }
+        let before = snapshot(&f);
+        let r = f
+            .server
+            .put(&path(P1, &key('a'), MON))
+            .json(&body(json!([[0, 150]])))
+            .await;
+        r.assert_status(StatusCode::CONFLICT);
+        assert_eq!(r.json::<Value>()["error"]["code"], "bundle_conflict");
+        assert_eq!(snapshot(&f), before);
+    }
 }
