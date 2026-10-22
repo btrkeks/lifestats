@@ -52,33 +52,29 @@ where
             statistic,
         } = command;
 
+        if let (
+            AnyStatistic::IntegerAmount(_),
+            LogValuePayload::Integer {
+                value,
+                update_policy,
+            },
+        ) = (&statistic, &payload)
+        {
+            if self
+                .repository
+                .log_integer_value(statistic_id, date, *value, *update_policy)?
+            {
+                self.event_publisher
+                    .publish_event_async(Event::ValueUpdated(statistic_id));
+            }
+            return Ok(());
+        }
+
         // Fetch the current value as JSON
         let current_value_json = self.repository.find_log_value(statistic_id, date)?;
 
         // 3. Match on payload type and statistic type to execute the appropriate domain logic
         let (new_value_json, changed) = match (statistic, payload) {
-            // Integer amount
-            (
-                AnyStatistic::IntegerAmount(s),
-                LogValuePayload::Integer {
-                    value,
-                    update_policy,
-                },
-            ) => {
-                let current_val: Option<i64> = current_value_json
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .context("Failed to deserialize current IntegerAmount value")?;
-
-                let (result, changed) =
-                    s.calculate_new_log_value(current_val, value, update_policy);
-
-                let result_json = serde_json::to_value(result)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?;
-
-                (result_json, changed)
-            }
-
             // Habit
             (
                 AnyStatistic::Habit(s),
@@ -203,16 +199,15 @@ mod tests {
         let stat =
             AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(metadata, None, test_date));
 
-        repo.expect_find_log_value()
+        repo.expect_log_integer_value()
             .times(1)
-            .return_once(|_, _| Ok(Some(serde_json::json!(10))));
-
-        repo.expect_save_log_value()
-            .times(1)
-            .withf(move |id, date, value| {
-                *id == stat_id && *date == test_date && value == &serde_json::json!(15)
+            .withf(move |id, date, value, policy| {
+                *id == stat_id
+                    && *date == test_date
+                    && *value == 5
+                    && *policy == AmountUpdatePolicy::Sum
             })
-            .return_once(|_, _, _| Ok(()));
+            .return_once(|_, _, _, _| Ok(true));
 
         event_publisher
             .expect_publish_event_async()

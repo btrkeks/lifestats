@@ -24,6 +24,15 @@ const EBOOK_METRIC_CHARACTERS_READ: &str = "characters_read";
 /// This trait allows for dependency injection and testability.
 #[cfg_attr(test, automock)]
 pub trait IntegrationServiceTrait: Send + Sync {
+    fn replace_yomikata_day(
+        &self,
+        day: NaiveDate,
+        totals: lifestats_core::yomikata::YomikataDayTotals,
+    ) -> Result<
+        lifestats_core::yomikata::YomikataDayReplacement,
+        lifestats_core::yomikata::YomikataDayError,
+    >;
+
     /// Provisions a bundle of statistics for the given source and context.
     ///
     /// This method is idempotent: calling it multiple times with the same
@@ -74,6 +83,7 @@ pub struct EbookEventIngestionResult {
 /// This service ensures that multiple calls with the same source and context
 /// return the same statistic IDs without creating duplicates.
 pub struct IntegrationService {
+    yomikata_day_store: Option<Arc<dyn lifestats_core::yomikata::YomikataDayStore>>,
     repository: Arc<dyn StatisticRepository + Send + Sync>,
     factories: HashMap<String, Arc<dyn BundleFactory>>,
     ebook_event_store: Option<Arc<dyn EbookEventStore>>,
@@ -95,11 +105,20 @@ impl IntegrationService {
             .collect();
 
         Self {
+            yomikata_day_store: None,
             repository,
             factories: factories_map,
             ebook_event_store,
             ebook_progress_service,
         }
+    }
+
+    pub fn with_yomikata_day_store(
+        mut self,
+        store: Arc<dyn lifestats_core::yomikata::YomikataDayStore>,
+    ) -> Self {
+        self.yomikata_day_store = Some(store);
+        self
     }
 
     /// Writes a log value only when it differs from the stored one.
@@ -192,6 +211,28 @@ fn day_time_frames(date: NaiveDate, workouts: &[LiftLogWorkout]) -> TimeFrameLis
 }
 
 impl IntegrationServiceTrait for IntegrationService {
+    fn replace_yomikata_day(
+        &self,
+        day: NaiveDate,
+        totals: lifestats_core::yomikata::YomikataDayTotals,
+    ) -> Result<
+        lifestats_core::yomikata::YomikataDayReplacement,
+        lifestats_core::yomikata::YomikataDayError,
+    > {
+        let store = self.yomikata_day_store.as_ref().ok_or_else(|| {
+            lifestats_core::yomikata::YomikataDayError::Storage(
+                lifestats_core::shared::ports::error::RepositoryError::OperationFailed(
+                    anyhow::anyhow!("Yomikata day store is not configured"),
+                ),
+            )
+        })?;
+        store.replace_day(
+            day,
+            totals,
+            super::yomikata_bundle_factory::YomikataBundleFactory::definitions(),
+        )
+    }
+
     /// Provisions a bundle of statistics for the given source and context.
     ///
     /// This method is idempotent: calling it multiple times with the same

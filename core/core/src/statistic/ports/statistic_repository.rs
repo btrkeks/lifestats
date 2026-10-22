@@ -35,6 +35,14 @@ pub trait StatisticRepository {
         date: NaiveDate,
         value: serde_json::Value,
     ) -> Result<(), RepositoryError>;
+    /// Atomically read, apply the integer policy, and save. Returns whether changed.
+    fn log_integer_value(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+        value: i64,
+        policy: crate::statistic::value_objects::update_policies::amount::AmountUpdatePolicy,
+    ) -> Result<bool, RepositoryError>;
     /// Removes the value logged on `date`. Returns whether a value existed.
     fn delete_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<bool, RepositoryError>;
     fn find_log_values_in_range(

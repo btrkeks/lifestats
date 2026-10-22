@@ -16,6 +16,31 @@ const CARDS_REVIEWED_DAILY_TARGET: i64 = 400;
 
 pub struct YomikataBundleFactory;
 
+impl YomikataBundleFactory {
+    pub fn definitions() -> lifestats_core::yomikata::YomikataBundleDefinitions {
+        let current_date = Local::now().date_naive();
+        let statistic = |metric: &str, name: &str, goal| {
+            let metadata = StatisticMetadata::new(StatisticId(0), "Yomikata".into(), name.into())
+                .with_tag("source".into(), YOMIKATA_SOURCE_TAG.into())
+                .with_tag("metric".into(), metric.into())
+                .with_tag("bundle_version".into(), YOMIKATA_BUNDLE_VERSION.into());
+            IntegerAmountStatistic::new(metadata, goal, current_date)
+        };
+        lifestats_core::yomikata::YomikataBundleDefinitions {
+            cards_reviewed: statistic(
+                METRIC_CARDS_REVIEWED,
+                "[Yomikata] Cards Reviewed",
+                Some(AmountGoal::new(CARDS_REVIEWED_DAILY_TARGET, true)),
+            ),
+            study_minutes: statistic(
+                METRIC_STUDY_MINUTES,
+                "[Yomikata] Study Time (minutes)",
+                None,
+            ),
+        }
+    }
+}
+
 impl BundleFactory for YomikataBundleFactory {
     fn source_name(&self) -> &'static str {
         YOMIKATA_SOURCE_TAG
@@ -25,53 +50,15 @@ impl BundleFactory for YomikataBundleFactory {
         &self,
         _context: &HashMap<String, String>,
     ) -> ApplicationResult<Vec<ProvisionedStatistic>> {
-        let temp_id = StatisticId(0);
-        let current_date = Local::now().date_naive();
-
-        let cards_reviewed_metadata = StatisticMetadata::new(
-            temp_id,
-            "Yomikata".to_string(),
-            "[Yomikata] Cards Reviewed".to_string(),
-        )
-        .with_tag("source".to_string(), YOMIKATA_SOURCE_TAG.to_string())
-        .with_tag("metric".to_string(), METRIC_CARDS_REVIEWED.to_string())
-        .with_tag(
-            "bundle_version".to_string(),
-            YOMIKATA_BUNDLE_VERSION.to_string(),
-        );
-
-        let cards_reviewed = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
-            cards_reviewed_metadata,
-            Some(AmountGoal::new(CARDS_REVIEWED_DAILY_TARGET, true)),
-            current_date,
-        ));
-
-        let study_minutes_metadata = StatisticMetadata::new(
-            temp_id,
-            "Yomikata".to_string(),
-            "[Yomikata] Study Time (minutes)".to_string(),
-        )
-        .with_tag("source".to_string(), YOMIKATA_SOURCE_TAG.to_string())
-        .with_tag("metric".to_string(), METRIC_STUDY_MINUTES.to_string())
-        .with_tag(
-            "bundle_version".to_string(),
-            YOMIKATA_BUNDLE_VERSION.to_string(),
-        );
-
-        let study_minutes = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
-            study_minutes_metadata,
-            None,
-            current_date,
-        ));
-
+        let definitions = Self::definitions();
         Ok(vec![
             ProvisionedStatistic {
                 key: METRIC_CARDS_REVIEWED.to_string(),
-                statistic: cards_reviewed,
+                statistic: AnyStatistic::IntegerAmount(definitions.cards_reviewed),
             },
             ProvisionedStatistic {
                 key: METRIC_STUDY_MINUTES.to_string(),
-                statistic: study_minutes,
+                statistic: AnyStatistic::IntegerAmount(definitions.study_minutes),
             },
         ])
     }

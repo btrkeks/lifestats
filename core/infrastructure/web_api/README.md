@@ -298,6 +298,8 @@ Heartbeat sessions track ongoing activity for a single statistic. Only one activ
 |--------|------|-------------|
 | `POST` | `/integrations/{source}` | Provision integration (e.g., Anki bundle) |
 | `POST` | `/integrations/ebook/events` | Ingest an idempotent ebook reading event and log per-book progress |
+| `PUT` | `/integrations/yomikata/days/{day}` | Atomically replace source-owned daily cards and exact study seconds |
+| `GET` | `/openapi.json` | Generated contract for the Yomikata daily API only |
 | `PUT` | `/integrations/liftlog/days` | Replace LiftLog workout time on the named days (empty `workouts` clears a day) |
 | `GET` | `/integrations/fitbit/auth/begin` | Start Fitbit OAuth flow |
 | `GET` | `/integrations/fitbit/auth/callback` | OAuth callback handler |
@@ -410,8 +412,7 @@ without adding the daily `delta` twice.
 {}
 ```
 
-The Yomikata Android app calls this route before it pushes daily totals. Send `{}`. The factory
-reads no context. On the first call it creates two `IntegerAmount` statistics in category `Yomikata`, tagged
+This legacy route remains available for existing clients. New clients use the daily PUT below and need no provisioning request. The factory reads no context. On the first call it creates two `IntegerAmount` statistics in category `Yomikata`, tagged
 `source=yomikata`, `metric=<key>`, and `bundle_version=1`:
 
 | Key | Name | Default goal |
@@ -430,6 +431,58 @@ statistics by tag and return the same IDs, so a goal edited afterwards stays as 
   "study_minutes_id": 102
 }
 ```
+
+### Replacing Yomikata daily totals
+
+`PUT /integrations/yomikata/days/{day}` accepts one strict valid `YYYY-MM-DD` date and this JSON body:
+
+```json
+{"cards_reviewed":42,"study_time_seconds":932}
+```
+
+Both fields are required JSON integers between `0` and `9223372036854775807`, inclusive.
+Strings, fractions, nulls, booleans, and extra fields are invalid. The response is `204 No Content`
+only after the transaction commits. Provisioning, legacy adoption, the source ledger, and both statistic
+projections commit together. Dates omitted from a request keep their values.
+
+Seconds are canonical. The existing `study_minutes` statistic receives `study_time_seconds / 60`,
+truncated after the daily total. Cards use the existing `cards_reviewed` statistic. Repeating a request
+is safe after a lost reply. Lower and zero totals replace the previous source contribution.
+Each projection uses `current aggregate - old source projection + new source projection`, preserving
+manual additions and other residual contributions. Arithmetic outside the final signed 64-bit range
+rejects the whole request.
+
+The server resolves each metric by `source=yomikata` and `metric=cards_reviewed` or `study_minutes`,
+independent of display name or bundle version. Duplicate matches and non-`IntegerAmount` matches
+return a conflict. Existing IDs, default goals, daily goals, and references remain intact.
+On first adoption, all tagged legacy days seed the ledger unchanged, with minutes multiplied by 60.
+This assumes those legacy values belong to Yomikata because the old data has no source provenance.
+Invalid or overflowing legacy values conflict instead of being silently converted.
+Permanent adoption markers include zero days. Deleting a statistic retains the ledger, and the next PUT
+recreates its source projections for every ledger day.
+
+Generic integer logging remains available and applies its read, policy, and save atomically.
+`sum` adds to the aggregate, `overwrite` corrects the whole aggregate, and `ignore` keeps an existing value.
+An overwrite below the source contribution produces a signed residual. Old Yomikata clients that overwrite
+through the generic API must stop at cutover because the server cannot distinguish them from manual writes.
+
+Errors on this route use the following scoped envelope. Legacy routes keep their existing error format.
+
+```json
+{"error":{"code":"invalid_field","field":"cards_reviewed","message":"Required nonnegative integer, at most 9223372036854775807"}}
+```
+
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | `malformed_json` or `invalid_body` | Malformed JSON or unreadable body |
+| 409 | `bundle_conflict` | Ambiguous identity, wrong statistic type, or invalid legacy value |
+| 415 | `unsupported_media_type` | Content type is not JSON |
+| 422 | `invalid_field` | Invalid date or body field; `field` identifies known fields |
+| 422 | `projection_overflow` | Resulting aggregate exceeds signed 64-bit bounds |
+| 500 | `storage_error` | Storage failed and the transaction did not commit |
+
+`GET /openapi.json` derives this scoped contract from the request and error DTOs and the handler annotation.
+It does not describe the other Lifestats routes.
 
 ### Syncing LiftLog Workout Days
 

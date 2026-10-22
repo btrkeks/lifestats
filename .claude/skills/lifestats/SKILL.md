@@ -138,7 +138,11 @@ curl -s -X POST http://localhost:3000/progress-items/1/checkpoints \
 
 Ebook reading syncs automatically via `POST /integrations/ebook/events` (idempotent by `event_id`) — don't log ebook progress manually unless asked.
 
-Yomikata (kanji-reading app) study syncs automatically: the app provisions `[Yomikata] Cards Reviewed` and `[Yomikata] Study Time (minutes)` via `POST /integrations/yomikata` with `{}`, then overwrites each day's totals. Don't log Yomikata study manually unless asked.
+Yomikata study syncs automatically through `PUT /integrations/yomikata/days/{day}`. Send a strict valid `YYYY-MM-DD` date and `{"cards_reviewed":42,"study_time_seconds":932}`. Both fields are required nonnegative JSON integers up to `9223372036854775807`. Success is `204` after atomic provisioning and replacement. No provisioning request is needed. The existing `[Yomikata] Study Time (minutes)` statistic projects exact seconds to whole minutes. Repeated, lower, and zero totals preserve subsequent manual contributions. Generic integer `overwrite` still corrects the entire aggregate and can leave a signed residual. Do not log Yomikata study manually unless asked.
+
+The daily PUT adopts all tagged legacy values once without changing their existing IDs or goals. Legacy minute values become seconds by multiplying by 60. Duplicate or wrongly typed tags return `409`. The daily ledger survives statistic deletion and the next PUT rebuilds projections. Existing generic logging and `POST /integrations/yomikata` remain available for legacy clients. Old Yomikata generic-overwrite writers must stop at cutover.
+
+Daily PUT errors use `{"error":{"code":"invalid_field","field":"cards_reviewed","message":"..."}}`. Statuses are `400` for malformed JSON, `415` for unsupported media, `422` for invalid fields, dates, or aggregate overflow, `409` for bundle conflicts, and `500` for sanitized storage failures. `GET /openapi.json` is the generated contract for this route only.
 
 Gym workouts sync automatically via `PUT /integrations/liftlog/days` (the LiftLog app sends the finished workouts of every day it changed; the server replaces `[LiftLog] Workout Time` on exactly those days, and an empty `workouts` list clears a day) — don't log LiftLog workouts manually unless asked. `[LiftLog] Total Weight Lifted (kg)` is no longer written.
 

@@ -6,6 +6,7 @@ pub mod plots;
 pub mod progress;
 pub mod sessions;
 pub mod statistics;
+pub mod yomikata;
 
 use axum::{
     routing::{get, patch, post, put},
@@ -27,6 +28,11 @@ where
     I: IntegrationServiceTrait + 'static,
 {
     Router::new()
+        .route("/openapi.json", get(yomikata::openapi))
+        .route(
+            "/integrations/yomikata/days/{day}",
+            put(yomikata::replace_day),
+        )
         // Statistics endpoints
         .route(
             "/statistics",

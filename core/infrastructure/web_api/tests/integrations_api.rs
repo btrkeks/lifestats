@@ -25,6 +25,8 @@ mock! {
     pub IntegrationSvc {}
 
     impl IntegrationServiceTrait for IntegrationSvc {
+        fn replace_yomikata_day(&self, day: NaiveDate, totals: lifestats_core::yomikata::YomikataDayTotals) -> Result<lifestats_core::yomikata::YomikataDayReplacement,lifestats_core::yomikata::YomikataDayError>;
+
         fn provision_bundle(
             &self,
             source: &str,

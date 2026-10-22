@@ -144,14 +144,9 @@ async fn test_log_value_successful() {
         .returning(move |_| Ok(stat.clone()));
 
     mock_repo
-        .expect_find_log_value()
+        .expect_log_integer_value()
         .times(1)
-        .returning(|_, _| Ok(None));
-
-    mock_repo
-        .expect_save_log_value()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
+        .returning(|_, _, _, _| Ok(true));
 
     // Create app state and router
     let app_state = mock_app_state(Arc::new(mock_repo));

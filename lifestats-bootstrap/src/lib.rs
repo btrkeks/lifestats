@@ -84,12 +84,15 @@ pub fn build_services() -> Result<Application> {
         Arc::new(SqliteEbookEventStore::new(Arc::clone(&pool)));
     let ebook_progress_service: Arc<dyn EbookProgressServiceTrait> =
         Arc::new(EbookProgressService::new(Arc::clone(&progress_repo)));
-    let integration_service = Arc::new(IntegrationService::new(
-        statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
-        factories,
-        Some(ebook_event_store),
-        Some(ebook_progress_service),
-    ));
+    let integration_service = Arc::new(
+        IntegrationService::new(
+            statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
+            factories,
+            Some(ebook_event_store),
+            Some(ebook_progress_service),
+        )
+        .with_yomikata_day_store(statistic_repo.clone()),
+    );
 
     // 2. Instantiate Fitbit integration components
     let http_client = reqwest::Client::new();

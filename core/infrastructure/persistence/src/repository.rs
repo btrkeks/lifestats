@@ -46,7 +46,7 @@ impl SqliteStatisticRepository {
         Self { pool }
     }
 
-    fn connection(
+    pub(crate) fn connection(
         &self,
     ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, RepositoryError> {
         self.pool
@@ -55,6 +55,37 @@ impl SqliteStatisticRepository {
             .map_err(RepositoryError::OperationFailed)
     }
 
+    pub(crate) fn read_integer(
+        conn: &mut SqliteConnection,
+        id: StatisticId,
+        day: NaiveDate,
+    ) -> anyhow::Result<Option<i64>> {
+        let row = logging_data::table
+            .find((id.0 as i32, day.to_string()))
+            .first::<LoggingDataRaw>(conn)
+            .optional()?;
+        row.map(|row| Ok(serde_json::from_str::<i64>(&row.value)?))
+            .transpose()
+    }
+    pub(crate) fn write_integer(
+        conn: &mut SqliteConnection,
+        id: StatisticId,
+        day: NaiveDate,
+        value: i64,
+    ) -> anyhow::Result<()> {
+        let row = LoggingDataRaw {
+            statistic_id: id.0 as i32,
+            date: day.to_string(),
+            value: value.to_string(),
+        };
+        diesel::insert_into(logging_data::table)
+            .values(&row)
+            .on_conflict((logging_data::statistic_id, logging_data::date))
+            .do_update()
+            .set(&row)
+            .execute(conn)?;
+        Ok(())
+    }
     fn load_statistic_anyhow(
         conn: &mut SqliteConnection,
         id: StatisticId,
@@ -66,7 +97,7 @@ impl SqliteStatisticRepository {
         dto.into_any_statistic(default_goal)
     }
 
-    fn insert_statistic_anyhow(
+    pub(crate) fn insert_statistic_anyhow(
         conn: &mut SqliteConnection,
         statistic: &AnyStatistic,
     ) -> anyhow::Result<AnyStatistic> {
@@ -270,6 +301,12 @@ impl StatisticRepository for SqliteStatisticRepository {
             // Delete default goal for this statistic
             diesel::delete(default_goals::table.find(id.0 as i32)).execute(conn)?;
 
+            diesel::sql_query(
+                "UPDATE yomikata_metric_bindings SET statistic_id=NULL WHERE statistic_id=?",
+            )
+            .bind::<diesel::sql_types::Integer, _>(id.0 as i32)
+            .execute(conn)?;
+
             // Finally, delete the statistic itself
             diesel::delete(statistics::table.find(id.0 as i32)).execute(conn)?;
 
@@ -330,6 +367,27 @@ impl StatisticRepository for SqliteStatisticRepository {
             .map_err(diesel_to_repository_error)?;
 
         Ok(())
+    }
+
+    fn log_integer_value(
+        &self,
+        id: StatisticId,
+        date: NaiveDate,
+        value: i64,
+        policy: lifestats_core::statistic::value_objects::update_policies::amount::AmountUpdatePolicy,
+    ) -> Result<bool, RepositoryError> {
+        let mut conn = self.connection()?;
+        conn.immediate_transaction::<_, anyhow::Error, _>(|conn| {
+            let current = Self::read_integer(conn, id, date)?;
+            let (new, changed) = policy
+                .apply_checked_i64(current, value)
+                .context("Integer sum exceeds supported range")?;
+            if changed {
+                Self::write_integer(conn, id, date, new)?;
+            }
+            Ok(changed)
+        })
+        .map_err(RepositoryError::OperationFailed)
     }
 
     fn delete_log_value(&self, id: StatisticId, date: NaiveDate) -> Result<bool, RepositoryError> {
