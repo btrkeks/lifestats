@@ -156,6 +156,9 @@ curl -s http://localhost:3000/sessions/25                          # status
 
 ## Plots
 
+Fitbit sleep duration and total awake duration display as `HH:MM`. Stored values
+remain seconds; `/plot/data` reports `duration_seconds` for values and goals.
+
 ```bash
 curl -s "http://localhost:3000/statistics/23/plot/image?plot_type=bar_chart" -o plot.png
 # optional: date_from, date_to (default last 14 days), width, height (800x600),

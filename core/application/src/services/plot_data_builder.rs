@@ -11,6 +11,20 @@ use lifestats_core::statistic::any_statistic::AnyStatistic;
 use plot_domain::plot::data::{DrawableData, DrawableGoal, ScalarValue};
 use serde_json::Value;
 
+fn integer_amount_scalar(statistic: &AnyStatistic, value: i64) -> ScalarValue {
+    let metadata = statistic.get_metadata();
+    if metadata.get_tag("source").map(String::as_str) == Some("fitbit")
+        && matches!(
+            metadata.get_tag("metric").map(String::as_str),
+            Some("sleep_duration" | "total_duration_awake")
+        )
+    {
+        ScalarValue::duration_seconds(value)
+    } else {
+        ScalarValue::number(value)
+    }
+}
+
 /// Converts a JSON log value to DrawableData based on the statistic type and plot type
 ///
 /// # Arguments
@@ -41,7 +55,9 @@ pub fn json_value_to_drawable_data(
                     value
                 )
             })?;
-            Ok(DrawableData::Scalar(ScalarValue::number(number)))
+            Ok(DrawableData::Scalar(integer_amount_scalar(
+                statistic, number,
+            )))
         }
         AnyStatistic::PointInTime(_) => {
             // PointInTime is stored as HH:MM:SS string, but we render it as seconds from midnight
@@ -131,7 +147,9 @@ pub fn json_value_to_drawable_goal(
                         value
                     )
                 })?;
-            Ok(DrawableGoal::Scalar(ScalarValue::number(goal_value)))
+            Ok(DrawableGoal::Scalar(integer_amount_scalar(
+                statistic, goal_value,
+            )))
         }
         AnyStatistic::PointInTime(_) => {
             // PointInTime goals have a "target" field with the target time
@@ -267,7 +285,9 @@ mod tests {
     #[test]
     fn test_integer_amount_to_drawable_data() {
         let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
-            StatisticMetadata::new(StatisticId::from(1), "Test".into(), "Test Amount".into()),
+            StatisticMetadata::new(StatisticId::from(1), "Test".into(), "Test Amount".into())
+                .with_tag("source".into(), "fitbit".into())
+                .with_tag("metric".into(), "steps".into()),
             None,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         ));
@@ -279,6 +299,53 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, DrawableData::Scalar(ScalarValue::number(42)));
+    }
+
+    #[test]
+    fn fitbit_durations_and_goals_use_hours_and_minutes() {
+        use plot_domain::plot::axis::{AxisLabelFormat, YAxis};
+        use plot_domain::plot::data::DataPoint;
+        use plot_domain::plot::plot_type::PlotType;
+
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 10, 16).unwrap();
+        for metric in ["sleep_duration", "total_duration_awake"] {
+            let stat = AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(
+                StatisticMetadata::new(StatisticId::from(51), "Fitbit".into(), "Renamed".into())
+                    .with_tag("source".into(), "fitbit".into())
+                    .with_tag("metric".into(), metric.into()),
+                None,
+                date,
+            ));
+            let value =
+                json_value_to_drawable_data(&stat, &json!(24660), PlotType::BarChart).unwrap();
+            let goal = json_value_to_drawable_goal(
+                &stat,
+                &json!({"target_amount": 25200, "is_at_least": true}),
+                PlotType::BarChart,
+            )
+            .unwrap();
+            assert_eq!(
+                value,
+                DrawableData::Scalar(ScalarValue::duration_seconds(24660))
+            );
+            assert_eq!(
+                goal,
+                DrawableGoal::Scalar(ScalarValue::duration_seconds(25200))
+            );
+            let points = [DataPoint::new(
+                date,
+                Some(value),
+                [255, 255, 255],
+                Some(goal),
+            )];
+            assert!(matches!(
+                YAxis::from_data_points(&points, PlotType::BarChart).unwrap(),
+                YAxis::Scalar {
+                    label_format: AxisLabelFormat::DurationHhMm,
+                    ..
+                }
+            ));
+        }
     }
 
     #[test]

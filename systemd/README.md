@@ -55,7 +55,7 @@ systemctl --user start lifestats-fitbit-sync.timer
 
 #### Changing the Sync Time
 
-By default, the sync runs at 8:00 AM daily. To change this:
+By default, the sync runs at 06:00 daily in the system's local timezone, with no randomized delay. To change this:
 
 1. Edit the timer file (`~/.config/systemd/user/lifestats-fitbit-sync.timer` or `/etc/systemd/system/lifestats-fitbit-sync.timer`)
 2. Modify the `OnCalendar` line:

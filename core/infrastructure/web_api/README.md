@@ -241,6 +241,10 @@ Bar, line and scatter plots annotate every day with its exact value (e.g. `23:48
 drawn when they fit inside a day column, `value_labels=true` forces them and
 `value_labels=false` hides them. Binary (yes/no) bars are never labelled.
 
+Fitbit `sleep_duration` and `total_duration_awake` metrics display durations as
+`HH:MM`, including goal lines. Their stored values remain seconds. Plot data marks
+these values and goals as `duration_seconds`, with `duration_hh_mm` axis labels.
+
 `GET /statistics/{id}/plot/data` accepts `plot_type`, `date_from`, and `date_to`.
 The response uses typed drawable values so clients can distinguish counts from time values:
 
