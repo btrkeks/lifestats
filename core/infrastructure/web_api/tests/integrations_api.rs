@@ -25,6 +25,10 @@ mock! {
     pub IntegrationSvc {}
 
     impl IntegrationServiceTrait for IntegrationSvc {
+        fn ebook_server_id(&self) -> Result<String, lifestats_core::ebook::EbookError>;
+        fn record_ebook_day(&self, producer: lifestats_core::ebook::ProducerId, book: lifestats_core::ebook::BookKey, day: NaiveDate, report: lifestats_core::ebook::EbookDayReport) -> Result<lifestats_core::ebook::EbookWriteOutcome, lifestats_core::ebook::EbookError>;
+        fn bind_legacy_ebook_book(&self, reader_data_id: u32, book: lifestats_core::ebook::BookKey, title: lifestats_core::ebook::BookTitle, length: std::num::NonZeroU64) -> Result<lifestats_core::ebook::EbookWriteOutcome, lifestats_core::ebook::EbookError>;
+
         fn replace_yomikata_day(&self, day: NaiveDate, totals: lifestats_core::yomikata::YomikataDayTotals) -> Result<lifestats_core::yomikata::YomikataDayReplacement,lifestats_core::yomikata::YomikataDayError>;
 
         fn provision_bundle(

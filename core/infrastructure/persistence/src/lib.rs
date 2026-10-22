@@ -12,4 +12,5 @@ pub use db::schema;
 pub use ebook_event_store::SqliteEbookEventStore;
 pub use progress_repository::SqliteProgressRepository;
 pub use token_store::SqliteTokenStore;
+mod ebook_reading_store;
 mod yomikata_day_store;

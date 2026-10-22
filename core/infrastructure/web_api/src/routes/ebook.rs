@@ -1,17 +1,20 @@
 use super::integration_error::ErrorEnvelope;
-use super::yomikata::DayApiError;
+use super::integration_error::{parse_day, parse_strict_object, IntegrationApiError};
 use crate::state::AppState;
 use axum::{
     extract::{rejection::JsonRejection, Path, State},
     http::StatusCode,
     Json,
 };
+use chrono::{DateTime, Local, Utc};
 use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
+use lifestats_core::ebook::{BookKey, BookTitle, EbookDayReport, ProducerId, SpanSet};
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use plot_domain::plot::renderer::PlotRenderer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
+use std::collections::BTreeMap;
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -28,15 +31,17 @@ pub struct EbookDescriptor {
 ))]
 pub async fn descriptor<R, Rend, E, I>(
     State(state): State<AppState<R, Rend, E, I>>,
-) -> Result<Json<EbookDescriptor>, DayApiError>
+) -> Result<Json<EbookDescriptor>, IntegrationApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    let _ = state;
-    todo!("persistent server identity")
+    Ok(Json(EbookDescriptor {
+        server_id: state.integration_service.ebook_server_id()?,
+        protocol: 1,
+    }))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -88,15 +93,44 @@ pub async fn put_day<R, Rend, E, I>(
     State(state): State<AppState<R, Rend, E, I>>,
     Path((producer, book_key, day)): Path<(String, String, String)>,
     body: Result<Json<Box<RawValue>>, JsonRejection>,
-) -> Result<StatusCode, DayApiError>
+) -> Result<StatusCode, IntegrationApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    let _ = (state, producer, book_key, day, body);
-    todo!("ebook ledger implementation")
+    let Json(raw) = body.map_err(IntegrationApiError::json)?;
+    let request = EbookDayRequest::parse(&raw)?;
+    let producer = ProducerId::parse(&producer)?;
+    let book = BookKey::parse(&book_key)?;
+    let day = parse_day(&day)?;
+    if day > Local::now().date_naive() + chrono::Duration::days(2) {
+        return Err(IntegrationApiError::invalid(
+            Some("day"),
+            "Day must be at most two days after the server local date",
+        ));
+    }
+    let report = EbookDayReport::new(
+        BookTitle::parse(&request.title)?,
+        request.length,
+        SpanSet::from_normalized(request.spans)?,
+        request.last_position,
+        DateTime::parse_from_rfc3339(&request.observed_at)
+            .map_err(|_| {
+                IntegrationApiError::invalid(Some("observed_at"), "Expected an RFC 3339 timestamp")
+            })?
+            .with_timezone(&Utc),
+    )?;
+    let outcome = state
+        .integration_service
+        .record_ebook_day(producer, book, day, report)?;
+    for id in outcome.changed_statistics {
+        state
+            .event_publisher
+            .publish_event_async(events::event_port::Event::ValueUpdated(id));
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -117,7 +151,7 @@ pub async fn put_legacy_book<R, Rend, E, I>(
     State(state): State<AppState<R, Rend, E, I>>,
     Path(reader_data_id): Path<String>,
     body: Result<Json<Box<RawValue>>, JsonRejection>,
-) -> Result<StatusCode, DayApiError>
+) -> Result<StatusCode, IntegrationApiError>
 where
     R: StatisticRepository + Send + Sync + 'static,
     Rend: PlotRenderer + 'static,
@@ -139,4 +173,29 @@ where
     I: IntegrationServiceTrait + 'static,
 {
     super::integrations::provision_integration(state, Path("ebook".into()), request).await
+}
+
+fn required<T: serde::de::DeserializeOwned>(
+    object: &BTreeMap<String, Box<RawValue>>,
+    field: &'static str,
+) -> Result<T, IntegrationApiError> {
+    object
+        .get(field)
+        .and_then(|raw| serde_json::from_str(raw.get()).ok())
+        .ok_or_else(|| {
+            IntegrationApiError::invalid(Some(field), "Required field with the documented type")
+        })
+}
+impl EbookDayRequest {
+    fn parse(raw: &RawValue) -> Result<Self, IntegrationApiError> {
+        let object = parse_strict_object(raw)?;
+        let _: String = required(&object, "title")?;
+        let _: u64 = required(&object, "length")?;
+        let _: Vec<(u64, u64)> = required(&object, "spans")?;
+        let _: u64 = required(&object, "last_position")?;
+        let _: String = required(&object, "observed_at")?;
+        serde_json::from_str(raw.get()).map_err(|_| {
+            IntegrationApiError::invalid(None, "Unexpected or duplicate request fields")
+        })
+    }
 }

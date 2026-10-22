@@ -91,7 +91,8 @@ pub fn build_services() -> Result<Application> {
             Some(ebook_event_store),
             Some(ebook_progress_service),
         )
-        .with_yomikata_day_store(statistic_repo.clone()),
+        .with_yomikata_day_store(statistic_repo.clone())
+        .with_ebook_reading_store(statistic_repo.clone()),
     );
 
     // 2. Instantiate Fitbit integration components

@@ -46,3 +46,17 @@ impl BundleFactory for EbookBundleFactory {
         }])
     }
 }
+
+impl EbookBundleFactory {
+    pub fn definitions() -> lifestats_core::ebook::EbookBundleDefinitions {
+        let statistics = Self
+            .provision(&HashMap::new())
+            .expect("ebook factory has no input");
+        let AnyStatistic::IntegerAmount(characters_read) =
+            statistics.into_iter().next().unwrap().statistic
+        else {
+            unreachable!()
+        };
+        lifestats_core::ebook::EbookBundleDefinitions { characters_read }
+    }
+}
