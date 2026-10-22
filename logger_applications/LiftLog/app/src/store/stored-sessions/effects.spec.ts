@@ -24,6 +24,8 @@ import { createAddEffectTestBed } from '@/utils/__test__/add-effect-testbed';
 import { exercisesSchema, sessionsSchema } from '@/db/schema';
 import { readSession, setActiveSession, writeSession } from '@/db/sessions';
 import { readSyncQueue } from '@/db/lifestats-sync';
+import { readPendingCalendarSessions } from '@/db/calendar-sync';
+import { calendarSessionsQueued } from '@/store/calendar-sync';
 import { lifestatsDaysQueued } from '@/store/lifestats-sync';
 import { makeWorkoutOn } from '@/models/session-models/__test__/helpers';
 import { Session } from '@/models/session-models';
@@ -71,7 +73,11 @@ describe('stored-sessions effects', () => {
     db = await createTestDb();
   });
 
-  function bed(options: { keyValueStore?: ReturnType<typeof makeKvStore>; state?: Partial<RootState> }) {
+  function bed(options: {
+    keyValueStore?: ReturnType<typeof makeKvStore>;
+    state?: Partial<RootState>;
+    phoneCalendar?: { supported: boolean };
+  }) {
     const testBed = createAddEffectTestBed({
       initialState: {
         settings: { isHydrated: true, preferredLanguage: 'en' },
@@ -83,6 +89,7 @@ describe('stored-sessions effects', () => {
         logger,
         keyValueStore: options.keyValueStore ?? makeKvStore(),
         tolgee: { t: (key: string, params: object) => `${key} ${JSON.stringify(params)}` },
+        phoneCalendar: options.phoneCalendar ?? { supported: true },
       },
     });
     applyStoredSessionsEffects(testBed.addEffect);
@@ -241,6 +248,51 @@ describe('stored-sessions effects', () => {
       await testBed.dispatchHandled(upsertStoredSessions([restoredEarlier, makeWorkoutOn('2026-10-05')]));
 
       expect(queued()).toEqual(['2026-10-01', '2026-10-05', '2026-10-09']);
+    });
+  });
+
+  describe('enrolling workouts in calendar sync', () => {
+    const calendarSync = {
+      isHydrated: true,
+      preferredLanguage: 'en',
+      calendarSyncEnabled: true,
+      calendarSyncCalendar: { id: 7, displayName: 'Personal', accountName: 'me@example.com' },
+      calendarSyncEventTitle: ' Gym ',
+    };
+    const enrolled = () => readPendingCalendarSessions(db).map(({ sessionId, target }) => ({ sessionId, target }));
+
+    async function finishWorkout(settings: object, phoneCalendar?: { supported: boolean }) {
+      const workout = makeWorkoutOn('2026-10-11', [0, 45]);
+      db.transaction((tx) => setActiveSession(tx, workout));
+      const testBed = bed({
+        state: {
+          settings,
+          storedSessions: { openSessions: { [workout.id]: workout }, activeSessionId: workout.id },
+        } as Partial<RootState>,
+        phoneCalendar,
+      });
+      await testBed.dispatchHandled(setActiveSessionId(undefined));
+      return testBed;
+    }
+
+    it('enrolls a finished workout with the chosen calendar and title, and wakes the calendar sync', async () => {
+      const testBed = await finishWorkout(calendarSync);
+
+      expect(enrolled()).toEqual([
+        {
+          sessionId: 'workout-2026-10-11',
+          target: { calendarId: 7, accountName: 'me@example.com', title: 'Gym' },
+        },
+      ]);
+      expect(testBed.dispatchedActions.map((x) => x.type)).toContain(calendarSessionsQueued.type);
+    });
+
+    it('enrolls nothing while sync is off, before settings load, or without a phone calendar', async () => {
+      await finishWorkout({ ...calendarSync, calendarSyncEnabled: false });
+      await finishWorkout({ ...calendarSync, isHydrated: false });
+      await finishWorkout(calendarSync, { supported: false });
+
+      expect(enrolled()).toEqual([]);
     });
   });
 

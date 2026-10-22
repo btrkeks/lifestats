@@ -24,6 +24,7 @@ import type {
   ResistanceJSON,
 } from '@/models/storage/versions/latest';
 import type { WeightUnitJSON } from '@/models/storage/versions/libs/weight';
+import type { CalendarOutcome } from '@/models/calendar-sync';
 import { and, eq, SQL, sql } from 'drizzle-orm';
 import {
   check,
@@ -316,3 +317,55 @@ export const lifestatsSyncQueueSchema = sqliteTable('lifestats_sync_queue', {
   date: text().$type<LocalDateJSON>().primaryKey(),
   seq: integer().notNull().default(1),
 });
+
+/**
+ * One row per workout finished while calendar sync was on, with the calendar and event title it was
+ * finished under, so changing the settings later never reroutes it. `seq` moves on every later write of
+ * the workout; `doneSeq` is the seq the last settled attempt read. The row is pending while `seq` is ahead,
+ * so an edit landing during a calendar write stays pending. There is no foreign key: the row outlives a
+ * deleted workout, because its claim keeps that workout's event from being taken by another.
+ */
+export const calendarSyncSessionsSchema = sqliteTable('calendar_sync_session', {
+  sessionId: text().primaryKey(),
+  seq: integer().notNull().default(1),
+  doneSeq: integer().notNull().default(0),
+  calendarId: integer().notNull(),
+  accountName: text().notNull(),
+  title: text().notNull(),
+  outcome: text().$type<CalendarOutcome>(),
+  outcomeDate: text().$type<LocalDateJSON>(),
+});
+
+/**
+ * The event occurrence a workout owns. The unique index is what stops two workouts from moving one event.
+ * A series occurrence is its master plus `ORIGINAL_INSTANCE_TIME`; a single event uses `-1` there.
+ * `observed` is what LiftLog last saw or wrote, and every write requires the calendar to still show it.
+ * `attempt` is the span of a write that may or may not have reached the calendar; the next run settles it.
+ */
+export const calendarClaimsSchema = sqliteTable(
+  'calendar_claim',
+  {
+    sessionId: text()
+      .primaryKey()
+      .references(() => calendarSyncSessionsSchema.sessionId),
+    calendarId: integer().notNull(),
+    accountName: text().notNull(),
+    eventId: integer().notNull(),
+    instanceTime: integer().notNull(),
+    syncId: text(),
+    rrule: text(),
+    title: text().notNull().default(''),
+    organizer: text(),
+    sourceStartMs: integer(),
+    sourceDuration: text(),
+    sourceTimezone: text(),
+    date: text().$type<LocalDateJSON>().notNull(),
+    originalStartMs: integer().notNull(),
+    originalEndMs: integer().notNull(),
+    observedStartMs: integer().notNull(),
+    observedEndMs: integer().notNull(),
+    attemptStartMs: integer(),
+    attemptEndMs: integer(),
+  },
+  (table) => [uniqueIndex('calendar_claim_occurrence').on(table.calendarId, table.eventId, table.instanceTime)],
+);

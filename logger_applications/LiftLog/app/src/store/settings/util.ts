@@ -31,6 +31,9 @@ export async function getBackupBytes(expoDb: SQLiteDatabase) {
     // Which days lifestats is behind on is about this device and its sync URL, which preferences hold
     // and a backup does not.
     await clearTables(backupDatabase, await presentTablesLike(backupDatabase, 'lifestats\\_%'));
+    // Calendar sync rows name this phone's calendar and event row ids, which mean nothing on another phone
+    // and could point at someone else's events there.
+    await clearTables(backupDatabase, await presentTablesLike(backupDatabase, 'calendar\\_%'));
     await backupDatabase.execAsync('VACUUM');
 
     const bytes = await backupDatabase.serializeAsync();

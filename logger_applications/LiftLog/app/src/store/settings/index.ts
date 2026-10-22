@@ -82,6 +82,9 @@ export const {
   setThemeMode,
   setLifestatsSyncEnabled,
   setLifestatsSyncUrl,
+  setCalendarSyncEnabled,
+  setCalendarSyncCalendar,
+  setCalendarSyncEventTitle,
 } = preferenceSetters;
 
 export const { selectPreferredWeightUnit } = settingsSlice.selectors;

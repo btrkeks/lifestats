@@ -53,7 +53,7 @@ is documented in the lifestats repository (`docs/liftlog-integration.md`).
 
 ```text
 session write (stored-sessions effects)
-  → queueDaysChangedBy(tx, ids, write)      db/lifestats-sync.ts, same transaction as the write
+  → queueSessionSync(tx, ids, write)        db/session-sync.ts, same transaction as the write
   → lifestatsDaysQueued                     wakes the sync effect
   → applyLifestatsSyncEffects               store/lifestats-sync/effects.ts: debounce, one push at a time, backoff
   → pushQueuedDays                          services/lifestats-sync.ts: 100 days per request, ack on success
@@ -64,7 +64,7 @@ session write (stored-sessions effects)
   that lands during a push stays queued. The payload is never stored. Each push rebuilds a day from
   the `session` rows (`syncDay`, `sessionSpan`).
 - **What queues a day.** A session counts on its day when it is finished and has a completed set
-  (`readWorkoutDates`). `queueDaysChangedBy` reads those dates for the sessions a write touches
+  (`readWorkoutDates`). `queueSessionSync` reads those dates for the sessions a write touches
   before and after the write, and queues both sets. That covers History edits and date moves
   (`putStoredSession` / `updateStoredSession`), deletes, imports and restores
   (`upsertStoredSessions`), and finishing and resuming (`setActiveSessionId`, in the transaction that
@@ -72,8 +72,9 @@ session write (stored-sessions effects)
 - **Automatic finishing** dispatches `sessionFinished`, so it queues the day through the same
   `setActiveSessionId` transaction. The decision is `forgottenWorkoutAction`
   (`store/stored-sessions/forgotten-workout.ts`), and the limit is `FORGOTTEN_WORKOUT_IDLE_LIMIT`.
-- **A new session write** that can change a finished session must go through `queueDaysChangedBy`
-  in its transaction, or lifestats will not hear about it.
+- **A new session write** that can change a finished session must go through `queueSessionSync`
+  in its transaction, or lifestats will not hear about it. The same call queues calendar sync
+  ([CalendarSync.md](./CalendarSync.md)).
 - **Delivery order.** The queue protects acknowledgements, not the order in which lifestats applies
   requests. A request delayed past its 15-second timeout could still land after a newer one for the
   same day. This is accepted for one phone on a tailnet.
