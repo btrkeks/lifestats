@@ -9,8 +9,8 @@ and cannot verify cloud delivery.
 ## Set it up
 
 1. Open **Settings → Calendar sync**. The page exists only on Android.
-2. Tap **Allow calendar access**. If you denied it before for good, the same row opens the system
-   settings instead. Calendar access and the calendar list refresh when you return to this page from
+2. Tap **Allow calendar access**. If Android reports permanent denial, that same button press opens
+   the system settings. Calendar access and the calendar list refresh when you return to this page from
    system settings, including when the route stays focused.
 3. Pick the **Calendar** that holds your Gym events. The picker lists writable Google calendars, including
    secondary calendars. Each calendar shows its account next to its name.

@@ -5,6 +5,7 @@ import { SegmentedListSelect } from '@/components/presentation/foundation/segmen
 import { SegmentedListSwitch } from '@/components/presentation/foundation/segmented-list-switch';
 import { useServices } from '@/components/smart/services-provider';
 import { CalendarAccess, CalendarChoice, CalendarOutcome } from '@/models/calendar-sync';
+import { allowCalendarAccess } from '@/services/calendar-sync-permission';
 import { RootState, useAppSelector } from '@/store';
 import { calendarRetryRequested } from '@/store/calendar-sync';
 import { setCalendarSyncCalendar, setCalendarSyncEnabled, setCalendarSyncEventTitle } from '@/store/settings';
@@ -70,18 +71,15 @@ export default function CalendarSyncPage() {
     }, [phoneCalendar]),
   );
 
-  const allowAccess = async () => {
-    if (access === 'blocked') {
-      await Linking.openSettings();
-      return;
-    }
-    const granted = await phoneCalendar.requestAccess();
-    setAccess(granted);
-    if (granted === 'granted') {
-      setCalendars(await phoneCalendar.calendars());
-      dispatch(calendarRetryRequested());
-    }
-  };
+  const allowAccess = () =>
+    allowCalendarAccess({
+      access,
+      phoneCalendar,
+      openSettings: () => Linking.openSettings(),
+      setAccess,
+      setCalendars,
+      retry: () => dispatch(calendarRetryRequested()),
+    });
 
   const titleIsUsable = !!calendarSyncEventTitle?.trim();
   const chosenIsListed = calendars.some((c) => c.id === calendarSyncCalendar?.id);
