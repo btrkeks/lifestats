@@ -453,6 +453,21 @@ export function readWorkoutDates(db: ExpoSQLiteDatabase, ids?: string[]): LocalD
     .map((row) => fromLocalDateJSON(row.date));
 }
 
+/** Which of `ids` put workout time on their day, by the same rule as `readWorkoutDates`. */
+export function readWorkoutSessionIds(db: ExpoSQLiteDatabase, ids: string[]): Set<string> {
+  if (!ids.length) {
+    return new Set();
+  }
+  return new Set(
+    db
+      .select({ id: sessionsSchema.id })
+      .from(sessionsSchema)
+      .where(and(isFinished, isNotNull(sessionsSchema.lastCompletedAtMs), inArray(sessionsSchema.id, ids)))
+      .all()
+      .map((row) => row.id),
+  );
+}
+
 export function readFinishedSessions(db: ExpoSQLiteDatabase, ids: string[]): Session[] {
   return ids.length ? readSessionsWhere(db, and(isFinished, inArray(sessionsSchema.id, ids))) : [];
 }

@@ -1,5 +1,4 @@
 import { lifestatsSyncQueueSchema } from '@/db/schema';
-import { readWorkoutDates } from '@/db/sessions';
 import { fromLocalDateJSON, toLocalDateJSON } from '@/models/storage/versions/libs';
 import { LocalDate } from '@js-joda/core';
 import { and, asc, count, eq, sql } from 'drizzle-orm';
@@ -21,17 +20,6 @@ export function enqueueSyncDates(tx: ExpoSQLiteDatabase, dates: LocalDate[]): bo
     .onConflictDoUpdate({ target: queue.date, set: { seq: sql`${queue.seq} + 1` } })
     .run();
   return true;
-}
-
-/**
- * Runs `write` over the given sessions and queues every day whose workout time it may have changed:
- * the dates where those sessions counted before it, and where they count after it. Call it inside the
- * write's transaction, so the queue and the sessions commit together. Returns whether anything was queued.
- */
-export function queueDaysChangedBy(tx: ExpoSQLiteDatabase, sessionIds: string[], write: () => void): boolean {
-  const before = readWorkoutDates(tx, sessionIds);
-  write();
-  return enqueueSyncDates(tx, [...before, ...readWorkoutDates(tx, sessionIds)]);
 }
 
 export function readSyncQueue(db: ExpoSQLiteDatabase): QueuedDay[] {
