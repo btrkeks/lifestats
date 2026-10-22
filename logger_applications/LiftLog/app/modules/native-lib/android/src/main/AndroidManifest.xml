@@ -1,2 +1,5 @@
-<manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Calendar sync (LiftLogCalendarModule). Asked for only from its settings page. -->
+  <uses-permission android:name="android.permission.READ_CALENDAR" />
+  <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 </manifest>

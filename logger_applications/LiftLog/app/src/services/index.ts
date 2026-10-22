@@ -13,6 +13,7 @@ import { DatabaseMigrationService } from './database-migration-service';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { DatabaseImportService } from '@/services/database-import-service';
+import { createPhoneCalendar } from '@/services/phone-calendar';
 
 export type Services = ReturnType<typeof createServices>;
 
@@ -22,6 +23,7 @@ export function createServices(store: Store<RootState>, db: ExpoSQLiteDatabase, 
   const sessionService = new SessionService(db, store.getState);
   const notificationService = new NotificationService(store.getState, store.dispatch);
   const fileExportService = new FileExportService();
+  const phoneCalendar = createPhoneCalendar();
   const filePickerService = new FilePickerService();
   const preferenceService = new PreferenceService(keyValueStore);
   const tolgee = getTolgee(preferenceService);
@@ -45,5 +47,6 @@ export function createServices(store: Store<RootState>, db: ExpoSQLiteDatabase, 
     db,
     expoDb,
     databaseMigrationService,
+    phoneCalendar,
   };
 }

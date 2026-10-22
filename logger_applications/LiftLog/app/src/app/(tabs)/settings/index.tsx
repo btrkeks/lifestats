@@ -10,11 +10,13 @@ import Button from '@/components/presentation/foundation/button';
 import * as Application from 'expo-application';
 import { useDispatch } from 'react-redux';
 import { copyLogs } from '@/store/app';
+import { useServices } from '@/components/smart/services-provider';
 
 export default function SettingsPageIndex() {
   const { t } = useTranslate();
   const { colors } = useAppTheme();
   const { push } = useRouter();
+  const { phoneCalendar } = useServices();
   const [appInfoOpen, setAppInfoOpen] = useState(false);
   const dispatch = useDispatch();
 
@@ -70,6 +72,13 @@ export default function SettingsPageIndex() {
           icon={'cloudUpload'}
           onPress={() => push('/settings/lifestats-sync')}
         />
+        {phoneCalendar.supported ? (
+          <SegmentedListLink
+            label={t('settings.calendar_sync.title')}
+            icon={'event'}
+            onPress={() => push('/settings/calendar-sync')}
+          />
+        ) : undefined}
       </SegmentedGroup>
 
       <SegmentedGroup>

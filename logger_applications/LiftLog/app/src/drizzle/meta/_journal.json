@@ -92,6 +92,13 @@
       "when": 1791811497582,
       "tag": "0012_lifestats_sync_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792695013119,
+      "tag": "0013_calendar_sync",
+      "breakpoints": true
     }
   ]
 }

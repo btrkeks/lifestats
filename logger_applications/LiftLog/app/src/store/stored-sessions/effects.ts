@@ -1,4 +1,4 @@
-import { AddEffectFn } from '@/store/store';
+import { AddEffectFn, AppDispatch } from '@/store/store';
 import {
   closeSession,
   deleteExercise,
@@ -23,11 +23,12 @@ import {
 } from './index';
 import { fetchUpcomingSessions } from '@/store/program';
 import { lifestatsDaysQueued } from '@/store/lifestats-sync';
+import { calendarSessionsQueued, selectCalendarSyncTarget } from '@/store/calendar-sync';
 import { setStatsIsDirty } from '@/store/stats';
 import { setPreferredLanguage } from '@/store/settings';
 import { exercisesSchema } from '@/db/schema';
 import { deleteSession, readActiveSession, readActiveSessionId, setActiveSession, writeSession } from '@/db/sessions';
-import { queueDaysChangedBy } from '@/db/lifestats-sync';
+import { queueSessionSync, SyncQueued } from '@/db/session-sync';
 import { eq, sql } from 'drizzle-orm';
 import { toRecord } from '@/utils/reduce';
 import { fromExerciseDescriptorJSON, toExerciseDescriptorJSON } from '@/models/exercise-models';
@@ -37,6 +38,15 @@ import { forgottenWorkoutAction } from '@/store/stored-sessions/forgotten-workou
 import { appForegroundChanged, showSnackbar } from '@/store/app';
 import { formatDate } from '@/utils/format-date';
 import { OffsetDateTime } from '@js-joda/core';
+
+function wakeSyncs(dispatch: AppDispatch, queued: SyncQueued) {
+  if (queued.lifestats) {
+    dispatch(lifestatsDaysQueued());
+  }
+  if (queued.calendar) {
+    dispatch(calendarSessionsQueued());
+  }
+}
 
 // Built-ins the user deleted, so they stay hidden across restarts and locale switches.
 const hiddenBuiltInExerciseIdsStorageKey = 'HiddenBuiltInExerciseIdList';
@@ -102,8 +112,8 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       dispatch(setActiveSessionId(undefined));
     }
     // Written here rather than left to the persist effect, so whoever re-reads on the revision bump sees it.
-    // It queues no lifestats sync: the flag flip above queued a finished workout, and History edits were
-    // queued as they were made, so closing History without a change pushes nothing.
+    // It queues no sync: the flag flip above queued a finished workout, and History edits were queued as
+    // they were made, so closing History without a change sends nothing.
     db.transaction((tx) => writeSession(tx, workout));
     dispatch(sessionsChanged());
     dispatch(closeSession(workout.id));
@@ -138,12 +148,10 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
 
   addEffect(deleteStoredSession, async (action, { dispatch, extra: { logger, db } }) => {
     const queued = await logger.time('deleteStoredSession', async () =>
-      db.transaction((tx) => queueDaysChangedBy(tx, [action.payload], () => deleteSession(tx, action.payload))),
+      db.transaction((tx) => queueSessionSync(tx, [action.payload], () => deleteSession(tx, action.payload))),
     );
     dispatch(sessionsChanged());
-    if (queued) {
-      dispatch(lifestatsDaysQueued());
-    }
+    wakeSyncs(dispatch, queued);
   });
 
   // Content only. The `active` flag has a single writer below, so a recorded set never touches it.
@@ -159,30 +167,29 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     if (!session) {
       return;
     }
-    // Queues a History edit's days. The workout in progress is not finished, so it queues nothing.
+    // Queues a History edit for both syncs. The workout in progress is not finished, so it queues nothing.
     const queued = await logger.time('persistStoredSession', async () =>
-      db.transaction((tx) => queueDaysChangedBy(tx, [session.id], () => writeSession(tx, session))),
+      db.transaction((tx) => queueSessionSync(tx, [session.id], () => writeSession(tx, session))),
     );
-    if (queued) {
-      dispatch(lifestatsDaysQueued());
-    }
+    wakeSyncs(dispatch, queued);
   });
 
   // The only writer of `active`. It writes the session's content too, so it does not depend on the effect
   // above having written the row first - the two are dispatched together and race.
-  addEffect(setActiveSessionId, async (action, { getState, dispatch, extra: { db, logger } }) => {
+  addEffect(setActiveSessionId, async (action, { getState, dispatch, extra: { db, logger, phoneCalendar } }) => {
     const queued = await logger.time('setActiveSessionId', async () => {
-      const session = action.payload === undefined ? undefined : selectSession(getState(), action.payload);
+      const state = getState();
+      const session = action.payload === undefined ? undefined : selectSession(state, action.payload);
       // Finishing a workout puts it on its day and resuming one takes it off, in the same commit as the flag.
+      // Finishing is also the only write that enrolls a workout in calendar sync.
+      const enrollFinishedIn = phoneCalendar.supported ? selectCalendarSyncTarget(state) : undefined;
       return db.transaction((tx) => {
         const affected = [readActiveSessionId(tx), session?.id].filter((id) => id !== undefined);
-        return queueDaysChangedBy(tx, affected, () => setActiveSession(tx, session));
+        return queueSessionSync(tx, affected, () => setActiveSession(tx, session), { enrollFinishedIn });
       });
     });
     dispatch(sessionsChanged());
-    if (queued) {
-      dispatch(lifestatsDaysQueued());
-    }
+    wakeSyncs(dispatch, queued);
   });
 
   addEffect(upsertStoredSessions, async (action, { cancelActiveListeners, dispatch, extra: { db, logger } }) => {
@@ -191,7 +198,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     // in-progress workout on this device keeps its flag because writing content never touches it.
     const queued = await logger.time('upsertStoredSessions', async () =>
       db.transaction((tx) =>
-        queueDaysChangedBy(
+        queueSessionSync(
           tx,
           action.payload.map((session) => session.id),
           () => action.payload.forEach((session) => writeSession(tx, session)),
@@ -199,9 +206,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       ),
     );
     dispatch(sessionsChanged());
-    if (queued) {
-      dispatch(lifestatsDaysQueued());
-    }
+    wakeSyncs(dispatch, queued);
   });
 
   addEffect(deleteExercise, async (action, { stateAfterReduce, extra: { db, keyValueStore } }) => {

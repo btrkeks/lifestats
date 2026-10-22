@@ -289,8 +289,9 @@ active one and nothing else. `activeSessionId` points at the live one.
   records, both from the stored session summaries, and `ownHistoryOf` turns them into per-day counts and
   volume, the volume scale and the streak. No `Session` is built. The activity calendar selector takes that summary as an argument.
 - Every write that can change which finished sessions count on a day also queues that day in
-  `lifestats_sync_queue`, in the same transaction, through `queueDaysChangedBy`. See
-  [LifestatsSync.md](./LifestatsSync.md).
+  `lifestats_sync_queue`, and re-queues the session in `calendar_sync_session` if calendar sync enrolled
+  it, in the same transaction, through `queueSessionSync`. See [LifestatsSync.md](./LifestatsSync.md)
+  and [CalendarSync.md](./CalendarSync.md).
 - `putStoredSession` / `updateStoredSession` mean "this session changed" and only write its content.
   `sessionFinished` means "the user is done with it". It is what marks stats dirty, clears the active
   pointer and closes the session. Keep completion work on `sessionFinished`, or it fires once per set.

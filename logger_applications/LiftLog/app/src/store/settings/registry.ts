@@ -1,7 +1,9 @@
 import { DayOfWeek } from '@js-joda/core';
 import { ActionCreatorWithPreparedPayload, createAction, UnknownAction } from '@reduxjs/toolkit';
+import { CalendarChoice } from '@/models/calendar-sync';
 import {
   boolCodec,
+  calendarChoiceCodec,
   Codec,
   colorSchemeSeedCodec,
   ColorSchemeSeed,
@@ -54,6 +56,9 @@ export const preferenceRegistry = {
   firstDayOfWeek: pref<DayOfWeek>({ default: DayOfWeek.SUNDAY, codec: dayOfWeekCodec }),
   lifestatsSyncEnabled: pref({ default: false, codec: boolCodec }),
   lifestatsSyncUrl: pref<string | undefined>({ default: 'https://laptop-1.tail87da75.ts.net', codec: stringCodec }),
+  calendarSyncEnabled: pref({ default: false, codec: boolCodec }),
+  calendarSyncCalendar: pref<CalendarChoice | undefined>({ default: undefined, codec: calendarChoiceCodec }),
+  calendarSyncEventTitle: pref<string | undefined>({ default: 'Gym', codec: stringCodec }),
 
   // Sync read + legacy rewrite; write-back also drives Tolgee/RTL.
   preferredLanguage: pref<string | undefined>({
