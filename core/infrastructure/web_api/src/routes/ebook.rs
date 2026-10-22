@@ -1,0 +1,142 @@
+use super::integration_error::ErrorEnvelope;
+use super::yomikata::DayApiError;
+use crate::state::AppState;
+use axum::{
+    extract::{rejection::JsonRejection, Path, State},
+    http::StatusCode,
+    Json,
+};
+use events::event_port::EventPublisher;
+use lifestats_application::use_cases::integration::IntegrationServiceTrait;
+use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use plot_domain::plot::renderer::PlotRenderer;
+use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
+use utoipa::ToSchema;
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EbookDescriptor {
+    #[schema(format = "uuid")]
+    pub server_id: String,
+    #[schema(minimum = 1, maximum = 1)]
+    pub protocol: u8,
+}
+
+#[utoipa::path(get, path = "/integrations/ebook", responses(
+    (status = 200, description = "Persistent database identity and ebook protocol version", body = EbookDescriptor),
+    (status = 500, description = "Storage unavailable", body = ErrorEnvelope)
+))]
+pub async fn descriptor<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+) -> Result<Json<EbookDescriptor>, DayApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    let _ = state;
+    todo!("persistent server identity")
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EbookDayRequest {
+    #[schema(min_length = 1, max_length = 1000)]
+    pub title: String,
+    #[schema(minimum = 1, maximum = 9007199254740992_i64)]
+    pub length: u64,
+    /// Normalized half-open [start,end) pairs, 0 <= start < end <= length; sorted, disjoint and non-adjacent.
+    #[schema(value_type = Vec<Vec<u64>>, max_items = 4096)]
+    pub spans: Vec<(u64, u64)>,
+    #[schema(minimum = 0, maximum = 9007199254740992_i64)]
+    pub last_position: u64,
+    #[schema(format = DateTime)]
+    pub observed_at: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EbookLegacyBookRequest {
+    #[schema(pattern = "^ttu-text-v1:[0-9a-f]{64}$")]
+    pub book_key: String,
+    #[schema(min_length = 1, max_length = 1000)]
+    pub title: String,
+    #[schema(minimum = 1, maximum = 9007199254740992_i64)]
+    pub length: u64,
+}
+
+#[utoipa::path(
+    put,
+    path = "/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}",
+    params(
+        ("producer" = String, Path, description = "Canonical lowercase UUID of the reporting ttu origin"),
+        ("book_key" = String, Path, description = "ttu-text-v1: followed by 64 lowercase hex characters"),
+        ("day" = String, Path, description = "Strict YYYY-MM-DD reading day (client local, 04:00 rollover)")
+    ),
+    request_body = EbookDayRequest,
+    responses(
+        (status = 204, description = "Merged (or already contained) and every projection committed"),
+        (status = 400, description = "Malformed JSON or unreadable body", body = ErrorEnvelope),
+        (status = 409, description = "Bundle conflict, book length mismatch, or legacy adoption pending", body = ErrorEnvelope),
+        (status = 415, description = "Unsupported media type", body = ErrorEnvelope),
+        (status = 422, description = "Invalid path or field, or aggregate overflow", body = ErrorEnvelope),
+        (status = 500, description = "Storage failed without committing", body = ErrorEnvelope)
+    )
+)]
+pub async fn put_day<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+    Path((producer, book_key, day)): Path<(String, String, String)>,
+    body: Result<Json<Box<RawValue>>, JsonRejection>,
+) -> Result<StatusCode, DayApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    let _ = (state, producer, book_key, day, body);
+    todo!("ebook ledger implementation")
+}
+
+#[utoipa::path(
+    put,
+    path = "/integrations/ebook/legacy-books/{reader_data_id}",
+    params(("reader_data_id" = u32, Path, description = "ttu data.id used by the pre-2026-10 event API")),
+    request_body = EbookLegacyBookRequest,
+    responses(
+        (status = 204, description = "Bound (or already bound to the same key)"),
+        (status = 400, description = "Malformed JSON or unreadable body", body = ErrorEnvelope),
+        (status = 415, description = "Unsupported media type", body = ErrorEnvelope),
+        (status = 409, description = "Bound to another key, title mismatch, or book already bound to another item", body = ErrorEnvelope),
+        (status = 422, description = "Invalid path or field", body = ErrorEnvelope),
+        (status = 500, description = "Storage failed without committing", body = ErrorEnvelope)
+    )
+)]
+pub async fn put_legacy_book<R, Rend, E, I>(
+    State(state): State<AppState<R, Rend, E, I>>,
+    Path(reader_data_id): Path<String>,
+    body: Result<Json<Box<RawValue>>, JsonRejection>,
+) -> Result<StatusCode, DayApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    let _ = (state, reader_data_id, body);
+    todo!("legacy adoption implementation")
+}
+
+pub async fn provision_legacy<R, Rend, E, I>(
+    state: State<AppState<R, Rend, E, I>>,
+    request: Json<super::integrations::ProvisionBundleRequest>,
+) -> Result<Json<super::integrations::ProvisionBundleResponse>, crate::error::ApiError>
+where
+    R: StatisticRepository + Send + Sync + 'static,
+    Rend: PlotRenderer + 'static,
+    E: EventPublisher + 'static,
+    I: IntegrationServiceTrait + 'static,
+{
+    super::integrations::provision_integration(state, Path("ebook".into()), request).await
+}

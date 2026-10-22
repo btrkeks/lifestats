@@ -13,10 +13,10 @@ use lifestats_core::{
     yomikata::{YomikataDayError, YomikataDayTotals},
 };
 use plot_domain::plot::renderer::PlotRenderer;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
-use utoipa::{OpenApi, ToSchema};
+use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -50,39 +50,9 @@ impl YomikataDayRequest {
     }
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct DayErrorEnvelope {
-    pub error: DayErrorBody,
-}
-#[derive(Debug, Serialize, ToSchema)]
-pub struct DayErrorBody {
-    pub code: DayErrorCode,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub field: Option<String>,
-    pub message: String,
-}
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum DayErrorCode {
-    InvalidField,
-    UnsupportedMediaType,
-    MalformedJson,
-    InvalidBody,
-    ProjectionOverflow,
-    BundleConflict,
-    StorageError,
-}
-impl DayErrorCode {
-    fn status(self) -> StatusCode {
-        match self {
-            Self::InvalidField | Self::ProjectionOverflow => StatusCode::UNPROCESSABLE_ENTITY,
-            Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            Self::MalformedJson | Self::InvalidBody => StatusCode::BAD_REQUEST,
-            Self::BundleConflict => StatusCode::CONFLICT,
-            Self::StorageError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
+pub use super::integration_error::{
+    ErrorBody as DayErrorBody, ErrorCode as DayErrorCode, ErrorEnvelope as DayErrorEnvelope,
+};
 
 pub struct DayApiError {
     status: StatusCode,
@@ -199,17 +169,4 @@ where
             .publish_event_async(Event::ValueUpdated(id));
     }
     Ok(StatusCode::NO_CONTENT)
-}
-
-#[derive(OpenApi)]
-#[openapi(
-    paths(replace_day),
-    components(schemas(YomikataDayRequest, DayErrorEnvelope, DayErrorBody, DayErrorCode)),
-    info(title = "Lifestats Yomikata daily API", version = "1")
-)]
-struct DailyApi;
-
-/// This document intentionally covers only the source-owned Yomikata API.
-pub async fn openapi() -> Json<utoipa::openapi::OpenApi> {
-    Json(DailyApi::openapi())
 }

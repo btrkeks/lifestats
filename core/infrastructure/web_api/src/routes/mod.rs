@@ -1,7 +1,10 @@
 pub mod daily_summary;
 pub mod dashboard;
+pub mod ebook;
 pub mod goals;
+pub mod integration_error;
 pub mod integrations;
+pub mod openapi;
 pub mod plots;
 pub mod progress;
 pub mod sessions;
@@ -28,10 +31,22 @@ where
     I: IntegrationServiceTrait + 'static,
 {
     Router::new()
-        .route("/openapi.json", get(yomikata::openapi))
+        .route("/openapi.json", get(openapi::openapi))
         .route(
             "/integrations/yomikata/days/{day}",
             put(yomikata::replace_day),
+        )
+        .route(
+            "/integrations/ebook",
+            get(ebook::descriptor).post(ebook::provision_legacy),
+        )
+        .route(
+            "/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}",
+            put(ebook::put_day),
+        )
+        .route(
+            "/integrations/ebook/legacy-books/{reader_data_id}",
+            put(ebook::put_legacy_book),
         )
         // Statistics endpoints
         .route(

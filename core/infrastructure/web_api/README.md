@@ -299,7 +299,10 @@ Heartbeat sessions track ongoing activity for a single statistic. Only one activ
 | `POST` | `/integrations/{source}` | Provision integration (e.g., Anki bundle) |
 | `POST` | `/integrations/ebook/events` | Ingest an idempotent ebook reading event and log per-book progress |
 | `PUT` | `/integrations/yomikata/days/{day}` | Atomically replace source-owned daily cards and exact study seconds |
-| `GET` | `/openapi.json` | Generated contract for the Yomikata daily API only |
+| `GET` | `/openapi.json` | Generated integration contract (Yomikata and ebook) |
+| `GET` | `/integrations/ebook` | Persistent server UUID and protocol version |
+| `PUT` | `/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}` | Merge read spans atomically |
+| `PUT` | `/integrations/ebook/legacy-books/{reader_data_id}` | Adopt an existing legacy book without adding credit |
 | `PUT` | `/integrations/liftlog/days` | Replace LiftLog workout time on the named days (empty `workouts` clears a day) |
 | `GET` | `/integrations/fitbit/auth/begin` | Start Fitbit OAuth flow |
 | `GET` | `/integrations/fitbit/auth/callback` | OAuth callback handler |
@@ -1322,3 +1325,5 @@ Ensure DTOs implement `Validate` and call `payload.validate()?` in handlers.
 ---
 
 **For questions or issues**, refer to the project root documentation or open an issue in the repository.
+
+See [the ebook contract](../../../docs/ebook-reading/api.md) for validation, error codes, and adoption ordering.

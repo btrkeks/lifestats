@@ -1,0 +1,14 @@
+{
+  "bundle_conflict": "{\"error\":{\"code\":\"bundle_conflict\",\"message\":\"Yomikata statistics or legacy values require correction\"}}",
+  "duplicate_field": "{\"error\":{\"code\":\"invalid_field\",\"message\":\"Unexpected or duplicate request fields\"}}",
+  "float": "{\"error\":{\"code\":\"invalid_field\",\"field\":\"cards_reviewed\",\"message\":\"Required nonnegative integer, at most 9223372036854775807\"}}",
+  "invalid_day": "{\"error\":{\"code\":\"invalid_field\",\"field\":\"day\",\"message\":\"Expected a valid YYYY-MM-DD calendar date\"}}",
+  "malformed_json": "{\"error\":{\"code\":\"malformed_json\",\"message\":\"Malformed JSON\"}}",
+  "missing_integer": "{\"error\":{\"code\":\"invalid_field\",\"field\":\"cards_reviewed\",\"message\":\"Required nonnegative integer, at most 9223372036854775807\"}}",
+  "negative_zero": "{\"error\":{\"code\":\"invalid_field\",\"field\":\"cards_reviewed\",\"message\":\"Required nonnegative integer, at most 9223372036854775807\"}}",
+  "non_object": "{\"error\":{\"code\":\"invalid_field\",\"message\":\"Expected a JSON object\"}}",
+  "projection_overflow": "{\"error\":{\"code\":\"projection_overflow\",\"message\":\"Resulting aggregate exceeds the supported integer range\"}}",
+  "storage_error": "{\"error\":{\"code\":\"storage_error\",\"message\":\"Unable to store daily totals\"}}",
+  "unknown_field": "{\"error\":{\"code\":\"invalid_field\",\"message\":\"Unexpected or duplicate request fields\"}}",
+  "unsupported_media_type": "{\"error\":{\"code\":\"unsupported_media_type\",\"message\":\"Content-Type must be application/json\"}}"
+}

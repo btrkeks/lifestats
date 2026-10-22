@@ -759,3 +759,105 @@ async fn regression_recreation_projects_only_the_requested_final_source_total() 
         }
     }
 }
+
+#[tokio::test]
+async fn served_openapi_matches_committed_snapshot() {
+    let f = fixture();
+    let actual: Value = f.server.get("/openapi.json").await.json();
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
+    if std::env::var_os("UPDATE_OPENAPI").is_some() {
+        std::fs::write(path, serde_json::to_string_pretty(&actual).unwrap() + "\n").unwrap();
+    }
+    let expected: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(actual, expected, "Regenerate with UPDATE_OPENAPI=1 cargo test -p lifestats-web-api --test yomikata_days_e2e served_openapi_matches_committed_snapshot");
+}
+
+#[tokio::test]
+async fn yomikata_error_bodies_match_byte_snapshots() {
+    let f = fixture();
+    let mut snapshots = std::collections::BTreeMap::new();
+    for (name, day, body, content_type) in [
+        ("missing_integer", DAY, "{}", "application/json"),
+        (
+            "unknown_field",
+            DAY,
+            r#"{"cards_reviewed":0,"study_time_seconds":0,"x":1}"#,
+            "application/json",
+        ),
+        (
+            "duplicate_field",
+            DAY,
+            r#"{"cards_reviewed":1,"cards_reviewed":2,"study_time_seconds":0}"#,
+            "application/json",
+        ),
+        ("non_object", DAY, "[]", "application/json"),
+        (
+            "invalid_day",
+            "2026-02-29",
+            r#"{"cards_reviewed":0,"study_time_seconds":0}"#,
+            "application/json",
+        ),
+        ("malformed_json", DAY, "{", "application/json"),
+        ("unsupported_media_type", DAY, "{}", "text/plain"),
+        (
+            "float",
+            DAY,
+            r#"{"cards_reviewed":1.0,"study_time_seconds":0}"#,
+            "application/json",
+        ),
+        (
+            "negative_zero",
+            DAY,
+            r#"{"cards_reviewed":-0,"study_time_seconds":0}"#,
+            "application/json",
+        ),
+    ] {
+        let response = f
+            .server
+            .put(&path(day))
+            .text(body)
+            .content_type(content_type)
+            .await;
+        assert!(response.status_code().is_client_error());
+        snapshots.insert(name, response.text());
+    }
+    put(&f, 10, 600).await;
+    manual(&f, ids(&f).0, i64::MAX, "overwrite").await;
+    let response = f
+        .server
+        .put(&path(DAY))
+        .json(&json!({"cards_reviewed":11,"study_time_seconds":600}))
+        .await;
+    response.assert_status(axum::http::StatusCode::UNPROCESSABLE_ENTITY);
+    snapshots.insert("projection_overflow", response.text());
+    let f = fixture();
+    legacy(&f, 1);
+    legacy(&f, 1);
+    let response = f
+        .server
+        .put(&path(DAY))
+        .json(&json!({"cards_reviewed":0,"study_time_seconds":0}))
+        .await;
+    response.assert_status(axum::http::StatusCode::CONFLICT);
+    snapshots.insert("bundle_conflict", response.text());
+    let f = fixture();
+    f.pool.get().unwrap().batch_execute("CREATE TRIGGER fail_yomikata BEFORE INSERT ON logging_data BEGIN SELECT RAISE(ABORT,'injected'); END;").unwrap();
+    let response = f
+        .server
+        .put(&path(DAY))
+        .json(&json!({"cards_reviewed":1,"study_time_seconds":60}))
+        .await;
+    response.assert_status(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    snapshots.insert("storage_error", response.text());
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/yomikata-errors.json"
+    );
+    let actual = serde_json::to_value(snapshots).unwrap();
+    if std::env::var_os("UPDATE_YOMIKATA_ERRORS").is_some() {
+        std::fs::create_dir_all(std::path::Path::new(path).parent().unwrap()).unwrap();
+        std::fs::write(path, serde_json::to_string_pretty(&actual).unwrap() + "\n").unwrap();
+    }
+    let expected: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(actual, expected);
+}
