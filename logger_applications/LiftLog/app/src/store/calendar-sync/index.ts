@@ -1,7 +1,7 @@
 import type { CalendarAttention } from '@/db/calendar-sync';
 import type { CalendarTarget } from '@/models/calendar-sync';
 import type { RootState } from '@/store/store';
-import { createAction, createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createAction, createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export type CalendarSyncStatus = { pending: number; attention: CalendarAttention[] };
 
@@ -50,15 +50,17 @@ export const calendarSessionsQueued = createAction('calendarSync/sessionsQueued'
 export const calendarRetryRequested = createAction('calendarSync/retryRequested');
 
 /**
- * Where a workout finished now would look for its event. Undefined while sync is off, not set up, or the
- * settings have not loaded, so a workout finished then is never enrolled.
+ * The enabled target for automatic or explicit enrollment. Undefined until settings are loaded and
+ * calendar sync is configured and enabled.
  */
-export function selectCalendarSyncTarget(state: RootState): CalendarTarget | undefined {
-  const { isHydrated, calendarSyncEnabled, calendarSyncCalendar, calendarSyncEventTitle } = state.settings;
-  const title = calendarSyncEventTitle?.trim();
-  return isHydrated && calendarSyncEnabled && calendarSyncCalendar && title
-    ? { calendarId: calendarSyncCalendar.id, accountName: calendarSyncCalendar.accountName, title }
-    : undefined;
-}
+export const selectCalendarSyncTarget = createSelector(
+  (state: RootState) => state.settings,
+  ({ isHydrated, calendarSyncEnabled, calendarSyncCalendar, calendarSyncEventTitle }): CalendarTarget | undefined => {
+    const title = calendarSyncEventTitle?.trim();
+    return isHydrated && calendarSyncEnabled && calendarSyncCalendar && title
+      ? { calendarId: calendarSyncCalendar.id, accountName: calendarSyncCalendar.accountName, title }
+      : undefined;
+  },
+);
 
 export const calendarSyncReducer = calendarSyncSlice.reducer;

@@ -11,7 +11,7 @@ import { calendarRetryRequested } from '@/store/calendar-sync';
 import { setCalendarSyncCalendar, setCalendarSyncEnabled, setCalendarSyncEventTitle } from '@/store/settings';
 import { formatDate } from '@/utils/format-date';
 import { useTranslate } from '@tolgee/react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { HelperText, Text, TextInput } from 'react-native-paper';
@@ -37,6 +37,7 @@ const calendarLabel = (calendar: CalendarChoice) => `${calendar.displayName} · 
 
 export default function CalendarSyncPage() {
   const { t } = useTranslate();
+  const router = useRouter();
   const dispatch = useDispatch();
   const { phoneCalendar } = useServices();
   const { calendarSyncEnabled, calendarSyncCalendar, calendarSyncEventTitle, preferredLanguage } = useAppSelector(
@@ -156,6 +157,14 @@ export default function CalendarSyncPage() {
           value={calendarSyncEnabled}
           disabled={!calendarSyncEnabled && (!calendarSyncCalendar || !titleIsUsable)}
           onValueChange={(value) => dispatch(setCalendarSyncEnabled(value))}
+        />
+      </SegmentedGroup>
+      <SegmentedGroup>
+        <SegmentListFormElement
+          label={t('settings.calendar_history.title')}
+          supportingText={t('settings.calendar_history.entry')}
+          icon={'history'}
+          onPress={() => router.push('/(tabs)/settings/calendar-history')}
         />
       </SegmentedGroup>
       <Text variant="bodyMedium">{statusText}</Text>

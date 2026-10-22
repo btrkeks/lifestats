@@ -50,6 +50,17 @@ export function enrollCalendarSessions(tx: ExpoSQLiteDatabase, ids: string[], ta
     .run();
 }
 
+/** Inserts only a new session; its preview claim must be pinned in the same transaction. */
+export function enrollNewCalendarSession(tx: ExpoSQLiteDatabase, sessionId: string, target: CalendarTarget): boolean {
+  return (
+    tx
+      .insert(sessions)
+      .values({ sessionId, ...target })
+      .onConflictDoNothing()
+      .run().changes === 1
+  );
+}
+
 /** Queues the enrolled ones of `ids` again. Returns whether any of them is enrolled. */
 export function requeueCalendarSessions(tx: ExpoSQLiteDatabase, ids: string[]): boolean {
   if (!ids.length) {

@@ -19,7 +19,7 @@ and cannot verify cloud delivery.
 5. Turn on **Move Gym events**.
 
 Sync is off until you turn it on. Turning it on never touches past workouts. Only workouts you finish
-from then on are moved.
+from then on are moved automatically. To include older workouts, use the explicit preview below.
 
 ## What happens
 
@@ -43,6 +43,30 @@ from then on are moved.
 - **The calendar write is local.** It needs no network. Your account's sync uploads it later, and
   LiftLog cannot see whether that upload happened.
 
+## Backfill past workouts
+
+1. Configure the calendar and exact event title, grant calendar access, and turn calendar sync on.
+2. Open **Backfill workout history** from Calendar sync settings.
+3. Review the **From** and **Through** dates. They default to the first and last finished workout dates
+   with completed sets. Both dates are inclusive. Edit them as `YYYY-MM-DD`.
+4. Tap **Preview history**. This reads workouts and calendar occurrences without changing either.
+5. Review the counts, workout names and dates, and each matching event's current time versus the workout
+   time. Choose individual **Ready** workouts, or tap **Select all ready**. Nothing starts selected.
+6. Tap **Apply N selected workouts** to queue only those rows. The results show queued and skipped
+   workouts. Calendar sync's normal waiting and **Needs attention** status track delivery afterward.
+
+Changing the calendar, title, enabled state, or date range invalidates the preview and selection.
+Already-linked workouts are left alone, including ones waiting or needing attention from an earlier
+run. Active, empty, and zero-length workouts are excluded. Missing, ambiguous, unsupported, or claimed
+events cannot be selected. When multiple workouts would take the same occurrence, all of that group is
+shown as conflicting and skipped. No event is created, unlinked, deleted, or restored.
+
+Apply checks permission, the current configuration and dates, and each workout again. Changed or
+removed workouts are skipped. It saves the exact previewed occurrence and its expected current time;
+it never searches for a replacement at delivery time. If that event changes outside LiftLog before
+delivery, normal calendar sync leaves the external edit alone and reports it. Repeating Apply does not
+change an already-enrolled workout or take its event twice.
+
 ### Needs attention
 
 The page lists each workout LiftLog could not finish with, by its day, and why. **Try again** looks at
@@ -61,6 +85,15 @@ all of them again.
 | Calendar is gone or read-only         | Check the calendar's account on the phone.                       |
 | Waiting for the series to sync        | Let the phone sync the account. LiftLog retries by itself.       |
 | Could not be updated                  | LiftLog retries by itself while the app is open.                 |
+
+### Google reminder inheritance
+
+On the Google sync adapter tested, creating a moved occurrence preserved the current alert time but
+converted a calendar-default reminder into an explicit reminder on that occurrence. LiftLog's device
+calendar integration does not expose Google's reminder-inheritance flag, so inherited reminders are not
+guaranteed to follow later calendar-default changes. Existing explicit reminders retain their current
+settings. A time-only historical operation can preserve the original Google reminder representation by
+reconciling the saved before-state through Google Calendar after upload.
 
 ## Contributor notes
 
@@ -95,11 +128,27 @@ setActiveSessionId effect (finishing a workout)
 
 ### Enrollment
 
-Only `setActiveSessionId` passes `enrollFinishedIn`, and only when `selectCalendarSyncTarget` returns a
+For automatic enrollment, only `setActiveSessionId` passes `enrollFinishedIn`, and only when `selectCalendarSyncTarget` returns a
 target: sync on, a calendar chosen, a non-empty title, settings loaded, and a phone calendar present.
 `queueSessionSync` then enrolls the workout in progress if the write finished it and it has a completed
 set. Every session writer re-queues sessions that are already enrolled. Restores, imports, History
-edits and **Sync all history** never enroll a workout.
+edits and Lifestats **Sync all history** never automatically enroll a workout.
+
+### Explicit history enrollment
+
+`models/calendar-backfill.ts` defines `BackfillPreview`, with a captured target and inclusive range,
+workout IDs/dates/names, exact completed spans, widened desired spans, and matched occurrence identities
+and current spans. `previewCalendarBackfill` in `services/calendar-backfill.ts` uses the existing day and
+title matching rules. It counts matches before checking suitability or ownership and caches one lookup
+per day. It performs no database or provider writes.
+
+`applyCalendarBackfill` rereads permission before touching SQLite, then rereads the live request and
+finished workout inside each transaction. It inserts a session row only when none exists and pins the
+preview claim, original/observed times, and desired attempt in the same transaction. A failed claim
+rolls back enrollment. The existing unique claim index arbitrates competing writers. No provider write
+runs inside a transaction. Only newly queued rows cause the page to dispatch `calendarSessionsQueued`.
+The existing runner reconciles the saved attempt and checks the pinned occurrence before delivery.
+No new table or migration is involved.
 
 ### One run
 
