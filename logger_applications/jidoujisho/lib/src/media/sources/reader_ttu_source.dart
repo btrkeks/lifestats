@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_logs/flutter_logs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,13 +18,17 @@ import 'package:yuuna/utils.dart';
 
 /// A global [Provider] for serving a local ッツ Ebook Reader.
 final ttuServerProvider =
-    FutureProvider.family<LocalAssetsServer, Language>((ref, language) {
-  return ReaderTtuSource.instance.serveLocalAssets(language);
+    FutureProvider.family<LocalAssetsServer, Language>((ref, language) async {
+  final source = ReaderTtuSource.instance;
+  final server = await source.serveLocalAssets(language);
+  await source.ensureOriginMatchesBundle(language);
+  return server;
 });
 
 /// A global [Provider] for getting ッツ Ebook Reader books from IndexedDB.
 final ttuBooksProvider =
-    FutureProvider.family<List<MediaItem>, Language>((ref, language) {
+    FutureProvider.family<List<MediaItem>, Language>((ref, language) async {
+  await ref.watch(ttuServerProvider(language).future);
   return ReaderTtuSource.instance.getBooksHistory(
     appModel: ref.watch(appProvider),
     language: language,
@@ -250,7 +255,7 @@ class ReaderTtuSource extends ReaderMediaSource {
     required Language language,
     bool recursive = false,
   }) async {
-    int port = getPortForLanguage(appModel.targetLanguage);
+    int port = getPortForLanguage(language);
 
     List<MediaItem>? items;
 
@@ -258,6 +263,7 @@ class ReaderTtuSource extends ReaderMediaSource {
       initialUrlRequest: URLRequest(
         url: WebUri('http://localhost:$port/'),
       ),
+      initialSettings: InAppWebViewSettings(cacheMode: CacheMode.LOAD_NO_CACHE),
       onLoadStop: (controller, url) async {
         controller.evaluateJavascript(source: getHistoryJs);
       },
@@ -307,7 +313,7 @@ class ReaderTtuSource extends ReaderMediaSource {
         await Future.delayed(const Duration(milliseconds: 500));
       }
     } finally {
-      await webView.dispose();
+      unawaited(_drainThenDispose(webView));
     }
 
     return items!;
@@ -466,7 +472,7 @@ class ReaderTtuSource extends ReaderMediaSource {
   /// Used to fetch JSON for all books in IndexedDB.
   static const String getHistoryJs = '''
 indexedDB.databases().then((databases) => {
-  if (databases.length > 0) {
+  if (databases.some((database) => database.name === "books")) {
     var bookmarkJson = JSON.stringify([]);
     var dataJson = JSON.stringify([]);
     var lastItemJson = JSON.stringify([]);
@@ -492,14 +498,18 @@ indexedDB.databases().then((databases) => {
           };
 
           dbRequest.onupgradeneeded = function(event) {
+            dbRequest.transaction.abort();
             reject(Error('Not found'));
           };
 
           dbRequest.onsuccess = function(event) {
             var database = event.target.result;
+            database.onversionchange = () => database.close();
 
             try {
-              var transaction = database.transaction([storeName], 'readwrite');
+              var transaction = database.transaction([storeName], 'readonly');
+              transaction.oncomplete = () => database.close();
+              transaction.onabort = () => database.close();
               var objectStore;
               try {
                 objectStore = transaction.objectStore(storeName);
@@ -568,128 +578,97 @@ indexedDB.databases().then((databases) => {
 });
 ''';
 
-  /// Used to fetch JSON for all books in IndexedDB.
-  static const String get = '''
-indexedDB.databases().then((databases) => {
-  if (databases.length > 0) {
-    var bookmarkJson = JSON.stringify([]);
-    var dataJson = JSON.stringify([]);
-    var lastItemJson = JSON.stringify([]);
+  final Set<int> _originsNeedingFreshLoad = {};
 
-    var blobToBase64 = function(blob) {
-      return new Promise(resolve => {
-        let reader = new FileReader();
-        reader.onload = function() {
-          let dataUrl = reader.result;
-          resolve(dataUrl);
-        };
-        reader.readAsDataURL(blob);
-      });
+  /// The generation shipped with this APK.
+  Future<String> bundledBuildVersion() async {
+    final version = jsonDecode(await rootBundle.loadString(
+        'assets/ttu-ebook-reader/_app/version.json')) as Map<String, dynamic>;
+    return version['version'] as String;
+  }
+
+  /// Refresh worker-owned assets without changing the origin's book storage.
+  Future<void> ensureOriginMatchesBundle(Language language) async {
+    final port = getPortForLanguage(language);
+    final version = await bundledBuildVersion();
+    final key = 'ttu_origin_build_$port';
+    if (getPreference<String?>(key: key, defaultValue: null) == version) {
+      return;
     }
 
-    function getAllFromIDBStore(storeName) {
-      return new Promise(
-        function(resolve, reject) {
-          var dbRequest = indexedDB.open("books");
-
-          dbRequest.onerror = function(event) {
-            reject(Error("Error opening DB"));
-          };
-
-          dbRequest.onupgradeneeded = function(event) {
-            reject(Error('Not found'));
-          };
-
-          dbRequest.onsuccess = function(event) {
-            var database = event.target.result;
-
-            try {
-              var transaction = database.transaction([storeName], 'readwrite');
-              var objectStore;
-              try {
-                objectStore = transaction.objectStore(storeName);
-              } catch (e) {
-                reject(Error('Error getting objects'));
-              }
-
-              var objectRequest = objectStore.getAll();
-
-              objectRequest.onerror = function(event) {
-                reject(Error('Error getting objects'));
-              };
-
-              objectRequest.onsuccess = function(event) {
-                if (objectRequest.result) resolve(objectRequest.result);
-                else reject(Error('Objects not found'));
-              }; 
-            } catch (e) {
-              console.log(JSON.stringify({messageType: "error", error: e.name}));
-              reject(Error('Error getting objects'));
-            }
-          };
+    _originsNeedingFreshLoad.add(port);
+    final verified = Completer<void>();
+    bool reloaded = false;
+    final webView = HeadlessInAppWebView(
+      initialUrlRequest: URLRequest(url: WebUri('http://localhost:$port/')),
+      initialSettings: InAppWebViewSettings(cacheMode: CacheMode.LOAD_NO_CACHE),
+      onLoadStop: (controller, url) async {
+        if (verified.isCompleted) {
+          return;
         }
-      );
-    }
-
-    async function getTtuData() {
-      try {
-        items = await getAllFromIDBStore("data");
-        await Promise.all(items.map(async (item) => {
-          try {
-            item["coverImage"] = await blobToBase64(item["coverImage"]);
-          } catch (e) {}
-        }));
-        
-        dataJson = JSON.stringify(items);
-      } catch (e) {
-        dataJson = JSON.stringify([]);
-      }
-
-      try {
-        bookmarkJson = JSON.stringify(await getAllFromIDBStore("bookmark"));
-      } catch (e) {
-        bookmarkJson = JSON.stringify([]);
-      }
-      
-      try {
-        lastItemJson = JSON.stringify(await getAllFromIDBStore("lastItem"));
-      } catch (e) {
-        lastItemJson = JSON.stringify([]);
-      }
-
-      console.log(JSON.stringify({messageType: "history", lastItem: lastItemJson, bookmark: bookmarkJson, data: dataJson}));
-    }
-
-    try {
-      getTtuData();
-    } catch (e) {
-      console.log(JSON.stringify({messageType: "history", lastItem: lastItemJson, bookmark: bookmarkJson, data: dataJson}));
-    }
-  } else {
-  
-    console.log(JSON.stringify({messageType: "empty"}));
-    
-  }
-});
-''';
-
-  /// This ensures that the internal version included with the app always uses
-  /// the cache and is consistent. If this version changes and the current stored
-  /// last version mismatches, a load from network is forced. The app will then
-  /// update its new last version, and all new loads will be from the cache
-  /// unless there is a new app version loaded with a different internal version.
-  static const ttuInternalVersion = 2;
-
-  /// Used to check for the current version.
-  int? get currentTtuInternalVersion {
-    return getPreference<int?>(key: 'ttu_internal_version', defaultValue: null);
-  }
-
-  /// Sets the new version.
-  void setTtuInternalVersion() async {
-    await setPreference<int?>(
-      key: 'ttu_internal_version',
-      value: ttuInternalVersion,
+        try {
+          if (!reloaded) {
+            final reset = await controller.callAsyncJavaScript(functionBody: '''
+const registrations = await navigator.serviceWorker.getRegistrations();
+await Promise.all(registrations.map((registration) => registration.unregister()));
+const names = await caches.keys();
+await Promise.all(names.filter((name) => name !== 'ttu-userfonts').map((name) => caches.delete(name)));
+return true;
+''');
+            if (reset?.value != true) {
+              throw StateError('Reader origin cleanup failed');
+            }
+            reloaded = true;
+            await controller.reload();
+          } else {
+            final check = await controller.callAsyncJavaScript(functionBody: '''
+const response = await fetch('/_app/version.json', {cache: 'no-store'});
+const generation = (await response.json()).version;
+return navigator.serviceWorker.controller === null && generation === ${jsonEncode(version)};
+''');
+            if (check?.value != true) {
+              throw StateError('Reader origin generation verification failed');
+            }
+            if (!verified.isCompleted) {
+              verified.complete();
+            }
+          }
+        } catch (error, stack) {
+          if (!verified.isCompleted) {
+            verified.completeError(error, stack);
+          }
+        }
+      },
     );
+    try {
+      await webView.run();
+      await verified.future.timeout(const Duration(seconds: 15));
+      await setPreference<String>(key: key, value: version);
+    } catch (error) {
+      debugPrint('Reader origin refresh will retry on next launch: $error');
+    } finally {
+      await webView.dispose();
+    }
+  }
+
+  /// Bypass the WebView HTTP cache on the first visible load after a refresh.
+  CacheMode cacheModeFor(int port) {
+    return _originsNeedingFreshLoad.remove(port)
+        ? CacheMode.LOAD_NO_CACHE
+        : CacheMode.LOAD_DEFAULT;
+  }
+
+  Future<void> _drainThenDispose(HeadlessInAppWebView webView) async {
+    try {
+      await webView.webViewController
+          ?.callAsyncJavaScript(
+            functionBody: 'return await globalThis.ttuLifestats?.drain(4000);',
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (error) {
+      debugPrint('Reader headless drain deferred: $error');
+    } finally {
+      await webView.dispose();
+    }
   }
 }

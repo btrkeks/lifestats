@@ -254,16 +254,6 @@ class _ReaderTtuSourcePageState extends BaseSourcePageState<ReaderTtuSourcePage>
     return selectedText;
   }
 
-  CacheMode get cacheMode {
-    if (mediaSource.currentTtuInternalVersion ==
-        ReaderTtuSource.ttuInternalVersion) {
-      return CacheMode.LOAD_CACHE_ELSE_NETWORK;
-    } else {
-      mediaSource.setTtuInternalVersion();
-      return CacheMode.LOAD_NO_CACHE;
-    }
-  }
-
   createFileFromBase64(String base64Content) async {
     var bytes = base64Decode(base64Content.replaceAll('\n', ''));
     DocumentFileSavePlus().saveFile(
@@ -301,7 +291,7 @@ class _ReaderTtuSourcePageState extends BaseSourcePageState<ReaderTtuSourcePage>
         horizontalScrollbarTrackColor: Colors.transparent,
         scrollbarFadingEnabled: false,
         appCachePath: appModel.browserDirectory.path,
-        cacheMode: cacheMode,
+        cacheMode: mediaSource.cacheModeFor(server.boundPort!),
         supportMultipleWindows: true,
       ),
       contextMenu: contextMenu,
@@ -348,7 +338,7 @@ class _ReaderTtuSourcePageState extends BaseSourcePageState<ReaderTtuSourcePage>
                     horizontalScrollbarTrackColor: Colors.transparent,
                     scrollbarFadingEnabled: false,
                     appCachePath: appModel.browserDirectory.path,
-                    cacheMode: cacheMode,
+                    cacheMode: mediaSource.cacheModeFor(server.boundPort!),
                     supportMultipleWindows: true,
                   ),
                   windowId: createWindowRequest.windowId,
@@ -423,23 +413,17 @@ class _ReaderTtuSourcePageState extends BaseSourcePageState<ReaderTtuSourcePage>
     InAppWebViewController controller,
     ConsoleMessage message,
   ) async {
+    final messageJson = parseTtuHostMessage(message.message);
+    if (messageJson == null) {
+      return;
+    }
+
     DateTime now = DateTime.now();
     if (lastMessageTime != null &&
         now.difference(lastMessageTime!) < consoleMessageDebounce) {
       return;
     }
-
     lastMessageTime = now;
-
-    late Map<String, dynamic> messageJson;
-    try {
-      messageJson = jsonDecode(message.message);
-    } catch (e) {
-      JsonEncoder encoder = const JsonEncoder.withIndent('  ');
-      debugPrint(encoder.convert(message.toJson()));
-
-      return;
-    }
 
     switch (messageJson['jidoujisho-message-type']) {
       case 'lookup':
@@ -1089,4 +1073,21 @@ function selectTextForTextLength(x, y, index, length, whitespaceOffset, isSpaceD
     evt.deltaY = -0.001 * ${mediaSource.volumePageTurningSpeed * (mediaSource.volumePageTurningInverted ? -1 : 1)};
     document.body.dispatchEvent(evt); 
     ''';
+}
+
+/// Classify console output before it can consume the lookup debounce window.
+Map<String, dynamic>? parseTtuHostMessage(String raw) {
+  if (!raw.contains('jidoujisho-message-type')) {
+    return null;
+  }
+  try {
+    final value = jsonDecode(raw);
+    if (value is Map<String, dynamic> &&
+        value['jidoujisho-message-type'] == 'lookup') {
+      return value;
+    }
+  } on FormatException {
+    return null;
+  }
+  return null;
 }
