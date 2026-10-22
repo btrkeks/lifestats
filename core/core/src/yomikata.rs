@@ -37,15 +37,12 @@ impl YomikataDayTotals {
     }
 }
 
-/// Preserve all contributions outside this source, including signed corrections.
-pub fn replace_source_projection(
-    current: i64,
-    old: i64,
-    new: i64,
-) -> Result<i64, YomikataDayError> {
-    // The residual can exceed i64 even when the resulting aggregate fits.
-    let result = i128::from(current) - i128::from(old) + i128::from(new);
-    i64::try_from(result).map_err(|_| YomikataDayError::ProjectionOverflow)
+pub use crate::shared::projection::replace_source_projection;
+
+impl From<crate::shared::projection::ProjectionOverflow> for YomikataDayError {
+    fn from(_: crate::shared::projection::ProjectionOverflow) -> Self {
+        Self::ProjectionOverflow
+    }
 }
 
 pub struct YomikataBundleDefinitions {
