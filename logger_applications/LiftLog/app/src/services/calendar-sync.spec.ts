@@ -7,6 +7,7 @@ import {
   readCalendarAttention,
   readPendingCalendarSessions,
   requeueCalendarAttention,
+  recordCalendarOutcome,
 } from '@/db/calendar-sync';
 import { calendarSyncSessionsSchema } from '@/db/schema';
 import { queueSessionSync } from '@/db/session-sync';
@@ -59,7 +60,7 @@ describe('syncCalendarSessions', () => {
     calendar = new FakePhoneCalendar();
   });
 
-  const run = () => syncCalendarSessions({ db, calendar, logger });
+  const run = () => syncCalendarSessions({ db, calendar, logger, enabled: () => true });
   const finish = (session: Session, target = TARGET) =>
     db.transaction((tx) => {
       writeSession(tx, session);
@@ -302,6 +303,153 @@ describe('syncCalendarSessions', () => {
 
     expect(calendar.timesOf(gym)).toEqual(span('2026-10-11T18:05', '2026-10-11T19:30'));
     expect(countPendingCalendarSessions(db)).toBe(0);
+  });
+
+  it.each(['pause', 'background', 'resume', 'delete', 'date', 'span'] as const)(
+    'leaves the revision pending after %s during occurrence lookup',
+    async (change) => {
+      const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
+      const session = workout('w', '2026-10-11', '18:05', '19:10');
+      finish(session);
+      let enabled = true;
+      const original = calendar.occurrences.bind(calendar);
+      const lookup = vi.spyOn(calendar, 'occurrences').mockImplementationOnce(async (...args) => {
+        const found = await original(...args);
+        switch (change) {
+          case 'pause':
+          case 'background':
+            enabled = false;
+            break;
+          case 'resume':
+            db.transaction((tx) => queueSessionSync(tx, ['w'], () => setActiveSession(tx, session)));
+            break;
+          case 'delete':
+            db.transaction((tx) => queueSessionSync(tx, ['w'], () => deleteSession(tx, 'w')));
+            break;
+          case 'date':
+            edit(session.withUpdatedDate(LocalDate.parse('2026-10-12')));
+            break;
+          case 'span':
+            edit(workout('w', '2026-10-11', '18:05', '19:50'));
+            break;
+        }
+        return found;
+      });
+      await syncCalendarSessions({ db, calendar, logger, enabled: () => enabled });
+      expect(calendar.writes).toEqual([]);
+      expect(readPendingCalendarSessions(db)[0]?.claim).toBeUndefined();
+      expect(countPendingCalendarSessions(db)).toBe(1);
+      lookup.mockRestore();
+      if (change === 'span') {
+        await run();
+        expect(calendar.timesOf(gym)).toEqual(span('2026-10-11T18:05', '2026-10-11T19:50'));
+      }
+    },
+  );
+
+  it.each(['pause', 'resume', 'delete', 'date', 'span'] as const)(
+    'leaves a claimed revision pending after %s during inspection',
+    async (change) => {
+      const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
+      const session = workout('w', '2026-10-11', '18:05', '19:10');
+      finish(session);
+      await run();
+      edit(workout('w', '2026-10-11', '18:05', '19:40'));
+      let enabled = true;
+      const original = calendar.inspect.bind(calendar);
+      vi.spyOn(calendar, 'inspect').mockImplementationOnce(async (...args) => {
+        const found = await original(...args);
+        switch (change) {
+          case 'pause':
+            enabled = false;
+            break;
+          case 'resume':
+            db.transaction((tx) => queueSessionSync(tx, ['w'], () => setActiveSession(tx, session)));
+            break;
+          case 'delete':
+            db.transaction((tx) => queueSessionSync(tx, ['w'], () => deleteSession(tx, 'w')));
+            break;
+          case 'date':
+            edit(session.withUpdatedDate(LocalDate.parse('2026-10-12')));
+            break;
+          case 'span':
+            edit(workout('w', '2026-10-11', '18:05', '19:50'));
+            break;
+        }
+        return found;
+      });
+      await syncCalendarSessions({ db, calendar, logger, enabled: () => enabled });
+      expect(calendar.writes).toHaveLength(1);
+      expect(calendar.timesOf(gym)).toEqual(span('2026-10-11T18:05', '2026-10-11T19:10'));
+      expect(countPendingCalendarSessions(db)).toBe(1);
+      if (change === 'span') {
+        await run();
+        expect(calendar.timesOf(gym)).toEqual(span('2026-10-11T18:05', '2026-10-11T19:50'));
+      }
+    },
+  );
+
+  it.each([false, true])(
+    'reconciles a saved attempt with landed=%s before reading edits during recovery',
+    async (landed) => {
+      const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
+      finish(workout('w', '2026-10-11', '18:05', '19:10'));
+      const crash = () => {
+        throw new Error('killed');
+      };
+      if (landed) calendar.afterWrite = crash;
+      else calendar.beforeWrite = crash;
+      await run();
+      calendar.afterWrite = () => {};
+      calendar.beforeWrite = () => {};
+      const inspect = calendar.inspect.bind(calendar);
+      vi.spyOn(calendar, 'inspect').mockImplementationOnce(async (...args) => {
+        const found = await inspect(...args);
+        edit(workout('w', '2026-10-11', '18:05', '19:50'));
+        return found;
+      });
+      const before = calendar.writes.length;
+      await run();
+      expect(calendar.writes.slice(before).map((w) => w.times)).toEqual([span('2026-10-11T18:05', '2026-10-11T19:50')]);
+      expect(calendar.timesOf(gym)).toEqual(span('2026-10-11T18:05', '2026-10-11T19:50'));
+      expect(countPendingCalendarSessions(db)).toBe(0);
+    },
+  );
+
+  it('persists the bounded source identity with its claim', async () => {
+    const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'), {
+      organizer: 'me@example.com',
+      sourceTimezone: 'Europe/Berlin',
+      sourceDuration: 'P3600S',
+    });
+    finish(workout('w', '2026-10-11', '18:05', '19:10'));
+    await run();
+    edit(workout('w', '2026-10-11', '18:05', '19:40'));
+    expect(readPendingCalendarSessions(db)[0]?.claim?.identity).toEqual(gym.identity);
+  });
+
+  it('never regresses a newer outcome or its acknowledged revision', () => {
+    finish(workout('w', '2026-10-11', '18:05', '19:10'));
+    edit(workout('w', '2026-10-11', '18:05', '19:40'));
+    db.transaction((tx) => recordCalendarOutcome(tx, { sessionId: 'w', seq: 2, outcome: 'changed', date: undefined }));
+    db.transaction((tx) => recordCalendarOutcome(tx, { sessionId: 'w', seq: 1, outcome: 'adjusted', date: undefined }));
+    const row = db.select().from(calendarSyncSessionsSchema).get();
+    expect(row).toMatchObject({ seq: 2, doneSeq: 2, outcome: 'changed' });
+    expect(countPendingCalendarSessions(db)).toBe(0);
+  });
+
+  it('checks the pause predicate before every queued workout', async () => {
+    calendar.addOccurrence(span('2026-10-10T17:00', '2026-10-10T18:00'));
+    calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
+    finish(workout('a', '2026-10-10', '18:05', '19:10'));
+    finish(workout('b', '2026-10-11', '18:05', '19:10'));
+    let enabled = true;
+    calendar.afterWrite = () => {
+      enabled = false;
+    };
+    await syncCalendarSessions({ db, calendar, logger, enabled: () => enabled });
+    expect(calendar.writes).toHaveLength(1);
+    expect(readPendingCalendarSessions(db).map((row) => row.sessionId)).toEqual(['b']);
   });
 
   it('keeps going past blocked workouts, and retries one waiting for its series to sync', async () => {

@@ -2,7 +2,19 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { LocalDate, OffsetDateTime } from '@js-joda/core';
 import { dayWindow, matchOccurrence, Occurrence, occurrenceOf, workoutTimes } from '@/models/calendar-sync';
 
-const identity = { calendarId: 1, accountName: 'me', eventId: 5, instanceTime: 0, syncId: 's', rrule: 'FREQ=DAILY' };
+const identity = {
+  calendarId: 1,
+  accountName: 'me',
+  eventId: 5,
+  instanceTime: 0,
+  syncId: 's',
+  rrule: 'FREQ=DAILY',
+  title: 'Gym',
+  organizer: undefined,
+  sourceStartMs: 0,
+  sourceDuration: 'P3600S',
+  sourceTimezone: 'UTC',
+};
 const ms = (instant: string) => OffsetDateTime.parse(instant).toInstant().toEpochMilli();
 
 describe('calendar sync model', () => {

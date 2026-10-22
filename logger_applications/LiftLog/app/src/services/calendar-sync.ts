@@ -4,6 +4,7 @@ import {
   claimOccurrence,
   PendingCalendarSession,
   readClaimOwner,
+  readCalendarRevision,
   readPendingCalendarSessions,
   recordCalendarOutcome,
   saveCalendarAttempt,
@@ -31,7 +32,12 @@ export type CalendarRun = {
   retry: boolean;
 };
 
-type Deps = { db: ExpoSQLiteDatabase; calendar: PhoneCalendar; logger: Pick<Logger, 'warn'> };
+type Deps = {
+  db: ExpoSQLiteDatabase;
+  calendar: PhoneCalendar;
+  logger: Pick<Logger, 'warn'>;
+  enabled: () => boolean;
+};
 
 /**
  * Brings each pending workout's event in line with the workout, one workout at a time, and records what
@@ -41,7 +47,12 @@ type Deps = { db: ExpoSQLiteDatabase; calendar: PhoneCalendar; logger: Pick<Logg
 export async function syncCalendarSessions(deps: Deps): Promise<CalendarRun> {
   let retry = false;
   for (const session of readPendingCalendarSessions(deps.db)) {
+    if (!deps.enabled()) break;
     const outcome = await syncSession(deps, session);
+    if (outcome === 'pending') {
+      retry = true;
+      continue;
+    }
     if (outcome === 'no-permission') {
       return { noPermission: true, retry: false };
     }
@@ -51,16 +62,28 @@ export async function syncCalendarSessions(deps: Deps): Promise<CalendarRun> {
 }
 
 async function syncSession(
-  { db, calendar, logger }: Deps,
+  { db, calendar, logger, enabled }: Deps,
   { sessionId, seq, target, claim }: PendingCalendarSession,
-): Promise<CalendarOutcome | 'no-permission'> {
-  // The day the outcome is about: the claimed day once there is a claim, else the workout's day.
+): Promise<CalendarOutcome | 'no-permission' | 'pending'> {
   let date: LocalDate | undefined = claim?.date;
   const record = (outcome: CalendarOutcome) => {
     db.transaction((tx) => recordCalendarOutcome(tx, { sessionId, seq, outcome, date }));
     return outcome;
   };
+  const eligibleNow = (next: Times, on: LocalDate) => {
+    const current = readFinishedSessions(db, [sessionId]).at(0);
+    const span = current && sessionSpan(current);
+    const times = span && workoutTimes(span);
+    return (
+      enabled() &&
+      readCalendarRevision(db, sessionId) === seq &&
+      current?.date.equals(on) &&
+      times !== undefined &&
+      sameTimes(times, next)
+    );
+  };
   const settleMove = async (owned: CalendarClaim, next: Times) => {
+    if (!eligibleNow(next, owned.date)) return 'pending' as const;
     const moved = await calendar.move(owned.identity, next, owned.observed);
     switch (moved.kind) {
       case 'moved':
@@ -77,7 +100,6 @@ async function syncSession(
   };
 
   try {
-    // A write from an earlier run may or may not have reached the calendar. Find out before anything else.
     let owned = claim;
     if (owned?.attempt) {
       const settled = await settleAttempt(db, calendar, sessionId, owned, owned.attempt);
@@ -88,8 +110,10 @@ async function syncSession(
         return record(settled);
       }
       owned = { ...owned, observed: settled.observed, attempt: undefined };
+      seq = readCalendarRevision(db, sessionId) ?? seq;
     }
 
+    if (!enabled()) return 'pending';
     const session = readFinishedSessions(db, [sessionId]).at(0);
     const span = session && sessionSpan(session);
     const times = span && workoutTimes(span);
@@ -104,6 +128,12 @@ async function syncSession(
       if (sameTimes(times, owned.observed)) {
         return record('adjusted');
       }
+      const inspected = await calendar.inspect(owned.identity);
+      if (!eligibleNow(times, session.date)) return 'pending';
+      if (inspected.kind !== 'found') {
+        return inspected.kind === 'no-permission' ? inspected.kind : record(inspected.kind);
+      }
+      if (!sameTimes(inspected.times, owned.observed)) return record('changed');
       db.transaction((tx) => saveCalendarAttempt(tx, sessionId, times));
       return await settleMove(owned, times);
     }
@@ -111,6 +141,7 @@ async function syncSession(
     date = session.date;
     const window = dayWindow(session.date);
     const found = await calendar.occurrences(target, window);
+    if (!eligibleNow(times, session.date)) return 'pending';
     if (found.kind !== 'found') {
       return found.kind === 'no-permission' ? found.kind : record(found.kind);
     }
@@ -126,6 +157,7 @@ async function syncSession(
       return record(problem);
     }
     const fresh = { identity, date: session.date, original, observed: original, attempt: times };
+    if (!eligibleNow(times, session.date)) return 'pending';
     if (!db.transaction((tx) => claimOccurrence(tx, sessionId, fresh))) {
       return record('claimed');
     }
@@ -136,10 +168,6 @@ async function syncSession(
   }
 }
 
-/**
- * Checkpoints a saved attempt by what the calendar shows now: the attempt (it landed), or the time
- * LiftLog last saw (it never did). Anything else was changed outside LiftLog, and is left alone.
- */
 async function settleAttempt(
   db: ExpoSQLiteDatabase,
   calendar: PhoneCalendar,

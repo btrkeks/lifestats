@@ -15,11 +15,17 @@ export type CalendarTarget = { calendarId: number; accountName: string; title: s
 export type OccurrenceIdentity = {
   calendarId: number;
   accountName: string;
+  title: string;
+  organizer: string | undefined;
+  sourceStartMs: number | undefined;
+  sourceDuration: string | undefined;
+  sourceTimezone: string | undefined;
+
   /** The series master, or the event itself when it does not repeat. */
   eventId: number;
   /** The occurrence's original start (`ORIGINAL_INSTANCE_TIME`); undefined for an event that does not repeat. */
   instanceTime: number | undefined;
-  /** The provider's sync id for `eventId`. A different one later means the row now holds another event. */
+  /** The provider's sync id for `eventId`. A mismatch blocks further writes. */
   syncId: string | undefined;
   /** The master's recurrence rule. A different one later means the series was changed or split. */
   rrule: string | undefined;
@@ -74,8 +80,8 @@ export function isCalendarOutcome(value: string): value is CalendarOutcome {
 }
 
 /**
- * A workout's span as calendar times, widened to whole seconds because the provider stores a moved
- * occurrence's length in seconds. Undefined when it has no length, which leaves its event alone.
+ * Widens to whole seconds for the first exception insert's DURATION payload.
+ * Undefined when the workout has no length, which leaves its event alone.
  */
 export function workoutTimes(span: { start: OffsetDateTime; end: OffsetDateTime }): Times | undefined {
   if (!span.end.isAfter(span.start)) {
@@ -128,6 +134,7 @@ export type CalendarAccess = 'granted' | 'denied' | 'blocked';
 
 /** Why an occurrence could not be read or moved. */
 export type OccurrenceProblem =
+  | 'changed'
   | 'no-permission'
   | 'calendar-missing'
   | 'gone'

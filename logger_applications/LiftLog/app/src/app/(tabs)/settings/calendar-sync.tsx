@@ -11,7 +11,7 @@ import { setCalendarSyncCalendar, setCalendarSyncEnabled, setCalendarSyncEventTi
 import { formatDate } from '@/utils/format-date';
 import { useTranslate } from '@tolgee/react';
 import { useFocusEffect } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Linking } from 'react-native';
 import { HelperText, Text, TextInput } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
@@ -45,14 +45,23 @@ export default function CalendarSyncPage() {
   const [access, setAccess] = useState<CalendarAccess>();
   const [calendars, setCalendars] = useState<CalendarChoice[]>([]);
 
-  // Again on every focus, so access granted in the system settings shows up when coming back.
-  useFocusEffect(() => {
-    void (async () => {
-      const current = await phoneCalendar.access();
-      setAccess(current);
-      setCalendars(current === 'granted' ? await phoneCalendar.calendars() : []);
-    })();
-  });
+  // useFocusEffect subscribes by callback identity, including renders caused by its own async reads.
+  useFocusEffect(
+    useCallback(() => {
+      let focused = true;
+      void (async () => {
+        const current = await phoneCalendar.access();
+        const available = current === 'granted' ? await phoneCalendar.calendars() : [];
+        if (focused) {
+          setAccess(current);
+          setCalendars(available);
+        }
+      })();
+      return () => {
+        focused = false;
+      };
+    }, [phoneCalendar]),
+  );
 
   const allowAccess = async () => {
     if (access === 'blocked') {

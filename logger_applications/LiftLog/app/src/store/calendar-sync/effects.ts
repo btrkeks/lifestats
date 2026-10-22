@@ -10,15 +10,13 @@ import {
   calendarStatusRead,
   CalendarSyncStatus,
 } from '@/store/calendar-sync';
-import { setCalendarSyncEnabled } from '@/store/settings';
+import { setCalendarSyncEnabled, setIsHydrated as setSettingsHydrated } from '@/store/settings';
 import { setIsHydrated as setStoredSessionsHydrated } from '@/store/stored-sessions';
 import { AddEffectFn, AppDispatch, RootState } from '@/store/store';
 import { Instant } from '@js-joda/core';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
-// Lets a burst of History edits land before one run handles them all.
-const WAKE_DELAY_MS = 1_500;
-// While a workout waits on something that may clear by itself (a calendar sync, a provider error).
+const DEBOUNCE_MS = 1_500;
 const RETRY_DELAYS_MS = [15_000, 60_000, 300_000];
 
 type SyncApi = { dispatch: AppDispatch; getState: () => RootState; extra: Services };
@@ -59,17 +57,15 @@ export function applyCalendarSyncEffects(addEffect: AddEffectFn) {
       do {
         again = false;
         const { db, phoneCalendar, logger } = api.extra;
-        const { settings, storedSessions } = api.getState();
-        if (
-          !phoneCalendar.supported ||
-          !settings.calendarSyncEnabled ||
-          !storedSessions.isHydrated ||
-          countPendingCalendarSessions(db) === 0
-        ) {
+        const enabled = () => {
+          const { settings, storedSessions } = api.getState();
+          return foreground && settings.isHydrated && settings.calendarSyncEnabled && storedSessions.isHydrated;
+        };
+        if (!phoneCalendar.supported || !enabled() || countPendingCalendarSessions(db) === 0) {
           return;
         }
         api.dispatch(calendarRunStarted());
-        const result = await syncCalendarSessions({ db, calendar: phoneCalendar, logger });
+        const result = await syncCalendarSessions({ db, calendar: phoneCalendar, logger, enabled });
         api.dispatch(
           calendarRunFinished({ at: Instant.now().toString(), noPermission: result.noPermission, ...readStatus(db) }),
         );
@@ -78,6 +74,13 @@ export function applyCalendarSyncEffects(addEffect: AddEffectFn) {
           wakeAfter(api, RETRY_DELAYS_MS[Math.min(failures, RETRY_DELAYS_MS.length) - 1]!);
         }
       } while (again);
+    } catch (error) {
+      api.extra.logger.warn('Calendar sync run failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const { pending, attention, noPermission } = api.getState().calendarSync;
+      api.dispatch(calendarRunFinished({ at: Instant.now().toString(), pending, attention, noPermission }));
+      if (foreground) wakeAfter(api, RETRY_DELAYS_MS[0]!);
     } finally {
       running = false;
     }
@@ -85,10 +88,13 @@ export function applyCalendarSyncEffects(addEffect: AddEffectFn) {
 
   function readAndWake(api: SyncApi) {
     api.dispatch(calendarStatusRead(readStatus(api.extra.db)));
-    wakeAfter(api, WAKE_DELAY_MS);
+    wakeAfter(api, DEBOUNCE_MS);
   }
 
-  addEffect([calendarSessionsQueued, setStoredSessionsHydrated, setCalendarSyncEnabled], (_, api) => readAndWake(api));
+  addEffect(
+    [calendarSessionsQueued, setStoredSessionsHydrated, setSettingsHydrated, setCalendarSyncEnabled],
+    (_, api) => readAndWake(api),
+  );
 
   addEffect(calendarRetryRequested, (_, api) => {
     api.extra.db.transaction((tx) => requeueCalendarAttention(tx));

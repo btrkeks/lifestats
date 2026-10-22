@@ -16,7 +16,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 
-/** One occurrence as LiftLog stores it. `instanceTime` is null for an event that does not repeat. */
+/** `instanceTime` is null for an event that does not repeat. */
 class OccurrenceInput : Record {
     @Field val calendarId: Long = 0
     @Field val accountName: String = ""
@@ -24,6 +24,11 @@ class OccurrenceInput : Record {
     @Field val instanceTime: Long? = null
     @Field val syncId: String? = null
     @Field val rrule: String? = null
+    @Field val title: String = ""
+    @Field val organizer: String? = null
+    @Field val sourceStartMs: Long? = null
+    @Field val sourceDuration: String? = null
+    @Field val sourceTimezone: String? = null
 }
 
 class SpanInput : Record {
@@ -31,11 +36,6 @@ class SpanInput : Record {
     @Field val endMs: Long = 0
 }
 
-/**
- * Reads the phone's calendars and moves single event occurrences for calendar sync. It never creates or
- * deletes an event, never writes a series master, and never writes as a sync adapter, so the provider
- * marks each change dirty and the account's sync adapter uploads it.
- */
 class LiftLogCalendarModule : Module() {
     // Serializes resolve-then-write, so two runs can never both see no exception and insert one each.
     private val writeLock = Any()
@@ -45,12 +45,10 @@ class LiftLogCalendarModule : Module() {
     private sealed class Target {
         abstract val current: Span
 
-        /** An occurrence of a series that has no exception row yet. Moving it inserts one. */
         data class Untouched(val masterId: Long, val instanceTime: Long, val status: Int?, override val current: Span) :
             Target()
 
-        /** An exception row, or an event that does not repeat. Moving it updates the row. */
-        data class Row(val id: Long, override val current: Span) : Target()
+        data class Row(val id: Long, val event: EventRow, override val current: Span) : Target()
     }
 
     private sealed class Resolved {
@@ -58,7 +56,7 @@ class LiftLogCalendarModule : Module() {
         data class Problem(val status: String) : Resolved()
     }
 
-    private data class CalendarRow(val accountName: String?, val accessLevel: Int, val ownerAccount: String?)
+    private data class CalendarRow(val accountName: String?, val accessLevel: Int, val ownerAccount: String?, val accountType: String?)
 
     private data class EventRow(
         val calendarId: Long,
@@ -71,6 +69,14 @@ class LiftLogCalendarModule : Module() {
         val dtstart: Long?,
         val dtend: Long?,
         val syncId: String?,
+        val title: String?,
+        val organizer: String?,
+        val guestsCanModify: Int?,
+        val originalTime: Long?,
+        val exrule: String?,
+        val exdate: String?,
+        val duration: String?,
+        val timezone: String?,
     )
 
     override fun definition() = ModuleDefinition {
@@ -82,7 +88,8 @@ class LiftLogCalendarModule : Module() {
                 Calendars.CONTENT_URI,
                 arrayOf(Calendars._ID, Calendars.CALENDAR_DISPLAY_NAME, Calendars.ACCOUNT_NAME),
                 "${Calendars.VISIBLE} = 1 AND ${Calendars.SYNC_EVENTS} = 1 AND " +
-                    "${Calendars.CALENDAR_ACCESS_LEVEL} >= ${Calendars.CAL_ACCESS_CONTRIBUTOR}",
+                    "${Calendars.CALENDAR_ACCESS_LEVEL} >= ${Calendars.CAL_ACCESS_CONTRIBUTOR} AND " +
+                    "${Calendars.ACCOUNT_TYPE} = 'com.google'",
                 emptyArray(),
             ) { c ->
                 mapOf(
@@ -94,19 +101,16 @@ class LiftLogCalendarModule : Module() {
             mapOf("status" to "ok", "calendars" to calendars.filter { it["accountName"] != null })
         }
 
-        /**
-         * Instances overlapping the window, cancelled ones left out. Nothing else is filtered: all-day and
-         * read-only events are flagged, so they still count when LiftLog checks for a second match.
-         */
+        /** Returns timed starts on the local day and all-day matches by their UTC calendar date. */
         AsyncFunction("findInstances") { calendarId: Long, accountName: String, beginMs: Long, endMs: Long ->
             if (!hasAccess()) return@AsyncFunction mapOf("status" to "noPermission")
             val calendar = readCalendar(calendarId)
-            if (calendar == null || calendar.accountName != accountName) {
+            if (calendar == null || calendar.accountName != accountName || calendar.accountType != "com.google") {
                 return@AsyncFunction mapOf("status" to "calendarMissing")
             }
             val uri = Instances.CONTENT_URI.buildUpon()
-                .appendPath(beginMs.toString())
-                .appendPath(endMs.toString())
+                .appendPath((beginMs - 86_400_000).toString())
+                .appendPath((endMs + 86_400_000).toString())
                 .build()
             val instances = query(
                 uri,
@@ -119,9 +123,12 @@ class LiftLogCalendarModule : Module() {
                     "${Instances.STATUS} != ${Events.STATUS_CANCELED})",
                 arrayOf(calendarId.toString()),
             ) { c ->
+                val allDay = c.getInt(4) != 0
+                val begins = c.getLong(1)
+                val onDay = instanceStartsOnDay(begins, allDay, beginMs, endMs)
+                if (!onDay) return@query null
                 val originalId = c.longOrNull(7)
-                // An exception row stands for an occurrence of its master; LiftLog's identity is the master's.
-                val master = if (originalId != null) readEvent(originalId) else null
+                val master = readEvent(originalId ?: c.getLong(0))
                 val repeats = originalId == null && (!c.stringOrNull(5).isNullOrEmpty() || !c.stringOrNull(6).isNullOrEmpty())
                 val organizer = c.stringOrNull(9)
                 mapOf(
@@ -135,16 +142,21 @@ class LiftLogCalendarModule : Module() {
                     "rrule" to if (originalId != null) master?.rrule else c.stringOrNull(5),
                     "rdate" to if (originalId != null) master?.rdate else c.stringOrNull(6),
                     "title" to c.stringOrNull(3),
-                    "beginMs" to c.getLong(1),
-                    "endMs" to c.getLong(2),
+                    "beginMs" to if (allDay) beginMs else begins,
+                    "endMs" to if (allDay) endMs else c.getLong(2),
+                    "organizer" to master?.organizer,
+                    "sourceStartMs" to if (originalId != null || repeats) master?.dtstart else null,
+                    "sourceDuration" to if (originalId != null || repeats) master?.duration else null,
+                    "sourceTimezone" to master?.timezone,
+                    "exclusions" to (master == null || !master.exrule.isNullOrEmpty() || !master.exdate.isNullOrEmpty()),
                     "allDay" to (c.getInt(4) != 0),
                     "editable" to (
-                        calendar.accessLevel >= Calendars.CAL_ACCESS_CONTRIBUTOR &&
+                        master?.title == c.stringOrNull(3) && calendar.accessLevel >= Calendars.CAL_ACCESS_CONTRIBUTOR &&
                             (organizer.isNullOrEmpty() || organizer == calendar.ownerAccount || c.getInt(10) != 0)
                         ),
                 )
             }
-            mapOf("status" to "ok", "instances" to instances)
+            mapOf("status" to "ok", "instances" to instances.filterNotNull())
         }
 
         AsyncFunction("inspectOccurrence") { input: OccurrenceInput ->
@@ -154,10 +166,7 @@ class LiftLogCalendarModule : Module() {
             }
         }
 
-        /**
-         * Moves the occurrence to `next` if it still shows `expected`, then reads it back. Answers `unchanged`
-         * when it already shows `next`, and `changed` with its current time when it shows something else.
-         */
+        /** Moves only this occurrence if it still shows expected, and verifies the resulting time. */
         AsyncFunction("moveOccurrence") { input: OccurrenceInput, next: SpanInput, expected: SpanInput ->
             val to = Span(next.beginMs, next.endMs)
             require(to.endMs > to.beginMs && (to.endMs - to.beginMs) % 1000 == 0L) {
@@ -174,7 +183,7 @@ class LiftLogCalendarModule : Module() {
                 }
                 when (target) {
                     is Target.Untouched -> insertException(target, to)
-                    is Target.Row -> if (!updateRow(target, to)) {
+                    is Target.Row -> if (!updateRow(input, target, to)) {
                         return@synchronized readBack(input, to)
                     }
                 }
@@ -193,39 +202,55 @@ class LiftLogCalendarModule : Module() {
         }
     }
 
-    /** Finds where the occurrence lives now, checking that it is still the same event in the same calendar. */
     private fun resolve(input: OccurrenceInput): Resolved {
         if (!hasAccess()) return Resolved.Problem("noPermission")
         val calendar = readCalendar(input.calendarId)
-        if (calendar == null || calendar.accountName != input.accountName) return Resolved.Problem("calendarMissing")
+        if (calendar == null || calendar.accountName != input.accountName || calendar.accountType != "com.google") return Resolved.Problem("calendarMissing")
         if (calendar.accessLevel < Calendars.CAL_ACCESS_CONTRIBUTOR) return Resolved.Problem("readOnly")
 
         val event = readEvent(input.eventId)
         if (event == null || event.deleted || event.calendarId != input.calendarId) return Resolved.Problem("gone")
+        if (event.status == Events.STATUS_CANCELED) return Resolved.Problem("gone")
         if (!input.syncId.isNullOrEmpty() && event.syncId != input.syncId) return Resolved.Problem("gone")
-        if (event.allDay) return Resolved.Problem("unsupported")
+        if (event.allDay || !event.rdate.isNullOrEmpty() || !event.exrule.isNullOrEmpty() || !event.exdate.isNullOrEmpty()) {
+            return Resolved.Problem("unsupported")
+        }
+        if (!editable(event, calendar)) return Resolved.Problem("readOnly")
+        if (event.title != input.title || event.organizer.orEmpty() != input.organizer.orEmpty() ||
+            event.timezone.orEmpty() != input.sourceTimezone.orEmpty()) return Resolved.Problem("changed")
 
         val instanceTime = input.instanceTime ?: return resolveSingle(input.eventId, event)
 
         if (event.rrule.isNullOrEmpty()) {
             return Resolved.Problem(if (event.rdate.isNullOrEmpty()) "gone" else "unsupported")
         }
-        if (input.rrule != null && event.rrule != input.rrule) return Resolved.Problem("gone")
+        if (event.rrule != input.rrule) return Resolved.Problem("gone")
+        if (event.dtstart != input.sourceStartMs || event.duration.orEmpty() != input.sourceDuration.orEmpty()) {
+            return Resolved.Problem("changed")
+        }
         // The provider drops the other occurrences of a series without a sync id when one of them is moved.
         if (event.syncId.isNullOrEmpty()) return Resolved.Problem("unsynced")
 
         val exceptions = query(
             Events.CONTENT_URI,
-            arrayOf(Events._ID, Events.STATUS, Events.DTSTART, Events.DTEND, Events.RRULE, Events.RDATE),
+            arrayOf(Events._ID),
             "${Events.ORIGINAL_ID} = ? AND ${Events.ORIGINAL_INSTANCE_TIME} = ? AND ${Events.DELETED} = 0 AND " +
                 "${Events.CALENDAR_ID} = ?",
             arrayOf(input.eventId.toString(), instanceTime.toString(), input.calendarId.toString()),
         ) { c ->
+            val id = c.getLong(0)
+            val row = readEvent(id)
             when {
-                c.intOrNull(1) == Events.STATUS_CANCELED -> Resolved.Problem("gone")
-                !c.stringOrNull(4).isNullOrEmpty() || !c.stringOrNull(5).isNullOrEmpty() || c.isNull(2) || c.isNull(3) ->
+                row == null || row.status == Events.STATUS_CANCELED -> Resolved.Problem("gone")
+                row.calendarId != input.calendarId || row.originalId != input.eventId || row.originalTime != instanceTime ->
+                    Resolved.Problem("gone")
+                row.allDay || !row.rrule.isNullOrEmpty() || !row.rdate.isNullOrEmpty() ||
+                    !row.exrule.isNullOrEmpty() || !row.exdate.isNullOrEmpty() || row.dtstart == null || row.dtend == null ->
                     Resolved.Problem("unsupported")
-                else -> Resolved.Found(Target.Row(c.getLong(0), Span(c.getLong(2), c.getLong(3))))
+                row.title != input.title || row.organizer.orEmpty() != input.organizer.orEmpty() ||
+                    row.timezone.orEmpty() != input.sourceTimezone.orEmpty() -> Resolved.Problem("changed")
+                !editable(row, calendar) -> Resolved.Problem("readOnly")
+                else -> Resolved.Found(Target.Row(id, row, Span(row.dtstart, row.dtend)))
             }
         }
         if (exceptions.size > 1) return Resolved.Problem("duplicate")
@@ -250,13 +275,10 @@ class LiftLogCalendarModule : Module() {
         if (event.status == Events.STATUS_CANCELED) return Resolved.Problem("gone")
         val start = event.dtstart ?: return Resolved.Problem("unsupported")
         val end = event.dtend ?: return Resolved.Problem("unsupported")
-        return Resolved.Found(Target.Row(eventId, Span(start, end)))
+        return Resolved.Found(Target.Row(eventId, event, Span(start, end)))
     }
 
-    /**
-     * The first move of a series occurrence. The provider rejects DTEND here and turns DURATION into the
-     * exception's DTEND. It also marks an exception tentative unless told its status, so the master's goes along.
-     */
+    /** The provider rejects DTEND here and turns DURATION into the exception's DTEND. */
     private fun insertException(target: Target.Untouched, to: Span) {
         val values = ContentValues().apply {
             put(Events.ORIGINAL_INSTANCE_TIME, target.instanceTime)
@@ -268,19 +290,28 @@ class LiftLogCalendarModule : Module() {
             ?: throw IllegalStateException("The calendar provider refused the moved occurrence")
     }
 
-    /**
-     * The only update this module makes. Its predicate cannot match a series master (no RRULE or RDATE)
-     * or a row whose time changed since it was read.
-     */
-    private fun updateRow(target: Target.Row, to: Span): Boolean {
+    private fun updateRow(input: OccurrenceInput, target: Target.Row, to: Span): Boolean {
         val values = ContentValues().apply {
             put(Events.DTSTART, to.beginMs)
             put(Events.DTEND, to.endMs)
         }
-        val selection = "${Events._ID} = ? AND ${Events.DELETED} = 0 AND ${Events.RRULE} IS NULL AND " +
-            "${Events.RDATE} IS NULL AND ${Events.DTSTART} = ? AND ${Events.DTEND} = ?"
-        val args = arrayOf(target.id.toString(), target.current.beginMs.toString(), target.current.endMs.toString())
-        return resolver.update(Events.CONTENT_URI, values, selection, args) == 1
+        val row = target.event
+        val occurrence = if (input.instanceTime == null) "${Events.ORIGINAL_ID} IS NULL AND ${Events.ORIGINAL_INSTANCE_TIME} IS NULL"
+            else "${Events.ORIGINAL_ID} = ? AND ${Events.ORIGINAL_INSTANCE_TIME} = ?"
+        val selection = "${Events._ID} = ? AND ${Events.CALENDAR_ID} = ? AND ${Events.DELETED} = 0 AND " +
+            "(${Events.RRULE} IS NULL OR ${Events.RRULE} = '') AND (${Events.RDATE} IS NULL OR ${Events.RDATE} = '') AND " +
+            "(${Events.EXRULE} IS NULL OR ${Events.EXRULE} = '') AND (${Events.EXDATE} IS NULL OR ${Events.EXDATE} = '') AND " +
+            "${Events.ALL_DAY} = 0 AND (${Events.STATUS} IS NULL OR ${Events.STATUS} != ${Events.STATUS_CANCELED}) AND " +
+            "${Events.DTSTART} = ? AND ${Events.DTEND} = ? AND ${Events.TITLE} IS ? AND ${Events.ORGANIZER} IS ? AND " +
+            "${Events.GUESTS_CAN_MODIFY} IS ? AND $occurrence"
+        val args = mutableListOf<String?>(target.id.toString(), input.calendarId.toString(),
+            target.current.beginMs.toString(), target.current.endMs.toString(), row.title, row.organizer,
+            row.guestsCanModify?.toString())
+        if (input.instanceTime != null) {
+            args.add(input.eventId.toString())
+            args.add(input.instanceTime.toString())
+        }
+        return resolver.update(Events.CONTENT_URI, values, selection, args.toTypedArray()) == 1
     }
 
     private fun readBack(input: OccurrenceInput, to: Span): Map<String, Any?> =
@@ -297,17 +328,19 @@ class LiftLogCalendarModule : Module() {
     private fun readCalendar(calendarId: Long): CalendarRow? =
         query(
             ContentUris.withAppendedId(Calendars.CONTENT_URI, calendarId),
-            arrayOf(Calendars.ACCOUNT_NAME, Calendars.CALENDAR_ACCESS_LEVEL, Calendars.OWNER_ACCOUNT),
+            arrayOf(Calendars.ACCOUNT_NAME, Calendars.CALENDAR_ACCESS_LEVEL, Calendars.OWNER_ACCOUNT, Calendars.ACCOUNT_TYPE),
             null,
             null,
-        ) { c -> CalendarRow(c.stringOrNull(0), c.getInt(1), c.stringOrNull(2)) }.firstOrNull()
+        ) { c -> CalendarRow(c.stringOrNull(0), c.getInt(1), c.stringOrNull(2), c.stringOrNull(3)) }.firstOrNull()
 
     private fun readEvent(eventId: Long): EventRow? =
         query(
             ContentUris.withAppendedId(Events.CONTENT_URI, eventId),
             arrayOf(
                 Events.CALENDAR_ID, Events.DELETED, Events.STATUS, Events.RRULE, Events.RDATE, Events.ORIGINAL_ID,
-                Events.ALL_DAY, Events.DTSTART, Events.DTEND, Events._SYNC_ID,
+                Events.ALL_DAY, Events.DTSTART, Events.DTEND, Events._SYNC_ID, Events.TITLE, Events.ORGANIZER,
+                Events.GUESTS_CAN_MODIFY, Events.ORIGINAL_INSTANCE_TIME, Events.EXRULE, Events.EXDATE, Events.DURATION,
+                Events.EVENT_TIMEZONE,
             ),
             null,
             null,
@@ -323,8 +356,19 @@ class LiftLogCalendarModule : Module() {
                 dtstart = c.longOrNull(7),
                 dtend = c.longOrNull(8),
                 syncId = c.stringOrNull(9),
+                title = c.stringOrNull(10),
+                organizer = c.stringOrNull(11),
+                guestsCanModify = c.intOrNull(12),
+                originalTime = c.longOrNull(13),
+                exrule = c.stringOrNull(14),
+                exdate = c.stringOrNull(15),
+                duration = c.stringOrNull(16),
+                timezone = c.stringOrNull(17),
             )
         }.firstOrNull()
+
+    private fun editable(event: EventRow, calendar: CalendarRow): Boolean =
+        event.organizer.isNullOrEmpty() || event.organizer == calendar.ownerAccount || event.guestsCanModify == 1
 
     private fun <T> query(
         uri: Uri,

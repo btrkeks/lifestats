@@ -1,3 +1,4 @@
+import * as calendarDb from '@/db/calendar-sync';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { combineReducers } from '@reduxjs/toolkit';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
@@ -7,7 +8,7 @@ import { CALENDAR, FakePhoneCalendar, span } from '@/services/__test__/fake-phon
 import { appForegroundChanged } from '@/store/app';
 import { calendarRetryRequested, calendarSessionsQueued, calendarSyncReducer } from '@/store/calendar-sync';
 import { applyCalendarSyncEffects } from '@/store/calendar-sync/effects';
-import { setCalendarSyncEnabled, settingsReducer } from '@/store/settings';
+import { setIsHydrated as setSettingsHydrated, setCalendarSyncEnabled, settingsReducer } from '@/store/settings';
 import { setIsHydrated, storedSessionsReducer } from '@/store/stored-sessions';
 import { createAddEffectTestBed } from '@/utils/__test__/add-effect-testbed';
 import { createTestDb } from '@/utils/__test__/test-db';
@@ -39,14 +40,17 @@ describe('calendar sync effects', () => {
     vi.useRealTimers();
   });
 
-  function bed({ enabled = true, hydrated = true } = {}) {
+  function bed({ enabled = true, hydrated = true, settingsHydrated = true } = {}) {
     const testBed = createAddEffectTestBed({
       reducer: combineReducers({
         settings: settingsReducer,
         storedSessions: storedSessionsReducer,
         calendarSync: calendarSyncReducer,
       }),
-      initialState: { settings: { calendarSyncEnabled: enabled }, storedSessions: { isHydrated: hydrated } },
+      initialState: {
+        settings: { calendarSyncEnabled: enabled, isHydrated: settingsHydrated },
+        storedSessions: { isHydrated: hydrated },
+      },
       services: { db, phoneCalendar: calendar },
     });
     applyCalendarSyncEffects(testBed.addEffect);
@@ -125,6 +129,52 @@ describe('calendar sync effects', () => {
 
     expect(calendar.timesOf(synced)).toEqual(WORKOUT);
     expect(testBed.getState().calendarSync.attention).toEqual([]);
+  });
+
+  it.each(['pause', 'background'] as const)(
+    'stops a native lookup on %s and does not claim or write',
+    async (change) => {
+      calendar.addOccurrence(span('2026-10-11T15:00', '2026-10-11T16:00'));
+      const testBed = bed();
+      const original = calendar.occurrences.bind(calendar);
+      vi.spyOn(calendar, 'occurrences').mockImplementationOnce(async (...args) => {
+        const result = await original(...args);
+        await testBed.dispatchHandled(change === 'pause' ? setCalendarSyncEnabled(false) : appForegroundChanged(false));
+        return result;
+      });
+      await testBed.dispatchHandled(calendarSessionsQueued());
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(calendar.writes).toEqual([]);
+      expect(testBed.getState().calendarSync).toMatchObject({ running: false, pending: 1 });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(calendar.writes).toEqual([]);
+    },
+  );
+
+  it('waits for settings hydration and wakes when settings load', async () => {
+    const gym = calendar.addOccurrence(span('2026-10-11T15:00', '2026-10-11T16:00'));
+    const testBed = bed({ settingsHydrated: false });
+    await testBed.dispatchHandled(calendarSessionsQueued());
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(calendar.writes).toEqual([]);
+    await testBed.dispatchHandled(setSettingsHydrated(true));
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(calendar.timesOf(gym)).toEqual(WORKOUT);
+  });
+
+  it('clears the running indicator after a failure outside a single session and can retry', async () => {
+    const gym = calendar.addOccurrence(span('2026-10-11T15:00', '2026-10-11T16:00'));
+    const testBed = bed();
+    const pending = vi.spyOn(calendarDb, 'readPendingCalendarSessions').mockImplementationOnce(() => {
+      throw new Error('SQLite unavailable');
+    });
+    await testBed.dispatchHandled(calendarSessionsQueued());
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(testBed.getState().calendarSync).toMatchObject({ running: false, pending: 1 });
+    pending.mockRestore();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(calendar.timesOf(gym)).toEqual(WORKOUT);
+    expect(testBed.getState().calendarSync.running).toBe(false);
   });
 
   it('lists a workout that needs attention, and Try again looks again', async () => {

@@ -3,15 +3,16 @@
 On Android, LiftLog can move the Gym event in your phone's calendar to the time you actually trained.
 Each workout you finish moves that day's Gym event to start at your first completed set and end at your
 last. A timed cardio set ends when its timer stops. LiftLog writes through the phone's calendar
-provider, and your account's own sync (usually Google) uploads the change. LiftLog never signs in to
-Google itself.
+provider. Your Google account's sync handles upload separately. LiftLog never signs in to Google itself
+and cannot verify cloud delivery.
 
 ## Set it up
 
 1. Open **Settings → Calendar sync**. The page exists only on Android.
 2. Tap **Allow calendar access**. If you denied it before for good, the same row opens the system
    settings instead.
-3. Pick the **Calendar** that holds your Gym events. Each calendar shows its account next to its name.
+3. Pick the **Calendar** that holds your Gym events. The picker lists writable Google calendars, including
+   secondary calendars. Each calendar shows its account next to its name.
 4. Check the **Event title**. It defaults to `Gym` and must match the event's title exactly, apart from
    spaces at either end. Case matters.
 5. Turn on **Move Gym events**.
@@ -30,9 +31,9 @@ from then on are moved.
   workout's, so another workout on the same day cannot take it.
 - **Moving a workout to another day writes nothing.** Its event stays on the old day, and the workout is
   listed under **Needs attention**. Move the workout back and LiftLog follows it again.
-- **Changes made in the calendar win.** If the event's time changed in the calendar since LiftLog last
-  moved it, LiftLog leaves it alone and lists the workout. Put the time back and tap **Try again** to
-  let LiftLog move it again.
+- **Changes made in the calendar win.** If the event's time, title, organizer, or source series timing
+  changed since LiftLog last inspected it, LiftLog leaves it alone and lists the workout. Restore the
+  previous values and tap **Try again** to let LiftLog move it again.
 - **Settings changes apply to the next workout you finish.** A finished workout keeps the calendar and
   title it was finished with.
 - **Workouts wait while LiftLog cannot write.** Without calendar access, or while sync is off, finished
@@ -84,9 +85,11 @@ setActiveSessionId effect (finishing a workout)
   `models/calendar-sync.ts`).
 - **`calendar_claim`** is the occurrence a workout owns. A unique index on `(calendarId, eventId,
   instanceTime)` stops two workouts from owning one occurrence. For a series, `eventId` is the master and
-  `instanceTime` is `ORIGINAL_INSTANCE_TIME`. A single event stores `-1` there. `syncId` and `rrule`
-  record the master as it was when claimed. The native module treats a different value later as a
-  different event. `observed` is the time LiftLog last saw or wrote. `attempt` is the span of a write
+  `instanceTime` is `ORIGINAL_INSTANCE_TIME`. A single event stores `-1` there. `syncId`, `rrule`, title,
+  organizer, source start, duration, and timezone
+  record the source when claimed. A mismatch blocks a later write. Source start and duration are pinned
+  only for series, since single-event times move with the workout. `observed` is the time LiftLog last saw
+  or wrote. `attempt` is the span of a write
   that may or may not have reached the provider.
 
 ### Enrollment
@@ -112,6 +115,11 @@ For each pending workout, `syncCalendarSessions`:
    another workout is `claimed`. A single unclaimed match is claimed with the span as `attempt`, in one
    transaction, before the write.
 
+The drain checks foreground, settings and session hydration, and enabled state before each job and write.
+After a lookup or inspection, it rereads the session and its revision. A changed revision stays pending
+without claiming or sending the obsolete span. Saved attempts are reconciled before reading the newest
+workout, so recovery never replays a stale span.
+
 A workout that is blocked or waiting does not stop the run. Missing calendar access stops the run and
 leaves every workout pending.
 
@@ -119,19 +127,24 @@ leaves every workout pending.
 
 `LiftLogCalendarModule.kt` in `modules/native-lib` has four functions: `listCalendars`,
 `findInstances`, `inspectOccurrence` and `moveOccurrence`. It never writes as a sync adapter, so the
-provider marks every change dirty for upload. `phone-calendar.android.ts` is its only caller and
+provider can mark changes dirty for the account sync adapter. Dirty state does not prove cloud delivery.
+`phone-calendar.android.ts` is its only caller and
 parses every answer. iOS and web use `phone-calendar.ts`, which reports no support.
 
 `moveOccurrence` re-checks the calendar, its account and access, the master's `_sync_id` and
-`RRULE`, and the occurrence's current time before it writes, and runs one write at a time.
+`RRULE`, title, organizer, source timing, timezone, current edit access, and the occurrence's time before
+it writes, and runs one write at a time. RDATE, EXRULE, and EXDATE recurrence variants are not written.
+All-day matches use their UTC calendar date and still count toward ambiguity. Queries cover an extra
+day at both ends so offsets in either direction cannot hide those matches.
 
 - **First move of a series occurrence.** The module inserts an exception through
   `Events.CONTENT_EXCEPTION_URI/<master>` with `ORIGINAL_INSTANCE_TIME`, `DTSTART`, a whole-second
-  `DURATION` and the master's `STATUS`. The provider rejects `DTEND` on this insert and marks an
-  exception without `STATUS` tentative.
+  `DURATION` and the master's `STATUS`, or confirmed when it is null. The provider rejects `DTEND`
+  on this insert.
 - **Later moves, or a single event.** The module updates the row's `DTSTART` and `DTEND` with a
-  selection that requires `RRULE IS NULL`, `RDATE IS NULL` and the times it just read, so it can never
-  match a series master.
+  selection on `Events.CONTENT_URI` that requires the row ID, calendar, original master and instance
+  identity, null or empty recurrence fields, current title, organizer, and editability, and the times it just
+  read. It cannot match a series master. Nullable status and timezone do not use equality guards.
 - **Before inserting**, it looks for an existing exception for the same master and
   `ORIGINAL_INSTANCE_TIME`. One is updated instead. Two or more is `duplicate`. The provider does not
   merge a second insert, so this lookup is what prevents duplicates after a lost answer.
@@ -140,4 +153,5 @@ parses every answer. iOS and web use `phone-calendar.ts`, which reports no suppo
 - After writing, it reads the occurrence back and answers `moved` only if it shows the new time.
 
 The permissions are declared in `modules/native-lib/android/src/main/AndroidManifest.xml` and requested
-only from the settings page.
+only from the settings page. An old binary without the optional module reports no support and can
+still start.

@@ -15,7 +15,7 @@ import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 const sessions = calendarSyncSessionsSchema;
 const claims = calendarClaimsSchema;
 
-// `instance_time` of an event that does not repeat. NOT NULL keeps the unique index effective for them.
+// `instanceTime` of an event that does not repeat. NOT NULL keeps the unique index effective for them.
 const SINGLE_EVENT = -1;
 
 export type CalendarClaim = {
@@ -92,6 +92,10 @@ export function readPendingCalendarSessions(db: ExpoSQLiteDatabase): PendingCale
     }));
 }
 
+export function readCalendarRevision(db: ExpoSQLiteDatabase, sessionId: string): number | undefined {
+  return db.select({ seq: sessions.seq }).from(sessions).where(eq(sessions.sessionId, sessionId)).get()?.seq;
+}
+
 export function countPendingCalendarSessions(db: ExpoSQLiteDatabase): number {
   return db.select({ n: count() }).from(sessions).where(pending).get()?.n ?? 0;
 }
@@ -144,6 +148,11 @@ export function claimOccurrence(
         instanceTime: identity.instanceTime ?? SINGLE_EVENT,
         syncId: identity.syncId,
         rrule: identity.rrule,
+        title: identity.title,
+        organizer: identity.organizer,
+        sourceStartMs: identity.sourceStartMs,
+        sourceDuration: identity.sourceDuration,
+        sourceTimezone: identity.sourceTimezone,
         date: toLocalDateJSON(claim.date),
         originalStartMs: original.startMs,
         originalEndMs: original.endMs,
@@ -192,9 +201,9 @@ export function recordCalendarOutcome(
   const { sessionId, seq, outcome, date } = result;
   tx.update(sessions)
     .set({
-      outcome,
-      outcomeDate: date ? toLocalDateJSON(date) : null,
-      ...(calendarOutcomes[outcome].settled ? { doneSeq: seq } : {}),
+      outcome: sql`CASE WHEN ${sessions.seq} = ${seq} THEN ${outcome} ELSE ${sessions.outcome} END`,
+      outcomeDate: sql`CASE WHEN ${sessions.seq} = ${seq} THEN ${date ? toLocalDateJSON(date) : null} ELSE ${sessions.outcomeDate} END`,
+      ...(calendarOutcomes[outcome].settled ? { doneSeq: sql`max(${sessions.doneSeq}, ${seq})` } : {}),
     })
     .where(eq(sessions.sessionId, sessionId))
     .run();
@@ -215,6 +224,11 @@ function claimFromRow(row: typeof claims.$inferSelect): CalendarClaim {
       instanceTime: row.instanceTime === SINGLE_EVENT ? undefined : row.instanceTime,
       syncId: row.syncId ?? undefined,
       rrule: row.rrule ?? undefined,
+      title: row.title,
+      organizer: row.organizer ?? undefined,
+      sourceStartMs: row.sourceStartMs ?? undefined,
+      sourceDuration: row.sourceDuration ?? undefined,
+      sourceTimezone: row.sourceTimezone ?? undefined,
     },
     date: fromLocalDateJSON(row.date),
     original: { startMs: row.originalStartMs, endMs: row.originalEndMs },

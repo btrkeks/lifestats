@@ -6,7 +6,8 @@ import {
   PhoneCalendar,
   Times,
 } from '@/models/calendar-sync';
-import { NativeModule, requireNativeModule } from 'expo';
+import { unsupportedPhoneCalendar } from '@/services/unsupported-phone-calendar';
+import { NativeModule, requireOptionalNativeModule } from 'expo';
 import { PermissionsAndroid } from 'react-native';
 import { match, P } from 'ts-pattern';
 
@@ -17,10 +18,14 @@ type NativeOccurrence = {
   instanceTime: number | null;
   syncId: string | null;
   rrule: string | null;
+  title: string;
+  organizer: string | null;
+  sourceStartMs: number | null;
+  sourceDuration: string | null;
+  sourceTimezone: string | null;
 };
 type NativeSpan = { beginMs: number; endMs: number };
 
-// The native side returns plain maps; everything it says is parsed below before LiftLog trusts it.
 declare class LiftLogCalendarModule extends NativeModule {
   listCalendars(): Promise<unknown>;
   findInstances(calendarId: number, accountName: string, beginMs: number, endMs: number): Promise<unknown>;
@@ -41,6 +46,7 @@ const problemOf = {
   duplicate: 'duplicate',
   unsupported: 'unsupported',
   unsynced: 'unsynced',
+  changed: 'changed',
 } as const satisfies Record<string, OccurrenceProblem>;
 const problemStatus = P.union(
   'noPermission',
@@ -50,6 +56,7 @@ const problemStatus = P.union(
   'duplicate',
   'unsupported',
   'unsynced',
+  'changed',
 );
 
 const calendarPattern = { id, displayName: optionalText, accountName: P.string };
@@ -59,6 +66,11 @@ const instancePattern = {
   syncId: optionalText,
   rrule: optionalText,
   rdate: optionalText,
+  organizer: optionalText,
+  sourceStartMs: P.union(id, P.nullish),
+  sourceDuration: optionalText,
+  sourceTimezone: optionalText,
+  exclusions: P.boolean,
   title: optionalText,
   beginMs: id,
   endMs: id,
@@ -77,6 +89,11 @@ const toNative = (identity: OccurrenceIdentity): NativeOccurrence => ({
   instanceTime: identity.instanceTime ?? null,
   syncId: identity.syncId ?? null,
   rrule: identity.rrule ?? null,
+  title: identity.title,
+  organizer: identity.organizer ?? null,
+  sourceStartMs: identity.sourceStartMs ?? null,
+  sourceDuration: identity.sourceDuration ?? null,
+  sourceTimezone: identity.sourceTimezone ?? null,
 });
 
 const toSpan = (times: Times): NativeSpan => ({ beginMs: times.startMs, endMs: times.endMs });
@@ -84,7 +101,8 @@ const toSpan = (times: Times): NativeSpan => ({ beginMs: times.startMs, endMs: t
 const nonEmpty = (text: string | null | undefined) => (text ? text : undefined);
 
 export function createPhoneCalendar(): PhoneCalendar {
-  const native = requireNativeModule<LiftLogCalendarModule>('LiftLogCalendar');
+  const native = requireOptionalNativeModule<LiftLogCalendarModule>('LiftLogCalendar');
+  if (!native) return unsupportedPhoneCalendar();
 
   async function access(): Promise<CalendarAccess> {
     const granted = await Promise.all(PERMISSIONS.map((permission) => PermissionsAndroid.check(permission)));
@@ -132,12 +150,17 @@ export function createPhoneCalendar(): PhoneCalendar {
                 instanceTime: row.instanceTime ?? undefined,
                 syncId: nonEmpty(row.syncId),
                 rrule: nonEmpty(row.rrule),
+                title: row.title ?? '',
+                organizer: nonEmpty(row.organizer),
+                sourceStartMs: row.sourceStartMs ?? undefined,
+                sourceDuration: nonEmpty(row.sourceDuration),
+                sourceTimezone: nonEmpty(row.sourceTimezone),
               },
               title: row.title ?? '',
               times: { startMs: row.beginMs, endMs: row.endMs },
               allDay: row.allDay,
               editable: row.editable,
-              rdateOnly: !row.rrule && !!row.rdate,
+              rdateOnly: !!row.rdate || row.exclusions,
             }),
           ),
         }))
