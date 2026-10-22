@@ -80,6 +80,9 @@ fn router(pool: Arc<Pool<ConnectionManager<SqliteConnection>>>) -> Router {
 }
 fn fixture() -> Fixture {
     let db = std::env::temp_dir().join(format!("lifestats-ebook-{}.db", uuid::Uuid::new_v4()));
+    fixture_at(db)
+}
+fn fixture_at(db: PathBuf) -> Fixture {
     let pool = Arc::new(
         Pool::builder()
             .max_size(6)
@@ -570,4 +573,242 @@ async fn legacy_post_routes_remain_idempotent_and_gate_matching_titles() {
     let legacy: Value = f.server.get("/progress-items/1").await.json();
     assert_eq!(legacy["name"], "Book");
     assert_eq!(legacy["tags"]["reader_data_id"], "1");
+}
+
+async fn legacy_event(f: &Fixture, event_id: &str, position: u64, delta: u64) {
+    f.server.post("/integrations/ebook/events").json(&json!({"event_id":event_id,"date":MON,"metric":"characters_read","delta":delta,"book_id":1,"book_title":"Book","confirmed_position_after":position,"book_target_characters":10000})).await.assert_status_ok();
+}
+fn claim(book: &str, title: &str, length: u64) -> Value {
+    json!({"book_key":book,"title":title,"length":length})
+}
+
+#[tokio::test]
+async fn adoption_seeds_transaction_time_furthest_without_credit_and_unblocks_phone() {
+    let f = fixture();
+    legacy_event(&f, "queued", 100, 80).await;
+    legacy_event(&f, "tail", 150, 50).await;
+    legacy_event(&f, "late-checkpoint", 120, 10).await;
+    assert_eq!(amount(&f, MON).await, 140);
+    let before = snapshot(&f);
+    let r = f
+        .server
+        .put(&path(P2, &key('a'), MON))
+        .json(&body(json!([[0, 100]])))
+        .await;
+    r.assert_status(StatusCode::CONFLICT);
+    assert_eq!(
+        r.json::<Value>()["error"]["code"],
+        "legacy_adoption_pending"
+    );
+    assert_eq!(snapshot(&f), before);
+    let r = f
+        .server
+        .put("/integrations/ebook/legacy-books/1")
+        .json(&claim(&key('a'), "Wrong title", 10000))
+        .await;
+    r.assert_status(StatusCode::CONFLICT);
+    assert_eq!(
+        r.json::<Value>()["error"]["code"],
+        "legacy_binding_conflict"
+    );
+    assert_eq!(snapshot(&f), before);
+    f.server
+        .put("/integrations/ebook/legacy-books/1")
+        .json(&claim(&key('a'), "Book", 10000))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(amount(&f, MON).await, 140);
+    assert_eq!(
+        query(&f, "SELECT json(legacy_spans) AS value FROM ebook_books"),
+        json!([[0, 150]])
+    );
+    let item: Value = f.server.get("/progress-items/1").await.json();
+    assert_eq!(item["tags"]["book_key"], key('a'));
+    assert_eq!(item["tags"]["reader_data_id"], "1");
+    let before = snapshot(&f);
+    f.server
+        .put("/integrations/ebook/legacy-books/1")
+        .json(&claim(&key('a'), "Book", 10000))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(snapshot(&f), before);
+    for (id, b, code) in [
+        (
+            1,
+            claim(&key('b'), "Book", 10000),
+            "legacy_binding_conflict",
+        ),
+        (
+            1,
+            claim(&key('a'), "Wrong", 10000),
+            "legacy_binding_conflict",
+        ),
+        (
+            2,
+            claim(&key('a'), "Book", 10000),
+            "legacy_binding_conflict",
+        ),
+        (1, claim(&key('a'), "Book", 9999), "book_length_mismatch"),
+    ] {
+        let r = f
+            .server
+            .put(&format!("/integrations/ebook/legacy-books/{id}"))
+            .json(&b)
+            .await;
+        r.assert_status(StatusCode::CONFLICT);
+        assert_eq!(r.json::<Value>()["error"]["code"], code);
+        assert_eq!(snapshot(&f), before);
+    }
+    put(&f, P2, MON, &body(json!([[0, 150]]))).await;
+    assert_eq!(amount(&f, MON).await, 140);
+    put(&f, P2, MON, &body(json!([[0, 200]]))).await;
+    assert_eq!(amount(&f, MON).await, 190);
+    let mut phone = body(json!([[0, 80]]));
+    phone["title"] = json!("Phone book 1");
+    f.server
+        .put(&path(P2, &key('b'), TUE))
+        .json(&phone)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(
+        f.server.get("/progress-items/1").await.json::<Value>(),
+        item
+    );
+    let items: Value = f.server.get("/progress-items").await.json();
+    assert_eq!(items.as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn adoption_failure_rolls_back_tags_binding_prefix_and_statistic() {
+    let f = fixture();
+    legacy_event(&f, "queued", 100, 80).await;
+    let before = snapshot(&f);
+    f.pool.get().unwrap().batch_execute("CREATE TRIGGER fail_claim BEFORE INSERT ON ebook_legacy_bindings BEGIN SELECT RAISE(ABORT,'injected claim failure'); END;").unwrap();
+    let r = f
+        .server
+        .put("/integrations/ebook/legacy-books/1")
+        .json(&claim(&key('a'), "Book", 10000))
+        .await;
+    r.assert_status(StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(r.json::<Value>()["error"]["code"], "storage_error");
+    assert_eq!(snapshot(&f), before);
+}
+
+#[tokio::test]
+async fn claims_validate_strictly_and_missing_legacy_items_get_independent_books() {
+    let f = fixture();
+    let before = snapshot(&f);
+    for id in ["0", "-1", "4294967296", "x"] {
+        let r = f
+            .server
+            .put(&format!("/integrations/ebook/legacy-books/{id}"))
+            .json(&claim(&key('a'), "Book", 10000))
+            .await;
+        r.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(r.json::<Value>()["error"]["field"], "reader_data_id");
+        assert_eq!(snapshot(&f), before);
+    }
+    let mut unknown = claim(&key('a'), "Book", 10000);
+    unknown["x"] = json!(1);
+    f.server
+        .put("/integrations/ebook/legacy-books/1")
+        .json(&unknown)
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    let duplicate = format!(
+        r#"{{"book_key":"{}","title":"Book","length":10000,"length":10000}}"#,
+        key('a')
+    );
+    f.server
+        .put("/integrations/ebook/legacy-books/1")
+        .text(&duplicate)
+        .content_type("application/json")
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(snapshot(&f), before);
+    f.server
+        .put("/integrations/ebook/legacy-books/99")
+        .json(&claim(&key('a'), "Book", 10000))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    put(&f, P1, MON, &body(json!([[0, 100]]))).await;
+    assert_eq!(amount(&f, MON).await, 100);
+}
+
+#[tokio::test]
+#[ignore = "requires EBOOK_LIVE_BACKUP pointing to an isolated read-only backup source"]
+async fn live_backup_adoption_preserves_43507_and_item_one() {
+    let seed =
+        std::env::var("EBOOK_LIVE_BACKUP").expect("create a read-only sqlite3 .backup first");
+    assert_ne!(
+        std::fs::canonicalize(&seed).unwrap(),
+        PathBuf::from("/home/daniel/.local/share/src/lifestats/test_data/test_snapshot.db")
+    );
+    let db = std::env::temp_dir().join(format!(
+        "lifestats-ebook-live-copy-{}.db",
+        uuid::Uuid::new_v4()
+    ));
+    let status = std::process::Command::new("sqlite3")
+        .arg(format!("file:{seed}?mode=ro"))
+        .arg(format!(".backup '{}'", db.display()))
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let f = fixture_at(db);
+    let url = "/statistics/110/integer_amount/total?start_date=2026-01-01&end_date=2026-12-31";
+    let before: Value = f.server.get(url).await.json();
+    assert_eq!(before["total"], 43507);
+    let item: Value = f.server.get("/progress-items/1").await.json();
+    let title = item["tags"]["book_title"].as_str().unwrap();
+    let length = item["target_value"].as_u64().unwrap();
+    let mut report = body(json!([]));
+    report["title"] = json!(title);
+    report["length"] = json!(length);
+    report["last_position"] = json!(0);
+    let before_db = snapshot(&f);
+    let r = f.server.put(&path(P2, &key('a'), MON)).json(&report).await;
+    r.assert_status(StatusCode::CONFLICT);
+    assert_eq!(
+        r.json::<Value>()["error"]["code"],
+        "legacy_adoption_pending"
+    );
+    assert_eq!(snapshot(&f), before_db);
+    f.server
+        .put("/integrations/ebook/legacy-books/1")
+        .json(&claim(&key('a'), title, length))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(f.server.get(url).await.json::<Value>(), before);
+    let bound: Value = f.server.get("/progress-items/1").await.json();
+    assert_eq!(bound["id"], 1);
+    assert_eq!(bound["name"], item["name"]);
+    assert_eq!(bound["tags"]["book_key"], key('a'));
+    let prefix = query(&f, "SELECT json(legacy_spans) AS value FROM ebook_books");
+    let furthest = prefix[0][1].as_u64().unwrap();
+    assert!(furthest > 0);
+    report["spans"] = json!([[0, furthest]]);
+    f.server
+        .put(&path(P2, &key('a'), MON))
+        .json(&report)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(f.server.get(url).await.json::<Value>(), before);
+    let mut phone = body(json!([[0, 80]]));
+    phone["title"] = json!("Different phone book 1");
+    f.server
+        .put(&path(P2, &key('b'), TUE))
+        .json(&phone)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(
+        f.server.get("/progress-items/1").await.json::<Value>(),
+        bound
+    );
+    let all: Value = f.server.get("/progress-items").await.json();
+    assert!(all
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|i| i["id"] != 1 && i["name"] == "Different phone book 1"));
+    println!("VERIFIED live-copy: 2026 total 43507 before and after adoption; item 1 survives; pending gate clears; phone book independent; F={furthest}");
 }

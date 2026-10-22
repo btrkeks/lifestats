@@ -87,6 +87,17 @@ struct Id {
     id: i32,
 }
 
+#[derive(QueryableByName)]
+struct LegacyBinding {
+    #[diesel(sql_type=Text)]
+    book_key: String,
+}
+#[derive(QueryableByName)]
+struct Furthest {
+    #[diesel(sql_type=BigInt)]
+    position: i64,
+}
+
 fn storage(error: impl Into<anyhow::Error>) -> EbookError {
     EbookError::Storage(RepositoryError::OperationFailed(error.into()))
 }
@@ -359,7 +370,60 @@ impl EbookReadingStore for SqliteStatisticRepository {
         length: NonZeroU64,
         definitions: EbookBundleDefinitions,
     ) -> Result<EbookWriteOutcome, EbookError> {
-        let _ = (reader_data_id, book, title, length, definitions);
-        todo!("legacy adoption unit")
+        let mut conn = self.connection()?;
+        conn.immediate_transaction::<_, anyhow::Error, _>(|conn| {
+            let claim = diesel::sql_query("SELECT book_key FROM ebook_legacy_bindings WHERE reader_data_id=?")
+                .bind::<BigInt,_>(i64::from(reader_data_id)).get_result::<LegacyBinding>(conn).optional().map_err(storage)?;
+            let existing = read_book(conn,&book)?;
+            if existing.as_ref().is_some_and(|row| row.length as u64 != length.get()) {
+                return Err(EbookError::BookLengthMismatch.into());
+            }
+            if let Some(claim) = claim {
+                if claim.book_key != book.as_str() { return Err(EbookError::LegacyBindingConflict.into()); }
+                if let Some(item) = existing.as_ref().and_then(|b|b.progress_item_id) {
+                    let item = diesel::sql_query("SELECT id,name,tags FROM progress_items WHERE id=?")
+                        .bind::<Integer,_>(item).get_result::<Item>(conn).map_err(storage)?;
+                    if item_title(&item)? != title { return Err(EbookError::LegacyBindingConflict.into()); }
+                }
+                return Ok(EbookWriteOutcome { changed_statistics: vec![] });
+            }
+            if diesel::sql_query("SELECT book_key FROM ebook_legacy_bindings WHERE book_key=?")
+                .bind::<Text,_>(book.as_str()).get_result::<LegacyBinding>(conn).optional().map_err(storage)?.is_some() {
+                return Err(EbookError::LegacyBindingConflict.into());
+            }
+            let legacy = diesel::sql_query("SELECT id,name,tags FROM progress_items WHERE json_extract(tags,'$.source')='ebook' AND json_extract(tags,'$.progress_type')='book' AND CAST(json_extract(tags,'$.reader_data_id') AS TEXT)=? ORDER BY id LIMIT 1")
+                .bind::<Text,_>(reader_data_id.to_string()).get_result::<Item>(conn).optional().map_err(storage)?;
+            let (id, rebuilding) = resolve_statistic(conn,definitions)?;
+            let (item, prefix) = if let Some(legacy) = legacy {
+                if item_title(&legacy)? != title || existing.as_ref().and_then(|b|b.progress_item_id).is_some_and(|id|id != legacy.id) {
+                    return Err(EbookError::LegacyBindingConflict.into());
+                }
+                let other_book = diesel::sql_query("SELECT id FROM progress_items WHERE id=? AND EXISTS(SELECT 1 FROM ebook_books WHERE progress_item_id=progress_items.id AND book_key<>?)")
+                    .bind::<Integer,_>(legacy.id).bind::<Text,_>(book.as_str()).get_result::<Id>(conn).optional().map_err(storage)?;
+                if other_book.is_some() { return Err(EbookError::LegacyBindingConflict.into()); }
+                let furthest = diesel::sql_query("SELECT COALESCE(MAX(position_value),0) AS position FROM progress_checkpoints WHERE progress_item_id=?")
+                    .bind::<Integer,_>(legacy.id).get_result::<Furthest>(conn).map_err(storage)?.position;
+                if furthest < 0 || furthest as u64 > length.get() { return Err(EbookError::LegacyBindingConflict.into()); }
+                let prefix = SpanSet::from_stored(vec![(0,furthest as u64)])?;
+                let mut tags: HashMap<String,String> = serde_json::from_str(&legacy.tags).map_err(storage)?;
+                tags.insert("book_key".into(),book.as_str().into());
+                diesel::sql_query("UPDATE progress_items SET tags=?,canonical_tags=?,updated_at=? WHERE id=?")
+                    .bind::<Text,_>(serde_json::to_string(&tags).map_err(storage)?)
+                    .bind::<Nullable<Text>,_>(canonicalize_tags(&tags)).bind::<Text,_>(timestamp()).bind::<Integer,_>(legacy.id).execute(conn).map_err(storage)?;
+                (legacy.id,prefix)
+            } else {
+                let (item,prefix,_) = ensure_book(conn,&book,&title,length)?;
+                (item,prefix)
+            };
+            let prefix = existing.as_ref().map(|r|decode_spans(&r.legacy_spans)).transpose()?.unwrap_or_default().union(&prefix);
+            diesel::sql_query("INSERT INTO ebook_books(book_key,length,progress_item_id,legacy_spans,created_at) VALUES(?,?,?,?,?) ON CONFLICT(book_key) DO UPDATE SET progress_item_id=excluded.progress_item_id,legacy_spans=excluded.legacy_spans")
+                .bind::<Text,_>(book.as_str()).bind::<BigInt,_>(length.get() as i64).bind::<Integer,_>(item)
+                .bind::<Text,_>(serde_json::to_string(prefix.pairs()).map_err(storage)?).bind::<Text,_>(timestamp()).execute(conn).map_err(storage)?;
+            diesel::sql_query("INSERT INTO ebook_legacy_bindings(reader_data_id,book_key) VALUES(?,?)")
+                .bind::<BigInt,_>(i64::from(reader_data_id)).bind::<Text,_>(book.as_str()).execute(conn).map_err(storage)?;
+            let mut changed = reproject_book(conn,id,&book,&prefix,rebuilding)?;
+            if rebuilding { changed |= rebuild_statistic(conn,id)?; }
+            Ok(EbookWriteOutcome { changed_statistics: if changed { vec![id] } else { vec![] } })
+        }).map_err(transaction_error)
     }
 }

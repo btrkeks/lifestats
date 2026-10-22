@@ -158,8 +158,36 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    let _ = (state, reader_data_id, body);
-    todo!("legacy adoption implementation")
+    let Json(raw) = body.map_err(IntegrationApiError::json)?;
+    let object = parse_strict_object(&raw)?;
+    let _: String = required(&object, "book_key")?;
+    let _: String = required(&object, "title")?;
+    let _: u64 = required(&object, "length")?;
+    let request: EbookLegacyBookRequest = serde_json::from_str(raw.get()).map_err(|_| {
+        IntegrationApiError::invalid(None, "Unexpected or duplicate request fields")
+    })?;
+    let reader_data_id = reader_data_id
+        .parse::<u32>()
+        .ok()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| {
+            IntegrationApiError::invalid(
+                Some("reader_data_id"),
+                "Expected a positive u32 reader ID",
+            )
+        })?;
+    let outcome = state.integration_service.bind_legacy_ebook_book(
+        reader_data_id,
+        BookKey::parse(&request.book_key)?,
+        BookTitle::parse(&request.title)?,
+        lifestats_core::ebook::parse_length(request.length)?,
+    )?;
+    for id in outcome.changed_statistics {
+        state
+            .event_publisher
+            .publish_event_async(events::event_port::Event::ValueUpdated(id));
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn provision_legacy<R, Rend, E, I>(
