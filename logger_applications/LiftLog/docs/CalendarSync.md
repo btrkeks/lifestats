@@ -86,6 +86,15 @@ all of them again.
 | Waiting for the series to sync        | Let the phone sync the account. LiftLog retries by itself.       |
 | Could not be updated                  | LiftLog retries by itself while the app is open.                 |
 
+### Google reminder inheritance
+
+On the Google sync adapter tested, creating a moved occurrence preserved the current alert time but
+converted a calendar-default reminder into an explicit reminder on that occurrence. LiftLog's device
+calendar integration does not expose Google's reminder-inheritance flag, so inherited reminders are not
+guaranteed to follow later calendar-default changes. Existing explicit reminders retain their current
+settings. A time-only historical operation can preserve the original Google reminder representation by
+reconciling the saved before-state through Google Calendar after upload.
+
 ## Contributor notes
 
 ```text
