@@ -223,6 +223,64 @@ describe('syncCalendarSessions', () => {
     expect(calendar.timesOf(gym)).toEqual(span('2026-10-11T18:05', '2026-10-11T19:40'));
   });
 
+  it('keeps the external-edit warning when a workout reverts to its last observed span', async () => {
+    const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
+    const observed = workout('w', '2026-10-11', '18:05', '19:10');
+    finish(observed);
+    await run();
+    const external = span('2026-10-11T18:05', '2026-10-11T21:00');
+    calendar.editOutside(gym, external);
+    edit(workout('w', '2026-10-11', '18:05', '19:40'));
+    await run();
+    expect(outcomes()).toEqual(['w: changed']);
+
+    edit(observed);
+    await run();
+
+    expect(outcomes()).toEqual(['w: changed']);
+    expect(readCalendarAttention(db).map((row) => row.outcome)).toEqual(['changed']);
+    expect(calendar.timesOf(gym)).toEqual(external);
+    expect(calendar.writes).toHaveLength(1);
+  });
+
+  it('inspects an unchanged claimed span before reporting success after a notes-only edit', async () => {
+    const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
+    const observed = workout('w', '2026-10-11', '18:05', '19:10');
+    finish(observed);
+    await run();
+    calendar.editOutside(gym, span('2026-10-11T18:05', '2026-10-11T21:00'));
+    edit(observed.with({ blueprint: observed.blueprint.with({ notes: 'Updated notes' }) }));
+    await run();
+    expect(outcomes()).toEqual(['w: changed']);
+    expect(calendar.writes).toHaveLength(1);
+  });
+
+  it.each(['pause', 'revision'] as const)(
+    'keeps an unchanged-span warning pending after %s during inspection',
+    async (change) => {
+      const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
+      const observed = workout('w', '2026-10-11', '18:05', '19:10');
+      finish(observed);
+      await run();
+      calendar.editOutside(gym, span('2026-10-11T18:05', '2026-10-11T21:00'));
+      edit(workout('w', '2026-10-11', '18:05', '19:40'));
+      await run();
+      edit(observed);
+      let enabled = true;
+      const inspect = calendar.inspect.bind(calendar);
+      vi.spyOn(calendar, 'inspect').mockImplementationOnce(async (...args) => {
+        const found = await inspect(...args);
+        if (change === 'pause') enabled = false;
+        else edit(workout('w', '2026-10-11', '18:05', '19:50'));
+        return found;
+      });
+      await syncCalendarSessions({ db, calendar, logger, enabled: () => enabled });
+      expect(countPendingCalendarSessions(db)).toBe(1);
+      expect(outcomes()).toEqual(['w: changed']);
+      expect(calendar.writes).toHaveLength(1);
+    },
+  );
+
   it('does not take over an event changed between matching and the first write', async () => {
     const gym = calendar.addOccurrence(span('2026-10-11T17:00', '2026-10-11T18:00'));
     finish(workout('w', '2026-10-11', '18:05', '19:10'));

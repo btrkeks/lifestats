@@ -125,15 +125,13 @@ async function syncSession(
       if (!session.date.equals(owned.date)) {
         return record('moved-date');
       }
-      if (sameTimes(times, owned.observed)) {
-        return record('adjusted');
-      }
       const inspected = await calendar.inspect(owned.identity);
       if (!eligibleNow(times, session.date)) return 'pending';
       if (inspected.kind !== 'found') {
         return inspected.kind === 'no-permission' ? inspected.kind : record(inspected.kind);
       }
       if (!sameTimes(inspected.times, owned.observed)) return record('changed');
+      if (sameTimes(times, owned.observed)) return record('adjusted');
       db.transaction((tx) => saveCalendarAttempt(tx, sessionId, times));
       return await settleMove(owned, times);
     }

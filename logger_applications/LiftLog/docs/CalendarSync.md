@@ -10,7 +10,8 @@ and cannot verify cloud delivery.
 
 1. Open **Settings → Calendar sync**. The page exists only on Android.
 2. Tap **Allow calendar access**. If you denied it before for good, the same row opens the system
-   settings instead.
+   settings instead. Calendar access and the calendar list refresh when you return to this page from
+   system settings, including when the route stays focused.
 3. Pick the **Calendar** that holds your Gym events. The picker lists writable Google calendars, including
    secondary calendars. Each calendar shows its account next to its name.
 4. Check the **Event title**. It defaults to `Gym` and must match the event's title exactly, apart from
@@ -108,7 +109,9 @@ For each pending workout, `syncCalendarSessions`:
    `observed`. If it still shows `observed`, the attempt is dropped. Anything else is `changed`.
 2. Records `idle` for a deleted, resumed or empty workout, and writes nothing.
 3. For a claimed workout, records `moved-date` if the workout's date is not the claim's date. Otherwise
-   it saves the new span as `attempt` and moves the occurrence only if it still shows `observed`.
+   it inspects the occurrence, even when the requested span equals `observed`. External changes remain
+   visible. If a move is needed, it saves the new span as `attempt` and moves the occurrence only if it
+   still shows `observed`.
 4. For an unclaimed workout, lists the target calendar's occurrences on the workout's local day. It
    counts every occurrence titled exactly like the target that starts that day, before checking
    whether it can move or who owns it. Zero is `no-match`, two or more is `ambiguous`, and one owned by
@@ -144,7 +147,8 @@ day at both ends so offsets in either direction cannot hide those matches.
 - **Later moves, or a single event.** The module updates the row's `DTSTART` and `DTEND` with a
   selection on `Events.CONTENT_URI` that requires the row ID, calendar, original master and instance
   identity, null or empty recurrence fields, current title, organizer, and editability, and the times it just
-  read. It cannot match a series master. Nullable status and timezone do not use equality guards.
+  read. It cannot match a series master. Nullable snapshot fields use `IS NULL` without a bind argument;
+  non-null fields bind strings. Nullable status and timezone do not use equality guards.
 - **Before inserting**, it looks for an existing exception for the same master and
   `ORIGINAL_INSTANCE_TIME`. One is updated instead. Two or more is `duplicate`. The provider does not
   merge a second insert, so this lookup is what prevents duplicates after a lost answer.

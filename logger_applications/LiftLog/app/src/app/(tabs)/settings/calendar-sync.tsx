@@ -12,7 +12,7 @@ import { formatDate } from '@/utils/format-date';
 import { useTranslate } from '@tolgee/react';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Linking } from 'react-native';
+import { AppState, Linking } from 'react-native';
 import { HelperText, Text, TextInput } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 
@@ -49,16 +49,23 @@ export default function CalendarSyncPage() {
   useFocusEffect(
     useCallback(() => {
       let focused = true;
-      void (async () => {
+      let refreshRevision = 0;
+      const refresh = async () => {
+        const revision = ++refreshRevision;
         const current = await phoneCalendar.access();
         const available = current === 'granted' ? await phoneCalendar.calendars() : [];
-        if (focused) {
+        if (focused && revision === refreshRevision) {
           setAccess(current);
           setCalendars(available);
         }
-      })();
+      };
+      void refresh();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void refresh();
+      });
       return () => {
         focused = false;
+        subscription.remove();
       };
     }, [phoneCalendar]),
   );

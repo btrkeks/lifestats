@@ -296,17 +296,17 @@ class LiftLogCalendarModule : Module() {
             put(Events.DTEND, to.endMs)
         }
         val row = target.event
+        val snapshot = calendarSnapshotPredicate(row.title, row.organizer, row.guestsCanModify)
         val occurrence = if (input.instanceTime == null) "${Events.ORIGINAL_ID} IS NULL AND ${Events.ORIGINAL_INSTANCE_TIME} IS NULL"
             else "${Events.ORIGINAL_ID} = ? AND ${Events.ORIGINAL_INSTANCE_TIME} = ?"
         val selection = "${Events._ID} = ? AND ${Events.CALENDAR_ID} = ? AND ${Events.DELETED} = 0 AND " +
             "(${Events.RRULE} IS NULL OR ${Events.RRULE} = '') AND (${Events.RDATE} IS NULL OR ${Events.RDATE} = '') AND " +
             "(${Events.EXRULE} IS NULL OR ${Events.EXRULE} = '') AND (${Events.EXDATE} IS NULL OR ${Events.EXDATE} = '') AND " +
             "${Events.ALL_DAY} = 0 AND (${Events.STATUS} IS NULL OR ${Events.STATUS} != ${Events.STATUS_CANCELED}) AND " +
-            "${Events.DTSTART} = ? AND ${Events.DTEND} = ? AND ${Events.TITLE} IS ? AND ${Events.ORGANIZER} IS ? AND " +
-            "${Events.GUESTS_CAN_MODIFY} IS ? AND $occurrence"
-        val args = mutableListOf<String?>(target.id.toString(), input.calendarId.toString(),
-            target.current.beginMs.toString(), target.current.endMs.toString(), row.title, row.organizer,
-            row.guestsCanModify?.toString())
+            "${Events.DTSTART} = ? AND ${Events.DTEND} = ? AND ${snapshot.selection} AND $occurrence"
+        val args = mutableListOf(target.id.toString(), input.calendarId.toString(),
+            target.current.beginMs.toString(), target.current.endMs.toString())
+        args.addAll(snapshot.args)
         if (input.instanceTime != null) {
             args.add(input.eventId.toString())
             args.add(input.instanceTime.toString())
