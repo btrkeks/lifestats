@@ -1,0 +1,75 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'off_product_dto.dart';
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+OFFProductDTO _$OFFProductDTOFromJson(Map<String, dynamic> json) =>
+    OFFProductDTO(
+      code: json['code'] as String?,
+      product_name: json['product_name'] as String?,
+      product_name_en: json['product_name_en'] as String?,
+      product_name_fr: json['product_name_fr'] as String?,
+      product_name_de: json['product_name_de'] as String?,
+      product_name_cs: json['product_name_cs'] as String?,
+      product_name_it: json['product_name_it'] as String?,
+      product_name_sk: json['product_name_sk'] as String?,
+      product_name_tr: json['product_name_tr'] as String?,
+      product_name_uk: json['product_name_uk'] as String?,
+      product_name_hu: json['product_name_hu'] as String?,
+      product_name_es: json['product_name_es'] as String?,
+      brands: _brandsFromJson(json['brands']),
+      image_front_thumb_url: json['image_front_thumb_url'] as String?,
+      image_front_url: json['image_front_url'] as String?,
+      image_ingredients_url: json['image_ingredients_url'] as String?,
+      image_nutrition_url: json['image_nutrition_url'] as String?,
+      image_url: json['image_url'] as String?,
+      url: json['url'] as String?,
+      quantity: json['quantity'] as String?,
+      product_quantity: json['product_quantity'],
+      serving_quantity: json['serving_quantity'],
+      serving_size: json['serving_size'] as String?,
+      serving_quantity_unit: json['serving_quantity_unit'] as String?,
+      nutriments: json['nutriments'] == null
+          ? null
+          : OFFProductNutrimentsDTO.fromJson(
+              json['nutriments'] as Map<String, dynamic>,
+            ),
+      popularity_key: json['popularity_key'] as num?,
+      countries_tags: (json['countries_tags'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+    );
+
+Map<String, dynamic> _$OFFProductDTOToJson(OFFProductDTO instance) =>
+    <String, dynamic>{
+      'code': instance.code,
+      'product_name': instance.product_name,
+      'product_name_en': instance.product_name_en,
+      'product_name_fr': instance.product_name_fr,
+      'product_name_de': instance.product_name_de,
+      'product_name_cs': instance.product_name_cs,
+      'product_name_it': instance.product_name_it,
+      'product_name_sk': instance.product_name_sk,
+      'product_name_tr': instance.product_name_tr,
+      'product_name_uk': instance.product_name_uk,
+      'product_name_hu': instance.product_name_hu,
+      'product_name_es': instance.product_name_es,
+      'brands': instance.brands,
+      'image_front_thumb_url': instance.image_front_thumb_url,
+      'image_front_url': instance.image_front_url,
+      'image_ingredients_url': instance.image_ingredients_url,
+      'image_nutrition_url': instance.image_nutrition_url,
+      'image_url': instance.image_url,
+      'url': instance.url,
+      'quantity': instance.quantity,
+      'product_quantity': instance.product_quantity,
+      'serving_quantity': instance.serving_quantity,
+      'serving_size': instance.serving_size,
+      'serving_quantity_unit': instance.serving_quantity_unit,
+      'popularity_key': instance.popularity_key,
+      'countries_tags': instance.countries_tags,
+      'nutriments': instance.nutriments,
+    };

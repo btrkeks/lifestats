@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:logging/logging.dart';
+import 'package:opennutritracker/core/domain/entity/custom_activity_template_entity.dart';
+import 'package:opennutritracker/core/domain/entity/physical_activity_entity.dart';
+import 'package:opennutritracker/core/domain/entity/user_entity.dart';
+import 'package:opennutritracker/core/presentation/widgets/app_card.dart';
+import 'package:opennutritracker/core/styles/app_palette.dart';
+import 'package:opennutritracker/core/styles/dimens.dart';
+import 'package:opennutritracker/core/utils/calc/unit_calc.dart';
+import 'package:opennutritracker/core/utils/energy_display.dart';
+import 'package:opennutritracker/core/utils/energy_unit_provider.dart';
+import 'package:opennutritracker/core/utils/locator.dart';
+import 'package:opennutritracker/core/utils/navigation_options.dart';
+import 'package:opennutritracker/core/utils/navigation_predicates.dart';
+import 'package:opennutritracker/features/activity_detail/presentation/bloc/activity_detail_bloc.dart';
+import 'package:opennutritracker/features/activity_detail/presentation/widget/activity_detail_bottom_sheet.dart';
+import 'package:opennutritracker/features/activity_detail/presentation/widget/activity_info_button.dart';
+import 'package:opennutritracker/features/activity_detail/presentation/widget/activity_title_expanded.dart';
+import 'package:opennutritracker/features/diary/presentation/bloc/calendar_day_bloc.dart';
+import 'package:opennutritracker/features/diary/presentation/bloc/diary_bloc.dart';
+import 'package:opennutritracker/features/home/presentation/bloc/home_bloc.dart';
+import 'package:opennutritracker/generated/l10n.dart';
+import 'package:provider/provider.dart';
+
+class ActivityDetailScreen extends StatefulWidget {
+  const ActivityDetailScreen({super.key});
+
+  @override
+  State<ActivityDetailScreen> createState() => _ActivityDetailScreenState();
+}
+
+class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
+  static const _containerSize = 250.0;
+
+  final log = Logger('ItemDetailScreen');
+  final _scrollController = ScrollController();
+
+  late PhysicalActivityEntity activityEntity;
+  late DateTime _day;
+  late TextEditingController quantityTextController;
+
+  late ActivityDetailBloc _activityDetailBloc;
+
+  late double totalQuantity;
+  late double totalKcal;
+
+  @override
+  void initState() {
+    _activityDetailBloc = locator<ActivityDetailBloc>();
+    quantityTextController = TextEditingController();
+    quantityTextController.text = "0";
+    quantityTextController.addListener(_onQuantityChanged);
+    totalQuantity = 0; // TODO change to 60
+    totalKcal = 0;
+    super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    final args =
+        ModalRoute.of(context)?.settings.arguments
+            as ActivityDetailScreenArguments;
+    activityEntity = args.activityEntity;
+    _day = args.day;
+    super.didChangeDependencies();
+  }
+
+  @override
+  void dispose() {
+    quantityTextController.removeListener(_onQuantityChanged);
+    quantityTextController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = isDark ? AppPalette.dark : AppPalette.light;
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: palette.canvas,
+        body: BlocBuilder<ActivityDetailBloc, ActivityDetailState>(
+          bloc: _activityDetailBloc,
+          builder: (context, state) {
+            if (state is ActivityDetailInitial) {
+              _activityDetailBloc.add(LoadActivityDetailEvent(activityEntity));
+              return getLoadingContent();
+            } else if (state is ActivityDetailLoadingState) {
+              return getLoadingContent();
+            } else if (state is ActivityDetailLoadedState) {
+              return getLoadedContent(state.totalKcalBurned, state.userEntity);
+            } else {
+              return const SizedBox();
+            }
+          },
+        ),
+        bottomSheet: ActivityDetailBottomSheet(
+          onAddButtonPressed: onAddButtonPressed,
+          quantityTextController: quantityTextController,
+          activityEntity: activityEntity,
+          activityDetailBloc: _activityDetailBloc,
+        ),
+      ),
+    );
+  }
+
+  Widget getLoadingContent() {
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  Widget getLoadedContent(double totalKcalBurned, UserEntity userEntity) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = isDark ? AppPalette.dark : AppPalette.light;
+    final accent = Theme.of(context).colorScheme.primary;
+    final text = Theme.of(context).textTheme;
+    return CustomScrollView(
+      controller: _scrollController,
+      slivers: [
+        SliverAppBar(
+          pinned: true,
+          backgroundColor: palette.canvas,
+          expandedHeight: 200,
+          flexibleSpace: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final top = constraints.biggest.height;
+              final barsHeight =
+                  MediaQuery.of(context).padding.top + kToolbarHeight;
+              const offset = 10;
+              return FlexibleSpaceBar(
+                expandedTitleScale: 1, // don't scale title
+                background: ActivityTitleExpanded(activity: activityEntity),
+                title: AnimatedOpacity(
+                  opacity: 1.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: top > barsHeight - offset && top < barsHeight + offset
+                      ? Text(
+                          activityEntity.getName(context),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                        )
+                      : const SizedBox(),
+                ),
+              );
+            },
+          ),
+        ),
+        SliverList(
+          delegate: SliverChildListDelegate([
+            Center(
+              child: Container(
+                width: _containerSize,
+                height: _containerSize,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  activityEntity.displayIcon,
+                  size: 64,
+                  color: accent,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(Dimens.spacing16),
+              child: Column(
+                children: [
+                  AppCard(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Dimens.spacing20,
+                      vertical: Dimens.spacing16,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        // set Focus
+                        Text(
+                          // For Custom activities the user enters kcal/kJ directly,
+                          // so the leading tilde (which implies an estimate) is
+                          // dropped: the figure on screen is exactly what they
+                          // typed in.
+                          activityEntity.isCustom
+                              ? EnergyDisplay.formatWithUnit(context, totalKcal)
+                              : '~${EnergyDisplay.formatWithUnit(context, totalKcal)}',
+                          style: text.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: palette.textStrong,
+                          ),
+                        ),
+                        // For Custom activities the duration line would just
+                        // mirror the kcal figure, which is confusing — so we
+                        // hide it.
+                        if (!activityEntity.isCustom)
+                          Text(
+                            ' / ${totalQuantity.toInt()} min',
+                            style: text.titleMedium?.copyWith(
+                              color: palette.textMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: Dimens.spacing32),
+                  // The Compendium attribution only makes sense for the
+                  // built-in activities it actually sourced. Custom activities
+                  // are user-entered, so the citation would be misleading.
+                  if (!activityEntity.isCustom) const ActivityInfoButton(),
+                  const SizedBox(height: 200.0), // height added to scroll
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  /// For a Custom activity the typed value is read in whichever unit the
+  /// user is currently displaying (kcal or kJ) and converted back to kcal
+  /// before it reaches the bloc. Everything stored on UserActivityDBO
+  /// stays in kcal regardless of the display setting, so toggling units
+  /// later just re-renders the same underlying energy.
+  double _convertTypedToKcal(double typed) {
+    if (!activityEntity.isCustom) return typed;
+    final usesKj =
+        Provider.of<EnergyUnitProvider>(context, listen: false).usesKilojoules;
+    return usesKj ? UnitCalc.kjToKcal(typed) : typed;
+  }
+
+  void _onQuantityChanged() {
+    final state = _activityDetailBloc.state;
+    if (state is! ActivityDetailLoadedState) return;
+    try {
+      final newQuantity = double.parse(quantityTextController.text);
+      // For custom: the quantity field IS the energy figure; convert it
+      // to kcal up front so the bloc only ever sees stored units.
+      final quantityInKcal = _convertTypedToKcal(newQuantity);
+      final newTotalKcal = _activityDetailBloc.getTotalKcalBurned(
+        state.userEntity,
+        activityEntity,
+        quantityInKcal,
+      );
+      setState(() {
+        totalQuantity = newQuantity;
+        totalKcal = newTotalKcal;
+        scrollToCalorieText();
+      });
+    } on FormatException catch (_) {
+      log.warning("Error while parsing: \"${quantityTextController.text}\"");
+    }
+  }
+
+  void scrollToCalorieText() {
+    _scrollController.animateTo(
+      _containerSize,
+      duration: const Duration(seconds: 1),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void onAddButtonPressed(
+    BuildContext context, {
+    String? templateName,
+    bool saveAsTemplate = false,
+  }) {
+    // The bloc treats `persistActivity`'s first argument as a kcal value
+    // for Custom activities (and as minutes for compendium activities),
+    // so when the user typed in kJ we hand over the converted figure
+    // here rather than the raw text. Compendium activities pass through
+    // unchanged.
+    String quantityForBloc = quantityTextController.text;
+    if (activityEntity.isCustom) {
+      try {
+        final typed = double.parse(quantityTextController.text);
+        final kcal = _convertTypedToKcal(typed);
+        quantityForBloc = kcal.toString();
+      } on FormatException catch (_) {
+        log.warning(
+          'Error while parsing on save: "${quantityTextController.text}"',
+        );
+      }
+    }
+    _activityDetailBloc.persistActivity(
+      quantityForBloc,
+      totalKcal,
+      activityEntity,
+      _day,
+    );
+
+    // #70 follow-up: optionally remember the Custom activity as a
+    // template the user can recall next time. The checkbox is off by
+    // default so we only persist when the user has explicitly opted in
+    // and provided a name to find it by later.
+    if (saveAsTemplate &&
+        activityEntity.isCustom &&
+        templateName != null &&
+        templateName.isNotEmpty) {
+      _activityDetailBloc.saveCustomActivityTemplate(
+        CustomActivityTemplateEntity(
+          name: templateName,
+          typicalKcal: totalKcal,
+        ),
+      );
+    }
+
+    // Refresh Home Page
+    locator<HomeBloc>().add(const LoadItemsEvent());
+
+    // Refresh Diary Page
+    locator<DiaryBloc>().add(const LoadDiaryYearEvent());
+    locator<CalendarDayBloc>().add(RefreshCalendarDayEvent());
+
+    // Show snackbar and return to dashboard
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(S.of(context).infoAddedActivityLabel)),
+    );
+    Navigator.of(
+      context,
+    ).popUntil(namedRouteOrFirst(NavigationOptions.mainRoute));
+  }
+}
+
+class ActivityDetailScreenArguments {
+  final PhysicalActivityEntity activityEntity;
+  final DateTime day;
+
+  ActivityDetailScreenArguments(this.activityEntity, this.day);
+}

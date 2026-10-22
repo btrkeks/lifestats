@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The languages OpenNutriTracker ships, offered to Android's per-app
+     language picker (Settings → Apps → OpenNutriTracker → Language).
+     Derived from lib/core/l10n/shipped_locales.dart, not from lib/l10n/,
+     which also holds languages Weblate is still filling. Do not edit by
+     hand: tool/check_locales.dart rewrites it in fix mode (see the tool's
+     header) and fails CI on drift; a tag listed here that the app cannot
+     render leaves someone stranded in a language we never wrote.
+     Chinese is a single entry: one Simplified ARB is what we ship, and
+     Android matches zh-CN and zh-Hans devices onto it. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="cs"/>
+    <locale android:name="de"/>
+    <locale android:name="en"/>
+    <locale android:name="es"/>
+    <locale android:name="hu"/>
+    <locale android:name="it"/>
+    <locale android:name="pl"/>
+    <locale android:name="sk"/>
+    <locale android:name="tr"/>
+    <locale android:name="uk"/>
+    <locale android:name="zh"/>
+</locale-config>

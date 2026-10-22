@@ -1,0 +1,199 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
+
+/// Two flavours of user-attached photo the app persists on disk.
+///
+/// Recipes live under `recipe_images/`, custom meals live under
+/// `meal_images/`. The subdirectory split keeps the two namespaces
+/// distinct on disk (so export zips can label them clearly and a
+/// runaway filename collision on one side can't quietly overwrite the
+/// other) while sharing one compression pipeline. The two are different
+/// kinds of thing in the domain model — a recipe is a composition of
+/// meals — and the storage layer now reflects that distinction.
+enum UserImageKind {
+  recipe('recipe_images'),
+  meal('meal_images'),
+  profile('profile_images');
+
+  const UserImageKind(this.subdir);
+
+  final String subdir;
+}
+
+/// Resolves the on-disk location of user-attached photos for either a
+/// recipe (#64) or a custom meal (#64 follow-up). Only the *relative*
+/// slug (e.g. `meal_images/<code>.webp`) is persisted on the matching
+/// DBO; the absolute path is recomposed on demand so the data survives
+/// across app reinstalls and iOS sandbox refreshes, where the documents
+/// directory's parent prefix can change between launches.
+///
+/// Photos are stored as WebP at quality 80, bounded at 1024px on the
+/// shortest edge — small enough that an export zip of a few dozen
+/// recipes and meals stays in the low-megabyte range, while still
+/// being plenty crisp for a list thumbnail and the detail-screen
+/// header. WebP roughly halves the bytes of an equivalent-quality JPEG
+/// and is supported natively on every Android and iOS version the app
+/// targets.
+class UserImageStorage {
+  static const String _extension = 'webp';
+
+  /// The relative slug stored on the DBO for a given owner id.
+  static String relativePathFor(UserImageKind kind, String ownerId) =>
+      '${kind.subdir}/$ownerId.$_extension';
+
+  /// Splits a relative slug back into its parts. Returns null for any
+  /// path that doesn't sit inside one of the known image
+  /// subdirectories. Defensive so that a malformed value from an old
+  /// export can't escape its images directory.
+  static String? sanitizeRelative(String relative) {
+    final parts = relative.split('/');
+    if (parts.length != 2) return null;
+    final knownDirs = {for (final k in UserImageKind.values) k.subdir};
+    if (!knownDirs.contains(parts[0])) return null;
+    if (parts[1].isEmpty || parts[1].contains('..')) return null;
+    return '${parts[0]}/${parts[1]}';
+  }
+
+  /// True when `relative` is one of our user-image slugs. Used by
+  /// import to decide whether a zip entry should be restored into
+  /// the documents directory or skipped.
+  static bool isUserImagePath(String relative) =>
+      sanitizeRelative(relative) != null;
+
+  /// Absolute path that corresponds to `relativePath` inside the
+  /// app's private documents directory. Use this for `File(...)`
+  /// operations.
+  static Future<String> absolutePath(String relativePath) async {
+    final dir = await getApplicationDocumentsDirectory();
+    return '${dir.path}/$relativePath';
+  }
+
+  /// Absolute path to the relevant images directory itself. Created
+  /// if missing.
+  static Future<Directory> ensureDirectory(UserImageKind kind) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final imagesDir = Directory('${dir.path}/${kind.subdir}');
+    if (!await imagesDir.exists()) {
+      await imagesDir.create(recursive: true);
+    }
+    return imagesDir;
+  }
+
+  /// Reads `sourcePath`, re-encodes it to WebP (quality 80, shortest
+  /// edge 1024px), writes the result to the matching images directory
+  /// under `<ownerId>.webp`, and returns the relative slug to persist.
+  /// The source file is left untouched.
+  ///
+  /// If the on-device WebP encoder is unavailable for some reason
+  /// (very old hardware, simulator quirks), `FlutterImageCompress`
+  /// returns `null` and we fall back to copying the source bytes
+  /// verbatim — the file extension stays `.webp` either way so callers
+  /// don't have to branch on it.
+  static Future<String> importFrom({
+    required UserImageKind kind,
+    required String ownerId,
+    required String sourcePath,
+  }) async {
+    final imagesDir = await ensureDirectory(kind);
+    final destPath = '${imagesDir.path}/$ownerId.$_extension';
+    final compressed = await _compressToWebP(sourcePath);
+    if (compressed != null) {
+      await File(destPath).writeAsBytes(compressed, flush: true);
+    } else {
+      await File(sourcePath).copy(destPath);
+    }
+    // A fresh import always wins over any stale photo-credit sidecar (see
+    // [writeCredit]) — a real user picking their own photo over a
+    // previously-seeded demo one should never keep showing someone else's
+    // attribution.
+    await _deleteCreditFile(destPath);
+    return relativePathFor(kind, ownerId);
+  }
+
+  /// Removes the file at `relativePath` if it exists. Silent no-op
+  /// when the file is already gone — callers don't need to
+  /// special-case that.
+  static Future<void> delete(String relativePath) async {
+    final sanitized = sanitizeRelative(relativePath);
+    if (sanitized == null) return;
+    final absolute = await absolutePath(sanitized);
+    final file = File(absolute);
+    if (await file.exists()) {
+      await file.delete();
+    }
+    await _deleteCreditFile(absolute);
+  }
+
+  /// Records a photographer credit for the image at `relativePath`, kept
+  /// as a `<relativePath>.credit.json` sidecar rather than a DBO field —
+  /// this is only ever written by the dev-only demo-data seeder for its
+  /// curated Unsplash photos, and a sidecar file needed no schema change
+  /// (and no Hive codegen) to add. Real user-picked photos never have one.
+  static Future<void> writeCredit(
+    String relativePath, {
+    required String name,
+    required String profileUrl,
+  }) async {
+    final sanitized = sanitizeRelative(relativePath);
+    if (sanitized == null) return;
+    final absolute = await absolutePath(sanitized);
+    await File(
+      '$absolute.credit.json',
+    ).writeAsString(jsonEncode({'name': name, 'profileUrl': profileUrl}));
+  }
+
+  /// The credit written by [writeCredit] for `relativePath`, or null when
+  /// there isn't one (the common case).
+  static Future<({String name, String profileUrl})?> readCredit(
+    String relativePath,
+  ) async {
+    try {
+      final sanitized = sanitizeRelative(relativePath);
+      if (sanitized == null) return null;
+      final absolute = await absolutePath(sanitized);
+      final file = File('$absolute.credit.json');
+      if (!await file.exists()) return null;
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map) return null;
+      final name = decoded['name'];
+      final profileUrl = decoded['profileUrl'];
+      if (name is! String || profileUrl is! String) return null;
+      return (name: name, profileUrl: profileUrl);
+    } catch (_) {
+      // Optional UI metadata — a corrupt/partial sidecar must not break
+      // the profile editor or meal detail screen.
+      return null;
+    }
+  }
+
+  static Future<void> _deleteCreditFile(String absoluteImagePath) async {
+    final creditFile = File('$absoluteImagePath.credit.json');
+    if (await creditFile.exists()) {
+      await creditFile.delete();
+    }
+  }
+
+  static Future<Uint8List?> _compressToWebP(String sourcePath) async {
+    try {
+      return await FlutterImageCompress.compressWithFile(
+        sourcePath,
+        format: CompressFormat.webp,
+        quality: 80,
+        minWidth: 1024,
+        minHeight: 1024,
+        // `minWidth`/`minHeight` bound the *shortest* edge, not the longest.
+        // The compressor takes `min(width/minWidth, height/minHeight)` as its
+        // scale factor, so the smaller ratio wins and the edge that lands on
+        // 1024 is the short one: a 4080x3072 frame comes out 1360x1024, and a
+        // 16:9 frame wider still. Aspect ratio is preserved and an image
+        // already smaller than 1024 on both edges passes through untouched.
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}

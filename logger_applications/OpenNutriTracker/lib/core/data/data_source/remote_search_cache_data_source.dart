@@ -1,0 +1,339 @@
+import 'dart:io';
+
+import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:opennutritracker/core/data/dbo/meal_dbo.dart';
+import 'package:opennutritracker/core/utils/app_locale.dart';
+import 'package:opennutritracker/core/utils/supported_language.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
+/// Local cache of remote meal lookups (Open Food Facts AND Supabase FDC).
+/// Every successful network search or barcode lookup writes its result
+/// here so that subsequent searches and scans for the same product
+/// resolve from disk — fast, and works offline.
+///
+/// Cached entries keep their original [MealSourceDBO] (`off` / `fdc`);
+/// they are NOT custom meals, just a local mirror of the remote result
+/// we last saw. This is separate from `CustomMealBox` so the user's own
+/// meals stay distinct from cached remote data and can be deleted
+/// independently.
+///
+/// Each entry has an associated "last touched" timestamp stored in a
+/// sidecar box. The timestamp is set on initial cache and refreshed
+/// whenever the user explicitly selects (logs an intake of) the item.
+/// [pruneStale] drops entries whose timestamp is older than the supplied
+/// age — typically 90 days, called on app startup.
+///
+/// The on-disk box names (`CachedOffMealBox`, `CachedOffMealTimestampsBox`)
+/// are kept for backward compatibility with installs that already have
+/// data in them; only the Dart class name was generalised when FDC
+/// caching was added.
+class RemoteSearchCacheDataSource {
+  final Box<MealDBO> _cacheBox;
+  final Box<int> _timestampsBox;
+
+  RemoteSearchCacheDataSource(this._cacheBox, this._timestampsBox);
+
+  /// Key in the timestamps box under which the language of the cached
+  /// names is recorded. A product arrives with one already-localized name
+  /// and is stored that way, so the whole cache is in one language; when
+  /// the app's language changes the entries cannot be re-localized and are
+  /// dropped instead. Checking here, on every read and write, covers every
+  /// way the language can change — the in-app picker, Android's per-app
+  /// picker, a switch while the app was closed — without the callers
+  /// knowing. The key is neither a barcode nor a product name, so it never
+  /// collides; [pruneStale] walks the cache box, so it never sees it.
+  static const _languageStampKey = '\u0000language';
+
+  /// The sidecar box is `Box<int>`, so the language code is packed as up to
+  /// three ASCII letters, big-endian. A stamp that does not decode to the
+  /// current language only ever costs a cache clear.
+  static int _encodeLanguage(String code) =>
+      code.codeUnits.take(3).fold(0, (packed, unit) => packed * 256 + unit);
+
+  int get _currentLanguage =>
+      _encodeLanguage(SupportedLanguage.fromCode(AppLocale.localeName).name);
+
+  /// Whether the cached names are in the app's current language. A cache
+  /// written before the stamp existed counts as foreign: its names may be
+  /// in any language, and a one-time loss of the "recently used" order is
+  /// cheaper than serving the wrong one for up to the prune age.
+  bool get _inCurrentLanguage =>
+      _cacheBox.isEmpty ||
+      _timestampsBox.get(_languageStampKey) == _currentLanguage;
+
+  /// Drops a cache written in another language and stamps the current one.
+  Future<void> _ensureLanguage() async {
+    if (_languageReset != null) await _languageReset;
+    final current = _currentLanguage;
+    if (_timestampsBox.get(_languageStampKey) == current) return;
+    if (_cacheBox.isNotEmpty) {
+      await _cacheBox.clear();
+      await _timestampsBox.clear();
+    }
+    await _timestampsBox.put(_languageStampKey, current);
+  }
+
+  /// The reset a synchronous reader kicked off, so a second reader does not
+  /// start another and a test can wait for it.
+  Future<void>? _languageReset;
+
+  /// For the synchronous readers: a foreign-language cache is reported as
+  /// empty and cleared in the background, so a stale name is never served.
+  bool _readable() {
+    if (_inCurrentLanguage) return true;
+    _languageReset ??= _ensureLanguage().whenComplete(
+      () => _languageReset = null,
+    );
+    return false;
+  }
+
+  /// Completes once any background language reset has finished.
+  @visibleForTesting
+  Future<void> settle() => _languageReset ?? Future<void>.value();
+
+  /// Persist [meal] in the cache and stamp its "last touched" timestamp
+  /// to the current time. If a cached entry with the same code (or, when
+  /// code is null, the same name) already exists, it is overwritten so
+  /// the freshest remote result wins.
+  Future<void> cache(MealDBO meal) async {
+    await _ensureLanguage();
+    final index = _buildDedupIndex();
+    final existingKey = _lookupExistingKey(meal, index);
+    if (existingKey != null) {
+      await _cacheBox.put(existingKey, meal);
+    } else {
+      await _cacheBox.add(meal);
+    }
+    final tsKey = _timestampKey(meal);
+    if (tsKey != null) {
+      await _timestampsBox.put(tsKey, DateTime.now().millisecondsSinceEpoch);
+    }
+  }
+
+  /// Persist all of [meals] in one pass. Touches the timestamp on every
+  /// entry — for that reason this is the right choice for intent-driven
+  /// writes (a barcode scan that returned multiple variants, etc) but
+  /// the wrong choice for bulk caching a search result page; use
+  /// [cacheFromSearch] for that.
+  Future<void> cacheAll(Iterable<MealDBO> meals) async {
+    await _ensureLanguage();
+    final index = _buildDedupIndex();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final meal in meals) {
+      final existingKey = _lookupExistingKey(meal, index);
+      if (existingKey != null) {
+        await _cacheBox.put(existingKey, meal);
+      } else {
+        final newKey = await _cacheBox.add(meal);
+        // Keep the index live so a duplicate later in the same batch
+        // overwrites this entry rather than producing a second copy.
+        _registerInIndex(meal, newKey, index);
+      }
+      final tsKey = _timestampKey(meal);
+      if (tsKey != null) {
+        await _timestampsBox.put(tsKey, now);
+      }
+    }
+  }
+
+  /// Persist a remote search result page. New entries are inserted and
+  /// stamped with the current time; entries that already exist get their
+  /// data refreshed but **keep their existing timestamp**, so the
+  /// "user-selected this recently" signal isn't wiped out by an
+  /// unrelated re-search of the same query.
+  Future<void> cacheFromSearch(Iterable<MealDBO> meals) async {
+    await _ensureLanguage();
+    final index = _buildDedupIndex();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final meal in meals) {
+      final existingKey = _lookupExistingKey(meal, index);
+      if (existingKey != null) {
+        // Refresh data, leave timestamp alone — but never let a thin search
+        // result overwrite an entry we've already hydrated to the full
+        // record, or the next open/scan would lose serving + micronutrients.
+        final existing = _cacheBox.get(existingKey);
+        final wouldDowngrade =
+            (existing?.detailed ?? false) && !(meal.detailed ?? false);
+        if (!wouldDowngrade) {
+          await _cacheBox.put(existingKey, meal);
+        }
+      } else {
+        final newKey = await _cacheBox.add(meal);
+        _registerInIndex(meal, newKey, index);
+        final tsKey = _timestampKey(meal);
+        if (tsKey != null) {
+          await _timestampsBox.put(tsKey, now);
+        }
+      }
+    }
+  }
+
+  /// Snapshot the cache box into a per-call dedup index. Two maps so
+  /// barcode-keyed entries and name-keyed entries don't collide on a
+  /// shared key namespace.
+  ///
+  /// The index lives only for the duration of a single cache(All|FromSearch)
+  /// call — bookkeeping a long-lived index inside the data source would
+  /// be more invasive than the speedup justifies, and Hive's `.values`
+  /// already iterates over an in-memory map so the snapshot is cheap.
+  _DedupIndex _buildDedupIndex() {
+    final byCode = <String, dynamic>{};
+    final byName = <String, dynamic>{};
+    for (final entry in _cacheBox.toMap().entries) {
+      final meal = entry.value;
+      final code = meal.code;
+      if (code != null && code.isNotEmpty) {
+        byCode[code] = entry.key;
+      } else {
+        final name = meal.name;
+        if (name != null && name.isNotEmpty) {
+          byName[name] = entry.key;
+        }
+      }
+    }
+    return _DedupIndex(byCode: byCode, byName: byName);
+  }
+
+  dynamic _lookupExistingKey(MealDBO meal, _DedupIndex index) {
+    final code = meal.code;
+    if (code != null && code.isNotEmpty) return index.byCode[code];
+    final name = meal.name;
+    if (name != null && name.isNotEmpty) return index.byName[name];
+    return null;
+  }
+
+  void _registerInIndex(MealDBO meal, dynamic boxKey, _DedupIndex index) {
+    final code = meal.code;
+    if (code != null && code.isNotEmpty) {
+      index.byCode[code] = boxKey;
+      return;
+    }
+    final name = meal.name;
+    if (name != null && name.isNotEmpty) {
+      index.byName[name] = boxKey;
+    }
+  }
+
+  List<MealDBO> getAll() => _readable() ? _cacheBox.values.toList() : [];
+
+  /// Returns cached entries sorted with the most recently touched first.
+  /// Entries with no timestamp record sort last. Used by search to put
+  /// items the user just selected at the top of the result list.
+  List<MealDBO> getAllByMostRecentlyTouched() {
+    if (!_readable()) return [];
+    final entries = _cacheBox.values.toList();
+    entries.sort((a, b) {
+      final aTs = _timestampFor(a) ?? 0;
+      final bTs = _timestampFor(b) ?? 0;
+      return bTs.compareTo(aTs);
+    });
+    return entries;
+  }
+
+  int? _timestampFor(MealDBO meal) {
+    final key = _timestampKey(meal);
+    if (key == null) return null;
+    return _timestampsBox.get(key);
+  }
+
+  /// Look up a single cached meal by barcode. Returns null when none
+  /// matches — the caller should then fall back to the remote API.
+  MealDBO? getByBarcode(String barcode) {
+    if (!_readable()) return null;
+    for (final meal in _cacheBox.values) {
+      if (meal.code == barcode) return meal;
+    }
+    return null;
+  }
+
+  /// Look up a cached meal by barcode but only return it when it holds the
+  /// full product record. A thin Search-a-licious search result cached under
+  /// the same code is ignored so the caller fetches (and re-caches) the full
+  /// product instead of serving up macros-only data on a scan or hydration.
+  MealDBO? getDetailedByBarcode(String barcode) {
+    if (!_readable()) return null;
+    for (final meal in _cacheBox.values) {
+      if (meal.code == barcode && (meal.detailed ?? false)) return meal;
+    }
+    return null;
+  }
+
+  /// Refresh the "last touched" timestamp for [code] without changing
+  /// the cached meal data. Called when the user selects (logs) an item
+  /// that was already in the cache, signalling continued interest.
+  Future<void> touch(String code) async {
+    if (code.isEmpty) return;
+    await _timestampsBox.put(code, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  int get count => _cacheBox.length;
+
+  /// On-disk size of the cache box plus the timestamps sidecar in bytes.
+  /// Returns 0 when the box files haven't been flushed yet or the path
+  /// can't be statted (e.g. in tests on an in-memory Hive). Used by
+  /// Settings to show how much space the cache is occupying.
+  Future<int> getStorageSizeBytes() async {
+    var total = 0;
+    for (final path in [_cacheBox.path, _timestampsBox.path]) {
+      if (path == null) continue;
+      final file = File(path);
+      if (!await file.exists()) continue;
+      total += await file.length();
+    }
+    return total;
+  }
+
+  /// Drop cached entries that haven't been touched within [maxAge].
+  /// "Untouched" includes entries with no timestamp record at all (e.g.
+  /// data left over from a build before the TTL feature existed) — those
+  /// are treated as immediately stale.
+  ///
+  /// Returns the number of entries removed. Call once at app startup.
+  Future<int> pruneStale(Duration maxAge) async {
+    final cutoff = DateTime.now().subtract(maxAge).millisecondsSinceEpoch;
+    final keysToDelete = <dynamic>[];
+    final timestampKeysToDelete = <String>[];
+
+    for (final entry in _cacheBox.toMap().entries) {
+      final tsKey = _timestampKey(entry.value);
+      if (tsKey == null) {
+        // No way to track an age for this entry — drop it.
+        keysToDelete.add(entry.key);
+        continue;
+      }
+      final lastTouched = _timestampsBox.get(tsKey);
+      if (lastTouched == null || lastTouched < cutoff) {
+        keysToDelete.add(entry.key);
+        timestampKeysToDelete.add(tsKey);
+      }
+    }
+
+    if (keysToDelete.isNotEmpty) {
+      await _cacheBox.deleteAll(keysToDelete);
+    }
+    if (timestampKeysToDelete.isNotEmpty) {
+      await _timestampsBox.deleteAll(timestampKeysToDelete);
+    }
+    return keysToDelete.length;
+  }
+
+  Future<void> clear() async {
+    await _cacheBox.clear();
+    await _timestampsBox.clear();
+  }
+
+  /// Use the meal's barcode as the timestamp key when present, falling
+  /// back to its name. Matches the dedup key used inside [cache].
+  String? _timestampKey(MealDBO meal) {
+    if (meal.code != null && meal.code!.isNotEmpty) return meal.code;
+    if (meal.name != null && meal.name!.isNotEmpty) return meal.name;
+    return null;
+  }
+}
+
+class _DedupIndex {
+  final Map<String, dynamic> byCode;
+  final Map<String, dynamic> byName;
+
+  _DedupIndex({required this.byCode, required this.byName});
+}

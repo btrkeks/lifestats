@@ -1,0 +1,28 @@
+class NavigationOptions {
+  static const splashRoute = "splash";
+  static const mainRoute = "main";
+  static const onboardingRoute = "onboarding";
+  static const settingsRoute = "settings";
+  static const addMealRoute = "addMeal";
+  static const bulkAddRoute = "bulkAdd";
+  static const scannerRoute = "scanner";
+  static const mealDetailRoute = "mealDetail";
+  static const editMealRoute = "editMeal";
+  static const addActivityRoute = "addActivity";
+  static const activityDetailRoute = "activityDetail";
+  static const imageFullScreenRoute = "imageFullScreen";
+  static const importMealScannerRoute = "importMealScanner";
+  static const importActivityScannerRoute = "importActivityScanner";
+  static const recipesRoute = "recipes";
+  static const recipeBuilderRoute = "recipeBuilder";
+  static const recipeDetailRoute = "recipeDetail";
+  static const importRecipeScannerRoute = "importRecipeScanner";
+  static const weightHistoryRoute = "weightHistory";
+  static const fastingRoute = "fasting";
+  static const accentColourRoute = "accentColour";
+
+  /// Named rather than pushed directly because Health Connect can ask for this
+  /// screen from outside the app — see `HealthRationaleService` (#927).
+  static const healthSyncRoute = "healthSync";
+  static const manageProfilesRoute = "manageProfiles";
+}

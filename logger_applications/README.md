@@ -14,8 +14,20 @@ Automatic activity tracking integrations for the LifeStats platform. Each logger
 | [E-book Reader](#e-book-reader) | Reading time | Web application | TypeScript/Svelte |
 | [Web Activity Tracker](#web-activity-time-tracker) | Browsing time per site | Browser extension | TypeScript |
 | [Bedtime Watch](#bedtime-watch) | Bedtime (one tap) | Wear OS tile | Kotlin |
+| [OpenNutriTracker](#opennutritracker) | Nutrition | Vendored app; Lifestats sync pending | Dart/Flutter |
 
 ## Logger Applications
+
+### OpenNutriTracker
+
+[`OpenNutriTracker/`](OpenNutriTracker/) contains a vendored copy of
+[simonoppowa/OpenNutriTracker](https://github.com/simonoppowa/OpenNutriTracker),
+alongside `LiftLog/`. The app tracks food intake and nutrition on Android and iOS.
+Lifestats sync is not implemented yet.
+
+See [`OpenNutriTracker/UPSTREAM.md`](OpenNutriTracker/UPSTREAM.md) for the source
+commit and local changes, and
+[`OpenNutriTracker/GettingStarted.md`](OpenNutriTracker/GettingStarted.md) for setup.
 
 ### Bedtime Watch
 

@@ -1,0 +1,132 @@
+import 'package:collection/collection.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:logging/logging.dart';
+import 'package:opennutritracker/core/data/data_source/user_activity_dbo.dart';
+import 'package:opennutritracker/core/utils/calc/day_boundary_calc.dart';
+import 'package:opennutritracker/core/utils/hive_db_provider.dart';
+
+class UserActivityDataSource {
+  final log = Logger('UserActivityDataSource');
+  final HiveDBProvider _db;
+
+  UserActivityDataSource(this._db);
+
+  Box<UserActivityDBO> get _userActivityBox => _db.userActivityBox;
+
+  Future<void> addUserActivity(UserActivityDBO userActivityDBO) async {
+    log.fine('Adding new user activity to db');
+    await _userActivityBox.add(userActivityDBO);
+  }
+
+  Future<void> addAllUserActivities(
+    List<UserActivityDBO> userActivityDBOList,
+  ) async {
+    log.fine('Adding new user activities to db');
+    await _userActivityBox.addAll(userActivityDBOList);
+  }
+
+  Future<UserActivityDBO?> updateUserActivity(
+    String id,
+    double newDuration,
+    double newBurnedKcal, {
+    double? userKcal,
+  }) async {
+    log.fine('Updating user activity in db');
+    final existing =
+        _userActivityBox.values.firstWhereOrNull((dbo) => dbo.id == id);
+    if (existing == null) return null;
+    final updated = UserActivityDBO(
+      existing.id,
+      newDuration,
+      newBurnedKcal,
+      existing.date,
+      existing.physicalActivityDBO,
+      userKcal: userKcal ?? existing.userKcal,
+      // Carried over rather than dropped: losing the external id would make
+      // an edited imported workout eligible for a second import.
+      externalId: existing.externalId,
+      sourceReportedKcal: existing.sourceReportedKcal,
+    );
+    await existing.delete();
+    await _userActivityBox.add(updated);
+    return updated;
+  }
+
+  Future<void> deleteIntakeFromId(String activityId) async {
+    log.fine('Deleting activity item from db');
+    final toDelete = _userActivityBox.values
+        .where((dbo) => dbo.id == activityId)
+        .toList();
+    for (final element in toDelete) {
+      await element.delete();
+    }
+  }
+
+  Future<List<UserActivityDBO>> getAllUserActivities() async {
+    return _userActivityBox.values.toList();
+  }
+
+  /// Activities filed under the calendar day [day].
+  ///
+  /// [day] is a day label, not a moment — see [IntakeDataSource
+  /// .getAllIntakesByDate] for the rationale (#139, #586).
+  Future<List<UserActivityDBO>> getAllUserActivitiesByDate(
+    DateTime day, {
+    int dayStartOffsetHours = 0,
+    int dayStartOffsetMinutes = 0,
+  }) async {
+    final totalMinutes = DayBoundaryCalc.totalMinutesOf(
+      dayStartOffsetHours,
+      dayStartOffsetMinutes,
+    );
+    return _userActivityBox.values
+        .where(
+          (activity) => DayBoundaryCalc.isMomentInLogicalDayMinutes(
+            day,
+            activity.date,
+            totalMinutes,
+          ),
+        )
+        .toList();
+  }
+
+  /// External record ids of activities dated at or after [from].
+  ///
+  /// The workout importer checks membership in this set before writing, so
+  /// re-reading an overlapping window from Health Connect / Apple Health
+  /// cannot produce a duplicate entry.
+  Future<Set<String>> getExternalIdsSince(DateTime from) async {
+    return _userActivityBox.values
+        .where(
+          (activity) =>
+              activity.externalId != null && !activity.date.isBefore(from),
+        )
+        .map((activity) => activity.externalId!)
+        .toSet();
+  }
+
+  Future<List<UserActivityDBO>> getRecentlyAddedUserActivity(
+      {int number = 100}) async {
+    final userActivities = _userActivityBox.values.toList();
+
+    //  sort list by date descending and filter unique activities
+    userActivities.sort(
+      (a, b) => b.date.compareTo(a.date),
+    );
+
+    final filterActivityCodes = <String>{};
+    final uniqueUserActivities = userActivities
+        .where(
+          (activity) =>
+              filterActivityCodes.add(activity.physicalActivityDBO.code),
+        )
+        .toList();
+
+    // return range or full list
+    try {
+      return uniqueUserActivities.getRange(0, number).toList();
+    } on RangeError catch (_) {
+      return uniqueUserActivities.toList();
+    }
+  }
+}
