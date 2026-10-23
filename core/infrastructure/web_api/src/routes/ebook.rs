@@ -67,17 +67,6 @@ pub struct EbookDayRequest {
     pub observed_at: String,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct EbookLegacyBookRequest {
-    #[schema(pattern = "^ttu-text-v1:[0-9a-f]{64}$")]
-    pub book_key: String,
-    #[schema(min_length = 1, max_length = 1000)]
-    pub title: String,
-    #[schema(minimum = 1, maximum = 9007199254740992_i64)]
-    pub length: u64,
-}
-
 #[utoipa::path(
     put,
     path = "/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}",
@@ -90,7 +79,7 @@ pub struct EbookLegacyBookRequest {
     responses(
         (status = 204, description = "Merged (or already contained) and every projection committed"),
         (status = 400, description = "Malformed JSON or unreadable body", body = ErrorEnvelope),
-        (status = 409, description = "Bundle conflict, book length mismatch, or legacy adoption pending", body = ErrorEnvelope),
+        (status = 409, description = "Bundle conflict or book length mismatch", body = ErrorEnvelope),
         (status = 415, description = "Unsupported media type", body = ErrorEnvelope),
         (status = 422, description = "Invalid path or field, or aggregate overflow", body = ErrorEnvelope),
         (status = 500, description = "Storage failed without committing", body = ErrorEnvelope)
@@ -146,76 +135,6 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(
-    put,
-    path = "/integrations/ebook/legacy-books/{reader_data_id}",
-    params(("reader_data_id" = u32, Path, description = "ttu data.id used by the pre-2026-10 event API")),
-    request_body = EbookLegacyBookRequest,
-    responses(
-        (status = 204, description = "Bound (or already bound to the same key)"),
-        (status = 400, description = "Malformed JSON or unreadable body", body = ErrorEnvelope),
-        (status = 415, description = "Unsupported media type", body = ErrorEnvelope),
-        (status = 409, description = "Bound to another key, title mismatch, or book already bound to another item", body = ErrorEnvelope),
-        (status = 422, description = "Invalid path or field", body = ErrorEnvelope),
-        (status = 500, description = "Storage failed without committing", body = ErrorEnvelope)
-    )
-)]
-pub async fn put_legacy_book<R, Rend, E, I>(
-    State(state): State<AppState<R, Rend, E, I>>,
-    Path(reader_data_id): Path<String>,
-    body: Result<Json<Box<RawValue>>, JsonRejection>,
-) -> Result<StatusCode, IntegrationApiError>
-where
-    R: StatisticRepository + Send + Sync + 'static,
-    Rend: PlotRenderer + 'static,
-    E: EventPublisher + 'static,
-    I: IntegrationServiceTrait + 'static,
-{
-    let Json(raw) = body.map_err(IntegrationApiError::json)?;
-    let object = parse_strict_object(&raw)?;
-    let _: String = required(&object, "book_key")?;
-    let _: String = required(&object, "title")?;
-    let _: u64 = required(&object, "length")?;
-    let request: EbookLegacyBookRequest = serde_json::from_str(raw.get()).map_err(|_| {
-        IntegrationApiError::invalid(None, "Unexpected or duplicate request fields")
-    })?;
-    let reader_data_id = reader_data_id
-        .parse::<u32>()
-        .ok()
-        .filter(|id| *id > 0)
-        .ok_or_else(|| {
-            IntegrationApiError::invalid(
-                Some("reader_data_id"),
-                "Expected a positive u32 reader ID",
-            )
-        })?;
-    let outcome = state.integration_service.bind_legacy_ebook_book(
-        reader_data_id,
-        BookKey::parse(&request.book_key)?,
-        BookTitle::parse(&request.title)?,
-        lifestats_core::ebook::parse_length(request.length)?,
-    )?;
-    for id in outcome.changed_statistics {
-        state
-            .event_publisher
-            .publish_event_async(events::event_port::Event::ValueUpdated(id));
-    }
-    Ok(StatusCode::NO_CONTENT)
-}
-
-pub async fn provision_legacy<R, Rend, E, I>(
-    state: State<AppState<R, Rend, E, I>>,
-    request: Json<super::integrations::ProvisionBundleRequest>,
-) -> Result<Json<super::integrations::ProvisionBundleResponse>, crate::error::ApiError>
-where
-    R: StatisticRepository + Send + Sync + 'static,
-    Rend: PlotRenderer + 'static,
-    E: EventPublisher + 'static,
-    I: IntegrationServiceTrait + 'static,
-{
-    super::integrations::provision_integration(state, Path("ebook".into()), request).await
-}
-
 fn required<T: serde::de::DeserializeOwned>(
     object: &BTreeMap<String, Box<RawValue>>,
     field: &'static str,
@@ -239,4 +158,26 @@ impl EbookDayRequest {
             IntegrationApiError::invalid(None, "Unexpected or duplicate request fields")
         })
     }
+}
+
+#[utoipa::path(post, path = "/integrations/ebook", responses(
+    (status = 410, description = "Upgrade to the reading spans client", body = ErrorEnvelope)
+))]
+pub async fn retired_provision() -> IntegrationApiError {
+    upgrade_required()
+}
+
+#[utoipa::path(post, path = "/integrations/ebook/events", responses(
+    (status = 410, description = "Upgrade to the reading spans client", body = ErrorEnvelope)
+))]
+pub async fn retired_events() -> IntegrationApiError {
+    upgrade_required()
+}
+
+fn upgrade_required() -> IntegrationApiError {
+    IntegrationApiError::new(
+        super::integration_error::ErrorCode::ClientUpgradeRequired,
+        None,
+        "Upgrade the ebook client to report reading spans",
+    )
 }

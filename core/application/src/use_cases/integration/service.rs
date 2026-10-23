@@ -1,18 +1,14 @@
 use lifestats_core::ebook::{
-    BookKey, BookTitle, EbookDayReport, EbookError, EbookReadingStore, EbookWriteOutcome,
-    ProducerId,
+    BookKey, EbookDayReport, EbookError, EbookReadingStore, EbookWriteOutcome, ProducerId,
 };
 use std::collections::HashMap;
-use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use super::bundle_factory::BundleFactory;
-use super::ebook_event_store::{EbookEventStore, EbookSyncEvent};
-use super::ebook_progress_service::{EbookProgressServiceTrait, EbookProgressSyncRequest};
 use super::liftlog_bundle_factory::{LIFTLOG_SOURCE_TAG, METRIC_WORKOUT_TIME};
 use super::liftlog_days::{LiftLogDaysSyncResult, LiftLogWorkout};
 use crate::error::{ApplicationError, ApplicationResult};
-use chrono::{NaiveDate, NaiveTime, Utc};
+use chrono::{NaiveDate, NaiveTime};
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
@@ -20,9 +16,6 @@ use std::collections::BTreeMap;
 
 #[cfg(test)]
 use mockall::automock;
-
-const EBOOK_SOURCE: &str = "ebook";
-const EBOOK_METRIC_CHARACTERS_READ: &str = "characters_read";
 
 /// Trait defining the contract for integration service implementations.
 ///
@@ -37,14 +30,6 @@ pub trait IntegrationServiceTrait: Send + Sync {
         day: NaiveDate,
         report: EbookDayReport,
     ) -> Result<EbookWriteOutcome, EbookError>;
-    fn bind_legacy_ebook_book(
-        &self,
-        reader_data_id: u32,
-        book: BookKey,
-        title: BookTitle,
-        length: NonZeroU64,
-    ) -> Result<EbookWriteOutcome, EbookError>;
-
     fn replace_yomikata_day(
         &self,
         day: NaiveDate,
@@ -66,12 +51,6 @@ pub trait IntegrationServiceTrait: Send + Sync {
         context: HashMap<String, String>,
     ) -> ApplicationResult<HashMap<String, StatisticId>>;
 
-    /// Accepts an idempotent ebook sync event and applies it at most once.
-    fn ingest_ebook_event(
-        &self,
-        request: EbookEventIngestionRequest,
-    ) -> ApplicationResult<EbookEventIngestionResult>;
-
     /// Replaces `[LiftLog] Workout Time` on exactly the given days with the
     /// given workouts. A day with no workouts loses its value. Days not named
     /// are untouched, and resending the same days changes nothing.
@@ -79,24 +58,6 @@ pub trait IntegrationServiceTrait: Send + Sync {
         &self,
         days: BTreeMap<NaiveDate, Vec<LiftLogWorkout>>,
     ) -> ApplicationResult<LiftLogDaysSyncResult>;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EbookEventIngestionRequest {
-    pub event_id: String,
-    pub date: NaiveDate,
-    pub metric: String,
-    pub delta: i64,
-    pub book_id: String,
-    pub book_title: String,
-    pub confirmed_position_after: i64,
-    pub book_target_characters: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EbookEventIngestionResult {
-    pub accepted: bool,
-    pub statistic_id: StatisticId,
 }
 
 /// Service for provisioning integration bundles in an idempotent manner.
@@ -108,8 +69,6 @@ pub struct IntegrationService {
     yomikata_day_store: Option<Arc<dyn lifestats_core::yomikata::YomikataDayStore>>,
     repository: Arc<dyn StatisticRepository + Send + Sync>,
     factories: HashMap<String, Arc<dyn BundleFactory>>,
-    ebook_event_store: Option<Arc<dyn EbookEventStore>>,
-    ebook_progress_service: Option<Arc<dyn EbookProgressServiceTrait>>,
 }
 
 impl IntegrationService {
@@ -117,8 +76,6 @@ impl IntegrationService {
     pub fn new(
         repository: Arc<dyn StatisticRepository + Send + Sync>,
         factories: Vec<Arc<dyn BundleFactory>>,
-        ebook_event_store: Option<Arc<dyn EbookEventStore>>,
-        ebook_progress_service: Option<Arc<dyn EbookProgressServiceTrait>>,
     ) -> Self {
         // Build a map from source_name to factory for O(1) lookup
         let factories_map = factories
@@ -131,8 +88,6 @@ impl IntegrationService {
             yomikata_day_store: None,
             repository,
             factories: factories_map,
-            ebook_event_store,
-            ebook_progress_service,
         }
     }
 
@@ -263,25 +218,9 @@ impl IntegrationServiceTrait for IntegrationService {
             book,
             day,
             report,
-            super::ebook_bundle_factory::EbookBundleFactory::definitions(),
+            super::ebook_definitions::definitions(),
         )
     }
-    fn bind_legacy_ebook_book(
-        &self,
-        reader_data_id: u32,
-        book: BookKey,
-        title: BookTitle,
-        length: NonZeroU64,
-    ) -> Result<EbookWriteOutcome, EbookError> {
-        self.ebook_store()?.bind_legacy_book(
-            reader_data_id,
-            book,
-            title,
-            length,
-            super::ebook_bundle_factory::EbookBundleFactory::definitions(),
-        )
-    }
-
     fn replace_yomikata_day(
         &self,
         day: NaiveDate,
@@ -358,104 +297,6 @@ impl IntegrationServiceTrait for IntegrationService {
         }
 
         Ok(result)
-    }
-
-    fn ingest_ebook_event(
-        &self,
-        request: EbookEventIngestionRequest,
-    ) -> ApplicationResult<EbookEventIngestionResult> {
-        if request.event_id.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "ebook event_id must not be empty".to_string(),
-            ));
-        }
-
-        if request.metric != EBOOK_METRIC_CHARACTERS_READ {
-            return Err(ApplicationError::InvalidInput(format!(
-                "unsupported ebook metric: {}",
-                request.metric
-            )));
-        }
-
-        if request.delta <= 0 {
-            return Err(ApplicationError::InvalidInput(
-                "ebook delta must be positive".to_string(),
-            ));
-        }
-
-        if request.book_id.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "ebook book_id must not be empty".to_string(),
-            ));
-        }
-
-        if request.book_title.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "ebook book_title must not be empty".to_string(),
-            ));
-        }
-
-        if request.confirmed_position_after < 0 {
-            return Err(ApplicationError::InvalidInput(
-                "ebook confirmed_position_after must be non-negative".to_string(),
-            ));
-        }
-
-        if request.book_target_characters <= 0 {
-            return Err(ApplicationError::InvalidInput(
-                "ebook book_target_characters must be positive".to_string(),
-            ));
-        }
-
-        let ebook_event_store = self.ebook_event_store.as_ref().ok_or_else(|| {
-            ApplicationError::InvalidInput(
-                "ebook event ingestion is not configured for this deployment".to_string(),
-            )
-        })?;
-        let ebook_progress_service = self.ebook_progress_service.as_ref().ok_or_else(|| {
-            ApplicationError::InvalidInput(
-                "ebook progress syncing is not configured for this deployment".to_string(),
-            )
-        })?;
-
-        let statistic_ids = self.provision_bundle(EBOOK_SOURCE, HashMap::new())?;
-        let statistic_id = statistic_ids
-            .get(EBOOK_METRIC_CHARACTERS_READ)
-            .copied()
-            .ok_or_else(|| {
-                ApplicationError::Infrastructure(anyhow::anyhow!(
-                    "ebook bundle did not provision the characters_read statistic"
-                ))
-            })?;
-
-        let event = EbookSyncEvent {
-            event_id: request.event_id.clone(),
-            source_name: EBOOK_SOURCE.to_string(),
-            metric: request.metric.clone(),
-            statistic_id,
-            date: request.date,
-            delta: request.delta,
-            book_id: Some(request.book_id.clone()),
-            book_title: request.book_title.clone(),
-            confirmed_position_after: request.confirmed_position_after,
-        };
-
-        let accepted = ebook_event_store.record_event(&event)?;
-
-        ebook_progress_service.ensure_and_log_checkpoint(EbookProgressSyncRequest {
-            event_id: request.event_id,
-            book_id: request.book_id,
-            book_title: request.book_title,
-            effective_date: request.date,
-            recorded_at: Utc::now(),
-            confirmed_position_after: request.confirmed_position_after,
-            book_target_characters: request.book_target_characters,
-        })?;
-
-        Ok(EbookEventIngestionResult {
-            accepted,
-            statistic_id,
-        })
     }
 
     fn sync_liftlog_days(
@@ -557,12 +398,7 @@ mod tests {
     }
 
     fn sync_service(repository: MockStatisticRepository) -> IntegrationService {
-        IntegrationService::new(
-            Arc::new(repository),
-            vec![Arc::new(LiftLogBundleFactory)],
-            None,
-            None,
-        )
+        IntegrationService::new(Arc::new(repository), vec![Arc::new(LiftLogBundleFactory)])
     }
 
     #[test]

@@ -38,15 +38,11 @@ where
         )
         .route(
             "/integrations/ebook",
-            get(ebook::descriptor).post(ebook::provision_legacy),
+            get(ebook::descriptor).post(ebook::retired_provision),
         )
         .route(
             "/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}",
             put(ebook::put_day),
-        )
-        .route(
-            "/integrations/ebook/legacy-books/{reader_data_id}",
-            put(ebook::put_legacy_book),
         )
         // Statistics endpoints
         .route(
@@ -165,10 +161,7 @@ where
             get(sessions::get_session_status),
         )
         // Integration endpoints
-        .route(
-            "/integrations/ebook/events",
-            post(integrations::ingest_ebook_event),
-        )
+        .route("/integrations/ebook/events", post(ebook::retired_events))
         .route(
             "/integrations/liftlog/days",
             put(integrations::sync_liftlog_days),

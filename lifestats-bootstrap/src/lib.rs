@@ -12,8 +12,7 @@ use lifestats_application::time::Clock;
 use lifestats_application::use_cases::{
     commands::sync_fitbit_data::SyncFitbitDataCommandHandler,
     integration::{
-        AnkiBundleFactory, BundleFactory, EbookBundleFactory, EbookEventStore,
-        EbookProgressService, EbookProgressServiceTrait, FitbitBundleFactory, IntegrationService,
+        AnkiBundleFactory, BundleFactory, FitbitBundleFactory, IntegrationService,
         LiftLogBundleFactory, YomikataBundleFactory,
     },
 };
@@ -22,9 +21,8 @@ use lifestats_core::progress::ports::progress_repository::ProgressRepository;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_fitbit_client::{HttpFitbitDataClient, HttpFitbitOAuthClient};
 use lifestats_persistence::{
-    ebook_event_store::SqliteEbookEventStore, pool::get_database_pool,
-    progress_repository::SqliteProgressRepository, repository::SqliteStatisticRepository,
-    token_store::SqliteTokenStore,
+    pool::get_database_pool, progress_repository::SqliteProgressRepository,
+    repository::SqliteStatisticRepository, token_store::SqliteTokenStore,
 };
 use lifestats_plotting::PlottersRenderer;
 use lifestats_system_clock::SystemClock;
@@ -75,21 +73,14 @@ pub fn build_services() -> Result<Application> {
 
     let factories: Vec<Arc<dyn BundleFactory>> = vec![
         Arc::new(AnkiBundleFactory),
-        Arc::new(EbookBundleFactory),
         Arc::new(FitbitBundleFactory),
         Arc::new(LiftLogBundleFactory),
         Arc::new(YomikataBundleFactory),
     ];
-    let ebook_event_store: Arc<dyn EbookEventStore> =
-        Arc::new(SqliteEbookEventStore::new(Arc::clone(&pool)));
-    let ebook_progress_service: Arc<dyn EbookProgressServiceTrait> =
-        Arc::new(EbookProgressService::new(Arc::clone(&progress_repo)));
     let integration_service = Arc::new(
         IntegrationService::new(
             statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
             factories,
-            Some(ebook_event_store),
-            Some(ebook_progress_service),
         )
         .with_yomikata_day_store(statistic_repo.clone())
         .with_ebook_reading_store(statistic_repo.clone()),

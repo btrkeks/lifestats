@@ -11,13 +11,13 @@ use utoipa::OpenApi;
         yomikata::replace_day,
         ebook::descriptor,
         ebook::put_day,
-        ebook::put_legacy_book
+        ebook::retired_provision,
+        ebook::retired_events
     ),
     components(schemas(
         yomikata::YomikataDayRequest,
         ebook::EbookDescriptor,
         ebook::EbookDayRequest,
-        ebook::EbookLegacyBookRequest,
         ErrorEnvelope,
         ErrorBody,
         ErrorCode

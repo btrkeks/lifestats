@@ -6,7 +6,7 @@ use diesel::RunQueryDsl;
 use diesel::SqliteConnection;
 use diesel_migrations::MigrationHarness;
 use lifestats_application::use_cases::integration::{
-    AnkiBundleFactory, BundleFactory, EbookBundleFactory, IntegrationService,
+    AnkiBundleFactory, BundleFactory, IntegrationService,
 };
 use lifestats_application::SessionManager;
 use lifestats_core::shared::ids::StatisticId;
@@ -75,13 +75,10 @@ async fn test_log_and_get_e2e() -> Result<()> {
     let renderer = Arc::new(PlottersRenderer::new());
 
     // Create integration service
-    let factories: Vec<Arc<dyn BundleFactory>> =
-        vec![Arc::new(AnkiBundleFactory), Arc::new(EbookBundleFactory)];
+    let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
     let integration_service = Arc::new(IntegrationService::new(
         repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
-        None,
-        None,
     ));
 
     let session_manager = Arc::new(SessionManager::new(repo.clone()));

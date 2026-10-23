@@ -33,8 +33,6 @@ fn server() -> TestServer {
     let integration_service = Arc::new(IntegrationService::new(
         repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
-        None,
-        None,
     ));
     let session_manager = Arc::new(SessionManager::new(repo.clone()));
 

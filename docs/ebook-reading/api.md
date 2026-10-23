@@ -39,24 +39,18 @@ the statistic equals its residual plus the sum of book credits. The residual
 includes existing legacy values and manual corrections. Legacy spans are excluded
 from all new credits. Checkpoint ordering follows observation time.
 
-## Adopt legacy books
+## Retired clients
 
-After draining v7 events, send
-`PUT /integrations/ebook/legacy-books/{reader_data_id}` with JSON
-`{"book_key":"ttu-text-v1:<64 lowercase hex>","title":"Book","length":10000}`.
-The positive reader ID selects a legacy item tagged `source=ebook` and
-`progress_type=book`. Its normalized title must match. Inside the transaction,
-the server reads its furthest checkpoint F, binds that existing item to the key,
-and seeds `[0,F)` as legacy spans. Seeding changes no statistic values.
-Repeated claims with the same identity return 204. Conflicting bindings fail.
-If no legacy item exists, the claim records the key for a new item.
+`POST /integrations/ebook` and `POST /integrations/ebook/events` return 410 with
+`client_upgrade_required` in the integration error envelope. They accept no writes,
+including provisioning through the generic integration route. Upgrade the reader
+to report spans. The temporary `PUT /integrations/ebook/legacy-books/{reader_data_id}`
+route has been removed.
 
-Before adoption, a day report for a key with no item yet, whose title matches an
-unbound legacy item, fails with `legacy_adoption_pending`. A key that already has
-an item never waits, and a legacy title the API cannot parse never matches. A
-different book can sync normally.
-The legacy POST `/integrations/ebook/events` and POST `/integrations/ebook` stay
-available for one release so the laptop can drain old events exactly once.
+Previously adopted books retain their `legacy_spans` prefix permanently. Reading
+inside that prefix earns no new credit. The `reader_data_id` and `book_key` progress
+item tags remain. `ebook_sync_events` is retained as history with no writer;
+`ebook_legacy_bindings` is dropped by the cleanup migration.
 
 ## Errors
 
@@ -67,7 +61,8 @@ available for one release so the laptop can drain old events exactly once.
 | Status | Codes |
 | --- | --- |
 | 400 | `malformed_json`, `invalid_body` |
-| 409 | `bundle_conflict`, `book_length_mismatch`, `legacy_adoption_pending`, `legacy_binding_conflict` |
+| 409 | `bundle_conflict`, `book_length_mismatch` |
+| 410 | `client_upgrade_required` |
 | 415 | `unsupported_media_type` |
 | 422 | `invalid_field`, `projection_overflow` |
 | 500 | `storage_error` |

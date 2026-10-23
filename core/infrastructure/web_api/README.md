@@ -302,7 +302,7 @@ Heartbeat sessions track ongoing activity for a single statistic. Only one activ
 | `GET` | `/openapi.json` | Generated integration contract (Yomikata and ebook) |
 | `GET` | `/integrations/ebook` | Persistent server UUID and protocol version |
 | `PUT` | `/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}` | Merge read spans atomically |
-| `PUT` | `/integrations/ebook/legacy-books/{reader_data_id}` | Adopt an existing legacy book without adding credit |
+| `POST` | `/integrations/ebook` and `/integrations/ebook/events` | Retired clients receive 410 `client_upgrade_required` |
 | `PUT` | `/integrations/liftlog/days` | Replace LiftLog workout time on the named days (empty `workouts` clears a day) |
 | `GET` | `/integrations/fitbit/auth/begin` | Start Fitbit OAuth flow |
 | `GET` | `/integrations/fitbit/auth/callback` | OAuth callback handler |

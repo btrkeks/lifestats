@@ -6,7 +6,7 @@ use diesel::SqliteConnection;
 use diesel_migrations::MigrationHarness;
 use helpers::NoOpEventPublisher;
 use lifestats_application::use_cases::integration::{
-    AnkiBundleFactory, BundleFactory, EbookBundleFactory, IntegrationService,
+    AnkiBundleFactory, BundleFactory, IntegrationService,
 };
 use lifestats_application::SessionManager;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
@@ -37,13 +37,10 @@ fn progress_server() -> TestServer {
     let progress_repo = Arc::new(SqliteProgressRepository::new(pool));
     let publisher = Arc::new(NoOpEventPublisher);
     let renderer = Arc::new(PlottersRenderer::new());
-    let factories: Vec<Arc<dyn BundleFactory>> =
-        vec![Arc::new(AnkiBundleFactory), Arc::new(EbookBundleFactory)];
+    let factories: Vec<Arc<dyn BundleFactory>> = vec![Arc::new(AnkiBundleFactory)];
     let integration_service = Arc::new(IntegrationService::new(
         statistic_repo.clone() as Arc<dyn StatisticRepository + Send + Sync>,
         factories,
-        None,
-        None,
     ));
     let session_manager = Arc::new(SessionManager::new(statistic_repo.clone()));
 

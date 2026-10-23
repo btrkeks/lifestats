@@ -37,13 +37,8 @@ fn fixture() -> Fixture {
     drop(conn);
     let repo = Arc::new(SqliteStatisticRepository::new(pool.clone()));
     let service = Arc::new(
-        IntegrationService::new(
-            repo.clone(),
-            vec![Arc::new(YomikataBundleFactory)],
-            None,
-            None,
-        )
-        .with_yomikata_day_store(repo.clone()),
+        IntegrationService::new(repo.clone(), vec![Arc::new(YomikataBundleFactory)])
+            .with_yomikata_day_store(repo.clone()),
     );
     let state = AppState::new(
         repo.clone(),
@@ -557,13 +552,8 @@ async fn zero_adoption_survives_reconstructed_service_and_server() {
     drop(server);
     let repo = Arc::new(SqliteStatisticRepository::new(pool.clone()));
     let service = Arc::new(
-        IntegrationService::new(
-            repo.clone(),
-            vec![Arc::new(YomikataBundleFactory)],
-            None,
-            None,
-        )
-        .with_yomikata_day_store(repo.clone()),
+        IntegrationService::new(repo.clone(), vec![Arc::new(YomikataBundleFactory)])
+            .with_yomikata_day_store(repo.clone()),
     );
     let state = AppState::new(
         repo.clone(),

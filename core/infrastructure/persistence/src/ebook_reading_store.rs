@@ -46,15 +46,6 @@ struct BookRow {
     legacy_spans: String,
 }
 #[derive(QueryableByName)]
-struct Item {
-    #[diesel(sql_type=Integer)]
-    id: i32,
-    #[diesel(sql_type=Text)]
-    name: String,
-    #[diesel(sql_type=Text)]
-    tags: String,
-}
-#[derive(QueryableByName)]
 struct DayRow {
     #[diesel(sql_type=Text)]
     day: String,
@@ -85,17 +76,6 @@ struct Credit {
 struct Id {
     #[diesel(sql_type=Integer)]
     id: i32,
-}
-
-#[derive(QueryableByName)]
-struct LegacyBinding {
-    #[diesel(sql_type=Text)]
-    book_key: String,
-}
-#[derive(QueryableByName)]
-struct Furthest {
-    #[diesel(sql_type=BigInt)]
-    position: i64,
 }
 
 fn storage(error: impl Into<anyhow::Error>) -> EbookError {
@@ -164,18 +144,6 @@ fn resolve_statistic(
     Ok((id, binding.is_some()))
 }
 
-fn unbound_legacy_items(conn: &mut SqliteConnection) -> Result<Vec<Item>, EbookError> {
-    diesel::sql_query("SELECT id,name,tags FROM progress_items WHERE json_extract(tags,'$.source')='ebook' AND json_extract(tags,'$.progress_type')='book' AND json_extract(tags,'$.reader_data_id') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ebook_books b WHERE b.progress_item_id=progress_items.id)")
-        .load(conn).map_err(storage)
-}
-fn item_title(item: &Item) -> Result<BookTitle, EbookError> {
-    let tags: HashMap<String, String> = serde_json::from_str(&item.tags).map_err(storage)?;
-    BookTitle::parse(
-        tags.get("book_title")
-            .map_or(item.name.as_str(), String::as_str),
-    )
-}
-
 fn create_item(
     conn: &mut SqliteConnection,
     book: &BookKey,
@@ -229,13 +197,6 @@ fn ensure_book(
             });
         }
     }
-    // Only an unbound key can be a legacy book's text; a bound key already has its item. A
-    // legacy title this API cannot parse can never match, so it must not fail the request.
-    for legacy in unbound_legacy_items(conn)? {
-        if item_title(&legacy).is_ok_and(|legacy| legacy == *title) {
-            return Err(EbookError::LegacyAdoptionPending);
-        }
-    }
     let id = create_item(conn, book, title, length.get())?;
     let legacy = old
         .as_ref()
@@ -249,138 +210,6 @@ fn ensure_book(
         legacy,
         recreated: old.is_some(),
     })
-}
-
-/// The key a reader data id was already claimed with.
-fn existing_claim(
-    conn: &mut SqliteConnection,
-    reader_data_id: u32,
-) -> Result<Option<String>, EbookError> {
-    diesel::sql_query("SELECT book_key FROM ebook_legacy_bindings WHERE reader_data_id=?")
-        .bind::<BigInt, _>(i64::from(reader_data_id))
-        .get_result::<LegacyBinding>(conn)
-        .optional()
-        .map(|claim| claim.map(|claim| claim.book_key))
-        .map_err(storage)
-}
-
-fn key_claimed(conn: &mut SqliteConnection, book: &BookKey) -> Result<bool, EbookError> {
-    diesel::sql_query("SELECT book_key FROM ebook_legacy_bindings WHERE book_key=?")
-        .bind::<Text, _>(book.as_str())
-        .get_result::<LegacyBinding>(conn)
-        .optional()
-        .map(|claim| claim.is_some())
-        .map_err(storage)
-}
-
-/// A repeated claim succeeds only with the same key and, once it has an item, the same title.
-fn confirm_claim(
-    conn: &mut SqliteConnection,
-    claimed: &str,
-    book: &BookKey,
-    existing: Option<&BookRow>,
-    title: &BookTitle,
-) -> Result<(), EbookError> {
-    if claimed != book.as_str() {
-        return Err(EbookError::LegacyBindingConflict);
-    }
-    if let Some(id) = existing.and_then(|row| row.progress_item_id) {
-        let item = diesel::sql_query("SELECT id,name,tags FROM progress_items WHERE id=?")
-            .bind::<Integer, _>(id)
-            .get_result::<Item>(conn)
-            .map_err(storage)?;
-        if item_title(&item)? != *title {
-            return Err(EbookError::LegacyBindingConflict);
-        }
-    }
-    Ok(())
-}
-
-/// The progress item the legacy events route created for a reader data id.
-fn legacy_item(
-    conn: &mut SqliteConnection,
-    reader_data_id: u32,
-) -> Result<Option<Item>, EbookError> {
-    diesel::sql_query("SELECT id,name,tags FROM progress_items WHERE json_extract(tags,'$.source')='ebook' AND json_extract(tags,'$.progress_type')='book' AND CAST(json_extract(tags,'$.reader_data_id') AS TEXT)=? ORDER BY id LIMIT 1")
-        .bind::<Text, _>(reader_data_id.to_string())
-        .get_result::<Item>(conn)
-        .optional()
-        .map_err(storage)
-}
-
-fn furthest_checkpoint(conn: &mut SqliteConnection, item: i32) -> Result<i64, EbookError> {
-    diesel::sql_query("SELECT COALESCE(MAX(position_value),0) AS position FROM progress_checkpoints WHERE progress_item_id=?")
-        .bind::<Integer, _>(item)
-        .get_result::<Furthest>(conn)
-        .map(|row| row.position)
-        .map_err(storage)
-}
-
-/// Tags the legacy item with the key and returns its prefix [0, furthest checkpoint).
-fn adopt_legacy_item(
-    conn: &mut SqliteConnection,
-    legacy: &Item,
-    book: &BookKey,
-    title: &BookTitle,
-    length: NonZeroU64,
-    existing: Option<&BookRow>,
-) -> Result<SpanSet, EbookError> {
-    if item_title(legacy)? != *title
-        || existing
-            .and_then(|row| row.progress_item_id)
-            .is_some_and(|id| id != legacy.id)
-    {
-        return Err(EbookError::LegacyBindingConflict);
-    }
-    let other_book = diesel::sql_query("SELECT id FROM progress_items WHERE id=? AND EXISTS(SELECT 1 FROM ebook_books WHERE progress_item_id=progress_items.id AND book_key<>?)")
-        .bind::<Integer, _>(legacy.id)
-        .bind::<Text, _>(book.as_str())
-        .get_result::<Id>(conn)
-        .optional()
-        .map_err(storage)?;
-    if other_book.is_some() {
-        return Err(EbookError::LegacyBindingConflict);
-    }
-    let furthest = furthest_checkpoint(conn, legacy.id)?;
-    if furthest < 0 || furthest as u64 > length.get() {
-        return Err(EbookError::LegacyBindingConflict);
-    }
-    let prefix = SpanSet::from_stored(vec![(0, furthest as u64)])?;
-    let mut tags: HashMap<String, String> = serde_json::from_str(&legacy.tags).map_err(storage)?;
-    tags.insert("book_key".into(), book.as_str().into());
-    diesel::sql_query("UPDATE progress_items SET tags=?,canonical_tags=?,updated_at=? WHERE id=?")
-        .bind::<Text, _>(serde_json::to_string(&tags).map_err(storage)?)
-        .bind::<Nullable<Text>, _>(canonicalize_tags(&tags))
-        .bind::<Text, _>(timestamp())
-        .bind::<Integer, _>(legacy.id)
-        .execute(conn)
-        .map_err(storage)?;
-    Ok(prefix)
-}
-
-/// Points the key at `item` with `prefix` as its legacy spans, and records the claim.
-fn bind(
-    conn: &mut SqliteConnection,
-    reader_data_id: u32,
-    book: &BookKey,
-    length: NonZeroU64,
-    item: i32,
-    prefix: &SpanSet,
-) -> Result<(), EbookError> {
-    diesel::sql_query("INSERT INTO ebook_books(book_key,length,progress_item_id,legacy_spans,created_at) VALUES(?,?,?,?,?) ON CONFLICT(book_key) DO UPDATE SET progress_item_id=excluded.progress_item_id,legacy_spans=excluded.legacy_spans")
-        .bind::<Text, _>(book.as_str())
-        .bind::<BigInt, _>(length.get() as i64)
-        .bind::<Integer, _>(item)
-        .bind::<Text, _>(serde_json::to_string(prefix.pairs()).map_err(storage)?)
-        .bind::<Text, _>(timestamp())
-        .execute(conn)
-        .map_err(storage)?;
-    diesel::sql_query("INSERT INTO ebook_legacy_bindings(reader_data_id,book_key) VALUES(?,?)")
-        .bind::<BigInt, _>(i64::from(reader_data_id))
-        .bind::<Text, _>(book.as_str())
-        .execute(conn)
-        .map_err(storage)?;
-    Ok(())
 }
 
 fn reproject_book(
@@ -514,61 +343,5 @@ impl EbookReadingStore for SqliteStatisticRepository {
             if rebuilding { changed|=rebuild_statistic(conn,id)?; }
             Ok(EbookWriteOutcome { changed_statistics: if changed {vec![id]} else {vec![]} })
         }).map_err(transaction_error)
-    }
-    fn bind_legacy_book(
-        &self,
-        reader_data_id: u32,
-        book: BookKey,
-        title: BookTitle,
-        length: NonZeroU64,
-        definitions: EbookBundleDefinitions,
-    ) -> Result<EbookWriteOutcome, EbookError> {
-        let mut conn = self.connection()?;
-        conn.immediate_transaction::<_, anyhow::Error, _>(|conn| {
-            let existing = read_book(conn, &book)?;
-            if existing
-                .as_ref()
-                .is_some_and(|row| row.length as u64 != length.get())
-            {
-                return Err(EbookError::BookLengthMismatch.into());
-            }
-            if let Some(claimed) = existing_claim(conn, reader_data_id)? {
-                confirm_claim(conn, &claimed, &book, existing.as_ref(), &title)?;
-                return Ok(EbookWriteOutcome {
-                    changed_statistics: vec![],
-                });
-            }
-            if key_claimed(conn, &book)? {
-                return Err(EbookError::LegacyBindingConflict.into());
-            }
-            let legacy = legacy_item(conn, reader_data_id)?;
-            let (id, rebuilding) = resolve_statistic(conn, definitions)?;
-            let (item, prefix) = match legacy {
-                Some(legacy) => {
-                    let prefix =
-                        adopt_legacy_item(conn, &legacy, &book, &title, length, existing.as_ref())?;
-                    (legacy.id, prefix)
-                }
-                None => {
-                    let item = ensure_book(conn, &book, &title, length)?;
-                    (item.id, item.legacy)
-                }
-            };
-            let prefix = existing
-                .as_ref()
-                .map(|row| decode_spans(&row.legacy_spans))
-                .transpose()?
-                .unwrap_or_default()
-                .union(&prefix);
-            bind(conn, reader_data_id, &book, length, item, &prefix)?;
-            let mut changed = reproject_book(conn, id, &book, &prefix, rebuilding)?;
-            if rebuilding {
-                changed |= rebuild_statistic(conn, id)?;
-            }
-            Ok(EbookWriteOutcome {
-                changed_statistics: if changed { vec![id] } else { vec![] },
-            })
-        })
-        .map_err(transaction_error)
     }
 }

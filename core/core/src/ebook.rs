@@ -246,10 +246,6 @@ pub enum EbookError {
     BundleConflict,
     #[error("Book length differs from the stored length")]
     BookLengthMismatch,
-    #[error("A matching legacy book must be adopted first")]
-    LegacyAdoptionPending,
-    #[error("Legacy book binding conflicts with an existing binding")]
-    LegacyBindingConflict,
     #[error("Ebook reading could not be stored")]
     Storage(#[from] RepositoryError),
 }
@@ -274,14 +270,6 @@ pub trait EbookReadingStore: Send + Sync {
         book: BookKey,
         day: NaiveDate,
         report: EbookDayReport,
-        definitions: EbookBundleDefinitions,
-    ) -> Result<EbookWriteOutcome, EbookError>;
-    fn bind_legacy_book(
-        &self,
-        reader_data_id: u32,
-        book: BookKey,
-        title: BookTitle,
-        length: NonZeroU64,
         definitions: EbookBundleDefinitions,
     ) -> Result<EbookWriteOutcome, EbookError>;
 }

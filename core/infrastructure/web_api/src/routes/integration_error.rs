@@ -30,8 +30,7 @@ pub enum ErrorCode {
     ProjectionOverflow,
     BundleConflict,
     StorageError,
-    LegacyBindingConflict,
-    LegacyAdoptionPending,
+    ClientUpgradeRequired,
     BookLengthMismatch,
 }
 impl ErrorCode {
@@ -40,10 +39,8 @@ impl ErrorCode {
             Self::InvalidField | Self::ProjectionOverflow => StatusCode::UNPROCESSABLE_ENTITY,
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::MalformedJson | Self::InvalidBody => StatusCode::BAD_REQUEST,
-            Self::BundleConflict
-            | Self::LegacyBindingConflict
-            | Self::LegacyAdoptionPending
-            | Self::BookLengthMismatch => StatusCode::CONFLICT,
+            Self::BundleConflict | Self::BookLengthMismatch => StatusCode::CONFLICT,
+            Self::ClientUpgradeRequired => StatusCode::GONE,
             Self::StorageError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -124,16 +121,6 @@ impl From<lifestats_core::ebook::EbookError> for IntegrationApiError {
                 ErrorCode::BookLengthMismatch,
                 Some("length"),
                 "Book length differs from the stored length",
-            ),
-            EbookError::LegacyAdoptionPending => Self::new(
-                ErrorCode::LegacyAdoptionPending,
-                None,
-                "A matching legacy book must be adopted first",
-            ),
-            EbookError::LegacyBindingConflict => Self::new(
-                ErrorCode::LegacyBindingConflict,
-                None,
-                "Legacy book identity conflicts with an existing binding",
             ),
             EbookError::Storage(error) => {
                 tracing::error!(error=?error,"Failed to store ebook reading");
