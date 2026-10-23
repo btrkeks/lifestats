@@ -829,6 +829,50 @@ describe('legacy v7 rows', () => {
     expect(status(r)).toMatchObject({ kind: 'synced', blockedBooks: [] });
   });
 
+  it('claims a fully flushed legacy book with an empty queue', async () => {
+    const server = new FakeServer();
+    const title = 'ロバート・B・チャルディーニ　影響力の武器［新版］　──人を動かす七つの原理';
+    const text = '猫'.repeat(578_754);
+    const legacy = new FakeLegacy(
+      [],
+      [
+        {
+          readerDataId: 1,
+          flushedPosition: 85_900,
+          confirmedPosition: 85_900,
+          updatedAt: Date.parse('2026-05-20T12:00:00')
+        }
+      ],
+      new Map([[1, { title, characters: 578_754 }]])
+    );
+    const r = await open(server, dbName(), { legacy, books: [book(1, text, title)] });
+    await configure(r);
+
+    expect(server.legacyTotal()).toBe(0);
+    expect(server.claims.get(1)).toEqual({
+      book_key: (await bookIdentity(text))?.key,
+      title,
+      length: 578_754
+    });
+    expect(status(r)).toMatchObject({ kind: 'synced', pending: { older: 0 }, blockedBooks: [] });
+  });
+
+  it('does not claim a flushed book while one of its rows is rejected', async () => {
+    const server = new FakeServer();
+    const legacy = v7Source();
+    legacy.queuedRows[1] = { ...legacy.queuedRows[1], title: ' ' };
+    legacy.tailRows[0] = { ...legacy.tailRows[0], flushedPosition: 800 };
+    const r = await open(server, dbName(), { legacy });
+    await configure(r);
+
+    expect(server.legacyTotal()).toBe(300);
+    expect(server.claims.has(1)).toBe(false);
+    expect(status(r)).toMatchObject({
+      kind: 'blocked',
+      blockedBooks: [{ title: 'Book 1', problem: { kind: 'rejected', httpStatus: 400 } }]
+    });
+  });
+
   it('reports a legacy book that left the library and still drains its rows', async () => {
     const server = new FakeServer();
     const r = await open(server, dbName(), { legacy: v7Source(), books: [] });

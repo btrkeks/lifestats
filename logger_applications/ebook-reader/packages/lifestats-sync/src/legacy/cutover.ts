@@ -53,6 +53,12 @@ interface Unit {
   readonly event: LegacyEvent;
 }
 
+interface Backlog {
+  readonly units: readonly Unit[];
+  /** Every book the v7 stores know, flushed or not, with a title for when it left the library. */
+  readonly books: ReadonlyMap<number, string>;
+}
+
 export interface CutoverReport {
   /** Rows and claims the current server has not acknowledged. */
   readonly pending: number;
@@ -99,8 +105,8 @@ export class LegacyCutover {
   }
 
   async pending(serverId: ServerId | null): Promise<number> {
-    const [units, receipts] = await Promise.all([this.units(), this.read()]);
-    return this.count(units, receipts, serverId);
+    const [backlog, receipts] = await Promise.all([this.backlog(), this.read()]);
+    return this.count(backlog, receipts, serverId);
   }
 
   /** Sends what is due to `serverId`. A transport failure stops the run and is returned. */
@@ -109,7 +115,8 @@ export class LegacyCutover {
     onClaimed: (book: BookKey) => Promise<void>
   ): Promise<CutoverReport | FailedAttempt> {
     const { fetch, base, serverId, context } = target;
-    const [units, receipts] = await Promise.all([this.units(), this.read()]);
+    const [backlog, receipts] = await Promise.all([this.backlog(), this.read()]);
+    const { units, books } = backlog;
     const open = units.filter((unit) => !ackedBy(receipts.get(unit.id), serverId));
     if (open.some((unit) => isDue(receipts.get(unit.id)?.delivery ?? ready, context))) {
       const provisioned = await provisionLegacy(fetch, base);
@@ -140,18 +147,14 @@ export class LegacyCutover {
 
     const held = new Set<BookKey>();
     const blocked: BlockedBook[] = [];
-    const titles = new Map(units.map((unit) => [unit.readerDataId, unit.event.book_title]));
-    for (const readerDataId of new Set(units.map((unit) => unit.readerDataId))) {
+    for (const [readerDataId, title] of books) {
       const id = `claim:${readerDataId}`;
       const receipt = receipts.get(id);
       if (ackedBy(receipt, serverId)) continue;
       const local = await this.library.book(readerDataId);
       const rejection = rejected.get(readerDataId);
       if (!local) {
-        blocked.push({
-          title: titles.get(readerDataId) ?? `ttu book ${readerDataId}`,
-          problem: rejection ?? { kind: 'not_in_library', readerDataId }
-        });
+        blocked.push({ title, problem: rejection ?? { kind: 'not_in_library', readerDataId } });
         continue;
       }
       let identity: BookIdentity | undefined;
@@ -169,8 +172,13 @@ export class LegacyCutover {
         held.add(identity.key);
         if (problem) blocked.push({ title: local.title, problem });
       };
-      if (rejection) {
-        hold(rejection);
+      // The server seeds the binding from what it has counted, so every row must be in first.
+      if (
+        units.some(
+          (unit) => unit.readerDataId === readerDataId && !ackedBy(receipts.get(unit.id), serverId)
+        )
+      ) {
+        hold(rejection ?? null);
         continue;
       }
       const delivery = receipt?.delivery ?? ready;
@@ -195,7 +203,7 @@ export class LegacyCutover {
       });
       hold(outcome.problem);
     }
-    return { pending: this.count(units, receipts, serverId), held, blocked };
+    return { pending: this.count(backlog, receipts, serverId), held, blocked };
   }
 
   /** Retry now: parked rows and claims are due again. */
@@ -213,20 +221,25 @@ export class LegacyCutover {
   }
 
   private count(
-    units: readonly Unit[],
+    { units, books }: Backlog,
     receipts: ReadonlyMap<string, Receipt>,
     serverId: ServerId | null
   ): number {
     const rows = units.filter((unit) => !ackedBy(receipts.get(unit.id), serverId)).length;
-    const claims = [...new Set(units.map((unit) => unit.readerDataId))].filter(
+    const claims = [...books.keys()].filter(
       (readerDataId) => !ackedBy(receipts.get(`claim:${readerDataId}`), serverId)
     ).length;
     return rows + claims;
   }
 
-  private async units(): Promise<Unit[]> {
+  private async backlog(): Promise<Backlog> {
     const [queued, tails] = await Promise.all([this.source.queued(), this.source.tails()]);
     const titles = new Map(queued.map((row) => [row.readerDataId, row.title]));
+    const books = new Map(titles);
+    for (const tail of tails) {
+      if (!books.has(tail.readerDataId))
+        books.set(tail.readerDataId, `ttu book ${tail.readerDataId}`);
+    }
     const units: Unit[] = [...queued]
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((row) => ({
@@ -263,7 +276,7 @@ export class LegacyCutover {
         }
       });
     }
-    return units;
+    return { units, books };
   }
 
   private async read(): Promise<Map<string, Receipt>> {
