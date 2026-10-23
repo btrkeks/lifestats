@@ -80,13 +80,12 @@ focus, except the three file/package operations `adb push`, `adb install`, and
    python3 tool/ttu_bundle/update_ttu_bundle.py --verify
    flutter pub get --enforce-lockfile
    GRADLE_OPTS='-Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.workers.max=1' \
-     flutter build apk --release --target-platform android-arm64 --no-pub
+     flutter build apk --release --split-per-abi --target-platform android-arm64 --no-pub
    ```
    The build output is
-   `/home/daniel/.local/share/src/lifestats-ebook-sync/logger_applications/jidoujisho/build/app/outputs/flutter-apk/app-release.apk`.
-   It is overwritten by a later build for another architecture. The verified,
-   retained arm64 release is
-   `/home/daniel/.local/state/pstack-t3/jidoujisho-lifestats/artifacts/vendor/jidoujisho-arm64-release.apk`.
+   `/home/daniel/.local/share/src/lifestats-ebook-sync/logger_applications/jidoujisho/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
+   (268 MB, version code 20002). Always build with `--split-per-abi`; see the README. The retained arm64 release is
+   `/home/daniel/.local/state/pstack-t3/jidoujisho-lifestats/artifacts/vendor/jidoujisho-arm64-v8a-release.apk`.
    Check `aapt2 dump badging` shows `com.btrkeks.jidoujisho` and
    `apksigner verify --print-certs` matches release certificate SHA-256
    `6a6dfe0c69b30fc0c3028bc5089691ca726ab64de3c3dec268296718bb14e15e`.
@@ -102,7 +101,7 @@ focus, except the three file/package operations `adb push`, `adb install`, and
 4. Install the retained arm64 release as the new app. This package operation
    needs no foreground focus.
    ```sh
-   adb -s GQHE9HZHLVRGQOAM install -r ~/.local/state/pstack-t3/jidoujisho-lifestats/artifacts/vendor/jidoujisho-arm64-release.apk
+   adb -s GQHE9HZHLVRGQOAM install -r ~/.local/state/pstack-t3/jidoujisho-lifestats/artifacts/vendor/jidoujisho-arm64-v8a-release.apk
    ```
    The new package is `com.btrkeks.jidoujisho`. Its launcher label remains
    `jidoujisho`, so distinguish it from the old app through Android App info.
