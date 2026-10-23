@@ -10,6 +10,7 @@ import type { LocalBook, ReaderBinding, SyncStatus } from '../api';
 import { bookIdentity } from '../domain/book-key';
 import type { BookKey, ReadingDay } from '../domain/ids';
 import { SpanSet } from '../domain/span-set';
+import { DESCRIBE_EVERY_MS } from './engine';
 import { openSyncStore } from '../store/sync-db';
 import {
   BASE,
@@ -262,6 +263,46 @@ describe('delivery', () => {
     await reopened.engine.retryNow();
     expect(status(reopened).kind).toBe('synced');
     expect(server.credited(await key())).toBe(1200);
+  });
+
+  it('describes the server once while delivery keeps succeeding', async () => {
+    const server = new FakeServer();
+    const r = await open(server);
+    await configure(r);
+    const binding = await readerFor(r);
+    const described = () =>
+      server.requests.filter((request) => request === 'GET /integrations/ebook').length;
+    const before = described();
+    read(r, binding, 0, 600);
+    await r.engine.drain(5_000);
+    read(r, binding, 600, 1200);
+    await r.engine.drain(5_000);
+
+    expect(described()).toBe(before);
+    expect(server.credited(await key())).toBe(1200);
+  });
+
+  it('notices a replaced server database within the describe interval', async () => {
+    const server = new FakeServer();
+    const other = '犬'.repeat(5_000);
+    const r = await open(server, dbName(), { books: [book(1, TEXT), book(2, other, 'Book 2')] });
+    await configure(r);
+    const first = await readerFor(r);
+    read(r, first, 0, 900);
+    expect(await r.engine.drain(5_000)).toBe('idle');
+    await first.close();
+
+    server.serverId = '5b0c1f8e-2f4d-4c43-9a43-7c1fd0b5a002';
+    server.days.clear();
+    const second = r.engine.reader({ forwardSkipThreshold: () => 2700 });
+    second.setBook(book(2, other, 'Book 2'));
+    await r.engine.flush();
+    read(r, second, 0, 600);
+    await r.engine.drain(5_000);
+    r.clock.advance(DESCRIBE_EVERY_MS / 1000);
+    await r.engine.drain(5_000);
+
+    expect(server.credited(await key())).toBe(900);
   });
 
   it('sends everything again when the server identity changes', async () => {

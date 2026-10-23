@@ -49,6 +49,8 @@ export const COALESCE_MS = 300;
 export const DELIVERY_DELAY_MS = 1_000;
 export const IDLE_PASS_MS = 30_000;
 export const STORAGE_RETRY_MS = 5_000;
+/** A healthy server is described again this often, so a replaced database is noticed. */
+export const DESCRIBE_EVERY_MS = 5 * 60_000;
 const DEFAULT_SKIP_THRESHOLD = 2700;
 const DELIVERY_LOCK = 'ttu-lifestats-delivery';
 
@@ -125,6 +127,7 @@ export class Engine implements LifestatsSync {
   private storageError: string | null = null;
   private server: DeliveryState = ready;
   private describeNext = true;
+  private describedAt = -Infinity;
   private passing: Promise<void> | null = null;
   private passAgain = false;
   private timer: unknown = null;
@@ -417,17 +420,23 @@ export class Engine implements LifestatsSync {
 
     const records = await store.records();
     const work = older > 0 || records.some((record) => isPending(record, config.serverId));
-    if (!base || (!work && !this.describeNext)) return this.refresh();
+    const describe =
+      this.describeNext || !config.serverId || context.now - this.describedAt >= DESCRIBE_EVERY_MS;
+    if (!base || (!work && !describe)) return this.refresh();
     if (!isDue(this.server, context)) {
       this.retryServerLater(context);
       return this.refresh();
     }
 
-    const description = await describeServer(this.env.fetch, base);
-    if (description.kind !== 'ok') return this.serverFailed(description, context);
-    this.describeNext = false;
-    const { serverId } = description;
-    if (serverId !== config.serverId) await store.setServerId(serverId);
+    let serverId = config.serverId;
+    if (describe || !serverId) {
+      const description = await describeServer(this.env.fetch, base);
+      if (description.kind !== 'ok') return this.serverFailed(description, context);
+      this.describeNext = false;
+      this.describedAt = context.now;
+      serverId = description.serverId;
+      if (serverId !== config.serverId) await store.setServerId(serverId);
+    }
 
     let held: ReadonlySet<BookKey> = new Set();
     if (this.cutover) {
@@ -463,6 +472,7 @@ export class Engine implements LifestatsSync {
   }
 
   private async serverFailed(outcome: FailedAttempt, context: DeliveryContext): Promise<void> {
+    this.describeNext = true;
     this.server = nextDeliveryState(this.server, outcome, context, this.env.random);
     this.retryServerLater(context);
     await this.refresh();
