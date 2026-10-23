@@ -427,10 +427,28 @@ describe('recording', () => {
     r.clock.advance(0.9);
     binding.observe(3000);
     r.clock.advance(10);
+    r.page.emit('input');
     binding.observe(3300);
     await r.engine.flush();
 
     expect((await storedSpans(r.name)).toPairs()).toEqual([[3000, 3300]]);
+  });
+
+  it('credits nothing for a slow move that reports several positions', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    binding.observe(2282);
+    r.clock.advance(120);
+    r.engine.relocate();
+    binding.observe(0);
+    r.clock.advance(1);
+    binding.observe(2638);
+    r.clock.advance(30);
+    r.page.emit('input');
+    binding.observe(2900);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[2638, 2900]]);
   });
 
   it('credits a page turned right after a programmatic move settled', async () => {
@@ -442,6 +460,7 @@ describe('recording', () => {
     r.clock.advance(0.05);
     binding.observe(1000);
     r.clock.advance(0.45);
+    r.page.emit('input');
     binding.observe(1400);
     await r.engine.flush();
 

@@ -39,13 +39,12 @@ import { openSyncStore, type SyncStore } from '../store/sync-db';
 import { describeServer, putDay } from '../wire/http';
 
 /**
- * After `relocate()` the reader's next position is the move's result, however slowly a section
- * loads, unless the user pressed a key or touched the page first. Without input, after this
- * long the next position is the user's again, as with autoscroll.
+ * After `relocate()` every position belongs to the programmatic move, however slowly a section
+ * loads and however many positions it reports, until the user presses a key, a pointer or the
+ * wheel, or touches the page. Without input, positions after this long are the user's again,
+ * as with autoscroll.
  */
 export const RELOCATION_TIMEOUT_MS = 10_000;
-/** Positions this soon after a move's first one belong to the same move. */
-export const COALESCE_MS = 300;
 export const DELIVERY_DELAY_MS = 1_000;
 export const IDLE_PASS_MS = 30_000;
 export const STORAGE_RETRY_MS = 5_000;
@@ -532,10 +531,8 @@ class Binding implements ReaderBinding {
   private unkeyed: { spans: SpanSet; position: number; atMs: number }[] = [];
   /** The reader reports a position only when it changes, often before the book is known. */
   private lastPosition: number | null = null;
-  private relocation:
-    | { readonly kind: 'awaiting'; readonly since: number }
-    | { readonly kind: 'coalescing'; readonly until: number }
-    | null = null;
+  /** When `relocate()` was last called, until the move ends. */
+  private relocatedAt: number | null = null;
 
   constructor(
     private readonly engine: Engine,
@@ -620,33 +617,24 @@ class Binding implements ReaderBinding {
 
   /** Reading resumes from wherever the reader is now, from this moment. */
   show(): void {
-    this.relocation = null;
+    this.relocatedAt = null;
     if (this.lastPosition === null) return;
     this.trail = relocate(this.trail, this.lastPosition, this.engine.now()).trail;
   }
 
   relocating(atMs: number): void {
-    this.relocation = { kind: 'awaiting', since: atMs };
+    this.relocatedAt = atMs;
   }
 
-  /**
-   * Input after `relocate()` means the next position is the user's: a move that left the
-   * position unchanged, such as opening a book at 0, reports nothing to end it.
-   */
+  /** The move is over: whatever the reader reports next follows from the user's action. */
   userInput(): void {
-    this.relocation = null;
+    this.relocatedAt = null;
   }
 
   /** Whether the position observed at `atMs` comes from a programmatic move. */
   private programmatic(atMs: number): boolean {
-    const relocation = this.relocation;
-    if (!relocation) return false;
-    if (relocation.kind === 'awaiting' && atMs - relocation.since <= RELOCATION_TIMEOUT_MS) {
-      this.relocation = { kind: 'coalescing', until: atMs + COALESCE_MS };
-      return true;
-    }
-    if (relocation.kind === 'coalescing' && atMs < relocation.until) return true;
-    this.relocation = null;
+    if (this.relocatedAt !== null && atMs - this.relocatedAt <= RELOCATION_TIMEOUT_MS) return true;
+    this.relocatedAt = null;
     return false;
   }
 
