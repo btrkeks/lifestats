@@ -4,7 +4,6 @@
  * All rights reserved.
  */
 
-import { openDB, unwrap } from 'idb';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ReaderBinding, SyncStatus } from '../api';
@@ -12,7 +11,18 @@ import { bookIdentity } from '../domain/book-key';
 import type { BookKey, ReadingDay } from '../domain/ids';
 import { SpanSet } from '../domain/span-set';
 import { openSyncStore } from '../store/sync-db';
-import { BASE, Clock, FakeServer, book, realTimers, rig, started, type Rig } from '../test/harness';
+import {
+  BASE,
+  Clock,
+  FakeLegacy,
+  FakeServer,
+  book,
+  legacyRow,
+  realTimers,
+  rig,
+  started,
+  type Rig
+} from '../test/harness';
 
 const TEXT = '猫'.repeat(10_000);
 const rigs: Rig[] = [];
@@ -448,50 +458,26 @@ describe('recording', () => {
 });
 
 describe('legacy v7 rows', () => {
-  async function v7Books(name: string) {
-    const db = await openDB(name, 8, {
-      upgrade(database) {
-        database.createObjectStore('data', { keyPath: 'id', autoIncrement: true });
-        database.createObjectStore('ebookSyncState', { keyPath: 'dataId' });
-        const queue = database.createObjectStore('ebookSyncQueue', { keyPath: 'eventId' });
-        queue.createIndex('dataId', 'dataId');
-      }
-    });
-    await db.put('data', { id: 1, title: 'Book 1', characters: 10_000 });
-    for (const [eventId, delta, after, createdAt] of [
-      ['0f8fad5b-d9cb-469f-a165-70867728950e', 300, 300, 1],
-      ['7c9e6679-7425-40de-944b-e07fc1f90ae7', 200, 500, 2]
-    ] as const) {
-      await db.put('ebookSyncQueue', {
-        eventId,
-        dataId: 1,
-        dateKey: '2026-10-20',
-        metric: 'characters_read',
-        delta,
-        confirmedPositionAfter: after,
-        bookTargetCharacters: 10_000,
-        bookTitle: 'Book 1',
-        createdAt,
-        attemptCount: 0,
-        nextRetryAt: 0
-      });
-    }
-    await db.put('ebookSyncState', {
-      dataId: 1,
-      currentPosition: 800,
-      confirmedPosition: 800,
-      lastFlushedPosition: 500,
-      bundleVersion: 1,
-      updatedAt: Date.parse('2026-10-21T12:00:00')
-    });
-    return db;
+  function v7Source() {
+    return new FakeLegacy(
+      [
+        legacyRow('0f8fad5b-d9cb-469f-a165-70867728950e', 300, 300, 1),
+        legacyRow('7c9e6679-7425-40de-944b-e07fc1f90ae7', 200, 500, 2)
+      ],
+      [
+        {
+          readerDataId: 1,
+          flushedPosition: 500,
+          confirmedPosition: 800,
+          updatedAt: Date.parse('2026-10-21T12:00:00')
+        }
+      ]
+    );
   }
 
   it('drains originals and the tail once, survives a lost reply, then claims the book', async () => {
     const server = new FakeServer();
-    const books = await v7Books(dbName());
-    const legacy = { books: async () => unwrap(books), dayOf: () => '2026-10-21' };
-    const r = await open(server, dbName(), { legacy });
+    const r = await open(server, dbName(), { legacy: v7Source() });
     server.loseReplies = 2;
     server.loseRepliesTo = '/events';
     await configure(r);
@@ -505,21 +491,21 @@ describe('legacy v7 rows', () => {
       delta: 300,
       confirmed_position_after: 800
     });
-    expect(await books.count('ebookSyncQueue')).toBe(0);
-    expect(await books.count('ebookSyncState')).toBe(0);
     expect(server.claims.get(1)).toEqual({
       book_key: await key(),
       title: 'Book 1',
       length: 10_000
     });
-    expect(status(r)).toMatchObject({ kind: 'synced', pending: { legacy: 0 } });
+    expect(status(r)).toMatchObject({ kind: 'synced', pending: { older: 0 } });
+
+    const requests = server.requests.length;
+    expect(await r.engine.drain(5_000)).toBe('idle');
+    expect(server.requests.length).toBe(requests);
   });
 
   it('holds new reports for a legacy book until its claim lands', async () => {
     const server = new FakeServer();
-    const books = await v7Books(dbName());
-    const legacy = { books: async () => unwrap(books), dayOf: () => '2026-10-21' };
-    const r = await open(server, dbName(), { legacy });
+    const r = await open(server, dbName(), { legacy: v7Source() });
     server.answer.set('/legacy-books/', 409);
     await configure(r);
     const binding = await readerFor(r);
@@ -534,20 +520,46 @@ describe('legacy v7 rows', () => {
     expect(server.credited(await key())).toBe(600);
   });
 
+  it('retries a rejected claim after 6 hours without Retry now', async () => {
+    const server = new FakeServer();
+    const r = await open(server, dbName(), { legacy: v7Source() });
+    server.answer.set('/legacy-books/', 409);
+    await configure(r);
+    const binding = await readerFor(r);
+    read(r, binding, 0, 600);
+    await r.engine.drain(5_000);
+    expect(server.claims.has(1)).toBe(false);
+
+    server.answer.clear();
+    r.clock.advance(6 * 3600);
+    await r.engine.drain(5_000);
+    expect(server.claims.has(1)).toBe(true);
+    expect(server.credited(await key())).toBe(600);
+  });
+
   it('keeps every row a failing server did not accept, and sends it later', async () => {
     const server = new FakeServer();
-    const books = await v7Books(dbName());
-    const legacy = { books: async () => unwrap(books), dayOf: () => '2026-10-21' };
-    const r = await open(server, dbName(), { legacy });
+    const r = await open(server, dbName(), { legacy: v7Source() });
     server.answer.set('/events', 500);
     await configure(r);
-    expect(await books.count('ebookSyncQueue')).toBe(2);
-    expect(await books.count('ebookSyncState')).toBe(1);
-    expect(status(r)).toMatchObject({ kind: 'waiting', pending: { legacy: 4 } });
+    expect(server.legacyTotal()).toBe(0);
+    expect(status(r)).toMatchObject({ kind: 'waiting', pending: { older: 4 } });
 
     server.answer.clear();
     await r.engine.retryNow();
     expect(server.legacyTotal()).toBe(800);
+  });
+
+  it('reports a legacy book that left the library and still drains its rows', async () => {
+    const server = new FakeServer();
+    const r = await open(server, dbName(), { legacy: v7Source(), books: [] });
+    await configure(r);
+
+    expect(server.legacyTotal()).toBe(800);
+    expect(status(r)).toMatchObject({
+      kind: 'blocked',
+      blockedBooks: [{ title: 'Book 1', problem: { kind: 'not_in_library', readerDataId: 1 } }]
+    });
   });
 });
 

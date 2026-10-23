@@ -28,10 +28,34 @@ export interface Library {
   book(localId: number): Promise<LocalBook | undefined>;
 }
 
-/** The retired v7 patch's leftovers in the `books` database. */
+/** A delta the retired v7 patch queued for the legacy events route. */
+export interface LegacyQueued {
+  readonly eventId: string;
+  readonly readerDataId: number;
+  readonly day: string;
+  readonly delta: number;
+  readonly positionAfter: number;
+  readonly targetCharacters: number | null;
+  readonly title: string;
+  readonly createdAt: number;
+}
+
+/** A v7 tracker position. Reading past `flushedPosition` was confirmed but never queued. */
+export interface LegacyTail {
+  readonly readerDataId: number;
+  readonly flushedPosition: number;
+  readonly confirmedPosition: number;
+  readonly updatedAt: number;
+}
+
+/** What the retired v7 patch left in this origin. Only ever read. */
 export interface LegacySource {
-  /** The app's open `books` connection, at version 8 or later. */
-  books(): Promise<IDBDatabase>;
+  queued(): Promise<readonly LegacyQueued[]>;
+  tails(): Promise<readonly LegacyTail[]>;
+  /** ttu's stored title and character count, while the book is in the library. */
+  book(
+    readerDataId: number
+  ): Promise<{ readonly title: string; readonly characters: number } | undefined>;
   /** The v7 day rule: ttu's `getDateKey` with its start-of-day hour. */
   dayOf(atMs: number): string;
 }
@@ -68,14 +92,19 @@ export interface PendingSummary {
   /** Characters in those records, before the server removes rereading on other devices. */
   readonly characters: number;
   readonly oldestDay: string | null;
-  /** v7 rows not yet drained plus legacy books not yet claimed. */
-  readonly legacy: number;
-  /** Legacy books gone from this library. Claim them with curl, using a key from another device. */
-  readonly missingLegacyBooks: readonly number[];
+  /** Reading saved by an earlier version of this reader, not yet delivered. */
+  readonly older: number;
+}
+
+/** A book whose reading stays on this device until someone fixes `problem`. */
+export interface BlockedBook {
+  readonly title: string;
+  readonly problem: DeliveryProblem;
 }
 
 interface Known {
   readonly pending: PendingSummary;
+  readonly blockedBooks: readonly BlockedBook[];
   readonly lastDeliveredAt: number | null;
 }
 

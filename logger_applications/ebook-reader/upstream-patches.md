@@ -54,5 +54,6 @@ contains `*` match many files.
 
 - The retired Lifestats patch: `src/lib/data/lifestats/**`, the v7 schema types, the sync
   methods in `database.service.ts`, `ebook-sync-cleanup.ts`, and the reader route's tracker.
-  Its two IndexedDB stores stay in existing databases until the new drain empties them.
+  Its two IndexedDB stores stay in existing databases, read but never changed by the cutover,
+  until the cleanup release drops them.
 - The 2023 `ネタバレ → SPOILER` hand patch on compiled output.

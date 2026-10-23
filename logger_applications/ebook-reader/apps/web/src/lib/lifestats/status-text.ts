@@ -23,6 +23,8 @@ export function problemText(problem: DeliveryProblem, onPhone = embedded): strin
       return `The Lifestats server at ${problem.serverUrl} has no reading API yet. Update Lifestats.`;
     case 'rejected':
       return `Lifestats rejected this reading: ${problem.message} (${problem.code}). It stays on this device.`;
+    case 'not_in_library':
+      return 'It is no longer in this library. Claim it with curl, using its key from another device.';
     default: {
       const _exhaustive: never = problem;
       return _exhaustive;
@@ -36,10 +38,10 @@ function plural(count: number, one: string): string {
 
 export function pendingText(status: SyncStatus): string | null {
   if (status.kind === 'starting') return null;
-  const { records, characters, legacy } = status.pending;
+  const { records, characters, older } = status.pending;
   const parts = [];
   if (records) parts.push(`${plural(records, 'day')} · ${characters.toLocaleString()} characters`);
-  if (legacy) parts.push(plural(legacy, 'older item'));
+  if (older) parts.push(plural(older, 'older item'));
   return parts.length ? `${parts.join(', ')} waiting` : null;
 }
 

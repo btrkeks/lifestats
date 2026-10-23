@@ -4,7 +4,6 @@
  * All rights reserved.
  */
 
-import { openDB, unwrap } from 'idb';
 import { describe, expect, it } from 'vitest';
 
 import { bookIdentity } from '../domain/book-key';
@@ -13,7 +12,7 @@ import { ready } from '../domain/delivery-policy';
 import { newProducerId, readingDayOf, type BookKey, type ReadingDay } from '../domain/ids';
 import { parseServerUrl, type ServerUrl } from '../domain/server-url';
 import { SpanSet } from '../domain/span-set';
-import { Clock, book, realTimers, rig, started } from '../test/harness';
+import { Clock, FakeLegacy, book, legacyRow, realTimers, rig, started } from '../test/harness';
 import {
   describeServer,
   postLegacyEvent,
@@ -206,39 +205,15 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
   it('counts a drained v7 event once when its 200 was lost and it is sent again', async () => {
     const day = readingDayOf(new Date(Date.now() - 3 * 86_400_000));
     const before = await logged(base, day);
-    const name = `books-contract-${crypto.randomUUID()}`;
     const readerDataId = 700_000 + Math.floor(Math.random() * 99_999);
     const text = `drain${crypto.randomUUID()}`.replace(/[^0-9a-z]/gi, '') + '猫'.repeat(5_000);
-    const books = await openDB(name, 8, {
-      upgrade(db) {
-        db.createObjectStore('data', { keyPath: 'id' });
-        db.createObjectStore('ebookSyncState', { keyPath: 'dataId' });
-        db.createObjectStore('ebookSyncQueue', { keyPath: 'eventId' });
-      }
-    });
     const title = `Drain contract ${readerDataId}`;
-    await books.put('data', { id: readerDataId, title, characters: 5_000 });
-    await books.put('ebookSyncQueue', {
-      eventId: crypto.randomUUID(),
-      dataId: readerDataId,
-      dateKey: day,
-      metric: 'characters_read',
-      delta: 400,
-      confirmedPositionAfter: 400,
-      bookTargetCharacters: 5_000,
-      bookTitle: title,
-      createdAt: 1,
-      attemptCount: 0,
-      nextRetryAt: 0
-    });
-    await books.put('ebookSyncState', {
-      dataId: readerDataId,
-      currentPosition: 650,
-      confirmedPosition: 650,
-      lastFlushedPosition: 400,
-      bundleVersion: 1,
-      updatedAt: Date.now()
-    });
+    const legacy = new FakeLegacy(
+      [{ ...legacyRow(crypto.randomUUID(), 400, 400, 1, readerDataId), day, title }],
+      [{ readerDataId, flushedPosition: 400, confirmedPosition: 650, updatedAt: Date.now() }],
+      new Map([[readerDataId, { title, characters: 5_000 }]])
+    );
+    legacy.dayOf = () => day;
 
     let lose = 1;
     const lossy: typeof fetch = async (input, init) => {
@@ -253,7 +228,7 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
       server: { fetch: lossy },
       dbName: `ttu-lifestats-contract-${crypto.randomUUID()}`,
       books: [book(readerDataId, text, title)],
-      legacy: { books: async () => unwrap(books), dayOf: () => day },
+      legacy,
       timers: realTimers,
       clock: new Clock(Date.now())
     });
@@ -265,8 +240,6 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
       await r.engine.retryNow();
       expect(lose).toBe(0);
       expect(await logged(base, day)).toBe(before + 400 + 250);
-      expect(await books.count('ebookSyncQueue')).toBe(0);
-      expect(await books.count('ebookSyncState')).toBe(0);
 
       const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });
       binding.setBook(book(readerDataId, text, title));
@@ -282,7 +255,6 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
       expect(await logged(base, today)).toBe(todayBefore + 250);
     } finally {
       r.engine.close();
-      books.close();
     }
   });
 });

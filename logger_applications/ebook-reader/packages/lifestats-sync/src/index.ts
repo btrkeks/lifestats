@@ -10,11 +10,14 @@ import { Engine, type EngineEnvironment } from './engine/engine';
 import { SYNC_DB_NAME } from './store/sync-db';
 
 export type {
+  BlockedBook,
   ConfigureResult,
   ConnectionCheck,
   DeliveryProblem,
   Library,
+  LegacyQueued,
   LegacySource,
+  LegacyTail,
   LifestatsSync,
   LocalBook,
   OpenBook,

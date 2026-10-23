@@ -9,8 +9,8 @@ import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books
 import { database, startDayHoursForTracker$ } from '$lib/data/store';
 import { getDateKey } from '$lib/functions/statistic-util';
 import { startLifestatsSync, type LifestatsSync, type LocalBook } from '@lifestats/ttu-sync';
-import { unwrap, type IDBPDatabase } from 'idb';
 import { countedBookText } from './counted-text';
+import { legacySource } from './legacy-source';
 
 let sync: LifestatsSync | undefined;
 
@@ -33,11 +33,9 @@ export function startSync(): LifestatsSync {
         return data && toLocalBook(data);
       }
     },
-    legacy: {
-      // unwrap's overloads only take an untyped database; the schema type is irrelevant here.
-      books: async () => unwrap((await database.db) as unknown as IDBPDatabase),
-      dayOf: (atMs) => getDateKey(startDayHoursForTracker$.getValue(), new Date(atMs))
-    }
+    legacy: legacySource(database.db, (atMs) =>
+      getDateKey(startDayHoursForTracker$.getValue(), new Date(atMs))
+    )
   });
   return sync;
 }

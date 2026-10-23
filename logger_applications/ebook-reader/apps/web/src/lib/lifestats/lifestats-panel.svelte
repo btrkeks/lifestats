@@ -77,11 +77,12 @@
       {#if pending}
         <p data-lifestats-pending>{pending}</p>
       {/if}
-      {#if $status.kind !== 'starting' && $status.pending.missingLegacyBooks.length}
-        <p>
-          Older books {$status.pending.missingLegacyBooks.join(', ')} are no longer in this library.
-          Claim them with curl using a key from another device.
-        </p>
+      {#if $status.kind !== 'starting' && $status.blockedBooks.length}
+        <ul data-lifestats-blocked>
+          {#each $status.blockedBooks as blocked}
+            <li>{blocked.title}: {problemText(blocked.problem)}</li>
+          {/each}
+        </ul>
       {/if}
       {#if $status.kind !== 'starting' && $status.lastDeliveredAt}
         <p>Last delivered {new Date($status.lastDeliveredAt).toLocaleString()}</p>

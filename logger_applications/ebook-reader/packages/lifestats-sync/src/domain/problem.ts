@@ -10,6 +10,8 @@ export type DeliveryProblem =
   | { readonly kind: 'server_error'; readonly httpStatus: number }
   | { readonly kind: 'not_lifestats'; readonly serverUrl: string }
   | { readonly kind: 'server_too_old'; readonly serverUrl: string }
+  /** A book the v7 patch counted, gone from this library, so its content key is unknown here. */
+  | { readonly kind: 'not_in_library'; readonly readerDataId: number }
   | {
       readonly kind: 'rejected';
       readonly httpStatus: number;

@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('@lifestats/ttu-sync boundary', () => {
@@ -23,4 +24,14 @@ describe('@lifestats/ttu-sync boundary', () => {
       await expect(import(/* @vite-ignore */ specifier)).rejects.toThrow();
     }
   );
+
+  it('names no storage type on its public surface', () => {
+    for (const file of ['api.ts', 'index.ts']) {
+      const source = readFileSync(
+        new URL(`../../../../../packages/lifestats-sync/src/${file}`, import.meta.url),
+        'utf8'
+      );
+      expect(source).not.toMatch(/\bIDB\w*|from 'idb'/);
+    }
+  });
 });

@@ -6,7 +6,7 @@
 
 import 'fake-indexeddb/auto';
 
-import type { LocalBook, SyncInit } from '../api';
+import type { LegacyQueued, LegacySource, LegacyTail, LocalBook, SyncInit } from '../api';
 import { SpanSet } from '../domain/span-set';
 import { Engine, type EngineEnvironment, type PageEvent, type Timers } from '../engine/engine';
 
@@ -118,6 +118,39 @@ function json(status: number, body: unknown): Response {
     status,
     headers: { 'Content-Type': 'application/json' }
   });
+}
+
+/** The v7 stores of a laptop profile, with book 1 still in its library. */
+export class FakeLegacy implements LegacySource {
+  constructor(
+    public queuedRows: LegacyQueued[],
+    public tailRows: LegacyTail[],
+    public library = new Map([[1, { title: 'Book 1', characters: 10_000 }]])
+  ) {}
+
+  queued = async () => this.queuedRows;
+  tails = async () => this.tailRows;
+  book = async (readerDataId: number) => this.library.get(readerDataId);
+  dayOf = () => '2026-10-21';
+}
+
+export function legacyRow(
+  eventId: string,
+  delta: number,
+  positionAfter: number,
+  createdAt: number,
+  readerDataId = 1
+): LegacyQueued {
+  return {
+    eventId,
+    readerDataId,
+    day: '2026-10-20',
+    delta,
+    positionAfter,
+    targetCharacters: 10_000,
+    title: `Book ${readerDataId}`,
+    createdAt
+  };
 }
 
 /** Background work never fires on its own, so each test decides when delivery runs. */

@@ -20,7 +20,6 @@ import {
   type ReadingDay,
   type ServerId
 } from '../domain/ids';
-import type { DeliveryProblem } from '../domain/problem';
 import { parseServerUrl, type ServerUrl } from '../domain/server-url';
 import { SpanSet } from '../domain/span-set';
 
@@ -55,34 +54,16 @@ interface IdentityRow {
   readonly key: string;
   readonly length: number;
 }
-interface ClaimRow {
-  readonly readerDataId: number;
-  readonly book: string | null;
-  readonly ackedBy: string | null;
-  readonly missing: boolean;
-  readonly problem: DeliveryProblem | null;
-}
-
 interface SyncSchema extends DBSchema {
   meta: { key: 'producer' | 'config' | 'delivered'; value: ProducerRow | ConfigRow | DeliveredRow };
   days: { key: [string, string]; value: DayRow };
   identities: { key: number; value: IdentityRow };
-  claims: { key: number; value: ClaimRow };
 }
 
 export interface SyncConfig {
   readonly serverUrl: ServerUrl | null;
   readonly revision: number;
   readonly serverId: ServerId | null;
-}
-
-/** A v7 book that must be bound to its content key on the server before its new reports. */
-export interface LegacyClaim {
-  readonly readerDataId: number;
-  readonly book: BookKey | null;
-  readonly ackedBy: ServerId | null;
-  readonly missing: boolean;
-  readonly problem: DeliveryProblem | null;
 }
 
 function toRow(record: DayRecord): DayRow {
@@ -97,14 +78,6 @@ function fromRow(row: DayRow): DayRecord | undefined {
       ? { revision: row.delivered.revision, serverId: row.delivered.serverId }
       : null;
   return { ...row, book: row.book, day: row.day, spans, delivered };
-}
-
-function fromClaimRow(row: ClaimRow): LegacyClaim {
-  return {
-    ...row,
-    book: isBookKey(row.book) ? row.book : null,
-    ackedBy: isServerId(row.ackedBy) ? row.ackedBy : null
-  };
 }
 
 const defaultConfig: ConfigRow = { serverUrl: null, revision: 0, serverId: null };
@@ -131,7 +104,6 @@ export async function openSyncStore(name = SYNC_DB_NAME) {
       database.createObjectStore('meta');
       database.createObjectStore('days', { keyPath: ['book', 'day'] });
       database.createObjectStore('identities', { keyPath: 'localId' });
-      database.createObjectStore('claims', { keyPath: 'readerDataId' });
     },
     blocking() {
       db.close();
@@ -253,31 +225,6 @@ export async function openSyncStore(name = SYNC_DB_NAME) {
 
     async putIdentity(localId: number, modified: number, identity: BookIdentity): Promise<void> {
       await db.put('identities', { localId, modified, ...identity });
-    },
-
-    async addClaims(readerDataIds: readonly number[]): Promise<void> {
-      const tx = db.transaction('claims', 'readwrite');
-      for (const readerDataId of readerDataIds) {
-        if (!(await tx.store.get(readerDataId))) {
-          await tx.store.put({
-            readerDataId,
-            book: null,
-            ackedBy: null,
-            missing: false,
-            problem: null
-          });
-        }
-      }
-      await tx.done;
-    },
-
-    async claims(): Promise<LegacyClaim[]> {
-      return (await db.getAll('claims')).map(fromClaimRow);
-    },
-
-    async putClaim(claim: LegacyClaim): Promise<void> {
-      await db.put('claims', claim);
-      changed();
     },
 
     onChange(listener: () => void): () => void {

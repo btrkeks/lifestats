@@ -4,11 +4,10 @@
  * All rights reserved.
  */
 
-import type { SyncStatus } from '../api';
+import type { BlockedBook, SyncStatus } from '../api';
 import { isPending, type DayRecord } from './day-record';
 import type { DeliveryState } from './delivery-policy';
 import type { ServerId } from './ids';
-import type { DeliveryProblem } from './problem';
 
 export interface StatusFacts {
   readonly configured: boolean;
@@ -17,9 +16,9 @@ export interface StatusFacts {
   readonly serverId: ServerId | null;
   /** The last descriptor or transport failure, held until it is retried. */
   readonly server: DeliveryState;
-  readonly legacy: number;
-  readonly missingLegacyBooks: readonly number[];
-  readonly claimProblem: DeliveryProblem | null;
+  /** Delivery work other than day records. */
+  readonly older: number;
+  readonly blockedBooks: readonly BlockedBook[];
   readonly lastDeliveredAt: number | null;
 }
 
@@ -30,20 +29,20 @@ export function deriveStatus(facts: StatusFacts): SyncStatus {
       records: pendingRecords.length,
       characters: pendingRecords.reduce((total, record) => total + record.spans.size, 0),
       oldestDay: pendingRecords.map((record) => record.day).sort()[0] ?? null,
-      legacy: facts.legacy,
-      missingLegacyBooks: facts.missingLegacyBooks
+      older: facts.older
     },
+    blockedBooks: facts.blockedBooks,
     lastDeliveredAt: facts.lastDeliveredAt
   };
   if (facts.storageError) return { ...known, kind: 'storage_failed', message: facts.storageError };
   if (!facts.configured) return { ...known, kind: 'not_configured' };
-  if (!pendingRecords.length && !facts.legacy) return { ...known, kind: 'synced' };
-
   const parked = [facts.server, ...pendingRecords.map((record) => record.delivery)].find(
     (state) => state.kind === 'parked'
   );
   if (parked?.kind === 'parked') return { ...known, kind: 'blocked', problem: parked.problem };
-  if (facts.claimProblem) return { ...known, kind: 'blocked', problem: facts.claimProblem };
+  const [blocked] = facts.blockedBooks;
+  if (blocked) return { ...known, kind: 'blocked', problem: blocked.problem };
+  if (!pendingRecords.length && !facts.older) return { ...known, kind: 'synced' };
 
   const retrying = [facts.server, ...pendingRecords.map((record) => record.delivery)]
     .flatMap((state) => (state.kind === 'retrying' ? [state] : []))

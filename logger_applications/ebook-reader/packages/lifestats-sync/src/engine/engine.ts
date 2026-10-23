@@ -5,6 +5,7 @@
  */
 
 import type {
+  BlockedBook,
   ConfigureResult,
   ConnectionCheck,
   LifestatsSync,
@@ -27,21 +28,14 @@ import {
   type DeliveryState,
   type FailedAttempt
 } from '../domain/delivery-policy';
-import { readingDayOf, type BookKey, type ProducerId, type ServerId } from '../domain/ids';
-import type { DeliveryProblem } from '../domain/problem';
+import { readingDayOf, type BookKey, type ProducerId } from '../domain/ids';
 import { emptyTrail, observe, release, relocate, type Trail } from '../domain/reading-policy';
 import { parseServerUrl, type ServerUrl } from '../domain/server-url';
 import { SpanSet } from '../domain/span-set';
 import { deriveStatus } from '../domain/status';
-import { drainLegacy, legacyBacklog } from '../legacy/drain';
+import { LegacyCutover } from '../legacy/cutover';
 import { openSyncStore, type SyncStore } from '../store/sync-db';
-import {
-  describeServer,
-  postLegacyEvent,
-  provisionLegacy,
-  putDay,
-  putLegacyBook
-} from '../wire/http';
+import { describeServer, putDay } from '../wire/http';
 
 /** How long after `relocate()` positions only move the anchor. Covers layout and scroll restore. */
 export const SETTLE_MS = 750;
@@ -101,10 +95,9 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface LegacyFacts {
-  readonly legacy: number;
-  readonly missingLegacyBooks: readonly number[];
-  readonly claimProblem: DeliveryProblem | null;
+interface CutoverFacts {
+  readonly older: number;
+  readonly blockedBooks: readonly BlockedBook[];
 }
 
 export class Engine implements LifestatsSync {
@@ -129,13 +122,22 @@ export class Engine implements LifestatsSync {
   private timerAt = Infinity;
   private refreshing: unknown = null;
   private settleUntil = 0;
-  private legacyFacts: LegacyFacts = { legacy: 0, missingLegacyBooks: [], claimProblem: null };
+  private readonly cutover: LegacyCutover | null;
+  private cutoverFacts: CutoverFacts = { older: 0, blockedBooks: [] };
   private closed = false;
 
   constructor(
     private readonly init: SyncInit,
     private readonly env: EngineEnvironment
   ) {
+    this.cutover =
+      init.legacy &&
+      new LegacyCutover(
+        init.legacy,
+        init.library,
+        (book) => this.identityFor(book),
+        `${env.dbName}-legacy`
+      );
     this.opened = openSyncStore(env.dbName).then(async (store) => ({
       store,
       producer: await store.producer()
@@ -196,10 +198,7 @@ export class Engine implements LifestatsSync {
   async retryNow(): Promise<void> {
     const { store } = await this.opened;
     await store.rearm();
-    for (const claim of await store.claims()) {
-      if (claim.problem || claim.missing)
-        await store.putClaim({ ...claim, problem: null, missing: false });
-    }
+    await this.cutover?.rearm();
     this.server = ready;
     this.describeNext = true;
     await this.deliver();
@@ -238,6 +237,7 @@ export class Engine implements LifestatsSync {
     this.disposers.splice(0).forEach((dispose) => dispose());
     this.env.timers.clear(this.timer);
     this.env.timers.clear(this.refreshing);
+    this.cutover?.close();
     void this.opened.then(({ store }) => store.close()).catch(() => undefined);
   }
 
@@ -340,7 +340,8 @@ export class Engine implements LifestatsSync {
     this.status.set({
       kind: 'storage_failed',
       message: this.storageError,
-      pending: { records: 0, characters: 0, oldestDay: null, legacy: 0, missingLegacyBooks: [] },
+      pending: { records: 0, characters: 0, oldestDay: null, older: 0 },
+      blockedBooks: [],
       lastDeliveredAt: null
     });
   }
@@ -394,14 +395,11 @@ export class Engine implements LifestatsSync {
       buildId: this.init.buildId,
       configRevision: config.revision
     };
-    const legacyDb = this.init.legacy ? await this.init.legacy.books() : null;
-    const backlog = legacyDb ? await legacyBacklog(legacyDb) : { readerDataIds: [], rows: 0 };
-    await store.addClaims(backlog.readerDataIds);
-    await this.updateLegacyFacts(store, backlog.rows, config.serverId);
+    const older = (await this.cutover?.pending(config.serverId)) ?? 0;
+    this.cutoverFacts = { ...this.cutoverFacts, older };
 
     const records = await store.records();
-    const work =
-      this.legacyFacts.legacy > 0 || records.some((record) => isPending(record, config.serverId));
+    const work = older > 0 || records.some((record) => isPending(record, config.serverId));
     if (!base || (!work && !this.describeNext)) return this.refresh();
     if (!isDue(this.server, context)) {
       this.retryServerLater(context);
@@ -414,21 +412,15 @@ export class Engine implements LifestatsSync {
     const { serverId } = description;
     if (serverId !== config.serverId) await store.setServerId(serverId);
 
-    let held = new Set<BookKey>();
-    if (legacyDb && this.init.legacy) {
-      const drained = await drainLegacy(
-        legacyDb,
-        {
-          provision: () => provisionLegacy(this.env.fetch, base),
-          send: (event) => postLegacyEvent(this.env.fetch, base, event)
-        },
-        this.init.legacy.dayOf
+    let held: ReadonlySet<BookKey> = new Set();
+    if (this.cutover) {
+      const report = await this.cutover.run(
+        { fetch: this.env.fetch, base, serverId, context, random: this.env.random },
+        (book) => store.rearm((record) => record.book === book)
       );
-      if (drained.kind !== 'delivered') return this.serverFailed(drained, context);
-      const claimed = await this.claimLegacyBooks(store, base, serverId);
-      if (!(claimed instanceof Set)) return this.serverFailed(claimed, context);
-      held = claimed;
-      await this.updateLegacyFacts(store, 0, serverId);
+      if ('kind' in report) return this.serverFailed(report, context);
+      held = report.held;
+      this.cutoverFacts = { older: report.pending, blockedBooks: report.blocked };
     }
 
     const due = (await store.records())
@@ -451,58 +443,6 @@ export class Engine implements LifestatsSync {
     }
     this.server = ready;
     await this.refresh();
-  }
-
-  /** After the drain is empty: binds each legacy item to its book's content key. */
-  private async claimLegacyBooks(
-    store: SyncStore,
-    base: ServerUrl,
-    serverId: ServerId
-  ): Promise<Set<BookKey> | FailedAttempt> {
-    const held = new Set<BookKey>();
-    for (const claim of await store.claims()) {
-      if (claim.ackedBy === serverId || claim.missing) continue;
-      if (claim.problem) {
-        if (claim.book) held.add(claim.book);
-        continue;
-      }
-      const local = await this.init.library.book(claim.readerDataId);
-      const identity = local && (await this.identityFor(local));
-      if (!local || !identity) {
-        await store.putClaim({ ...claim, missing: true });
-        continue;
-      }
-      const outcome = await putLegacyBook(this.env.fetch, base, claim.readerDataId, {
-        book: identity.key,
-        title: local.title,
-        length: identity.length
-      });
-      if (outcome.kind === 'retryable') return outcome;
-      if (outcome.kind === 'delivered') {
-        await store.putClaim({ ...claim, book: identity.key, ackedBy: serverId, problem: null });
-        await store.rearm((record) => record.book === identity.key);
-      } else {
-        await store.putClaim({ ...claim, book: identity.key, problem: outcome.problem });
-        held.add(identity.key);
-      }
-    }
-    return held;
-  }
-
-  private async updateLegacyFacts(
-    store: SyncStore,
-    rows: number,
-    serverId: ServerId | null
-  ): Promise<void> {
-    const claims = await store.claims();
-    const open = claims.filter((claim) => claim.ackedBy !== serverId && !claim.missing);
-    this.legacyFacts = {
-      legacy: rows + open.length,
-      missingLegacyBooks: claims
-        .filter((claim) => claim.missing)
-        .map((claim) => claim.readerDataId),
-      claimProblem: open.find((claim) => claim.problem)?.problem ?? null
-    };
   }
 
   private async serverFailed(outcome: FailedAttempt, context: DeliveryContext): Promise<void> {
@@ -542,7 +482,7 @@ export class Engine implements LifestatsSync {
         serverId: config.serverId,
         server: this.server,
         lastDeliveredAt,
-        ...this.legacyFacts
+        ...this.cutoverFacts
       })
     );
   }
