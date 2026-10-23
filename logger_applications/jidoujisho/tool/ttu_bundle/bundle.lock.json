@@ -1,20 +1,17 @@
 {
   "buildProfile": {
     "command": "pnpm svelte-kit sync && pnpm build",
-    "compatibilityCommit": "ea68f0c87b83e6c0d18063d3d4b49d3e96cc3b40",
-    "compatibilityPatch": "legacy-embedded.patch",
-    "compatibilityPatchHash": "d2be06bc8e9a348399f6f5fb5336e77b25e3cbb195adcaf5d62e67ca66c5656c",
     "env": {
       "VITE_SERVICE_WORKER": "off",
       "VITE_STATIC_ROUTE_SUFFIX": ".html"
     },
     "name": "embedded"
   },
-  "commit": "ea68f0c87b83e6c0d18063d3d4b49d3e96cc3b40",
+  "commit": "77eb41c12c5c6f222472ebcfc307735459def8a0",
   "dirty": false,
   "path": "logger_applications/ebook-reader",
   "repository": "https://github.com/btrkeks/lifestats.git",
-  "sourceHash": "62a0fccaced4f382a9e5a57060e8bad955747468488c3df85dde4f0324768977",
+  "sourceHash": "296e19e9fad635a158ae032527debf7e0a56fea561c1dbef75ba25668b7039c2",
   "toolchain": {
     "image": "node:20.11.1-bookworm-slim@sha256:357deca6eb61149534d32faaf5e4b2e4fa3549c2be610ee1019bf340ea8c51ec",
     "node": "20.11.1",
