@@ -31,3 +31,18 @@ Back up the private keystore directory securely, including `release.jks` and
 `key.properties`. Losing the key means future updates require uninstalling the
 app and losing its local data. Keep the directory mode 700 and signing files
 mode 600. Never commit signing material.
+
+Verify saved release APKs before installation. Obtain the expected public SHA-256
+certificate fingerprint from the backed-up keystore or the release report.
+
+```sh
+python3 tool/android/verify_release.py --certificate-sha256 EXPECTED_SHA256 /path/to/arm64.apk /path/to/x64.apk
+```
+
+The check rejects a different package, a debuggable APK, a different signer, or
+reader asset drift. Its JSON contains the APK hashes and absolute paths.
+For emulator verification, the shared harness accepts `JIDOUJISHO_PACKAGE` with
+`com.btrkeks.jidoujisho` or the old test package. The daily old package is excluded.
+The launcher component is
+`com.btrkeks.jidoujisho/app.arianneorpilla.yuuna.MainActivity`.
+Hold the shared emulator lock and always use an explicit emulator serial.
