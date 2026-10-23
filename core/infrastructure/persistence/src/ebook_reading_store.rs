@@ -203,11 +203,6 @@ fn ensure_book(
     title: &BookTitle,
     length: NonZeroU64,
 ) -> Result<(i32, SpanSet, bool), EbookError> {
-    for legacy in unbound_legacy_items(conn)? {
-        if item_title(&legacy)? == *title {
-            return Err(EbookError::LegacyAdoptionPending);
-        }
-    }
     let old = read_book(conn, book)?;
     if old
         .as_ref()
@@ -217,6 +212,13 @@ fn ensure_book(
     }
     if let Some(item) = old.as_ref().and_then(|b| b.progress_item_id) {
         return Ok((item, decode_spans(&old.unwrap().legacy_spans)?, false));
+    }
+    // Only an unbound key can be a legacy book's text; a bound key already has its item. A
+    // legacy title this API cannot parse can never match, so it must not fail the request.
+    for legacy in unbound_legacy_items(conn)? {
+        if item_title(&legacy).is_ok_and(|legacy| legacy == *title) {
+            return Err(EbookError::LegacyAdoptionPending);
+        }
     }
     let item = create_item(conn, book, title, length.get())?;
     let restored = old.is_some();

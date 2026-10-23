@@ -48,8 +48,10 @@ and seeds `[0,F)` as legacy spans. Seeding changes no statistic values.
 Repeated claims with the same identity return 204. Conflicting bindings fail.
 If no legacy item exists, the claim records the key for a new item.
 
-Before adoption, a day report whose title matches an unbound legacy item fails
-with `legacy_adoption_pending`. A different book can sync normally.
+Before adoption, a day report for a key with no item yet, whose title matches an
+unbound legacy item, fails with `legacy_adoption_pending`. A key that already has
+an item never waits, and a legacy title the API cannot parse never matches. A
+different book can sync normally.
 The legacy POST `/integrations/ebook/events` and POST `/integrations/ebook` stay
 available for one release so the laptop can drain old events exactly once.
 

@@ -681,6 +681,33 @@ async fn adoption_seeds_transaction_time_furthest_without_credit_and_unblocks_ph
 }
 
 #[tokio::test]
+async fn adoption_gate_holds_only_unbound_keys_and_skips_unparsable_legacy_titles() {
+    let f = fixture();
+    put(&f, P2, MON, &body(json!([[0, 100]]))).await;
+    legacy_event(&f, "late-v7", 100, 80).await;
+    put(&f, P2, TUE, &body(json!([[100, 200]]))).await;
+    let r = f
+        .server
+        .put(&path(P2, &key('b'), TUE))
+        .json(&body(json!([[0, 50]])))
+        .await;
+    r.assert_status(StatusCode::CONFLICT);
+    assert_eq!(
+        r.json::<Value>()["error"]["code"],
+        "legacy_adoption_pending"
+    );
+
+    f.server.post("/integrations/ebook/events").json(&json!({"event_id":"long-title","date":MON,"metric":"characters_read","delta":10,"book_id":2,"book_title":"x".repeat(1001),"confirmed_position_after":10,"book_target_characters":10000})).await.assert_status_ok();
+    let mut other = body(json!([[0, 50]]));
+    other["title"] = json!("Other");
+    f.server
+        .put(&path(P2, &key('c'), TUE))
+        .json(&other)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
 async fn adoption_failure_rolls_back_tags_binding_prefix_and_statistic() {
     let f = fixture();
     legacy_event(&f, "queued", 100, 80).await;
