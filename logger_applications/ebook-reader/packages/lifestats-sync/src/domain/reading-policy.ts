@@ -9,6 +9,12 @@ import { SpanSet } from './span-set';
 /** About 2.5 times fast native Japanese reading. Holding a page key cannot outrun it. */
 export const READING_SPEED_CAP = 40;
 
+/**
+ * One large screen of text, and ttu's default skip threshold. The budget never banks more, so
+ * a large threshold cannot turn a long dwell into a credited jump.
+ */
+export const BUDGET_CAP = 2700;
+
 export interface ReadingPolicy {
   /** ttu's `trackerForwardSkipThreshold`. A single larger step is a skip and never counts. */
   readonly forwardSkipThreshold: number;
@@ -17,7 +23,7 @@ export interface ReadingPolicy {
 /** Per-session position trail. Lives in memory only. */
 export interface Trail {
   readonly anchor: { readonly position: number; readonly atMs: number } | null;
-  /** Characters that may still be credited, refilled by elapsed time up to the skip threshold. */
+  /** Characters that may still be credited, refilled by elapsed time up to `BUDGET_CAP`. */
   readonly budget: number;
 }
 
@@ -31,16 +37,16 @@ export type Step =
       readonly trail: Trail;
     };
 
-function refilled(trail: Trail, atMs: number, policy: ReadingPolicy): number {
-  if (!trail.anchor) return Math.min(trail.budget, policy.forwardSkipThreshold);
+function refilled(trail: Trail, atMs: number): number {
+  if (!trail.anchor) return Math.min(trail.budget, BUDGET_CAP);
   const elapsedSeconds = Math.max(0, atMs - trail.anchor.atMs) / 1000;
-  return Math.min(policy.forwardSkipThreshold, trail.budget + elapsedSeconds * READING_SPEED_CAP);
+  return Math.min(BUDGET_CAP, trail.budget + elapsedSeconds * READING_SPEED_CAP);
 }
 
 /** User-driven movement: credits a forward step that is neither a skip nor faster than the cap. */
 export function observe(trail: Trail, position: number, atMs: number, policy: ReadingPolicy): Step {
-  if (!trail.anchor) return relocate(trail, position, atMs, policy);
-  const budget = refilled(trail, atMs, policy);
+  if (!trail.anchor) return relocate(trail, position, atMs);
+  const budget = refilled(trail, atMs);
   const from = trail.anchor.position;
   const moved = (reason: 'backward' | 'skip' | 'too_fast'): Step => ({
     kind: 'moved',
@@ -59,16 +65,11 @@ export function observe(trail: Trail, position: number, atMs: number, policy: Re
 }
 
 /** Programmatic movement (open, restore, resize, navigation): moves the anchor, never credits. */
-export function relocate(
-  trail: Trail,
-  position: number,
-  atMs: number,
-  policy: ReadingPolicy
-): Step {
+export function relocate(trail: Trail, position: number, atMs: number): Step {
   return {
     kind: 'moved',
     reason: 'anchored',
-    trail: { anchor: { position, atMs }, budget: refilled(trail, atMs, policy) }
+    trail: { anchor: { position, atMs }, budget: refilled(trail, atMs) }
   };
 }
 

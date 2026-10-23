@@ -6,14 +6,26 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { emptyTrail, observe, release, relocate, type Step, type Trail } from './reading-policy';
+import {
+  BUDGET_CAP,
+  emptyTrail,
+  observe,
+  release,
+  relocate,
+  type Step,
+  type Trail
+} from './reading-policy';
 import { SpanSet } from './span-set';
 
 const policy = { forwardSkipThreshold: 2700 };
 const second = 1000;
 
 /** Replays [kind, position, seconds] and returns every credited span merged. */
-function replay(moves: ['observe' | 'relocate' | 'release', number, number][], start = emptyTrail) {
+function replay(
+  moves: ['observe' | 'relocate' | 'release', number, number][],
+  start = emptyTrail,
+  rules = policy
+) {
   let trail: Trail = start;
   let credited = SpanSet.empty;
   const steps: Step[] = [];
@@ -22,12 +34,10 @@ function replay(moves: ['observe' | 'relocate' | 'release', number, number][], s
       trail = release(trail);
       continue;
     }
-    const step = (kind === 'observe' ? observe : relocate)(
-      trail,
-      position,
-      seconds * second,
-      policy
-    );
+    const step =
+      kind === 'observe'
+        ? observe(trail, position, seconds * second, rules)
+        : relocate(trail, position, seconds * second);
     if (step.kind === 'read') credited = credited.union(step.spans);
     steps.push(step);
     trail = step.trail;
@@ -81,6 +91,19 @@ describe('reading policy', () => {
     const { credited } = replay(moves);
     expect(credited.size).toBeLessThanOrEqual(2700 + 10 * 40);
     expect(credited.size).toBeGreaterThan(0);
+  });
+
+  it('banks at most a fixed budget, whatever the skip threshold', () => {
+    const { credited, trail } = replay(
+      [
+        ['observe', 0, 0],
+        ['observe', 50_000, 3600]
+      ],
+      emptyTrail,
+      { forwardSkipThreshold: 100_000 }
+    );
+    expect(credited.size).toBe(0);
+    expect(trail.budget).toBe(BUDGET_CAP);
   });
 
   it('credits nothing for backward movement, then reading forward from there', () => {

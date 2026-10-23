@@ -377,6 +377,63 @@ describe('recording', () => {
     expect((await storedSpans(r.name)).toPairs()).toEqual([[5000, 5300]]);
   });
 
+  it('credits nothing for a programmatic move whose position arrives late', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    binding.observe(1000);
+    r.clock.advance(70);
+    r.engine.relocate();
+    r.clock.advance(0.9);
+    binding.observe(3000);
+    r.clock.advance(10);
+    binding.observe(3300);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[3000, 3300]]);
+  });
+
+  it('credits a page turned right after a programmatic move settled', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    binding.observe(1000);
+    r.clock.advance(30);
+    r.engine.relocate();
+    r.clock.advance(0.05);
+    binding.observe(1000);
+    r.clock.advance(0.45);
+    binding.observe(1400);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[1000, 1400]]);
+  });
+
+  it('credits a page turned long after a relocation that left the position unchanged', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    binding.observe(1000);
+    r.clock.advance(5);
+    r.engine.relocate();
+    r.clock.advance(30);
+    binding.observe(1300);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[1000, 1300]]);
+  });
+
+  it('credits no jump within a large skip threshold after a long dwell', async () => {
+    const long = '猫'.repeat(120_000);
+    const r = await open(new FakeServer(), dbName(), { books: [book(1, long)] });
+    const binding = r.engine.reader({ forwardSkipThreshold: () => 100_000 });
+    binding.setBook(book(1, long));
+    await r.engine.flush();
+    binding.observe(0);
+    r.clock.advance(3600);
+    binding.observe(50_000);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([]);
+  });
+
   it('credits the first page turned after opening a book', async () => {
     const r = await open(new FakeServer());
     const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });

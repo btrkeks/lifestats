@@ -75,7 +75,7 @@ export interface ReaderOptions {
 /** One per reader page. All calls are cheap and synchronous; storage happens behind them. */
 export interface ReaderBinding {
   setBook(book: LocalBook | null): void;
-  /** Every position change. Within a moment of `relocate()`, it only moves the anchor. */
+  /** Every position change. The first one after `relocate()` only moves the anchor. */
   observe(position: number): void;
   close(): Promise<void>;
 }

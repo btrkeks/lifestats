@@ -38,8 +38,14 @@ import { LegacyCutover } from '../legacy/cutover';
 import { openSyncStore, type SyncStore } from '../store/sync-db';
 import { describeServer, putDay } from '../wire/http';
 
-/** How long after `relocate()` positions only move the anchor. Covers layout and scroll restore. */
-export const SETTLE_MS = 750;
+/**
+ * After `relocate()` the reader's next position is the move's result, however slowly a section
+ * loads. A move that left the position unchanged reports nothing, so after this long the next
+ * position is the user's again.
+ */
+export const RELOCATION_TIMEOUT_MS = 10_000;
+/** Positions this soon after a move's first one belong to the same move. */
+export const COALESCE_MS = 300;
 export const DELIVERY_DELAY_MS = 1_000;
 export const IDLE_PASS_MS = 30_000;
 export const STORAGE_RETRY_MS = 5_000;
@@ -124,7 +130,6 @@ export class Engine implements LifestatsSync {
   private timer: unknown = null;
   private timerAt = Infinity;
   private refreshing: unknown = null;
-  private settleUntil = 0;
   private readonly cutover: LegacyCutover | null;
   private cutoverFacts: CutoverFacts = { older: 0, blockedBooks: [] };
   private closed = false;
@@ -169,7 +174,8 @@ export class Engine implements LifestatsSync {
   }
 
   relocate(): void {
-    this.settleUntil = this.env.now() + SETTLE_MS;
+    const atMs = this.env.now();
+    this.bindings.forEach((binding) => binding.relocating(atMs));
   }
 
   async configure(raw: string | null): Promise<ConfigureResult> {
@@ -252,10 +258,6 @@ export class Engine implements LifestatsSync {
 
   now(): number {
     return this.env.now();
-  }
-
-  settling(atMs: number): boolean {
-    return atMs < this.settleUntil;
   }
 
   unbind(binding: Binding): void {
@@ -517,6 +519,10 @@ class Binding implements ReaderBinding {
   private unkeyed: { spans: SpanSet; position: number; atMs: number }[] = [];
   /** The reader reports a position only when it changes, often before the book is known. */
   private lastPosition: number | null = null;
+  private relocation:
+    | { readonly kind: 'awaiting'; readonly since: number }
+    | { readonly kind: 'coalescing'; readonly until: number }
+    | null = null;
 
   constructor(
     private readonly engine: Engine,
@@ -533,7 +539,7 @@ class Binding implements ReaderBinding {
     this.trail =
       this.lastPosition === null
         ? emptyTrail
-        : relocate(emptyTrail, this.lastPosition, this.engine.now(), this.policy()).trail;
+        : relocate(emptyTrail, this.lastPosition, this.engine.now()).trail;
     this.unkeyed = [];
     this.engine.openBook.set(null);
     this.book = local && { local, identity: undefined, failed: false };
@@ -573,12 +579,10 @@ class Binding implements ReaderBinding {
       return;
     }
     const atMs = this.engine.now();
-    const settling = this.engine.settling(atMs);
     this.lastPosition = position;
-    const policy = this.policy();
-    const step = settling
-      ? relocate(this.trail, position, atMs, policy)
-      : observe(this.trail, position, atMs, policy);
+    const step = this.programmatic(atMs)
+      ? relocate(this.trail, position, atMs)
+      : observe(this.trail, position, atMs, this.policy());
     this.trail = step.trail;
     this.emit(step.kind === 'read' ? step.spans : SpanSet.empty, position, atMs);
   }
@@ -598,8 +602,26 @@ class Binding implements ReaderBinding {
 
   /** Reading resumes from wherever the reader is now, from this moment. */
   show(): void {
+    this.relocation = null;
     if (this.lastPosition === null) return;
-    this.trail = relocate(this.trail, this.lastPosition, this.engine.now(), this.policy()).trail;
+    this.trail = relocate(this.trail, this.lastPosition, this.engine.now()).trail;
+  }
+
+  relocating(atMs: number): void {
+    this.relocation = { kind: 'awaiting', since: atMs };
+  }
+
+  /** Whether the position observed at `atMs` comes from a programmatic move. */
+  private programmatic(atMs: number): boolean {
+    const relocation = this.relocation;
+    if (!relocation) return false;
+    if (relocation.kind === 'awaiting' && atMs - relocation.since <= RELOCATION_TIMEOUT_MS) {
+      this.relocation = { kind: 'coalescing', until: atMs + COALESCE_MS };
+      return true;
+    }
+    if (relocation.kind === 'coalescing' && atMs < relocation.until) return true;
+    this.relocation = null;
+    return false;
   }
 
   async close(): Promise<void> {
