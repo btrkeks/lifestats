@@ -1,1 +1,0 @@
-import{_ as n,a as p}from"./error-handler.CksEQt_q.js";import{m as o}from"./store.BWH6E3JV.js";var t=Array.isArray;function i(a,r){return t(r)?a.apply(void 0,n([],p(r))):a(r)}function y(a){return o(function(r){return i(a,r)})}export{y as m};
