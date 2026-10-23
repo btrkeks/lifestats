@@ -80,7 +80,7 @@
     showCharacterCounter$,
     trackerForwardSkipThreshold$
   } from '$lib/data/store';
-  import { relocateReading, startSync, toLocalBook } from '$lib/lifestats/sync';
+  import { relocateReading, startReader, toLocalBook } from '$lib/lifestats/sync';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
   import BookReaderProgressBar from '$lib/components/book-reader/book-reader-progress-bar.svelte';
@@ -207,7 +207,7 @@
   });
   const queuedReaderImageGalleryPictures = new Map<string, boolean>();
   const lifestatsReader = browser
-    ? startSync().reader({ forwardSkipThreshold: () => $trackerForwardSkipThreshold$ })
+    ? startReader({ forwardSkipThreshold: () => $trackerForwardSkipThreshold$ })
     : undefined;
 
   const bookId$ = iffBrowser(() => readableToObservable(page)).pipe(

@@ -574,9 +574,6 @@ class Binding implements ReaderBinding {
     }
     const atMs = this.engine.now();
     const settling = this.engine.settling(atMs);
-    // ttu reports 0 while it lays out a new section, so a page turn into the next section is
-    // not a move back to the start. Programmatic moves to 0 still re-anchor.
-    if (position === 0 && !settling && (this.trail.anchor?.position ?? 0) > 0) return;
     this.lastPosition = position;
     const policy = this.policy();
     const step = settling

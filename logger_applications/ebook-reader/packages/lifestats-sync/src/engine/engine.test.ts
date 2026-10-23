@@ -390,18 +390,22 @@ describe('recording', () => {
     expect((await storedSpans(r.name)).toPairs()).toEqual([[0, 700]]);
   });
 
-  it('credits a page turn into the next section despite the layout reset to 0', async () => {
-    const r = await open(new FakeServer());
-    const binding = await readerFor(r);
-    read(r, binding, 2000, 2600);
+  it('credits reading from 0 after a skip far ahead and a return to the start', async () => {
+    const long = '猫'.repeat(120_000);
+    const r = await open(new FakeServer(), dbName(), { books: [book(1, long)] });
+    const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });
+    binding.setBook(book(1, long));
+    await r.engine.flush();
+    binding.observe(0);
+    r.clock.advance(10);
+    binding.observe(100_000);
     r.clock.advance(10);
     binding.observe(0);
-    binding.observe(2900);
     r.clock.advance(10);
-    binding.observe(3200);
+    binding.observe(80);
     await r.engine.flush();
 
-    expect((await storedSpans(r.name)).toPairs()).toEqual([[2000, 3200]]);
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[0, 80]]);
   });
 
   it('credits the first page read after the page comes back from hidden', async () => {
