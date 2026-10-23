@@ -23,6 +23,8 @@ export function problemText(problem: DeliveryProblem, onPhone = embedded): strin
       return `The Lifestats server at ${problem.serverUrl} has no reading API yet. Update Lifestats.`;
     case 'rejected':
       return `Lifestats rejected this reading: ${problem.message} (${problem.code}). It stays on this device.`;
+    case 'untrackable':
+      return `This book cannot be tracked yet: ${problem.message} Its reading waits on this device; Retry now tries again.`;
     case 'not_in_library':
       return 'It is no longer in this library. Claim it with curl, using its key from another device.';
     default: {

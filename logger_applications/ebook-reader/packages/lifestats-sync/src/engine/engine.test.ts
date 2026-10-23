@@ -6,7 +6,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { ReaderBinding, SyncStatus } from '../api';
+import type { LocalBook, ReaderBinding, SyncStatus } from '../api';
 import { bookIdentity } from '../domain/book-key';
 import type { BookKey, ReadingDay } from '../domain/ids';
 import { SpanSet } from '../domain/span-set';
@@ -85,6 +85,19 @@ async function readerFor(r: Rig) {
   binding.setBook(book(1, TEXT));
   await r.engine.flush();
   return binding;
+}
+
+/** Its first `countedText()` throws, as a failed parse or digest would. */
+function flaky(local: LocalBook): LocalBook {
+  let calls = 0;
+  return {
+    ...local,
+    countedText() {
+      calls += 1;
+      if (calls === 1) throw new Error('parse failed');
+      return local.countedText();
+    }
+  };
 }
 
 describe('delivery', () => {
@@ -433,6 +446,27 @@ describe('recording', () => {
     ]);
   });
 
+  it('keeps the reading of a book whose key failed to resolve until Retry now', async () => {
+    const server = new FakeServer();
+    const r = await open(server);
+    await configure(r);
+    const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });
+    binding.setBook(flaky(book(1, TEXT)));
+    await r.engine.flush();
+    read(r, binding, 0, 900);
+    await r.engine.drain(5_000);
+
+    expect(server.credited(await key())).toBe(0);
+    expect(status(r)).toMatchObject({
+      kind: 'blocked',
+      blockedBooks: [{ title: 'Book 1', problem: { kind: 'untrackable', message: 'parse failed' } }]
+    });
+
+    await r.engine.retryNow();
+    expect(server.credited(await key())).toBe(900);
+    expect(status(r)).toMatchObject({ kind: 'synced', blockedBooks: [] });
+  });
+
   it('reports storage failure and keeps the reading for the next commit', async () => {
     const r = await open(new FakeServer());
     const binding = await readerFor(r);
@@ -612,6 +646,16 @@ describe('legacy v7 rows', () => {
       book_target_characters: 300
     });
     expect(status(r).kind).toBe('synced');
+  });
+
+  it('claims a legacy book whose key failed to resolve once, without marking it missing', async () => {
+    const server = new FakeServer();
+    const r = await open(server, dbName(), { legacy: v7Source(), books: [flaky(book(1, TEXT))] });
+    await configure(r);
+    await r.engine.drain(5_000);
+
+    expect(server.claims.has(1)).toBe(true);
+    expect(status(r)).toMatchObject({ kind: 'synced', blockedBooks: [] });
   });
 
   it('reports a legacy book that left the library and still drains its rows', async () => {

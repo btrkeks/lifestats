@@ -29,6 +29,7 @@ import {
   type FailedAttempt
 } from '../domain/delivery-policy';
 import { readingDayOf, type BookKey, type ProducerId } from '../domain/ids';
+import { untrackable } from '../domain/problem';
 import { emptyTrail, observe, release, relocate, type Trail } from '../domain/reading-policy';
 import { parseServerUrl, type ServerUrl } from '../domain/server-url';
 import { SpanSet } from '../domain/span-set';
@@ -109,6 +110,8 @@ export class Engine implements LifestatsSync {
   private readonly buffer = new Map<string, DayObservation>();
   private readonly bindings = new Set<Binding>();
   private readonly identities = new Map<string, Promise<BookIdentity | undefined>>();
+  /** Open books whose key failed to resolve, by local id. */
+  private readonly untrackable = new Map<number, BlockedBook>();
   /** Book keys still resolving for open readers; their positions wait in the reader. */
   private readonly resolving = new Set<Promise<unknown>>();
   private readonly disposers: (() => void)[] = [];
@@ -199,6 +202,8 @@ export class Engine implements LifestatsSync {
     const { store } = await this.opened;
     await store.rearm();
     await this.cutover?.rearm();
+    this.bindings.forEach((binding) => binding.retry());
+    await this.flush();
     this.server = ready;
     this.describeNext = true;
     await this.deliver();
@@ -268,10 +273,18 @@ export class Engine implements LifestatsSync {
     const key = `${book.localId}:${book.modified}`;
     let identity = this.identities.get(key);
     if (!identity) {
-      identity = this.resolveIdentity(book).catch(() => undefined);
+      identity = this.resolveIdentity(book);
       this.identities.set(key, identity);
+      identity.catch(() => this.identities.delete(key));
     }
     return identity;
+  }
+
+  /** Whether `book`'s key resolved, for the status. */
+  resolved(book: LocalBook, error: unknown | null): void {
+    if (error === null) this.untrackable.delete(book.localId);
+    else this.untrackable.set(book.localId, { title: book.title, problem: untrackable(error) });
+    this.refreshSoon();
   }
 
   private async resolveIdentity(book: LocalBook): Promise<BookIdentity | undefined> {
@@ -288,7 +301,8 @@ export class Engine implements LifestatsSync {
       })
     );
     const identity = await bookIdentity(text);
-    if (identity) await store.putIdentity(book.localId, book.modified, identity);
+    // A failed cache write costs only a recomputation next time.
+    if (identity) await store.putIdentity(book.localId, book.modified, identity).catch(() => {});
     return identity;
   }
 
@@ -482,16 +496,23 @@ export class Engine implements LifestatsSync {
         serverId: config.serverId,
         server: this.server,
         lastDeliveredAt,
-        ...this.cutoverFacts
+        older: this.cutoverFacts.older,
+        blockedBooks: [...this.cutoverFacts.blockedBooks, ...this.untrackable.values()]
       })
     );
   }
 }
 
+interface CurrentBook {
+  readonly local: LocalBook;
+  /** `undefined` while resolving or after a failure; `null` for a book with no countable text. */
+  identity: BookIdentity | null | undefined;
+  failed: boolean;
+}
+
 class Binding implements ReaderBinding {
   private trail: Trail = emptyTrail;
-  private book: { readonly local: LocalBook; identity: BookIdentity | null | undefined } | null =
-    null;
+  private book: CurrentBook | null = null;
   private unkeyed: { spans: SpanSet; position: number; atMs: number }[] = [];
   /** The reader reports a position only when it changes, often before the book is known. */
   private lastPosition: number | null = null;
@@ -514,23 +535,33 @@ class Binding implements ReaderBinding {
         : relocate(emptyTrail, this.lastPosition, this.engine.now(), this.policy()).trail;
     this.unkeyed = [];
     this.engine.openBook.set(null);
-    if (!local) {
-      this.book = null;
-      return;
-    }
-    const current: { readonly local: LocalBook; identity: BookIdentity | null | undefined } = {
-      local,
-      identity: undefined
-    };
-    this.book = current;
-    const resolution = this.engine.identityFor(local).then((identity) => {
-      if (this.book !== current) return;
-      current.identity = identity ?? null;
-      if (identity) this.engine.openBook.set({ title: local.title, ...identity });
-      const queued = this.unkeyed;
-      this.unkeyed = [];
-      queued.forEach(({ spans, position, atMs }) => this.emit(spans, position, atMs));
-    });
+    this.book = local && { local, identity: undefined, failed: false };
+    if (this.book) this.resolve(this.book);
+  }
+
+  /** Retry now: resolves a key that failed, keeping the reading observed meanwhile. */
+  retry(): void {
+    if (this.book?.failed) this.resolve(this.book);
+  }
+
+  private resolve(current: CurrentBook): void {
+    current.failed = false;
+    const resolution = this.engine.identityFor(current.local).then(
+      (identity) => {
+        if (this.book !== current) return;
+        this.engine.resolved(current.local, null);
+        current.identity = identity ?? null;
+        if (identity) this.engine.openBook.set({ title: current.local.title, ...identity });
+        const queued = this.unkeyed;
+        this.unkeyed = [];
+        queued.forEach(({ spans, position, atMs }) => this.emit(spans, position, atMs));
+      },
+      (error: unknown) => {
+        if (this.book !== current) return;
+        current.failed = true;
+        this.engine.resolved(current.local, error);
+      }
+    );
     this.engine.track(resolution);
   }
 

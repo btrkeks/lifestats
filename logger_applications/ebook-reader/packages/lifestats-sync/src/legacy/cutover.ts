@@ -17,7 +17,7 @@ import {
   type FailedAttempt
 } from '../domain/delivery-policy';
 import { isServerId, type BookKey, type ServerId } from '../domain/ids';
-import type { DeliveryProblem } from '../domain/problem';
+import { untrackable, type DeliveryProblem } from '../domain/problem';
 import type { ServerUrl } from '../domain/server-url';
 import { postLegacyEvent, provisionLegacy, putLegacyBook, type LegacyEvent } from '../wire/http';
 
@@ -146,13 +146,23 @@ export class LegacyCutover {
       const receipt = receipts.get(id);
       if (ackedBy(receipt, serverId)) continue;
       const local = await this.library.book(readerDataId);
-      const identity = local && (await this.identityFor(local).catch(() => undefined));
       const rejection = rejected.get(readerDataId);
-      if (!local || !identity) {
+      if (!local) {
         blocked.push({
           title: titles.get(readerDataId) ?? `ttu book ${readerDataId}`,
           problem: rejection ?? { kind: 'not_in_library', readerDataId }
         });
+        continue;
+      }
+      let identity: BookIdentity | undefined;
+      try {
+        identity = await this.identityFor(local);
+      } catch (error) {
+        blocked.push({ title: local.title, problem: untrackable(error) });
+        continue;
+      }
+      if (!identity) {
+        blocked.push({ title: local.title, problem: untrackable('It has no countable text.') });
         continue;
       }
       const hold = (problem: DeliveryProblem | null) => {
