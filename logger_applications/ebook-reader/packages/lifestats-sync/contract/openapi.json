@@ -1,0 +1,449 @@
+{
+  "components": {
+    "schemas": {
+      "EbookDayRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "last_position": {
+            "format": "int64",
+            "maximum": 9007199254740992,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "length": {
+            "format": "int64",
+            "maximum": 9007199254740992,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "spans": {
+            "description": "Normalized half-open [start,end) pairs, 0 <= start < end <= length; sorted, disjoint and non-adjacent.",
+            "items": {
+              "items": {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "maxItems": 4096,
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": ["title", "length", "spans", "last_position", "observed_at"],
+        "type": "object"
+      },
+      "EbookDescriptor": {
+        "properties": {
+          "protocol": {
+            "format": "int32",
+            "maximum": 1,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "server_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["server_id", "protocol"],
+        "type": "object"
+      },
+      "EbookLegacyBookRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "book_key": {
+            "pattern": "^ttu-text-v1:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "length": {
+            "format": "int64",
+            "maximum": 9007199254740992,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": ["book_key", "title", "length"],
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "field": {
+            "type": ["string", "null"]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["code", "message"],
+        "type": "object"
+      },
+      "ErrorCode": {
+        "enum": [
+          "invalid_field",
+          "unsupported_media_type",
+          "malformed_json",
+          "invalid_body",
+          "projection_overflow",
+          "bundle_conflict",
+          "storage_error",
+          "legacy_binding_conflict",
+          "legacy_adoption_pending",
+          "book_length_mismatch"
+        ],
+        "type": "string"
+      },
+      "ErrorEnvelope": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": ["error"],
+        "type": "object"
+      },
+      "YomikataDayRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cards_reviewed": {
+            "format": "int64",
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "study_time_seconds": {
+            "description": "Exact engaged seconds. Existing study_minutes projects seconds / 60.",
+            "format": "int64",
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["cards_reviewed", "study_time_seconds"],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "title": "Lifestats integrations API",
+    "version": "2"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/integrations/ebook": {
+      "get": {
+        "operationId": "descriptor",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EbookDescriptor"
+                }
+              }
+            },
+            "description": "Persistent database identity and ebook protocol version"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": ["ebook"]
+      }
+    },
+    "/integrations/ebook/legacy-books/{reader_data_id}": {
+      "put": {
+        "operationId": "put_legacy_book",
+        "parameters": [
+          {
+            "description": "ttu data.id used by the pre-2026-10 event API",
+            "in": "path",
+            "name": "reader_data_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EbookLegacyBookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Bound (or already bound to the same key)"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed JSON or unreadable body"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bound to another key, title mismatch, or book already bound to another item"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid path or field"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Storage failed without committing"
+          }
+        },
+        "tags": ["ebook"]
+      }
+    },
+    "/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}": {
+      "put": {
+        "operationId": "put_day",
+        "parameters": [
+          {
+            "description": "Canonical lowercase UUID of the reporting ttu origin",
+            "in": "path",
+            "name": "producer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ttu-text-v1: followed by 64 lowercase hex characters",
+            "in": "path",
+            "name": "book_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Strict YYYY-MM-DD reading day (client local, 04:00 rollover), from 2026-10-01 to two days after the server local date",
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EbookDayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Merged (or already contained) and every projection committed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed JSON or unreadable body"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bundle conflict, book length mismatch, or legacy adoption pending"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid path or field, or aggregate overflow"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Storage failed without committing"
+          }
+        },
+        "tags": ["ebook"]
+      }
+    },
+    "/integrations/yomikata/days/{day}": {
+      "put": {
+        "operationId": "replace_day",
+        "parameters": [
+          {
+            "description": "Strict valid YYYY-MM-DD calendar date",
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YomikataDayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Daily totals and both projections committed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed JSON or unreadable body"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Ambiguous or invalid legacy bundle"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid date, field, or aggregate overflow"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Storage failed without committing"
+          }
+        },
+        "tags": ["yomikata"]
+      }
+    }
+  }
+}

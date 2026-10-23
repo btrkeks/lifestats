@@ -1,0 +1,4 @@
+error ../../node_modules/.pnpm/idb@8.0.0/node_modules/idb/build/entry.d.ts TS2430: Interface 'TypedDOMStringList<T>' incorrectly extends interface 'DOMStringList'.
+error ../../node_modules/.pnpm/vite@5.4.8_@types+node@20.16.9_sass@1.79.3/node_modules/vite/dist/node/index.d.ts TS2307: Cannot find module 'rollup/parseAst' or its corresponding type declarations.
+error src/lib/data/database/books-db/versions/books-db.ts TS1284: An 'export default' must reference a value when 'verbatimModuleSyntax' is enabled, but 'BooksDb' only refers to a type.
+error src/lib/functions/file-loaders/epub/generate-epub-html.ts TS2322: Type 'HTMLBodyElement | null' is not assignable to type 'HTMLElement'.

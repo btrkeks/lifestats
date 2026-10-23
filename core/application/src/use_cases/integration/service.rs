@@ -1,4 +1,9 @@
+use lifestats_core::ebook::{
+    BookKey, BookTitle, EbookDayReport, EbookError, EbookReadingStore, EbookWriteOutcome,
+    ProducerId,
+};
 use std::collections::HashMap;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use super::bundle_factory::BundleFactory;
@@ -24,6 +29,22 @@ const EBOOK_METRIC_CHARACTERS_READ: &str = "characters_read";
 /// This trait allows for dependency injection and testability.
 #[cfg_attr(test, automock)]
 pub trait IntegrationServiceTrait: Send + Sync {
+    fn ebook_server_id(&self) -> Result<String, EbookError>;
+    fn record_ebook_day(
+        &self,
+        producer: ProducerId,
+        book: BookKey,
+        day: NaiveDate,
+        report: EbookDayReport,
+    ) -> Result<EbookWriteOutcome, EbookError>;
+    fn bind_legacy_ebook_book(
+        &self,
+        reader_data_id: u32,
+        book: BookKey,
+        title: BookTitle,
+        length: NonZeroU64,
+    ) -> Result<EbookWriteOutcome, EbookError>;
+
     fn replace_yomikata_day(
         &self,
         day: NaiveDate,
@@ -83,6 +104,7 @@ pub struct EbookEventIngestionResult {
 /// This service ensures that multiple calls with the same source and context
 /// return the same statistic IDs without creating duplicates.
 pub struct IntegrationService {
+    ebook_reading_store: Option<Arc<dyn EbookReadingStore>>,
     yomikata_day_store: Option<Arc<dyn lifestats_core::yomikata::YomikataDayStore>>,
     repository: Arc<dyn StatisticRepository + Send + Sync>,
     factories: HashMap<String, Arc<dyn BundleFactory>>,
@@ -105,12 +127,27 @@ impl IntegrationService {
             .collect();
 
         Self {
+            ebook_reading_store: None,
             yomikata_day_store: None,
             repository,
             factories: factories_map,
             ebook_event_store,
             ebook_progress_service,
         }
+    }
+
+    pub fn with_ebook_reading_store(mut self, store: Arc<dyn EbookReadingStore>) -> Self {
+        self.ebook_reading_store = Some(store);
+        self
+    }
+    fn ebook_store(&self) -> Result<&dyn EbookReadingStore, EbookError> {
+        self.ebook_reading_store.as_deref().ok_or_else(|| {
+            EbookError::Storage(
+                lifestats_core::shared::ports::error::RepositoryError::OperationFailed(
+                    anyhow::anyhow!("Ebook reading store is not configured"),
+                ),
+            )
+        })
     }
 
     pub fn with_yomikata_day_store(
@@ -211,6 +248,40 @@ fn day_time_frames(date: NaiveDate, workouts: &[LiftLogWorkout]) -> TimeFrameLis
 }
 
 impl IntegrationServiceTrait for IntegrationService {
+    fn ebook_server_id(&self) -> Result<String, EbookError> {
+        self.ebook_store()?.server_id()
+    }
+    fn record_ebook_day(
+        &self,
+        producer: ProducerId,
+        book: BookKey,
+        day: NaiveDate,
+        report: EbookDayReport,
+    ) -> Result<EbookWriteOutcome, EbookError> {
+        self.ebook_store()?.record_day(
+            producer,
+            book,
+            day,
+            report,
+            super::ebook_bundle_factory::EbookBundleFactory::definitions(),
+        )
+    }
+    fn bind_legacy_ebook_book(
+        &self,
+        reader_data_id: u32,
+        book: BookKey,
+        title: BookTitle,
+        length: NonZeroU64,
+    ) -> Result<EbookWriteOutcome, EbookError> {
+        self.ebook_store()?.bind_legacy_book(
+            reader_data_id,
+            book,
+            title,
+            length,
+            super::ebook_bundle_factory::EbookBundleFactory::definitions(),
+        )
+    }
+
     fn replace_yomikata_day(
         &self,
         day: NaiveDate,

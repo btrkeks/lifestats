@@ -6,16 +6,21 @@
 
 import { isNodeGaiji } from './is-node-gaiji';
 
+/** Stands for one gaiji image in counted text. The filter below removes it from real text. */
+export const gaijiPlaceholder = '\uFFFC';
+
 export function getCharacterCount(node: Node) {
-  return isNodeGaiji(node) ? 1 : getRawCharacterCount(node);
+  return countUnicodeCharacters(getCountedText(node));
 }
 
 const isNotJapaneseRegex =
   /[^0-9A-Z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]+/gimu;
 
-function getRawCharacterCount(node: Node) {
-  if (!node.textContent) return 0;
-  return countUnicodeCharacters(node.textContent.replace(isNotJapaneseRegex, ''));
+/** The characters of `node` that the counter counts, in order. */
+export function getCountedText(node: Node) {
+  if (isNodeGaiji(node)) return gaijiPlaceholder;
+  if (!node.textContent) return '';
+  return node.textContent.replace(isNotJapaneseRegex, '');
 }
 
 /**

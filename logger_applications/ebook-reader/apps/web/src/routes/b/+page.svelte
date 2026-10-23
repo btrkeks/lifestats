@@ -80,6 +80,7 @@
     showCharacterCounter$,
     trackerForwardSkipThreshold$
   } from '$lib/data/store';
+  import { relocateReading, startReader, toLocalBook } from '$lib/lifestats/sync';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
   import BookReaderProgressBar from '$lib/components/book-reader/book-reader-progress-bar.svelte';
@@ -110,11 +111,8 @@
     currentDbVersion,
     type BooksDbBookData,
     type BooksDbBookmarkData,
-    type BooksDbEbookSyncState,
     type BooksDbStatistic
   } from '$lib/data/database/books-db/versions/books-db';
-  import { LifestatsSyncAdapter } from '$lib/data/lifestats/lifestats-sync-adapter';
-  import { ReadingProgressTracker } from '$lib/data/lifestats/reading-progress-tracker';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath } from '$lib/data/env';
   import { DB_VERSION, PAGE_CHANGE, SKIPKEYLISTENER, SYNCED } from '$lib/data/events';
@@ -208,17 +206,9 @@
     syncedResolver = resolver;
   });
   const queuedReaderImageGalleryPictures = new Map<string, boolean>();
-  const ebookSyncAdapter = browser ? new LifestatsSyncAdapter(database) : undefined;
-
-  let ebookProgressTracker: ReadingProgressTracker | undefined;
-  let ebookSyncDataId: number | undefined;
-  let ebookSyncBookTitle = '';
-  let ebookSyncInitializedForDataId: number | undefined;
-  let ebookSyncTickInterval: ReturnType<typeof setInterval> | undefined;
-  let ebookSyncFlushInterval: ReturnType<typeof setInterval> | undefined;
-  let ebookTrackerWasPaused = false;
-  let ebookTrackerWasFrozen = false;
-  let ebookLastTickAt = 0;
+  const lifestatsReader = browser
+    ? startReader({ forwardSkipThreshold: () => $trackerForwardSkipThreshold$ })
+    : undefined;
 
   const bookId$ = iffBrowser(() => readableToObservable(page)).pipe(
     map((pageObj) => Number(pageObj.url.searchParams.get('id'))),
@@ -498,15 +488,14 @@
     externalStorageHandler &&
     ($autoReplication$ === AutoReplicationType.Up || $autoReplication$ === AutoReplicationType.All);
 
+  $: lifestatsReader?.setBook($rawBookData$ ? toLocalBook($rawBookData$) : null);
+
+  $: lifestatsReader?.observe(exploredCharCount);
+
   $: bookmarkData.then((data) => {
     hasBookmarkData = !!data;
     storedExploredCharacter = data?.exploredCharCount || 0;
   });
-
-  $: if (browser && $rawBookData$?.id && ebookSyncInitializedForDataId !== $rawBookData$.id) {
-    ebookSyncInitializedForDataId = $rawBookData$.id;
-    void initializeEbookSync($rawBookData$);
-  }
 
   /** Experimental Code - May be removed any time without warning */
 
@@ -514,19 +503,7 @@
     document.dispatchEvent(new CustomEvent(SKIPKEYLISTENER, { detail: $skipKeyDownListener$ }));
   }
 
-  onMount(() => {
-    document.addEventListener('ttu-action', handleAction, false);
-
-    ebookLastTickAt = Date.now();
-    ebookSyncTickInterval = setInterval(() => {
-      void runEbookProgressTrackerTick().catch(({ message }: any) => {
-        logger.warn(`Error updating ebook sync tracker: ${message}`);
-      });
-    }, 1000);
-    ebookSyncFlushInterval = setInterval(() => {
-      void flushEbookSyncQueue();
-    }, 15000);
-  });
+  onMount(() => document.addEventListener('ttu-action', handleAction, false));
 
   function handleAction({ detail }: any) {
     if (!detail.type) {
@@ -554,15 +531,8 @@
       document.removeEventListener('ttu-action', handleAction, false);
     }
 
-    if (ebookSyncTickInterval) {
-      clearInterval(ebookSyncTickInterval);
-    }
-
-    if (ebookSyncFlushInterval) {
-      clearInterval(ebookSyncFlushInterval);
-    }
-
     readerImageGalleryPictures$.next([]);
+    void lifestatsReader?.close();
   });
 
   function handleUnload(event: BeforeUnloadEvent) {
@@ -579,199 +549,6 @@
     }
 
     return event;
-  }
-
-  function getReadingProgressTrackerConfig() {
-    const suspiciousForwardJumpThreshold = $trackerForwardSkipThreshold$ || 400;
-
-    return {
-      suspiciousForwardJumpThreshold,
-      jumpDwellSeconds: 15,
-      jumpConfirmationForwardChars: Math.max(120, Math.floor(suspiciousForwardJumpThreshold / 5))
-    };
-  }
-
-  function trackerSyncShouldPause() {
-    return $statisticsEnabled$ ? $isTrackerPaused$ : false;
-  }
-
-  function getObservedEbookTrackerPosition() {
-    return $statisticsEnabled$ && frozenPosition !== -1 ? frozenPosition : exploredCharCount;
-  }
-
-  async function initializeEbookSync(bookData: BooksDbBookData) {
-    if (!ebookSyncAdapter) {
-      return;
-    }
-
-    const bookmark = await database.getBookmark(bookData.id);
-    const existingSyncState = await database.getEbookSyncState(bookData.id);
-    const initialPosition =
-      existingSyncState?.currentPosition ??
-      existingSyncState?.confirmedPosition ??
-      existingSyncState?.lastFlushedPosition ??
-      bookmark?.exploredCharCount ??
-      0;
-
-    ebookProgressTracker = new ReadingProgressTracker(
-      existingSyncState
-        ? {
-            currentPosition: existingSyncState.currentPosition,
-            confirmedPosition: existingSyncState.confirmedPosition,
-            lastFlushedPosition: existingSyncState.lastFlushedPosition,
-            pendingJump: existingSyncState.pendingJump,
-            diagnosticReason: existingSyncState.diagnosticReason
-          }
-        : {
-            currentPosition: initialPosition,
-            confirmedPosition: initialPosition,
-            lastFlushedPosition: initialPosition
-          },
-      getReadingProgressTrackerConfig()
-    );
-    ebookSyncDataId = bookData.id;
-    ebookSyncBookTitle = bookData.title;
-    ebookLastTickAt = Date.now();
-    ebookTrackerWasPaused = trackerSyncShouldPause();
-    ebookTrackerWasFrozen = $statisticsEnabled$ && frozenPosition !== -1;
-
-    if (ebookTrackerWasPaused) {
-      ebookProgressTracker.pause();
-    }
-
-    if (ebookTrackerWasFrozen) {
-      ebookProgressTracker.freeze(frozenPosition);
-    }
-
-    await persistEbookSyncState();
-    logger.info('Initialized lifestats ebook sync tracker', {
-      dataId: bookData.id,
-      title: bookData.title,
-      initialPosition,
-      currentPosition: ebookProgressTracker.snapshot().currentPosition,
-      confirmedPosition: ebookProgressTracker.snapshot().confirmedPosition,
-      lastFlushedPosition: ebookProgressTracker.snapshot().lastFlushedPosition,
-      statisticsEnabled: $statisticsEnabled$,
-      paused: ebookTrackerWasPaused,
-      frozen: ebookTrackerWasFrozen
-    });
-    void ebookSyncAdapter.ensureBundle().catch(() => {});
-    void flushEbookSyncQueue();
-  }
-
-  function buildEbookSyncState(
-    currentDataId: number,
-    lastSnapshot = ebookProgressTracker?.snapshot()
-  ): BooksDbEbookSyncState | undefined {
-    if (!ebookSyncAdapter || !lastSnapshot) {
-      return undefined;
-    }
-
-    return ebookSyncAdapter.buildSyncState(currentDataId, lastSnapshot);
-  }
-
-  async function persistEbookSyncState() {
-    if (!ebookSyncAdapter || ebookSyncDataId === undefined) {
-      return;
-    }
-
-    const syncState = buildEbookSyncState(ebookSyncDataId);
-    if (!syncState) {
-      return;
-    }
-
-    await ebookSyncAdapter.persistState(syncState);
-  }
-
-  function syncEbookTrackerState() {
-    if (!ebookProgressTracker) {
-      return;
-    }
-
-    const shouldPause = trackerSyncShouldPause();
-    if (shouldPause !== ebookTrackerWasPaused) {
-      ebookTrackerWasPaused = shouldPause;
-
-      if (shouldPause) {
-        ebookProgressTracker.pause();
-      } else {
-        ebookProgressTracker.resumeAt(getObservedEbookTrackerPosition());
-      }
-    }
-
-    const isFrozen = $statisticsEnabled$ && frozenPosition !== -1;
-    if (isFrozen !== ebookTrackerWasFrozen || (isFrozen && frozenPosition !== exploredCharCount)) {
-      ebookTrackerWasFrozen = isFrozen;
-
-      if (isFrozen) {
-        ebookProgressTracker.freeze(frozenPosition);
-      } else {
-        ebookProgressTracker.unfreeze();
-      }
-    }
-  }
-
-  async function runEbookProgressTrackerTick() {
-    if (!ebookProgressTracker || !ebookSyncAdapter || ebookSyncDataId === undefined) {
-      return;
-    }
-
-    syncEbookTrackerState();
-
-    const now = Date.now();
-    const elapsedSeconds = Math.max(1, Math.round((now - ebookLastTickAt) / 1000));
-    ebookLastTickAt = now;
-
-    if (trackerSyncShouldPause()) {
-      await persistEbookSyncState();
-      return;
-    }
-
-    const snapshot = ebookProgressTracker.tick(elapsedSeconds, exploredCharCount, now);
-
-    if (snapshot.flushableCharacters > 0) {
-      const queueEntry = ebookSyncAdapter.createQueueEntry(
-        ebookSyncDataId,
-        getDateKey($startDayHoursForTracker$),
-        snapshot.flushableCharacters,
-        snapshot.confirmedPosition,
-        bookCharCount,
-        ebookSyncBookTitle
-      );
-      const syncState = ebookSyncAdapter.buildSyncState(ebookSyncDataId, {
-        ...snapshot,
-        lastFlushedPosition: snapshot.confirmedPosition,
-        flushableCharacters: 0,
-        diagnosticReason: 'queued_flushable_delta'
-      });
-
-      await ebookSyncAdapter.persistConfirmedDelta(syncState, queueEntry);
-      logger.info('Queued lifestats ebook sync delta', {
-        dataId: ebookSyncDataId,
-        dateKey: queueEntry.dateKey,
-        delta: queueEntry.delta,
-        confirmedPositionAfter: queueEntry.confirmedPositionAfter,
-        bookTargetCharacters: queueEntry.bookTargetCharacters,
-        diagnosticReason: snapshot.diagnosticReason
-      });
-      ebookProgressTracker.markFlushed(snapshot.confirmedPosition);
-      void flushEbookSyncQueue();
-      return;
-    }
-
-    await persistEbookSyncState();
-  }
-
-  async function flushEbookSyncQueue(force = false) {
-    if (!ebookSyncAdapter || (!$isOnline$ && !force)) {
-      return;
-    }
-
-    try {
-      await ebookSyncAdapter.flushQueue(force);
-    } catch ({ message }: any) {
-      logger.warn(`Error flushing ebook sync queue: ${message}`);
-    }
   }
 
   function trackerSingleClickHandler() {
@@ -841,6 +618,8 @@
 
       return;
     }
+
+    lifestatsReader?.reachedEnd();
 
     dialogManager.dialogs$.next([
       {
@@ -1471,9 +1250,6 @@
         }
       }
 
-      await persistEbookSyncState();
-      await flushEbookSyncQueue(true);
-
       dialogManager.dialogs$.next([]);
 
       if (upSyncEnabled) {
@@ -1606,6 +1382,8 @@
   }
 
   function pauseTracker(restartAfterCharacterChange = false) {
+    relocateReading();
+
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       wasTrackerPaused = false;
       $isTrackerPaused$ = true;

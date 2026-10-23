@@ -7,6 +7,7 @@
     type SectionWithProgress
   } from '$lib/components/book-reader/book-toc/book-toc';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
+  import { relocateReading } from '$lib/lifestats/sync';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { isStoredFont } from '$lib/data/fonts';
   import { FuriganaStyle } from '$lib/data/furigana-style';
@@ -237,6 +238,7 @@
     updateSectionProgress();
   }
 
+  /** Experimental Code - May be removed any time without warning */
   onMount(() => document.addEventListener('ttu-action', handleAction, false));
 
   function handleAction({ detail }: any) {
@@ -331,6 +333,7 @@
       rect
     };
   }
+  /** Experimental Code - May be removed any time without warning */
 
   onDestroy(() => {
     document.removeEventListener('ttu-action', handleAction, false);
@@ -361,8 +364,11 @@
         calculator.getScrollPosByCharCount(prevIntendedCharCount) +
         (verticalMode ? customReadingPointScrollOffset : -customReadingPointScrollOffset);
       isResizeScroll = true;
+      relocateReading();
       pageManagerConcrete.scrollTo(scrollPos);
     });
+
+  combineLatest([width$, height$]).pipe(skip(1), takeUntil(destroy$)).subscribe(relocateReading);
 
   function updateCustomReadingPointPosition() {
     if (!$customReadingPointEnabled$ || !contentEl) {
@@ -408,6 +414,7 @@
   }
 
   function onContentDisplayChange(_calculator: CharacterStatsCalculator) {
+    relocateReading();
     _calculator.updateParagraphPos();
     updateCustomReadingPointPosition();
     exploredCharCount = _calculator.calcExploredCharCount(customReadingPointScrollOffset);
@@ -539,6 +546,7 @@
 
   function onHtmlLoad() {
     if (!contentEl) return;
+    relocateReading();
 
     calculator = new CharacterStatsCalculator(
       contentEl,
@@ -586,6 +594,7 @@
   }
 
   nextChapter$.pipe(takeUntil(destroy$)).subscribe((chapterId) => {
+    relocateReading();
     let targetElement = document.getElementById(chapterId);
 
     if (!targetElement) {

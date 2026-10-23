@@ -11,6 +11,7 @@ import {
   type SectionWithProgress
 } from '$lib/components/book-reader/book-toc/book-toc';
 import type { PageManager } from '../types';
+import { readingReachedEnd } from '$lib/lifestats/sync';
 
 export class PageManagerPaginated implements PageManager {
   private translateX = 0;
@@ -151,7 +152,10 @@ export class PageManagerPaginated implements PageManager {
 
   private nextSection(isUser: boolean) {
     const nextPage = this.sectionIndex$.getValue() + 1;
-    if (nextPage >= this.sections.length) return false;
+    if (nextPage >= this.sections.length) {
+      readingReachedEnd();
+      return false;
+    }
 
     this.updateSectionIndex(nextPage).subscribe(() => {
       this.scrollToPos(0, isUser);

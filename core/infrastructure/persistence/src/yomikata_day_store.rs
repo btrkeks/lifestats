@@ -189,7 +189,8 @@ fn resolve_metric(
                 current.unwrap_or(0),
                 0,
                 metric.projection(row.totals()?),
-            )?;
+            )
+            .map_err(YomikataDayError::from)?;
             if current != Some(new) {
                 SqliteStatisticRepository::write_integer(conn, id, day, new).map_err(storage)?;
                 changed = true;
@@ -244,7 +245,8 @@ impl YomikataDayStore for SqliteStatisticRepository {
                     current.unwrap_or(0),
                     old_projection,
                     metric.projection(totals),
-                )?;
+                )
+                .map_err(YomikataDayError::from)?;
                 if current != Some(new) {
                     SqliteStatisticRepository::write_integer(conn, id, day, new)
                         .map_err(storage)?;

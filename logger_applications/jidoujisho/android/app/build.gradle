@@ -1,0 +1,152 @@
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+if (flutterRoot == null) {
+    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+def releaseKeyPropertiesFile = new File(System.getenv('JIDOUJISHO_KEY_PROPERTIES') ?:
+        "${System.getProperty('user.home')}/.local/share/keystores/jidoujisho/key.properties")
+def releaseKeyProperties = new Properties()
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+if (releaseKeyPropertiesFile.isFile()) {
+    releaseKeyPropertiesFile.withInputStream { releaseKeyProperties.load(it) }
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { name ->
+        if (!releaseKeyProperties.getProperty(name)) {
+            throw new GradleException("Release signing requires ${name} in ${releaseKeyPropertiesFile}")
+        }
+    }
+    def releaseStore = new File(releaseKeyProperties.getProperty('storeFile'))
+    if (!releaseStore.isAbsolute() || !releaseStore.isFile()) {
+        throw new GradleException("Release signing storeFile must be an existing absolute path in ${releaseKeyPropertiesFile}")
+    }
+} else if (releaseRequested) {
+    throw new GradleException("Release signing key missing: ${releaseKeyPropertiesFile}. Restore the personal key backup or set JIDOUJISHO_KEY_PROPERTIES to an absolute key.properties path.")
+}
+
+android {
+    compileSdkVersion 34
+    ndkVersion '21.4.7075529'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId "com.btrkeks.jidoujisho"
+        minSdkVersion 24
+        targetSdkVersion 32
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+    }
+
+    signingConfigs {
+        release {
+            if (releaseKeyPropertiesFile.isFile()) {
+                storeFile new File(releaseKeyProperties.getProperty('storeFile'))
+                storePassword releaseKeyProperties.getProperty('storePassword')
+                keyAlias releaseKeyProperties.getProperty('keyAlias')
+                keyPassword releaseKeyProperties.getProperty('keyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+      release {
+         minifyEnabled true
+         signingConfig signingConfigs.release
+      }
+
+      debug {
+        
+      }
+   }
+
+    packagingOptions {
+       // Fixes duplicate libraries build issue, 
+       // when your project uses more than one plugin that depend on C++ libs.
+        pickFirst 'lib/**/libc++_shared.so'
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def appName = "jidoujisho_yuuna"
+            def buildType = variant.buildType.name
+            def architecture = output.getFilter(com.android.build.OutputFile.ABI)
+            def newName
+
+            if ("${architecture}" == "arm64-v8a") {
+                architecture = "arm64"
+            } else if ("${architecture}" == "armeabi-v7a") {
+                architecture = "armeabi"
+            }
+
+            if ("${architecture}" == "null") {
+                if (buildType == 'debug') {
+                    newName = "${appName}_${defaultConfig.versionName}-debug.apk"
+                } else {
+                    newName = "${appName}_${defaultConfig.versionName}.apk"
+                }
+                
+                output.versionCodeOverride = (100 * project.android.defaultConfig.versionCode)
+            } else {
+                if (buildType == 'debug') {
+                    newName = "${appName}_${defaultConfig.versionName}-${architecture}-debug.apk"
+                } else {
+                    newName = "${appName}_${defaultConfig.versionName}-${architecture}.apk"
+                }
+
+                def offset
+                if (architecture == "armeabi") {
+                    offset = 1
+                } else if (architecture == "arm64") {
+                    offset = 2
+                } else if (architecture == "x86_64") {
+                    offset = 3
+                }
+
+                outputFileName = newName
+                output.versionCodeOverride = (100 * project.android.defaultConfig.versionCode) + offset
+            }
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    implementation 'com.github.ankidroid:Anki-Android:2.17alpha14'
+    implementation 'com.github.umair13adil:RxLogs:v1.0.18'
+}

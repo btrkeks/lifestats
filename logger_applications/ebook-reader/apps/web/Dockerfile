@@ -6,6 +6,7 @@ RUN npm install -g pnpm@9.15.9
 
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-*.yaml ./
+COPY packages ./packages
 
 WORKDIR /workspace/apps/web
 COPY apps/web/package.json ./

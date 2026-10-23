@@ -1,0 +1,19 @@
+{
+  "buildProfile": {
+    "command": "pnpm svelte-kit sync && pnpm build",
+    "env": {
+      "VITE_SERVICE_WORKER": "off",
+      "VITE_STATIC_ROUTE_SUFFIX": ".html"
+    },
+    "name": "embedded"
+  },
+  "dirty": false,
+  "generation": "f73281f26f5d-b152b562ca0d1270",
+  "path": "../ebook-reader",
+  "sourceHash": "9186c45a66130b41995f5cf1c4dafb2826ed838c61965aa84e5404d75d60fa89",
+  "toolchain": {
+    "image": "node:20.11.1-bookworm-slim@sha256:357deca6eb61149534d32faaf5e4b2e4fa3549c2be610ee1019bf340ea8c51ec",
+    "node": "20.11.1",
+    "pnpm": "9.15.9"
+  }
+}

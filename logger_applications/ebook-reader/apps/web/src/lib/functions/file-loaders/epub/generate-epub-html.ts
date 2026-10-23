@@ -140,7 +140,7 @@ export default function generateEpubHtml(
     }
 
     let parsedContent = parser.parseFromString(data[htmlHref] as string, 'text/html');
-    let body: HTMLElement | null = parsedContent.body;
+    let body = parsedContent.body;
 
     if (!body?.childNodes?.length) {
       parsedContent = parser.parseFromString(data[htmlHref] as string, 'text/xml');
@@ -151,11 +151,10 @@ export default function generateEpubHtml(
       }
     }
 
-    const resolvedBody = body;
     const htmlClass = parsedContent.querySelector('html')?.className || '';
-    const bodyId = resolvedBody.id || '';
-    const bodyClass = resolvedBody.className || '';
-    let innerHtml = resolvedBody.innerHTML || '';
+    const bodyId = body.id || '';
+    const bodyClass = body.className || '';
+    let innerHtml = body.innerHTML || '';
 
     blobLocations.forEach((blobLocation) => {
       innerHtml = innerHtml.replaceAll(

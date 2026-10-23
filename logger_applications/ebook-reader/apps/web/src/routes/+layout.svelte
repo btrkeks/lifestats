@@ -1,6 +1,9 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
+  import BooksDbBlockedBanner from '$lib/components/books-db-blocked-banner.svelte';
+  import LifestatsBanner from '$lib/lifestats/lifestats-banner.svelte';
+  import { startSync } from '$lib/lifestats/sync';
   import DomainHint from '$lib/components/domain-hint.svelte';
   import { basePath, clearConsoleOnReload } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
@@ -9,6 +12,8 @@
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
   import { MetaTags } from 'svelte-meta-tags';
   import '../app.scss';
+
+  if (browser) startSync();
 
   let path = '';
   let dialogs: Dialog[] = [];
@@ -135,3 +140,9 @@
 <span style={`font-family: ${$fontFamilyGroupOne$ || 'Noto Serif JP'}`} />
 
 <DomainHint />
+
+<BooksDbBlockedBanner />
+
+{#if browser}
+  <LifestatsBanner />
+{/if}
