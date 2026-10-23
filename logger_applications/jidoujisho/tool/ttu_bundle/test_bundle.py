@@ -74,6 +74,15 @@ class BundleVerificationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'commit'):
             self.verify()
 
+    def test_matching_dirty_lock_and_provenance_fail_verification(self):
+        self.verify()
+        for file in [self.lock, self.assets / 'BUNDLE_SOURCE.json']:
+            data = json.loads(file.read_text())
+            data['dirty'] = True
+            file.write_text(bundle.encoded(data))
+        with self.assertRaisesRegex(ValueError, 'clean pinned source'):
+            self.verify()
+
     def test_host_contracts_reject_worker_auth_and_live_default(self):
         reader = self.assets / '_app/reader.js'
         initial = reader.read_text()

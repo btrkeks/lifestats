@@ -79,8 +79,10 @@ def check_output(root, profile):
     print(f'Host contracts passed, generation {version}', flush=True)
 
 
-def verify():
+def verify(*, allow_dirty=False):
     lock = json.loads(LOCK.read_text())
+    if lock['dirty'] and not allow_dirty:
+        raise ValueError('Verification requires clean pinned source; regenerate from a clean checkout')
     source = json.loads((ASSETS / 'BUNDLE_SOURCE.json').read_text())
     for key in ['repository', 'commit', 'dirty', 'sourceHash', 'buildProfile', 'toolchain']:
         if source[key] != lock[key]:
@@ -174,7 +176,7 @@ def build(args):
             subprocess.run(['rsync', '-a', '--delete', str(output) + '/', str(ASSETS) + '/'], check=True)
             (YUUNA / 'pubspec.yaml').write_text(pubspec)
             LOCK.write_text(encoded(lock))
-            verify()
+            verify(allow_dirty=True)
 
 
 def main():
