@@ -25,6 +25,25 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
+def releaseKeyPropertiesFile = new File(System.getenv('JIDOUJISHO_KEY_PROPERTIES') ?:
+        "${System.getProperty('user.home')}/.local/share/keystores/jidoujisho/key.properties")
+def releaseKeyProperties = new Properties()
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+if (releaseKeyPropertiesFile.isFile()) {
+    releaseKeyPropertiesFile.withInputStream { releaseKeyProperties.load(it) }
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { name ->
+        if (!releaseKeyProperties.getProperty(name)) {
+            throw new GradleException("Release signing requires ${name} in ${releaseKeyPropertiesFile}")
+        }
+    }
+    def releaseStore = new File(releaseKeyProperties.getProperty('storeFile'))
+    if (!releaseStore.isAbsolute() || !releaseStore.isFile()) {
+        throw new GradleException("Release signing storeFile must be an existing absolute path in ${releaseKeyPropertiesFile}")
+    }
+} else if (releaseRequested) {
+    throw new GradleException("Release signing key missing: ${releaseKeyPropertiesFile}. Restore the personal key backup or set JIDOUJISHO_KEY_PROPERTIES to an absolute key.properties path.")
+}
+
 android {
     compileSdkVersion 34
     ndkVersion '21.4.7075529'
@@ -50,10 +69,21 @@ android {
         versionName flutterVersionName
     }
 
+    signingConfigs {
+        release {
+            if (releaseKeyPropertiesFile.isFile()) {
+                storeFile new File(releaseKeyProperties.getProperty('storeFile'))
+                storePassword releaseKeyProperties.getProperty('storePassword')
+                keyAlias releaseKeyProperties.getProperty('keyAlias')
+                keyPassword releaseKeyProperties.getProperty('keyPassword')
+            }
+        }
+    }
+
     buildTypes {
       release {
          minifyEnabled true
-         signingConfig signingConfigs.debug
+         signingConfig signingConfigs.release
       }
 
       debug {
