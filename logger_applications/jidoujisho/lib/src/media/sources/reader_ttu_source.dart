@@ -660,11 +660,20 @@ return navigator.serviceWorker.controller === null && generation === ${jsonEncod
 
   Future<void> _drainThenDispose(HeadlessInAppWebView webView) async {
     try {
-      await webView.webViewController
-          ?.callAsyncJavaScript(
-            functionBody: 'return await globalThis.ttuLifestats?.drain(4000);',
-          )
-          .timeout(const Duration(seconds: 5));
+      await webView.webViewController?.callAsyncJavaScript(
+        functionBody: '''
+const deadline = performance.now() + 4000;
+while (performance.now() < deadline) {
+  const sync = globalThis.ttuLifestats;
+  if (sync) {
+    const result = await sync.drain(Math.max(1, deadline - performance.now()));
+    if (result === 'idle' || result === 'timeout') return result;
+  }
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+return 'pending';
+''',
+      ).timeout(const Duration(seconds: 5));
     } catch (error) {
       debugPrint('Reader headless drain deferred: $error');
     } finally {
