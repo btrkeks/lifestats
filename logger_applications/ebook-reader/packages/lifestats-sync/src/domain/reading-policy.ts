@@ -72,7 +72,7 @@ export function relocate(
   };
 }
 
-/** The page went hidden: the next position after it returns re-anchors without credit. */
+/** Drops the anchor and keeps the budget, until `relocate` sets a new anchor. */
 export function release(trail: Trail): Trail {
   return { anchor: null, budget: trail.budget };
 }

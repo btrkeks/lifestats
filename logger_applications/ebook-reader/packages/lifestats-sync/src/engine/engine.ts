@@ -308,9 +308,10 @@ export class Engine implements LifestatsSync {
 
   private onPage(event: PageEvent): void {
     if (event === 'hidden') {
+      this.bindings.forEach((binding) => binding.hide());
       this.schedule(0);
     } else if (event === 'visible') {
-      this.bindings.forEach((binding) => binding.release());
+      this.bindings.forEach((binding) => binding.show());
       this.schedule(DELIVERY_DELAY_MS);
     } else {
       this.describeNext = true;
@@ -566,7 +567,11 @@ class Binding implements ReaderBinding {
   }
 
   observe(position: number): void {
-    if (!Number.isFinite(position) || position < 0 || this.engine.hidden()) return;
+    if (!Number.isFinite(position) || position < 0) return;
+    if (this.engine.hidden()) {
+      this.lastPosition = position;
+      return;
+    }
     const atMs = this.engine.now();
     const settling = this.engine.settling(atMs);
     // ttu reports 0 while it lays out a new section, so a page turn into the next section is
@@ -589,8 +594,15 @@ class Binding implements ReaderBinding {
     };
   }
 
-  release(): void {
+  /** Hidden time is not reading time, so it neither credits nor refills the budget. */
+  hide(): void {
     this.trail = release(this.trail);
+  }
+
+  /** Reading resumes from wherever the reader is now, from this moment. */
+  show(): void {
+    if (this.lastPosition === null) return;
+    this.trail = relocate(this.trail, this.lastPosition, this.engine.now(), this.policy()).trail;
   }
 
   async close(): Promise<void> {

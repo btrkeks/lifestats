@@ -404,7 +404,23 @@ describe('recording', () => {
     expect((await storedSpans(r.name)).toPairs()).toEqual([[2000, 3200]]);
   });
 
-  it('ignores positions while the page is hidden and re-anchors when it returns', async () => {
+  it('credits the first page read after the page comes back from hidden', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    read(r, binding, 0, 600);
+    r.page.emit('hidden');
+    r.clock.advance(120);
+    r.page.emit('visible');
+    r.clock.advance(10);
+    binding.observe(900);
+    r.clock.advance(10);
+    binding.observe(1200);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[0, 1200]]);
+  });
+
+  it('credits nothing that moved while the page was hidden', async () => {
     const r = await open(new FakeServer());
     const binding = await readerFor(r);
     read(r, binding, 0, 600);
@@ -412,15 +428,13 @@ describe('recording', () => {
     r.clock.advance(10);
     binding.observe(900);
     r.page.emit('visible');
-    r.clock.advance(600);
-    binding.observe(3000);
     r.clock.advance(10);
-    binding.observe(3300);
+    binding.observe(1200);
     await r.engine.flush();
 
     expect((await storedSpans(r.name)).toPairs()).toEqual([
       [0, 600],
-      [3000, 3300]
+      [900, 1200]
     ]);
   });
 
