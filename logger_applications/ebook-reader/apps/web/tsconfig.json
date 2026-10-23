@@ -4,10 +4,9 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "target": "ESNext",
     "module": "ES2022",
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "strict": true,
     "noImplicitReturns": true,
-    "allowSyntheticDefaultImports": true,
-    "skipLibCheck": true
+    "allowSyntheticDefaultImports": true
   }
 }

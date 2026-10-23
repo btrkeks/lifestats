@@ -7,8 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
-    "check:types": "tsc --noEmit",
+    "check": "node ../../scripts/upstream-baseline.mjs svelte-check",
+    "check:types": "node ../../scripts/upstream-baseline.mjs tsc",
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
     "test:e2e": "playwright test"
   },

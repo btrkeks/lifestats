@@ -1633,6 +1633,8 @@
   </div>
 {/if}
 
+<BookReaderProgressBar {exploredCharCount} {bookCharCount} />
+
 <div
   id="ttu-page-footer"
   tabindex="0"
@@ -1729,5 +1731,3 @@
     }
   }}
 />
-
-<BookReaderProgressBar {exploredCharCount} {bookCharCount} />

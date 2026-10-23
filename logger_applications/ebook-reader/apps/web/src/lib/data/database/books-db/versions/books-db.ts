@@ -19,4 +19,4 @@ export type BooksDbSubtitleData = BooksDb['subtitle']['value'];
 export type BooksDbHandle = BooksDb['handle']['value'];
 export const currentDbVersion = 6;
 
-export type { BooksDb as default };
+export default BooksDb;

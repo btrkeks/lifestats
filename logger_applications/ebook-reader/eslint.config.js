@@ -53,9 +53,12 @@ module.exports = tseslint.config(
     }
   },
   {
-    files: ['packages/**'],
+    files: ['packages/**', 'scripts/**'],
     languageOptions: {
-      parserOptions: { project: './packages/*/tsconfig.json', tsconfigRootDir: '.' }
+      parserOptions: {
+        project: ['./packages/*/tsconfig.json', './scripts/tsconfig.json'],
+        tsconfigRootDir: '.'
+      }
     }
   },
   {

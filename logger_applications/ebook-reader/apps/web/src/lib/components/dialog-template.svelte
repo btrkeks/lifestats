@@ -1,5 +1,3 @@
-<script lang="ts"></script>
-
 <section class=" mdc-elevation--z24 rounded bg-white p-6">
   <h2 class="weight-medium mb-5 text-xl"><slot name="header" /></h2>
   <slot name="content" />
