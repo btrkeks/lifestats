@@ -23,7 +23,7 @@ flutter build apk --release --split-per-abi --target-platform android-x64 --no-p
 The builds write `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` and
 `app-x86_64-release.apk`. Always use `--split-per-abi`. Without it, plugin native
 libraries for all four ABIs double the APK to about 560 MB. The version code also
-drops the ABI offset (20000 instead of 20002), so Android refuses it as a
+drops the ABI offset (20100 instead of 20102), so Android refuses it as a
 downgrade over an installed split build. Signing reads the absolute default path
 `~/.local/share/keystores/jidoujisho/key.properties` under the build user's home,
 or the path in `JIDOUJISHO_KEY_PROPERTIES`. Its `storeFile` must be absolute.

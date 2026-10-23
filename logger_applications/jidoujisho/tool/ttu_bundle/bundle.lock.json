@@ -8,9 +8,9 @@
     "name": "embedded"
   },
   "dirty": false,
-  "generation": "f73281f26f5d-b152b562ca0d1270",
+  "generation": "2941ed570665-c3f32dc786775811",
   "path": "../ebook-reader",
-  "sourceHash": "9186c45a66130b41995f5cf1c4dafb2826ed838c61965aa84e5404d75d60fa89",
+  "sourceHash": "2941ed57066542f460f29e243b55a9b0555528ad70919472ea707a300264622f",
   "toolchain": {
     "image": "node:20.11.1-bookworm-slim@sha256:357deca6eb61149534d32faaf5e4b2e4fa3549c2be610ee1019bf340ea8c51ec",
     "node": "20.11.1",
