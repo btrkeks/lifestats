@@ -39,7 +39,13 @@
             "type": "string"
           }
         },
-        "required": ["title", "length", "spans", "last_position", "observed_at"],
+        "required": [
+          "title",
+          "length",
+          "spans",
+          "last_position",
+          "observed_at"
+        ],
         "type": "object"
       },
       "EbookDescriptor": {
@@ -55,29 +61,10 @@
             "type": "string"
           }
         },
-        "required": ["server_id", "protocol"],
-        "type": "object"
-      },
-      "EbookLegacyBookRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "book_key": {
-            "pattern": "^ttu-text-v1:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "length": {
-            "format": "int64",
-            "maximum": 9007199254740992,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "title": {
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
-          }
-        },
-        "required": ["book_key", "title", "length"],
+        "required": [
+          "server_id",
+          "protocol"
+        ],
         "type": "object"
       },
       "ErrorBody": {
@@ -86,13 +73,19 @@
             "$ref": "#/components/schemas/ErrorCode"
           },
           "field": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "message": {
             "type": "string"
           }
         },
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "type": "object"
       },
       "ErrorCode": {
@@ -104,8 +97,7 @@
           "projection_overflow",
           "bundle_conflict",
           "storage_error",
-          "legacy_binding_conflict",
-          "legacy_adoption_pending",
+          "client_upgrade_required",
           "book_length_mismatch"
         ],
         "type": "string"
@@ -116,7 +108,9 @@
             "$ref": "#/components/schemas/ErrorBody"
           }
         },
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "type": "object"
       },
       "YomikataDayRequest": {
@@ -136,7 +130,10 @@
             "type": "integer"
           }
         },
-        "required": ["cards_reviewed", "study_time_seconds"],
+        "required": [
+          "cards_reviewed",
+          "study_time_seconds"
+        ],
         "type": "object"
       }
     }
@@ -176,40 +173,34 @@
             "description": "Storage unavailable"
           }
         },
-        "tags": ["ebook"]
+        "tags": [
+          "ebook"
+        ]
+      },
+      "post": {
+        "operationId": "retired_provision",
+        "responses": {
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Upgrade to the reading spans client"
+          }
+        },
+        "tags": [
+          "ebook"
+        ]
       }
     },
-    "/integrations/ebook/legacy-books/{reader_data_id}": {
-      "put": {
-        "operationId": "put_legacy_book",
-        "parameters": [
-          {
-            "description": "ttu data.id used by the pre-2026-10 event API",
-            "in": "path",
-            "name": "reader_data_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EbookLegacyBookRequest"
-              }
-            }
-          },
-          "required": true
-        },
+    "/integrations/ebook/events": {
+      "post": {
+        "operationId": "retired_events",
         "responses": {
-          "204": {
-            "description": "Bound (or already bound to the same key)"
-          },
-          "400": {
+          "410": {
             "content": {
               "application/json": {
                 "schema": {
@@ -217,50 +208,12 @@
                 }
               }
             },
-            "description": "Malformed JSON or unreadable body"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bound to another key, title mismatch, or book already bound to another item"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unsupported media type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Invalid path or field"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Storage failed without committing"
+            "description": "Upgrade to the reading spans client"
           }
         },
-        "tags": ["ebook"]
+        "tags": [
+          "ebook"
+        ]
       }
     },
     "/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}": {
@@ -327,7 +280,7 @@
                 }
               }
             },
-            "description": "Bundle conflict, book length mismatch, or legacy adoption pending"
+            "description": "Bundle conflict or book length mismatch"
           },
           "415": {
             "content": {
@@ -360,7 +313,9 @@
             "description": "Storage failed without committing"
           }
         },
-        "tags": ["ebook"]
+        "tags": [
+          "ebook"
+        ]
       }
     },
     "/integrations/yomikata/days/{day}": {
@@ -442,7 +397,9 @@
             "description": "Storage failed without committing"
           }
         },
-        "tags": ["yomikata"]
+        "tags": [
+          "yomikata"
+        ]
       }
     }
   }

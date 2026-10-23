@@ -9,14 +9,14 @@ export interface paths {
     };
     get: operations['descriptor'];
     put?: never;
-    post?: never;
+    post: operations['retired_provision'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/integrations/ebook/legacy-books/{reader_data_id}': {
+  '/integrations/ebook/events': {
     parameters: {
       query?: never;
       header?: never;
@@ -24,8 +24,8 @@ export interface paths {
       cookie?: never;
     };
     get?: never;
-    put: operations['put_legacy_book'];
-    post?: never;
+    put?: never;
+    post: operations['retired_events'];
     delete?: never;
     options?: never;
     head?: never;
@@ -85,12 +85,6 @@ export interface components {
       /** Format: uuid */
       server_id: string;
     };
-    EbookLegacyBookRequest: {
-      book_key: string;
-      /** Format: int64 */
-      length: number;
-      title: string;
-    };
     ErrorBody: {
       code: components['schemas']['ErrorCode'];
       field?: string | null;
@@ -105,8 +99,7 @@ export interface components {
       | 'projection_overflow'
       | 'bundle_conflict'
       | 'storage_error'
-      | 'legacy_binding_conflict'
-      | 'legacy_adoption_pending'
+      | 'client_upgrade_required'
       | 'book_length_mismatch';
     ErrorEnvelope: {
       error: components['schemas']['ErrorBody'];
@@ -158,67 +151,37 @@ export interface operations {
       };
     };
   };
-  put_legacy_book: {
+  retired_provision: {
     parameters: {
       query?: never;
       header?: never;
-      path: {
-        /** @description ttu data.id used by the pre-2026-10 event API */
-        reader_data_id: number;
-      };
+      path?: never;
       cookie?: never;
     };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['EbookLegacyBookRequest'];
+    requestBody?: never;
+    responses: {
+      /** @description Upgrade to the reading spans client */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
       };
     };
+  };
+  retired_events: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
-      /** @description Bound (or already bound to the same key) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Malformed JSON or unreadable body */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorEnvelope'];
-        };
-      };
-      /** @description Bound to another key, title mismatch, or book already bound to another item */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorEnvelope'];
-        };
-      };
-      /** @description Unsupported media type */
-      415: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorEnvelope'];
-        };
-      };
-      /** @description Invalid path or field */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorEnvelope'];
-        };
-      };
-      /** @description Storage failed without committing */
-      500: {
+      /** @description Upgrade to the reading spans client */
+      410: {
         headers: {
           [name: string]: unknown;
         };
@@ -264,7 +227,7 @@ export interface operations {
           'application/json': components['schemas']['ErrorEnvelope'];
         };
       };
-      /** @description Bundle conflict, book length mismatch, or legacy adoption pending */
+      /** @description Bundle conflict or book length mismatch */
       409: {
         headers: {
           [name: string]: unknown;

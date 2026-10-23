@@ -16,8 +16,6 @@ export interface StatusFacts {
   readonly serverId: ServerId | null;
   /** The last descriptor or transport failure, held until it is retried. */
   readonly server: DeliveryState;
-  /** Delivery work other than day records. */
-  readonly older: number;
   readonly blockedBooks: readonly BlockedBook[];
   readonly lastDeliveredAt: number | null;
 }
@@ -28,8 +26,7 @@ export function deriveStatus(facts: StatusFacts): SyncStatus {
     pending: {
       records: pendingRecords.length,
       characters: pendingRecords.reduce((total, record) => total + record.spans.size, 0),
-      oldestDay: pendingRecords.map((record) => record.day).sort()[0] ?? null,
-      older: facts.older
+      oldestDay: pendingRecords.map((record) => record.day).sort()[0] ?? null
     },
     blockedBooks: facts.blockedBooks,
     lastDeliveredAt: facts.lastDeliveredAt
@@ -42,7 +39,7 @@ export function deriveStatus(facts: StatusFacts): SyncStatus {
   if (parked?.kind === 'parked') return { ...known, kind: 'blocked', problem: parked.problem };
   const [blocked] = facts.blockedBooks;
   if (blocked) return { ...known, kind: 'blocked', problem: blocked.problem };
-  if (!pendingRecords.length && !facts.older) return { ...known, kind: 'synced' };
+  if (!pendingRecords.length) return { ...known, kind: 'synced' };
 
   const retrying = [facts.server, ...pendingRecords.map((record) => record.delivery)]
     .flatMap((state) => (state.kind === 'retrying' ? [state] : []))

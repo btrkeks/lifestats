@@ -6,7 +6,7 @@
 
 import 'fake-indexeddb/auto';
 
-import type { LegacyQueued, LegacySource, LegacyTail, LocalBook, SyncInit } from '../api';
+import type { LocalBook } from '../api';
 import { SpanSet } from '../domain/span-set';
 import { Engine, type EngineEnvironment, type PageEvent, type Timers } from '../engine/engine';
 
@@ -23,8 +23,6 @@ export class FakeServer {
   loseRepliesTo = '/integrations/ebook/';
   readonly days = new Map<string, SpanSet>();
   readonly lengths = new Map<string, number>();
-  readonly legacyEvents = new Map<string, Record<string, unknown>>();
-  readonly claims = new Map<number, Record<string, unknown>>();
   readonly requests: string[] = [];
 
   /** Characters credited across all producers and days. */
@@ -33,10 +31,6 @@ export class FakeServer {
     for (const [key, spans] of this.days)
       if (key.split('|')[1] === book) union = union.union(spans);
     return union.size;
-  }
-
-  legacyTotal(): number {
-    return [...this.legacyEvents.values()].reduce((total, event) => total + Number(event.delta), 0);
   }
 
   readonly fetch: typeof fetch = async (input, init) => {
@@ -66,21 +60,6 @@ export class FakeServer {
   ): Response {
     if (method === 'GET' && path === '/integrations/ebook') {
       return json(200, { server_id: this.serverId, protocol: 1 });
-    }
-    if (method === 'POST' && path === '/integrations/ebook') return json(200, { ebook: 1 });
-    if (method === 'POST' && path === '/integrations/ebook/events' && body) {
-      if (String(body.book_title).trim() === '' || Number(body.book_target_characters) <= 0) {
-        return json(400, { error: { code: 'bad_request', field: null, message: 'Invalid event' } });
-      }
-      const id = String(body.event_id);
-      const duplicate = this.legacyEvents.has(id);
-      if (!duplicate) this.legacyEvents.set(id, body);
-      return json(200, { accepted: !duplicate, duplicate });
-    }
-    const claim = /^\/integrations\/ebook\/legacy-books\/(\d+)$/.exec(path);
-    if (method === 'PUT' && claim && body) {
-      this.claims.set(Number(claim[1]), body);
-      return new Response(null, { status: 204 });
     }
     const day = /^\/integrations\/ebook\/producers\/([^/]+)\/books\/([^/]+)\/days\/([^/]+)$/.exec(
       path
@@ -121,39 +100,6 @@ function json(status: number, body: unknown): Response {
     status,
     headers: { 'Content-Type': 'application/json' }
   });
-}
-
-/** The v7 stores of a laptop profile, with book 1 still in its library. */
-export class FakeLegacy implements LegacySource {
-  constructor(
-    public queuedRows: LegacyQueued[],
-    public tailRows: LegacyTail[],
-    public library = new Map([[1, { title: 'Book 1', characters: 10_000 }]])
-  ) {}
-
-  queued = async () => this.queuedRows;
-  tails = async () => this.tailRows;
-  book = async (readerDataId: number) => this.library.get(readerDataId);
-  dayOf = () => '2026-10-21';
-}
-
-export function legacyRow(
-  eventId: string,
-  delta: number,
-  positionAfter: number,
-  createdAt: number,
-  readerDataId = 1
-): LegacyQueued {
-  return {
-    eventId,
-    readerDataId,
-    day: '2026-10-20',
-    delta,
-    positionAfter,
-    targetCharacters: 10_000,
-    title: `Book ${readerDataId}`,
-    createdAt
-  };
 }
 
 /** Background work never fires on its own, so each test decides when delivery runs. */
@@ -202,15 +148,12 @@ export interface Rig {
 export function rig(options: {
   server: { fetch: typeof fetch };
   dbName: string;
-  books?: LocalBook[];
-  legacy?: SyncInit['legacy'];
   buildId?: string;
   clock?: Clock;
   timers?: Timers;
 }): Rig {
   const clock = options.clock ?? new Clock();
   const page = new FakePage();
-  const library = new Map((options.books ?? []).map((local) => [local.localId, local]));
   const env: EngineEnvironment = {
     fetch: options.server.fetch,
     now: clock.now,
@@ -224,9 +167,7 @@ export function rig(options: {
   };
   const engine = new Engine(
     {
-      buildId: options.buildId ?? 'build-1',
-      library: { book: async (localId) => library.get(localId) },
-      legacy: options.legacy ?? null
+      buildId: options.buildId ?? 'build-1'
     },
     env
   );

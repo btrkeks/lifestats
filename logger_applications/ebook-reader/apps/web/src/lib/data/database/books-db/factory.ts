@@ -1,27 +1,23 @@
 /**
  * @license BSD-3-Clause
- * Copyright (c) 2024, ッツ Reader Authors
+ * Copyright (c) 2026, ッツ Reader Authors
  * All rights reserved.
  */
 
 import type BooksDb from './versions/books-db';
 import type { IDBPDatabase } from 'idb';
 import { BehaviorSubject } from 'rxjs';
-import { openDB } from 'idb';
+import { openDB, unwrap } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 type UpgradeDatabase = Pick<IDBPDatabase<BooksDb>, 'objectStoreNames' | 'createObjectStore'>;
 
-// Fork: two above upstream's schema version. Laptop databases already reached 7 through
-// the retired Lifestats patch, whose ebookSyncState/ebookSyncQueue stores survive here
-// untouched until the Lifestats drain empties them. Opening at 8 also fences tabs still
-// running the old code: their v7 connection blocks this upgrade until they close.
-export const BOOKS_DB_VERSION = 8;
+export const BOOKS_DB_VERSION = 9;
 
 export const booksDbUpgradeBlocked$ = new BehaviorSubject(false);
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, BOOKS_DB_VERSION, {
+  const opening = openDB<BooksDb>(name, BOOKS_DB_VERSION, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       if (oldVersion === 0) {
         createFreshSchemaStores(oldDb);
@@ -33,6 +29,10 @@ export function createBooksDb(name = 'books') {
       ensureStorageSourceStore(oldDb);
       ensureStatisticsStores(oldDb);
       ensureMediaStores(oldDb);
+      const previous = unwrap(opening).result;
+      for (const store of ['ebookSyncState', 'ebookSyncQueue']) {
+        if (previous.objectStoreNames.contains(store)) previous.deleteObjectStore(store);
+      }
     },
     blocked() {
       booksDbUpgradeBlocked$.next(true);
@@ -41,7 +41,8 @@ export function createBooksDb(name = 'books') {
       (event.target as IDBDatabase).close();
       globalThis.location?.reload();
     }
-  }).finally(() => booksDbUpgradeBlocked$.next(false));
+  });
+  return opening.finally(() => booksDbUpgradeBlocked$.next(false));
 }
 
 function createFreshSchemaStores(oldDb: UpgradeDatabase) {

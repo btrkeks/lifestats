@@ -12,8 +12,6 @@ export type DeliveryProblem =
   | { readonly kind: 'server_too_old'; readonly serverUrl: string }
   /** Its content key could not be computed. Its reading waits in memory for Retry now. */
   | { readonly kind: 'untrackable'; readonly message: string }
-  /** A book the v7 patch counted, gone from this library, so its content key is unknown here. */
-  | { readonly kind: 'not_in_library'; readonly readerDataId: number }
   | {
       readonly kind: 'rejected';
       readonly httpStatus: number;

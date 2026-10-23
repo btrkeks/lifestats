@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { deleteDB, openDB, unwrap, type DBSchema, type IDBPDatabase } from 'idb';
 
 import type { BookIdentity } from '../domain/book-key';
 import { absorb, acknowledge, type DayObservation, type DayRecord } from '../domain/day-record';
@@ -99,16 +99,22 @@ export type SyncStore = Awaited<ReturnType<typeof openSyncStore>>;
  * origin as the books, so it lives exactly as long as they do.
  */
 export async function openSyncStore(name = SYNC_DB_NAME) {
-  const db: IDBPDatabase<SyncSchema> = await openDB<SyncSchema>(name, 1, {
-    upgrade(database) {
-      database.createObjectStore('meta');
-      database.createObjectStore('days', { keyPath: ['book', 'day'] });
-      database.createObjectStore('identities', { keyPath: 'localId' });
+  await deleteDB(`${name}-legacy`);
+  const opening = openDB<SyncSchema>(name, 2, {
+    upgrade(database, oldVersion) {
+      if (oldVersion < 1) {
+        database.createObjectStore('meta');
+        database.createObjectStore('days', { keyPath: ['book', 'day'] });
+        database.createObjectStore('identities', { keyPath: 'localId' });
+      }
+      const previous = unwrap(opening).result;
+      if (previous.objectStoreNames.contains('claims')) previous.deleteObjectStore('claims');
     },
     blocking() {
-      db.close();
+      void opening.then((db) => db.close());
     }
   });
+  const db: IDBPDatabase<SyncSchema> = await opening;
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(name) : null;
   const listeners = new Set<() => void>();
   const changed = () => {
@@ -204,11 +210,11 @@ export async function openSyncStore(name = SYNC_DB_NAME) {
     },
 
     /** Makes parked and retrying records due now. */
-    async rearm(matches: (record: DayRecord) => boolean = () => true): Promise<void> {
+    async rearm(): Promise<void> {
       const tx = db.transaction('days', 'readwrite');
       for (const row of await tx.store.getAll()) {
         const record = fromRow(row);
-        if (record && record.delivery.kind !== 'ready' && matches(record)) {
+        if (record && record.delivery.kind !== 'ready') {
           await tx.store.put(toRow({ ...record, delivery: ready }));
         }
       }

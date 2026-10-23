@@ -28,13 +28,12 @@ import {
   type DeliveryState,
   type FailedAttempt
 } from '../domain/delivery-policy';
-import { readingDayOf, type BookKey, type ProducerId } from '../domain/ids';
+import { readingDayOf, type ProducerId } from '../domain/ids';
 import { untrackable } from '../domain/problem';
 import { emptyTrail, observe, release, relocate, type Trail } from '../domain/reading-policy';
 import { parseServerUrl, type ServerUrl } from '../domain/server-url';
 import { SpanSet } from '../domain/span-set';
 import { deriveStatus } from '../domain/status';
-import { LegacyCutover } from '../legacy/cutover';
 import { openSyncStore, type SyncStore } from '../store/sync-db';
 import { describeServer, putDay } from '../wire/http';
 
@@ -104,11 +103,6 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface CutoverFacts {
-  readonly older: number;
-  readonly blockedBooks: readonly BlockedBook[];
-}
-
 export class Engine implements LifestatsSync {
   readonly status = writable<SyncStatus>({ kind: 'starting' });
   readonly serverUrl = writable<string | null>(null);
@@ -133,22 +127,12 @@ export class Engine implements LifestatsSync {
   private timer: unknown = null;
   private timerAt = Infinity;
   private refreshing: unknown = null;
-  private readonly cutover: LegacyCutover | null;
-  private cutoverFacts: CutoverFacts = { older: 0, blockedBooks: [] };
   private closed = false;
 
   constructor(
     private readonly init: SyncInit,
     private readonly env: EngineEnvironment
   ) {
-    this.cutover =
-      init.legacy &&
-      new LegacyCutover(
-        init.legacy,
-        init.library,
-        (book) => this.identityFor(book),
-        `${env.dbName}-legacy`
-      );
     this.opened = openSyncStore(env.dbName).then(async (store) => ({
       store,
       producer: await store.producer()
@@ -210,7 +194,6 @@ export class Engine implements LifestatsSync {
   async retryNow(): Promise<void> {
     const { store } = await this.opened;
     await store.rearm();
-    await this.cutover?.rearm();
     this.bindings.forEach((binding) => binding.retry());
     await this.flush();
     this.server = ready;
@@ -251,7 +234,6 @@ export class Engine implements LifestatsSync {
     this.disposers.splice(0).forEach((dispose) => dispose());
     this.env.timers.clear(this.timer);
     this.env.timers.clear(this.refreshing);
-    this.cutover?.close();
     void this.opened.then(({ store }) => store.close()).catch(() => undefined);
   }
 
@@ -362,7 +344,7 @@ export class Engine implements LifestatsSync {
     this.status.set({
       kind: 'storage_failed',
       message: this.storageError,
-      pending: { records: 0, characters: 0, oldestDay: null, older: 0 },
+      pending: { records: 0, characters: 0, oldestDay: null },
       blockedBooks: [],
       lastDeliveredAt: null
     });
@@ -417,11 +399,8 @@ export class Engine implements LifestatsSync {
       buildId: this.init.buildId,
       configRevision: config.revision
     };
-    const older = (await this.cutover?.pending(config.serverId)) ?? 0;
-    this.cutoverFacts = { ...this.cutoverFacts, older };
-
     const records = await store.records();
-    const work = older > 0 || records.some((record) => isPending(record, config.serverId));
+    const work = records.some((record) => isPending(record, config.serverId));
     const describe =
       this.describeNext || !config.serverId || context.now - this.describedAt >= DESCRIBE_EVERY_MS;
     if (!base || (!work && !describe)) return this.refresh();
@@ -440,22 +419,8 @@ export class Engine implements LifestatsSync {
       if (serverId !== config.serverId) await store.setServerId(serverId);
     }
 
-    let held: ReadonlySet<BookKey> = new Set();
-    if (this.cutover) {
-      const report = await this.cutover.run(
-        { fetch: this.env.fetch, base, serverId, context, random: this.env.random },
-        (book) => store.rearm((record) => record.book === book)
-      );
-      if ('kind' in report) return this.serverFailed(report, context);
-      held = report.held;
-      this.cutoverFacts = { older: report.pending, blockedBooks: report.blocked };
-    }
-
     const due = (await store.records())
-      .filter(
-        (record) =>
-          isPending(record, serverId) && isDue(record.delivery, context) && !held.has(record.book)
-      )
+      .filter((record) => isPending(record, serverId) && isDue(record.delivery, context))
       .sort((a, b) => a.day.localeCompare(b.day) || a.book.localeCompare(b.book));
     for (const record of due) {
       const outcome = await putDay(this.env.fetch, base, producer, record);
@@ -511,8 +476,7 @@ export class Engine implements LifestatsSync {
         serverId: config.serverId,
         server: this.server,
         lastDeliveredAt,
-        older: this.cutoverFacts.older,
-        blockedBooks: [...this.cutoverFacts.blockedBooks, ...this.untrackable.values()]
+        blockedBooks: [...this.untrackable.values()]
       })
     );
   }

@@ -12,15 +12,7 @@ import { ready } from '../domain/delivery-policy';
 import { newProducerId, readingDayOf, type BookKey, type ReadingDay } from '../domain/ids';
 import { parseServerUrl, type ServerUrl } from '../domain/server-url';
 import { SpanSet } from '../domain/span-set';
-import { Clock, FakeLegacy, book, legacyRow, realTimers, rig, started } from '../test/harness';
-import {
-  describeServer,
-  postLegacyEvent,
-  provisionLegacy,
-  putDay,
-  putLegacyBook,
-  type LegacyEvent
-} from './http';
+import { describeServer, putDay } from './http';
 
 /** Runs only against an isolated server: pnpm test:contract starts none, it expects one. */
 const raw = process.env.LIFESTATS_CONTRACT_URL;
@@ -60,19 +52,14 @@ function record(
   };
 }
 
-async function statisticId(base: ServerUrl): Promise<number> {
+async function logged(base: ServerUrl, day: string): Promise<number> {
   const statistics: { id: number; name: string }[] = await (
     await fetch(`${base}/statistics`)
   ).json();
   const found = statistics.find((statistic) => statistic.name === '[Ebook] Characters Read');
   if (!found) throw new Error('no ebook statistic');
-  return found.id;
-}
-
-async function logged(base: ServerUrl, day: string): Promise<number> {
-  const id = await statisticId(base);
   const body: { value?: number } = await (
-    await fetch(`${base}/statistics/${id}/logged/${day}`)
+    await fetch(`${base}/statistics/${found.id}/logged/${day}`)
   ).json();
   return body.value ?? 0;
 }
@@ -108,22 +95,6 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
     });
   });
 
-  it('accepts legacy provisioning, events and duplicate events', async () => {
-    const event: LegacyEvent = {
-      event_id: crypto.randomUUID(),
-      date: today,
-      metric: 'characters_read',
-      delta: 7,
-      book_id: 900_000 + Math.floor(Math.random() * 99_999),
-      book_title: `Legacy contract ${crypto.randomUUID()}`,
-      confirmed_position_after: 7,
-      book_target_characters: 100
-    };
-    expect(await provisionLegacy(fetch, base)).toEqual({ kind: 'delivered' });
-    expect(await postLegacyEvent(fetch, base, event)).toEqual({ kind: 'delivered' });
-    expect(await postLegacyEvent(fetch, base, event)).toEqual({ kind: 'delivered' });
-  });
-
   it('maps each error class to the outcome the client acts on', async () => {
     const { key, length } = await uniqueBook('errors');
     await putDay(fetch, base, producer, record(key, length, [[0, 10]], today));
@@ -141,49 +112,6 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
       kind: 'needs_fix',
       problem: { kind: 'rejected', httpStatus: 422, code: 'invalid_field', field: 'day' }
     });
-
-    const title = `Legacy adoption ${crypto.randomUUID()}`;
-    const readerDataId = 800_000 + Math.floor(Math.random() * 99_999);
-    await postLegacyEvent(fetch, base, {
-      event_id: crypto.randomUUID(),
-      date: today,
-      metric: 'characters_read',
-      delta: 5,
-      book_id: readerDataId,
-      book_title: title,
-      confirmed_position_after: 5,
-      book_target_characters: 100
-    });
-    const adopted = await uniqueBook('adopted');
-    expect(
-      await putDay(fetch, base, producer, {
-        ...record(adopted.key, adopted.length, [[0, 10]], today),
-        title
-      })
-    ).toMatchObject({
-      kind: 'needs_fix',
-      problem: { httpStatus: 409, code: 'legacy_adoption_pending' }
-    });
-    const claim = { book: adopted.key, title, length: adopted.length };
-    expect(await putLegacyBook(fetch, base, readerDataId, claim)).toEqual({ kind: 'delivered' });
-    expect(await putLegacyBook(fetch, base, readerDataId, claim)).toEqual({ kind: 'delivered' });
-    const other = await uniqueBook('other');
-    expect(
-      await putLegacyBook(fetch, base, readerDataId, {
-        ...claim,
-        book: other.key,
-        length: other.length
-      })
-    ).toMatchObject({
-      kind: 'needs_fix',
-      problem: { httpStatus: 409, code: 'legacy_binding_conflict' }
-    });
-    expect(
-      await putDay(fetch, base, producer, {
-        ...record(adopted.key, adopted.length, [[0, 10]], today),
-        title
-      })
-    ).toEqual({ kind: 'delivered' });
 
     expect(
       await putDay(
@@ -213,60 +141,28 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
       problem: { kind: 'unreachable' }
     });
   });
+  it('returns upgrade envelopes from retired POSTs without changing the statistic', async () => {
+    const before = await logged(base, today);
+    for (const path of ['/integrations/ebook', '/integrations/ebook/events']) {
+      const response = await fetch(`${base}${path}`, { method: 'POST', body: '{}' });
+      expect(response.status).toBe(410);
+      expect(await response.json()).toMatchObject({ error: { code: 'client_upgrade_required' } });
+    }
+    expect(await logged(base, today)).toBe(before);
+  });
 
-  it('counts a drained v7 event once when its 200 was lost and it is sent again', async () => {
-    const day = readingDayOf(new Date(Date.now() - 3 * 86_400_000));
-    const before = await logged(base, day);
-    const readerDataId = 700_000 + Math.floor(Math.random() * 99_999);
-    const text = `drain${crypto.randomUUID()}`.replace(/[^0-9a-z]/gi, '') + '猫'.repeat(5_000);
-    const title = `Drain contract ${readerDataId}`;
-    const legacy = new FakeLegacy(
-      [{ ...legacyRow(crypto.randomUUID(), 400, 400, 1, readerDataId), day, title }],
-      [{ readerDataId, flushedPosition: 400, confirmedPosition: 650, updatedAt: Date.now() }],
-      new Map([[readerDataId, { title, characters: 5_000 }]])
-    );
-    legacy.dayOf = () => day;
-
-    let lose = 1;
+  it('credits a day once after its successful reply is lost', async () => {
+    const { key, length } = await uniqueBook('lost-reply');
+    const report = record(key, length, [[0, 400]], today);
+    const before = await logged(base, today);
     const lossy: typeof fetch = async (input, init) => {
       const response = await fetch(input, init);
-      if (String(input).endsWith('/events') && lose > 0) {
-        lose -= 1;
-        throw new TypeError('reply lost');
-      }
-      return response;
+      expect(response.status).toBe(204);
+      throw new TypeError('reply lost');
     };
-    const r = rig({
-      server: { fetch: lossy },
-      dbName: `ttu-lifestats-contract-${crypto.randomUUID()}`,
-      books: [book(readerDataId, text, title)],
-      legacy,
-      timers: realTimers,
-      clock: new Clock(Date.now())
-    });
-    await started(r.engine);
-    try {
-      await r.engine.configure(base);
-      await r.engine.drain(10_000);
-      await r.engine.retryNow();
-      await r.engine.retryNow();
-      expect(lose).toBe(0);
-      expect(await logged(base, day)).toBe(before + 400 + 250);
-
-      const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });
-      binding.setBook(book(readerDataId, text, title));
-      await r.engine.flush();
-      const todayBefore = await logged(base, today);
-      r.engine.relocate();
-      binding.observe(650);
-      r.clock.advance(60);
-      binding.observe(900);
-      expect(await r.engine.drain(10_000)).toBe('idle');
-      expect(await logged(base, today)).toBe(todayBefore + 250);
-      expect(await r.engine.drain(10_000)).toBe('idle');
-      expect(await logged(base, today)).toBe(todayBefore + 250);
-    } finally {
-      r.engine.close();
-    }
+    expect(await putDay(lossy, base, producer, report)).toMatchObject({ kind: 'retryable' });
+    expect(await logged(base, today)).toBe(before + 400);
+    expect(await putDay(fetch, base, producer, report)).toEqual({ kind: 'delivered' });
+    expect(await logged(base, today)).toBe(before + 400);
   });
 });

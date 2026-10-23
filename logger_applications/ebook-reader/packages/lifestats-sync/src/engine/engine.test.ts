@@ -12,18 +12,7 @@ import type { BookKey, ReadingDay } from '../domain/ids';
 import { SpanSet } from '../domain/span-set';
 import { DESCRIBE_EVERY_MS } from './engine';
 import { openSyncStore } from '../store/sync-db';
-import {
-  BASE,
-  Clock,
-  FakeLegacy,
-  FakeServer,
-  book,
-  legacyRow,
-  realTimers,
-  rig,
-  started,
-  type Rig
-} from '../test/harness';
+import { BASE, Clock, FakeServer, book, realTimers, rig, started, type Rig } from '../test/harness';
 
 const TEXT = '猫'.repeat(10_000);
 const rigs: Rig[] = [];
@@ -39,7 +28,7 @@ async function open(
   name = dbName(),
   extra: Partial<Parameters<typeof rig>[0]> = {}
 ) {
-  const r = rig({ server, dbName: name, books: [book(1, TEXT)], ...extra });
+  const r = rig({ server, dbName: name, ...extra });
   rigs.push(r);
   await started(r.engine);
   return { ...r, name };
@@ -285,7 +274,7 @@ describe('delivery', () => {
   it('notices a replaced server database within the describe interval', async () => {
     const server = new FakeServer();
     const other = '犬'.repeat(5_000);
-    const r = await open(server, dbName(), { books: [book(1, TEXT), book(2, other, 'Book 2')] });
+    const r = await open(server);
     await configure(r);
     const first = await readerFor(r);
     read(r, first, 0, 900);
@@ -496,7 +485,7 @@ describe('recording', () => {
 
   it('credits no jump within a large skip threshold after a long dwell', async () => {
     const long = '猫'.repeat(120_000);
-    const r = await open(new FakeServer(), dbName(), { books: [book(1, long)] });
+    const r = await open(new FakeServer());
     const binding = r.engine.reader({ forwardSkipThreshold: () => 100_000 });
     binding.setBook(book(1, long));
     await r.engine.flush();
@@ -545,7 +534,7 @@ describe('recording', () => {
 
   it('credits reading from 0 after a skip far ahead and a return to the start', async () => {
     const long = '猫'.repeat(120_000);
-    const r = await open(new FakeServer(), dbName(), { books: [book(1, long)] });
+    const r = await open(new FakeServer());
     const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });
     binding.setBook(book(1, long));
     await r.engine.flush();
@@ -598,7 +587,7 @@ describe('recording', () => {
   it('records only the book that is open when its key resolves', async () => {
     const server = new FakeServer();
     const other = '犬'.repeat(5_000);
-    const r = await open(server, dbName(), { books: [book(1, TEXT), book(2, other)] });
+    const r = await open(server);
     const primed = r.engine.reader({ forwardSkipThreshold: () => 2700 });
     primed.setBook(book(2, other, 'Book 2'));
     await primed.close();
@@ -659,230 +648,6 @@ describe('recording', () => {
 
     expect(status(r).kind).toBe('not_configured');
     expect((await storedSpans(r.name)).toPairs()).toEqual([[0, 900]]);
-  });
-});
-
-describe('legacy v7 rows', () => {
-  function v7Source() {
-    return new FakeLegacy(
-      [
-        legacyRow('0f8fad5b-d9cb-469f-a165-70867728950e', 300, 300, 1),
-        legacyRow('7c9e6679-7425-40de-944b-e07fc1f90ae7', 200, 500, 2)
-      ],
-      [
-        {
-          readerDataId: 1,
-          flushedPosition: 500,
-          confirmedPosition: 800,
-          updatedAt: Date.parse('2026-10-21T12:00:00')
-        }
-      ]
-    );
-  }
-
-  it('drains originals and the tail once, survives a lost reply, then claims the book', async () => {
-    const server = new FakeServer();
-    const r = await open(server, dbName(), { legacy: v7Source() });
-    server.loseReplies = 2;
-    server.loseRepliesTo = '/events';
-    await configure(r);
-    await r.engine.retryNow();
-    await r.engine.retryNow();
-    expect(server.loseReplies).toBe(0);
-
-    expect(server.legacyTotal()).toBe(800);
-    expect(server.legacyEvents.get('v7-tail-1-500-800')).toMatchObject({
-      date: '2026-10-21',
-      delta: 300,
-      confirmed_position_after: 800
-    });
-    expect(server.claims.get(1)).toEqual({
-      book_key: await key(),
-      title: 'Book 1',
-      length: 10_000
-    });
-    expect(status(r)).toMatchObject({ kind: 'synced', pending: { older: 0 } });
-
-    const requests = server.requests.length;
-    expect(await r.engine.drain(5_000)).toBe('idle');
-    expect(server.requests.length).toBe(requests);
-  });
-
-  it('delivers every legacy row and claim again to a new server identity', async () => {
-    const server = new FakeServer();
-    const r = await open(server, dbName(), { legacy: v7Source() });
-    await configure(r);
-    expect(server.legacyTotal()).toBe(800);
-
-    server.serverId = '5b0c1f8e-2f4d-4c43-9a43-7c1fd0b5a002';
-    server.legacyEvents.clear();
-    server.claims.clear();
-    await r.engine.retryNow();
-
-    expect(server.legacyTotal()).toBe(800);
-    expect(server.claims.has(1)).toBe(true);
-    expect(status(r)).toMatchObject({ kind: 'synced', pending: { older: 0 } });
-  });
-
-  it('holds new reports for a legacy book until its claim lands', async () => {
-    const server = new FakeServer();
-    const r = await open(server, dbName(), { legacy: v7Source() });
-    server.answer.set('/legacy-books/', 409);
-    await configure(r);
-    const binding = await readerFor(r);
-    read(r, binding, 0, 600);
-    await r.engine.drain(5_000);
-    expect(status(r)).toMatchObject({ kind: 'blocked', problem: { httpStatus: 409 } });
-    expect(server.requests.some((request) => request.includes('/days/'))).toBe(false);
-
-    server.answer.clear();
-    await r.engine.retryNow();
-    expect(server.claims.has(1)).toBe(true);
-    expect(server.credited(await key())).toBe(600);
-  });
-
-  it('retries a rejected claim after 6 hours without Retry now', async () => {
-    const server = new FakeServer();
-    const r = await open(server, dbName(), { legacy: v7Source() });
-    server.answer.set('/legacy-books/', 409);
-    await configure(r);
-    const binding = await readerFor(r);
-    read(r, binding, 0, 600);
-    await r.engine.drain(5_000);
-    expect(server.claims.has(1)).toBe(false);
-
-    server.answer.clear();
-    r.clock.advance(6 * 3600);
-    await r.engine.drain(5_000);
-    expect(server.claims.has(1)).toBe(true);
-    expect(server.credited(await key())).toBe(600);
-  });
-
-  it('keeps every row a failing server did not accept, and sends it later', async () => {
-    const server = new FakeServer();
-    const r = await open(server, dbName(), { legacy: v7Source() });
-    server.answer.set('/events', 500);
-    await configure(r);
-    expect(server.legacyTotal()).toBe(0);
-    expect(status(r)).toMatchObject({ kind: 'waiting', pending: { older: 4 } });
-
-    server.answer.clear();
-    await r.engine.retryNow();
-    expect(server.legacyTotal()).toBe(800);
-  });
-
-  it('holds only the book of a rejected row and delivers everything else', async () => {
-    const server = new FakeServer();
-    const other = '犬'.repeat(5_000);
-    const legacy = v7Source();
-    legacy.queuedRows.push({
-      ...legacyRow('b0b0b0b0-0000-4000-8000-000000000002', 100, 100, 3, 2),
-      title: ' '
-    });
-    legacy.library.set(2, { title: 'Book 2', characters: 5_000 });
-    const r = await open(server, dbName(), {
-      legacy,
-      books: [book(1, TEXT), book(2, other, 'Book 2')]
-    });
-    await configure(r);
-    const first = await readerFor(r);
-    read(r, first, 0, 600);
-    await first.close();
-    const second = r.engine.reader({ forwardSkipThreshold: () => 2700 });
-    second.setBook(book(2, other, 'Book 2'));
-    await r.engine.flush();
-    read(r, second, 0, 900);
-    await r.engine.drain(5_000);
-
-    expect(server.legacyTotal()).toBe(800);
-    expect(server.claims.has(1)).toBe(true);
-    expect(server.credited(await key())).toBe(600);
-    expect(server.claims.has(2)).toBe(false);
-    const otherKey = (await bookIdentity(other))?.key ?? '';
-    expect(server.credited(otherKey)).toBe(0);
-    expect(status(r)).toMatchObject({
-      kind: 'blocked',
-      blockedBooks: [{ title: 'Book 2', problem: { kind: 'rejected', httpStatus: 400 } }]
-    });
-  });
-
-  it('sends a stored target of 0 as a positive target', async () => {
-    const server = new FakeServer();
-    const legacy = v7Source();
-    legacy.queuedRows[0] = { ...legacy.queuedRows[0], targetCharacters: 0 };
-    const r = await open(server, dbName(), { legacy });
-    await configure(r);
-
-    expect(server.legacyEvents.get(legacy.queuedRows[0].eventId)).toMatchObject({
-      book_target_characters: 300
-    });
-    expect(status(r).kind).toBe('synced');
-  });
-
-  it('claims a legacy book whose key failed to resolve once, without marking it missing', async () => {
-    const server = new FakeServer();
-    const r = await open(server, dbName(), { legacy: v7Source(), books: [flaky(book(1, TEXT))] });
-    await configure(r);
-    await r.engine.drain(5_000);
-
-    expect(server.claims.has(1)).toBe(true);
-    expect(status(r)).toMatchObject({ kind: 'synced', blockedBooks: [] });
-  });
-
-  it('claims a fully flushed legacy book with an empty queue', async () => {
-    const server = new FakeServer();
-    const title = 'ロバート・B・チャルディーニ　影響力の武器［新版］　──人を動かす七つの原理';
-    const text = '猫'.repeat(578_754);
-    const legacy = new FakeLegacy(
-      [],
-      [
-        {
-          readerDataId: 1,
-          flushedPosition: 85_900,
-          confirmedPosition: 85_900,
-          updatedAt: Date.parse('2026-05-20T12:00:00')
-        }
-      ],
-      new Map([[1, { title, characters: 578_754 }]])
-    );
-    const r = await open(server, dbName(), { legacy, books: [book(1, text, title)] });
-    await configure(r);
-
-    expect(server.legacyTotal()).toBe(0);
-    expect(server.claims.get(1)).toEqual({
-      book_key: (await bookIdentity(text))?.key,
-      title,
-      length: 578_754
-    });
-    expect(status(r)).toMatchObject({ kind: 'synced', pending: { older: 0 }, blockedBooks: [] });
-  });
-
-  it('does not claim a flushed book while one of its rows is rejected', async () => {
-    const server = new FakeServer();
-    const legacy = v7Source();
-    legacy.queuedRows[1] = { ...legacy.queuedRows[1], title: ' ' };
-    legacy.tailRows[0] = { ...legacy.tailRows[0], flushedPosition: 800 };
-    const r = await open(server, dbName(), { legacy });
-    await configure(r);
-
-    expect(server.legacyTotal()).toBe(300);
-    expect(server.claims.has(1)).toBe(false);
-    expect(status(r)).toMatchObject({
-      kind: 'blocked',
-      blockedBooks: [{ title: 'Book 1', problem: { kind: 'rejected', httpStatus: 400 } }]
-    });
-  });
-
-  it('reports a legacy book that left the library and still drains its rows', async () => {
-    const server = new FakeServer();
-    const r = await open(server, dbName(), { legacy: v7Source(), books: [] });
-    await configure(r);
-
-    expect(server.legacyTotal()).toBe(800);
-    expect(status(r)).toMatchObject({
-      kind: 'blocked',
-      blockedBooks: [{ title: 'Book 1', problem: { kind: 'not_in_library', readerDataId: 1 } }]
-    });
   });
 });
 

@@ -12,24 +12,6 @@ import type { components } from './schema';
 
 type Schemas = components['schemas'];
 type DayRequest = Schemas['EbookDayRequest'];
-type LegacyBookRequest = Schemas['EbookLegacyBookRequest'];
-
-/**
- * `POST /integrations/ebook/events`, kept by the server for one release so v7 rows drain
- * with their original ids. It predates the OpenAPI document, so this mirrors
- * `EbookEventRequest` in the server's routes/integrations.rs.
- */
-export interface LegacyEvent {
-  readonly event_id: string;
-  readonly date: string;
-  readonly metric: 'characters_read';
-  readonly delta: number;
-  readonly book_id: number;
-  readonly book_title: string;
-  readonly confirmed_position_after: number;
-  readonly book_target_characters: number;
-}
-
 export const REQUEST_TIMEOUT_MS = 15_000;
 
 export type Description = { readonly kind: 'ok'; readonly serverId: ServerId } | FailedAttempt;
@@ -40,7 +22,7 @@ async function send(
   fetchImpl: typeof fetch,
   base: ServerUrl,
   path: string,
-  init: { method: 'GET' | 'PUT' | 'POST'; body?: unknown }
+  init: { method: 'GET' | 'PUT'; body?: unknown }
 ): Promise<Sent> {
   try {
     const response = await fetchImpl(`${base}${path}`, {
@@ -174,40 +156,4 @@ export async function putDay(
   };
   const path = dayPath(producer, record.book, record.day);
   return classify(await send(fetchImpl, base, path, { method: 'PUT', body }), base);
-}
-
-export async function putLegacyBook(
-  fetchImpl: typeof fetch,
-  base: ServerUrl,
-  readerDataId: number,
-  claim: { readonly book: BookKey; readonly title: string; readonly length: number }
-): Promise<AttemptOutcome> {
-  const body: LegacyBookRequest = {
-    book_key: claim.book,
-    title: claim.title,
-    length: claim.length
-  };
-  const path = `/integrations/ebook/legacy-books/${readerDataId}`;
-  return classify(await send(fetchImpl, base, path, { method: 'PUT', body }), base);
-}
-
-export async function provisionLegacy(
-  fetchImpl: typeof fetch,
-  base: ServerUrl
-): Promise<AttemptOutcome> {
-  return classify(
-    await send(fetchImpl, base, '/integrations/ebook', { method: 'POST', body: {} }),
-    base
-  );
-}
-
-export async function postLegacyEvent(
-  fetchImpl: typeof fetch,
-  base: ServerUrl,
-  event: LegacyEvent
-): Promise<AttemptOutcome> {
-  return classify(
-    await send(fetchImpl, base, '/integrations/ebook/events', { method: 'POST', body: event }),
-    base
-  );
 }

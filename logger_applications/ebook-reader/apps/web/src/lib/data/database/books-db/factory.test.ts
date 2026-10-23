@@ -1,6 +1,6 @@
 /**
  * @license BSD-3-Clause
- * Copyright (c) 2024, ッツ Reader Authors
+ * Copyright (c) 2026, ッツ Reader Authors
  * All rights reserved.
  */
 
@@ -112,39 +112,41 @@ describe('createBooksDb', () => {
     expect(stores).toEqual(upstreamStores);
   });
 
-  it('opens a legacy v7 database at v8 and keeps every row, including the v7 sync stores', async () => {
-    const name = dbName();
-    const legacy = await seed(name, 7, (db) => {
-      const data = db.createObjectStore('data', { keyPath: 'id', autoIncrement: true });
-      data.createIndex('title', 'title');
-      db.createObjectStore('bookmark', { keyPath: 'dataId' });
-      db.createObjectStore('lastItem');
-      db.createObjectStore('storageSource', { keyPath: 'name' });
-      db.createObjectStore('statistic', { keyPath: ['title', 'dateKey'] });
-      db.createObjectStore('readingGoal', { keyPath: 'goalStartDate' });
-      db.createObjectStore('lastModified', { keyPath: ['title', 'dataType'] });
-      db.createObjectStore('audioBook', { keyPath: 'title' });
-      db.createObjectStore('subtitle', { keyPath: 'title' });
-      db.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
-      db.createObjectStore('ebookSyncState', { keyPath: 'dataId' });
-      const queue = db.createObjectStore('ebookSyncQueue', { keyPath: 'eventId' });
-      queue.createIndex('nextRetryAt', 'nextRetryAt');
-      queue.createIndex('dataId', 'dataId');
-    });
-    await legacy.put('ebookSyncState', syncState);
-    await legacy.put('ebookSyncQueue', queuedEvent);
-    legacy.close();
-    const before = await contents(name);
+  it.each([7, 8])(
+    'opens a v%i database at v9, drops retired stores and keeps upstream rows',
+    async (oldVersion) => {
+      const name = dbName();
+      const legacy = await seed(name, oldVersion, (db) => {
+        const data = db.createObjectStore('data', { keyPath: 'id', autoIncrement: true });
+        data.createIndex('title', 'title');
+        db.createObjectStore('bookmark', { keyPath: 'dataId' });
+        db.createObjectStore('lastItem');
+        db.createObjectStore('storageSource', { keyPath: 'name' });
+        db.createObjectStore('statistic', { keyPath: ['title', 'dateKey'] });
+        db.createObjectStore('readingGoal', { keyPath: 'goalStartDate' });
+        db.createObjectStore('lastModified', { keyPath: ['title', 'dataType'] });
+        db.createObjectStore('audioBook', { keyPath: 'title' });
+        db.createObjectStore('subtitle', { keyPath: 'title' });
+        db.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
+        db.createObjectStore('ebookSyncState', { keyPath: 'dataId' });
+        const queue = db.createObjectStore('ebookSyncQueue', { keyPath: 'eventId' });
+        queue.createIndex('nextRetryAt', 'nextRetryAt');
+        queue.createIndex('dataId', 'dataId');
+      });
+      await legacy.put('ebookSyncState', syncState);
+      await legacy.put('ebookSyncQueue', queuedEvent);
+      legacy.close();
+      const before = await contents(name);
 
-    (await createBooksDb(name)).close();
+      (await createBooksDb(name)).close();
 
-    const after = await contents(name);
-    expect(after.version).toBe(8);
-    expect(after.stores).toEqual(before.stores);
-    expect(after.rows).toEqual(before.rows);
-    expect(after.rows.ebookSyncQueue).toEqual([queuedEvent]);
-    expect(after.rows.ebookSyncState).toEqual([syncState]);
-  });
+      const after = await contents(name);
+      expect(after.version).toBe(9);
+      expect(after.stores).toEqual(upstreamStores);
+      const { ebookSyncQueue: _queue, ebookSyncState: _state, ...upstreamRows } = before.rows;
+      expect(JSON.stringify(after.rows)).toBe(JSON.stringify(upstreamRows));
+    }
+  );
 
   it('upgrades a 2023 v4 database to every upstream store and keeps its book and bookmark', async () => {
     const name = dbName();
