@@ -40,13 +40,19 @@ function browserEnvironment(): EngineEnvironment {
         listener(document.visibilityState === 'hidden' ? 'hidden' : 'visible');
       const onPageHide = () => listener('hidden');
       const onOnline = () => listener('online');
+      const onInput = () => listener('input');
+      // Capture, so the input is seen before a ttu handler it triggers calls relocate().
+      const input = { capture: true, passive: true };
+      const inputs = ['keydown', 'pointerdown', 'wheel', 'touchstart'] as const;
       document.addEventListener('visibilitychange', onVisibility);
       window.addEventListener('pagehide', onPageHide);
       window.addEventListener('online', onOnline);
+      inputs.forEach((type) => window.addEventListener(type, onInput, input));
       return () => {
         document.removeEventListener('visibilitychange', onVisibility);
         window.removeEventListener('pagehide', onPageHide);
         window.removeEventListener('online', onOnline);
+        inputs.forEach((type) => window.removeEventListener(type, onInput, input));
       };
     },
     locks: navigator.locks ?? null,

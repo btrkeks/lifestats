@@ -40,8 +40,8 @@ import { describeServer, putDay } from '../wire/http';
 
 /**
  * After `relocate()` the reader's next position is the move's result, however slowly a section
- * loads. A move that left the position unchanged reports nothing, so after this long the next
- * position is the user's again.
+ * loads, unless the user pressed a key or touched the page first. Without input, after this
+ * long the next position is the user's again, as with autoscroll.
  */
 export const RELOCATION_TIMEOUT_MS = 10_000;
 /** Positions this soon after a move's first one belong to the same move. */
@@ -54,7 +54,8 @@ export const DESCRIBE_EVERY_MS = 5 * 60_000;
 const DEFAULT_SKIP_THRESHOLD = 2700;
 const DELIVERY_LOCK = 'ttu-lifestats-delivery';
 
-export type PageEvent = 'hidden' | 'visible' | 'online';
+/** `input` is a key press, pointer press, wheel or touch by the user. */
+export type PageEvent = 'hidden' | 'visible' | 'online' | 'input';
 
 export interface EngineEnvironment {
   readonly fetch: typeof fetch;
@@ -318,6 +319,8 @@ export class Engine implements LifestatsSync {
     } else if (event === 'visible') {
       this.bindings.forEach((binding) => binding.show());
       this.schedule(DELIVERY_DELAY_MS);
+    } else if (event === 'input') {
+      this.bindings.forEach((binding) => binding.userInput());
     } else {
       this.describeNext = true;
       this.schedule(0);
@@ -624,6 +627,14 @@ class Binding implements ReaderBinding {
 
   relocating(atMs: number): void {
     this.relocation = { kind: 'awaiting', since: atMs };
+  }
+
+  /**
+   * Input after `relocate()` means the next position is the user's: a move that left the
+   * position unchanged, such as opening a book at 0, reports nothing to end it.
+   */
+  userInput(): void {
+    this.relocation = null;
   }
 
   /** Whether the position observed at `atMs` comes from a programmatic move. */

@@ -176,7 +176,7 @@ export class FakePage {
   };
 
   emit(event: PageEvent): void {
-    this.hiddenNow = event === 'hidden';
+    if (event === 'hidden' || event === 'visible') this.hiddenNow = event === 'hidden';
     this.listeners.forEach((listener) => listener(event));
   }
 }

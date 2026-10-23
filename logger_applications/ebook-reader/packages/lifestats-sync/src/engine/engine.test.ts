@@ -461,6 +461,20 @@ describe('recording', () => {
     expect((await storedSpans(r.name)).toPairs()).toEqual([[1000, 1300]]);
   });
 
+  it('credits a page the user turned soon after a relocation that moved nothing', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    binding.observe(1000);
+    r.clock.advance(30);
+    r.engine.relocate();
+    r.clock.advance(2);
+    r.page.emit('input');
+    binding.observe(1400);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[1000, 1400]]);
+  });
+
   it('credits no jump within a large skip threshold after a long dwell', async () => {
     const long = '猫'.repeat(120_000);
     const r = await open(new FakeServer(), dbName(), { books: [book(1, long)] });
