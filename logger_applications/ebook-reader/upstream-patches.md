@@ -1,0 +1,46 @@
+# Fork changes to upstream ッツ
+
+The fork is based on upstream [`68c40f1c`](https://github.com/ttu-ttu/ebook-reader/commit/68c40f1ca934e8d743395ca0f08f44d7292c5683).
+This file lists every path that differs from that commit. It is the rebase surface.
+
+`scripts/fork-delta.sh [upstream clone]` compares the fork with the base. It fails when a
+changed path is missing here, or when a listed path no longer differs. Rows whose path
+contains `*` match many files.
+
+## Upstream files changed by the fork
+
+| Path                                                                 | Change                                                                                                                                              | Why                                                                                                                                                                    |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/src/lib/data/database/books-db/factory.ts`                 | Opens `books` at version 8. Replaces the upgrade switch with a cumulative one. Adds `blocked` and `blocking` handlers and `booksDbUpgradeBlocked$`. | Laptop databases are already at 7. Upstream's switch has no fall-through, so a 2023 v4 database misses the v6 stores. Version 8 fences tabs still running the v7 code. |
+| `apps/web/src/routes/+layout.svelte`                                 | Mounts `BooksDbBlockedBanner`.                                                                                                                      | Shows "Close other ッツ tabs" while an old tab blocks the upgrade.                                                                                                     |
+| `apps/web/src/routes/b/+page.svelte`                                 | Mounts `BookReaderProgressBar`.                                                                                                                     | Progress strip.                                                                                                                                                        |
+| `apps/web/src/lib/data/database/books-db/versions/books-db.ts`       | `export type { BooksDb as default }`.                                                                                                               | `check:types` rejects a default export of a type under `verbatimModuleSyntax`.                                                                                         |
+| `apps/web/src/lib/functions/file-loaders/epub/generate-epub-html.ts` | Types `body` as nullable.                                                                                                                           | `check:types` fails on upstream.                                                                                                                                       |
+| `apps/web/tsconfig.json`                                             | `moduleResolution: bundler`, `skipLibCheck`.                                                                                                        | `check:types` fails on upstream's `idb` and `vite` declarations.                                                                                                       |
+| `apps/web/package.json`                                              | Adds `test: vitest run` and Vitest.                                                                                                                 | Fork tests.                                                                                                                                                            |
+| `pnpm-lock.yaml`                                                     | Lock for the dependencies above.                                                                                                                    | Lockfile.                                                                                                                                                              |
+| `apps/web/Dockerfile`                                                | Pins pnpm 9.15.9 and serves on 5001.                                                                                                                | Lifestats deployment.                                                                                                                                                  |
+| `apps/web/nginx/conf.d/default.conf`                                 | Listens on 5001.                                                                                                                                    | Lifestats deployment.                                                                                                                                                  |
+| `docker-compose.yml`                                                 | Maps 5001 and drops the `version` key.                                                                                                              | Lifestats deployment.                                                                                                                                                  |
+| `.gitignore`                                                         | Ignores `package-lock.json`.                                                                                                                        | A stray npm lock in `apps/web`.                                                                                                                                        |
+| `README.md`                                                          | Replaces the manual with a short fork note.                                                                                                         | Fork documentation.                                                                                                                                                    |
+| `assets/readme/*.svg`                                                | CRLF to LF.                                                                                                                                         | Line endings changed when the fork was imported.                                                                                                                       |
+| `.github/*`                                                          | Deleted.                                                                                                                                            | Upstream's CI and funding files do not apply inside Lifestats.                                                                                                         |
+
+## Files that exist only in the fork
+
+| Path                                                                      | Purpose                                          |
+| ------------------------------------------------------------------------- | ------------------------------------------------ |
+| `upstream-patches.md`                                                     | This list.                                       |
+| `scripts/fork-delta.sh`                                                   | Checks this list.                                |
+| `apps/web/src/fake-indexeddb-auto.d.ts`                                   | Types the `fake-indexeddb/auto` import in tests. |
+| `apps/web/src/lib/components/book-reader/book-reader-progress-bar.svelte` | Progress strip with chapter marks.               |
+| `apps/web/src/lib/components/books-db-blocked-banner.svelte`              | Banner for a blocked `books` upgrade.            |
+| `apps/web/src/lib/data/database/books-db/factory.test.ts`                 | Upgrade and data-preservation tests for `books`. |
+
+## Not carried over
+
+- The retired Lifestats patch: `src/lib/data/lifestats/**`, the v7 schema types, the sync
+  methods in `database.service.ts`, `ebook-sync-cleanup.ts`, and the reader route's tracker.
+  Its two IndexedDB stores stay in existing databases until the new drain empties them.
+- The 2023 `ネタバレ → SPOILER` hand patch on compiled output.

@@ -4,13 +4,9 @@
  * All rights reserved.
  */
 
-import type BooksDbV7 from '$lib/data/database/books-db/versions/v7/books-db-v7';
-import type {
-  BooksDbV7EbookSyncQueueEntry,
-  BooksDbV7EbookSyncState
-} from '$lib/data/database/books-db/versions/v7/books-db-v7';
+import type BooksDbV6 from '$lib/data/database/books-db/versions/v6/books-db-v6';
 
-export type BooksDb = BooksDbV7;
+type BooksDb = BooksDbV6;
 
 export type BooksDbBookData = BooksDb['data']['value'];
 export type BooksDbBookmarkData = BooksDb['bookmark']['value'];
@@ -21,6 +17,6 @@ export type BooksDbLastModified = BooksDb['lastModified']['value'];
 export type BooksDbAudioBook = BooksDb['audioBook']['value'];
 export type BooksDbSubtitleData = BooksDb['subtitle']['value'];
 export type BooksDbHandle = BooksDb['handle']['value'];
-export type BooksDbEbookSyncState = BooksDbV7EbookSyncState;
-export type BooksDbEbookSyncQueueEntry = BooksDbV7EbookSyncQueueEntry;
-export const currentDbVersion = 7;
+export const currentDbVersion = 6;
+
+export type { BooksDb as default };

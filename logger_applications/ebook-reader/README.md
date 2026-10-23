@@ -4,6 +4,8 @@ An online e-book reader that supports dictionary extensions like Yomitan, which 
 
 **Note**: The reader was created for japanese (language learners) - while books in other languages may work to a specific degree other functionalites (e. g. character counter etc.) may have unsupported / unexpected results
 
-## Lifestats addition
+## Lifestats fork
 
-We intercepted the scrolling behaviour of this application to trigger a HeartBeat ping. This allows us to track very accurately and automatically, the time the user reads a book
+This copy of ッツ is a fork of upstream commit `68c40f1c`. It reports reading progress to Lifestats.
+`upstream-patches.md` lists every file that differs from upstream, and `scripts/fork-delta.sh`
+checks that list.

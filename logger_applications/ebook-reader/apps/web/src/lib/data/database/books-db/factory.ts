@@ -4,15 +4,24 @@
  * All rights reserved.
  */
 
-import type { BooksDb } from './versions/books-db';
+import type BooksDb from './versions/books-db';
 import type { IDBPDatabase } from 'idb';
+import { BehaviorSubject } from 'rxjs';
 import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 type UpgradeDatabase = Pick<IDBPDatabase<BooksDb>, 'objectStoreNames' | 'createObjectStore'>;
 
+// Fork: two above upstream's schema version. Laptop databases already reached 7 through
+// the retired Lifestats patch, whose ebookSyncState/ebookSyncQueue stores survive here
+// untouched until the Lifestats drain empties them. Opening at 8 also fences tabs still
+// running the old code: their v7 connection blocks this upgrade until they close.
+export const BOOKS_DB_VERSION = 8;
+
+export const booksDbUpgradeBlocked$ = new BehaviorSubject(false);
+
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 7, {
+  return openDB<BooksDb>(name, BOOKS_DB_VERSION, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       if (oldVersion === 0) {
         createFreshSchemaStores(oldDb);
@@ -20,12 +29,19 @@ export function createBooksDb(name = 'books') {
         await upgradeBooksDbFromV2(oldDb, oldVersion, newVersion, transaction);
       }
 
+      // Upstream's switch has no fall-through, so a v4 database would skip the v6 stores.
       ensureStorageSourceStore(oldDb);
       ensureStatisticsStores(oldDb);
       ensureMediaStores(oldDb);
-      ensureEbookSyncStores(oldDb);
+    },
+    blocked() {
+      booksDbUpgradeBlocked$.next(true);
+    },
+    blocking(_currentVersion, _blockedVersion, event) {
+      (event.target as IDBDatabase).close();
+      globalThis.location?.reload();
     }
-  });
+  }).finally(() => booksDbUpgradeBlocked$.next(false));
 }
 
 function createFreshSchemaStores(oldDb: UpgradeDatabase) {
@@ -40,9 +56,6 @@ function createFreshSchemaStores(oldDb: UpgradeDatabase) {
   });
 
   oldDb.createObjectStore('lastItem');
-  ensureStorageSourceStore(oldDb);
-  ensureStatisticsStores(oldDb);
-  ensureMediaStores(oldDb);
 }
 
 function ensureStorageSourceStore(oldDb: UpgradeDatabase) {
@@ -89,22 +102,5 @@ function ensureMediaStores(oldDb: UpgradeDatabase) {
 
   if (!oldDb.objectStoreNames.contains('handle')) {
     oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
-  }
-}
-
-function ensureEbookSyncStores(oldDb: UpgradeDatabase) {
-  if (!oldDb.objectStoreNames.contains('ebookSyncState')) {
-    oldDb.createObjectStore('ebookSyncState', {
-      keyPath: 'dataId'
-    });
-  }
-
-  if (!oldDb.objectStoreNames.contains('ebookSyncQueue')) {
-    const queueStore = oldDb.createObjectStore('ebookSyncQueue', {
-      keyPath: 'eventId'
-    });
-
-    queueStore.createIndex('nextRetryAt', 'nextRetryAt');
-    queueStore.createIndex('dataId', 'dataId');
   }
 }

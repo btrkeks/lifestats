@@ -237,6 +237,7 @@
     updateSectionProgress();
   }
 
+  /** Experimental Code - May be removed any time without warning */
   onMount(() => document.addEventListener('ttu-action', handleAction, false));
 
   function handleAction({ detail }: any) {
@@ -331,6 +332,7 @@
       rect
     };
   }
+  /** Experimental Code - May be removed any time without warning */
 
   onDestroy(() => {
     document.removeEventListener('ttu-action', handleAction, false);

@@ -8,8 +8,6 @@ import type {
   BooksDbAudioBook,
   BooksDbBookData,
   BooksDbBookmarkData,
-  BooksDbEbookSyncQueueEntry,
-  BooksDbEbookSyncState,
   BooksDbReadingGoal,
   BooksDbStatistic,
   BooksDbStorageSource,
@@ -34,9 +32,8 @@ import { lastReadingGoalsModified$, readingGoal$, syncTarget$ } from '$lib/data/
 
 import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import type { BookStatistic } from '$lib/components/statistics/statistics-types';
-import type { BooksDb } from '$lib/data/database/books-db/versions/books-db';
+import type BooksDb from '$lib/data/database/books-db/versions/books-db';
 import type { IDBPDatabase } from 'idb';
-import { deleteEbookSyncRecordsForDataId } from './ebook-sync-cleanup';
 import LogReportDialog from '$lib/components/log-report-dialog.svelte';
 import { MergeMode } from '$lib/data/merge-mode';
 import MessageDialog from '$lib/components/message-dialog.svelte';
@@ -322,60 +319,6 @@ export class DatabaseService {
     return db.get('bookmark', dataId);
   }
 
-  async getEbookSyncState(dataId: number) {
-    const db = await this.db;
-    return db.get('ebookSyncState', dataId);
-  }
-
-  async putEbookSyncState(syncState: BooksDbEbookSyncState) {
-    const db = await this.db;
-    return db.put('ebookSyncState', syncState);
-  }
-
-  async commitEbookSyncDelta(
-    syncState: BooksDbEbookSyncState,
-    queueEntry: BooksDbEbookSyncQueueEntry
-  ) {
-    const db = await this.db;
-    const tx = db.transaction(['ebookSyncState', 'ebookSyncQueue'], 'readwrite');
-
-    try {
-      await tx.objectStore('ebookSyncState').put(syncState);
-      await tx.objectStore('ebookSyncQueue').put(queueEntry);
-      await tx.done;
-    } catch (error: any) {
-      try {
-        tx.abort();
-        await tx.done;
-      } catch (_) {
-        // no-op
-      }
-
-      throw error;
-    }
-  }
-
-  async getEbookSyncQueueEntries(includeDeferred = false, referenceTime = Date.now()) {
-    const db = await this.db;
-    const entries = await db.getAll('ebookSyncQueue');
-
-    return includeDeferred
-      ? entries.sort((a, b) => a.createdAt - b.createdAt)
-      : entries
-          .filter((entry) => entry.nextRetryAt <= referenceTime)
-          .sort((a, b) => a.createdAt - b.createdAt);
-  }
-
-  async putEbookSyncQueueEntry(queueEntry: BooksDbEbookSyncQueueEntry) {
-    const db = await this.db;
-    return db.put('ebookSyncQueue', queueEntry);
-  }
-
-  async deleteEbookSyncQueueEntry(eventId: string) {
-    const db = await this.db;
-    return db.delete('ebookSyncQueue', eventId);
-  }
-
   async putBookmark(bookmarkData: BooksDbBookmarkData) {
     const db = await this.db;
 
@@ -423,9 +366,7 @@ export class DatabaseService {
       | 'audioBook'
       | 'subtitle'
       | 'handle'
-      | 'ebookSyncState'
-      | 'ebookSyncQueue'
-    )[] = ['data', 'audioBook', 'subtitle', 'handle', 'ebookSyncState', 'ebookSyncQueue'];
+    )[] = ['data', 'audioBook', 'subtitle', 'handle'];
     const shouldDeleteLastItem = cachedData.lastItem === dataId;
     const shouldDeleteBookmark = cachedData.bookmarkIds.has(dataId);
 
@@ -470,11 +411,6 @@ export class DatabaseService {
         await tx.objectStore('handle').delete(IDBKeyRange.bound([bookTitle], [bookTitle, []]));
       }
 
-      await deleteEbookSyncRecordsForDataId(
-        tx as any,
-        dataId,
-        shouldDeleteStatistics
-      );
       await tx.objectStore('data').delete(dataId);
       await tx.done;
 
