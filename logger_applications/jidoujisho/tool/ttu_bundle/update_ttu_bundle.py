@@ -85,11 +85,6 @@ def verify():
     for key in ['repository', 'commit', 'dirty', 'sourceHash', 'buildProfile', 'toolchain']:
         if source[key] != lock[key]:
             raise ValueError(f'BUNDLE_SOURCE.json differs from bundle.lock.json: {key}')
-    profile = lock['buildProfile']
-    if profile.get('compatibilityPatch'):
-        patch = HERE / profile['compatibilityPatch']
-        if hashlib.sha256(patch.read_bytes()).hexdigest() != profile['compatibilityPatchHash']:
-            raise ValueError('Compatibility profile patch drift; rebuild the bundle')
     actual = manifest(ASSETS)
     changed = sorted(k for k in actual.keys() | source['files'].keys() if actual.get(k) != source['files'].get(k))
     if changed or content_hash(actual) != source['contentHash']:
@@ -141,13 +136,6 @@ def build(args):
                 elif target.exists():
                     target.unlink()
         lock['sourceHash'] = content_hash(manifest(src))
-        compatibility = profile.get('compatibilityPatch')
-        if compatibility:
-            if profile['compatibilityCommit'] != commit:
-                raise ValueError('Legacy compatibility patch is pinned to another commit; remove it for a native embedded profile')
-            patch = HERE / compatibility
-            profile['compatibilityPatchHash'] = hashlib.sha256(patch.read_bytes()).hexdigest()
-            subprocess.run(['git', 'apply', '--unsafe-paths', str(patch)], cwd=src, check=True)
         toolchain = lock['toolchain']
         command = ('set -eu; test "$(node --version)" = "v' + toolchain['node'] + '"; '
                    'npm install --prefix /tmp/ttu-toolchain pnpm@' + toolchain['pnpm'] + '; '
