@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
+  import { relocateReading } from '$lib/lifestats/sync';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { SECTION_CHANGE } from '$lib/data/events';
@@ -384,12 +385,16 @@
 
         wasResized = !useBookmark;
 
+        relocateReading();
         concretePageManager.scrollTo(scrollPos, false);
       });
     });
 
+  combineLatest([width$, height$]).pipe(skip(1), takeUntil(destroy$)).subscribe(relocateReading);
+
   pageChange$.pipe(takeUntil(destroy$)).subscribe((isUser) => {
     if (!calculator) return;
+    if (!isUser) relocateReading();
 
     showCustomReadingPoint = false;
 
@@ -532,6 +537,7 @@
   }
 
   function onContentDisplayChange(_calculator: SectionCharacterStatsCalculator) {
+    if (scrollWhenReady) relocateReading();
     _calculator.updateParagraphPos();
     exploredCharCount = _calculator.calcExploredCharCount(customReadingPointRange);
     sectionReady$.next(_calculator);
@@ -646,6 +652,7 @@
   }
 
   nextChapter$.pipe(takeUntil(destroy$)).subscribe((chapterId) => {
+    relocateReading();
     const nextSectionIndex = sections.findIndex(
       (section) => section.id === chapterId || section.querySelector(`[id="${chapterId}"]`)
     );

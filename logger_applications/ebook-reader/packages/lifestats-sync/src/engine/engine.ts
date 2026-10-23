@@ -596,12 +596,16 @@ class Binding implements ReaderBinding {
   observe(position: number): void {
     if (!Number.isFinite(position) || position < 0 || this.engine.hidden()) return;
     const atMs = this.engine.now();
+    const settling = this.engine.settling(atMs);
+    // ttu reports 0 while it lays out a new section, so a page turn into the next section is
+    // not a move back to the start. Programmatic moves to 0 still re-anchor.
+    if (position === 0 && !settling && (this.trail.anchor?.position ?? 0) > 0) return;
     const threshold = this.options.forwardSkipThreshold();
     const policy = {
       forwardSkipThreshold:
         Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SKIP_THRESHOLD
     };
-    const step = this.engine.settling(atMs)
+    const step = settling
       ? relocate(this.trail, position, atMs, policy)
       : observe(this.trail, position, atMs, policy);
     this.trail = step.trail;

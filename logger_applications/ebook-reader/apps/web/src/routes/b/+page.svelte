@@ -77,8 +77,10 @@
     readingGoalsMergeMode$,
     pauseTrackerOnCustomPointChange$,
     hideSpoilerImageMode$,
-    showCharacterCounter$
+    showCharacterCounter$,
+    trackerForwardSkipThreshold$
   } from '$lib/data/store';
+  import { relocateReading, startSync, toLocalBook } from '$lib/lifestats/sync';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
   import BookReaderProgressBar from '$lib/components/book-reader/book-reader-progress-bar.svelte';
@@ -204,6 +206,9 @@
     syncedResolver = resolver;
   });
   const queuedReaderImageGalleryPictures = new Map<string, boolean>();
+  const lifestatsReader = browser
+    ? startSync().reader({ forwardSkipThreshold: () => $trackerForwardSkipThreshold$ })
+    : undefined;
 
   const bookId$ = iffBrowser(() => readableToObservable(page)).pipe(
     map((pageObj) => Number(pageObj.url.searchParams.get('id'))),
@@ -483,6 +488,10 @@
     externalStorageHandler &&
     ($autoReplication$ === AutoReplicationType.Up || $autoReplication$ === AutoReplicationType.All);
 
+  $: lifestatsReader?.setBook($rawBookData$ ? toLocalBook($rawBookData$) : null);
+
+  $: lifestatsReader?.observe(exploredCharCount);
+
   $: bookmarkData.then((data) => {
     hasBookmarkData = !!data;
     storedExploredCharacter = data?.exploredCharCount || 0;
@@ -523,6 +532,7 @@
     }
 
     readerImageGalleryPictures$.next([]);
+    void lifestatsReader?.close();
   });
 
   function handleUnload(event: BeforeUnloadEvent) {
@@ -1370,6 +1380,8 @@
   }
 
   function pauseTracker(restartAfterCharacterChange = false) {
+    relocateReading();
+
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       wasTrackerPaused = false;
       $isTrackerPaused$ = true;

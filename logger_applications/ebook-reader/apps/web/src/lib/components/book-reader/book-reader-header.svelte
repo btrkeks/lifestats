@@ -22,6 +22,7 @@
   import { customReadingPointEnabled$, viewMode$ } from '$lib/data/store';
   import { ViewMode } from '$lib/data/view-mode';
   import { dummyFn, isMobile$, isOnOldUrl } from '$lib/functions/utils';
+  import LifestatsIndicator from '$lib/lifestats/lifestats-indicator.svelte';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -129,6 +130,9 @@
   </div>
 
   <div class="flex transform-gpu {translateXHeaderFa}">
+    {#if browser}
+      <LifestatsIndicator />
+    {/if}
     <div
       tabindex="0"
       role="button"

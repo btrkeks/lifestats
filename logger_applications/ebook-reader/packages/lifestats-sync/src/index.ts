@@ -28,7 +28,7 @@ export type {
 
 function browserEnvironment(): EngineEnvironment {
   return {
-    fetch: (input, init) => fetch(input, init),
+    fetch: globalThis.fetch.bind(globalThis),
     now: () => Date.now(),
     random: Math.random,
     hidden: () => document.visibilityState === 'hidden',

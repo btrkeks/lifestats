@@ -333,6 +333,20 @@ describe('recording', () => {
     expect((await storedSpans(r.name)).toPairs()).toEqual([[5000, 5300]]);
   });
 
+  it('credits a page turn into the next section despite the layout reset to 0', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    read(r, binding, 2000, 2600);
+    r.clock.advance(10);
+    binding.observe(0);
+    binding.observe(2900);
+    r.clock.advance(10);
+    binding.observe(3200);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[2000, 3200]]);
+  });
+
   it('ignores positions while the page is hidden and re-anchors when it returns', async () => {
     const r = await open(new FakeServer());
     const binding = await readerFor(r);
