@@ -12,7 +12,7 @@ import { bookIdentity } from '../domain/book-key';
 import type { BookKey, ReadingDay } from '../domain/ids';
 import { SpanSet } from '../domain/span-set';
 import { openSyncStore } from '../store/sync-db';
-import { BASE, FakeServer, book, realTimers, rig, started, type Rig } from '../test/harness';
+import { BASE, Clock, FakeServer, book, realTimers, rig, started, type Rig } from '../test/harness';
 
 const TEXT = '猫'.repeat(10_000);
 const rigs: Rig[] = [];
@@ -256,6 +256,27 @@ describe('delivery', () => {
     await r.engine.drain(5_000);
 
     expect(server.credited(await key())).toBe(1500);
+  });
+
+  it('replays old days to a new server identity after later deliveries', async () => {
+    const server = new FakeServer();
+    const clock = new Clock(Date.parse('2026-09-01T10:00:00'));
+    const r = await open(server, dbName(), { clock });
+    await configure(r);
+    const binding = await readerFor(r);
+    read(r, binding, 0, 900);
+    expect(await r.engine.drain(5_000)).toBe('idle');
+
+    clock.ms = Date.parse('2026-10-22T10:00:00');
+    read(r, binding, 900, 1500);
+    expect(await r.engine.drain(5_000)).toBe('idle');
+
+    server.serverId = '5b0c1f8e-2f4d-4c43-9a43-7c1fd0b5a002';
+    server.days.clear();
+    await r.engine.retryNow();
+
+    expect(server.credited(await key())).toBe(1500);
+    expect([...server.days.keys()].some((day) => day.endsWith('|2026-09-01'))).toBe(true);
   });
 });
 

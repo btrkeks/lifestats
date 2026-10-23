@@ -48,7 +48,6 @@ export const SETTLE_MS = 750;
 export const DELIVERY_DELAY_MS = 1_000;
 export const IDLE_PASS_MS = 30_000;
 export const STORAGE_RETRY_MS = 5_000;
-export const RETAIN_DELIVERED_DAYS = 30;
 const DEFAULT_SKIP_THRESHOLD = 2700;
 const DELIVERY_LOCK = 'ttu-lifestats-delivery';
 
@@ -451,9 +450,6 @@ export class Engine implements LifestatsSync {
       );
     }
     this.server = ready;
-    const cutoff = new Date(this.env.now());
-    cutoff.setDate(cutoff.getDate() - RETAIN_DELIVERED_DAYS);
-    await store.prune(readingDayOf(cutoff), serverId);
     await this.refresh();
   }
 

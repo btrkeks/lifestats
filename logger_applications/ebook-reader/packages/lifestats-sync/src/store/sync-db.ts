@@ -7,13 +7,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 import type { BookIdentity } from '../domain/book-key';
-import {
-  absorb,
-  acknowledge,
-  isPending,
-  type DayObservation,
-  type DayRecord
-} from '../domain/day-record';
+import { absorb, acknowledge, type DayObservation, type DayRecord } from '../domain/day-record';
 import { ready, type DeliveryState } from '../domain/delivery-policy';
 import {
   isBookKey,
@@ -248,18 +242,6 @@ export async function openSyncStore(name = SYNC_DB_NAME) {
       }
       await tx.done;
       changed();
-    },
-
-    /** Drops records the current server has, from days before `before`. The server keeps their union. */
-    async prune(before: ReadingDay, serverId: ServerId): Promise<void> {
-      const tx = db.transaction('days', 'readwrite');
-      for (const row of await tx.store.getAll()) {
-        const record = fromRow(row);
-        if (record && record.day < before && !isPending(record, serverId)) {
-          await tx.store.delete([row.book, row.day]);
-        }
-      }
-      await tx.done;
     },
 
     async identity(localId: number, modified: number): Promise<BookIdentity | undefined> {
