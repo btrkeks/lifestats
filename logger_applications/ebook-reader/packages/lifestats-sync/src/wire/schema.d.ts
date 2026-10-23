@@ -237,7 +237,7 @@ export interface operations {
         producer: string;
         /** @description ttu-text-v1: followed by 64 lowercase hex characters */
         book_key: string;
-        /** @description Strict YYYY-MM-DD reading day (client local, 04:00 rollover) */
+        /** @description Strict YYYY-MM-DD reading day (client local, 04:00 rollover), from 2026-10-01 to two days after the server local date */
         day: string;
       };
       cookie?: never;

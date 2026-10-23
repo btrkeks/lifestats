@@ -19,7 +19,10 @@ Title and local book IDs do not determine identity. `length` is a positive integ
 at most 2^53. The first report fixes the length for that key.
 
 `day` is a strict valid YYYY-MM-DD label, calculated by the client from local time
-with a 04:00 rollover. Days more than two days after the server's local date fail.
+with a 04:00 rollover. Days more than two days after the server's local date fail,
+and so do days before 2026-10-01, when no reader used this protocol. Both answer 422
+with field `day`. A device with a wrong clock parks its record instead of giving
+that day the characters for good.
 `spans` contains at most 4096 sorted, disjoint, non-adjacent half-open integer pairs
 with `0 <= start < end <= length`. Empty spans are valid. `last_position` is an
 integer in `[0,length]`. `observed_at` is RFC 3339. Titles are NFC-normalized and

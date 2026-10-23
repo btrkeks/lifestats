@@ -319,6 +319,8 @@ async fn length_conflict_and_all_validation_errors_leave_state_untouched() {
         (P1, key('A'), MON.to_owned(), "book_key"),
         (P1, key('a'), "2026-02-29".into(), "day"),
         (P1, key('a'), "2026-1-01".into(), "day"),
+        (P1, key('a'), "2000-01-01".into(), "day"),
+        (P1, key('a'), "2026-09-30".into(), "day"),
         (
             P1,
             key('a'),
@@ -371,6 +373,7 @@ async fn length_conflict_and_all_validation_errors_leave_state_untouched() {
     r.assert_status(StatusCode::UNSUPPORTED_MEDIA_TYPE);
     assert_eq!(r.json::<Value>()["error"]["code"], "unsupported_media_type");
     assert_eq!(snapshot(&f), before);
+    put(&f, P1, "2026-10-01", &body(json!([]))).await;
     put(&f, P1, MON, &body(json!([]))).await;
     let before = snapshot(&f);
     let mut changed = body(json!([]));

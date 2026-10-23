@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local, NaiveDate, Utc};
 use events::event_port::EventPublisher;
 use lifestats_application::use_cases::integration::IntegrationServiceTrait;
 use lifestats_core::ebook::{BookKey, BookTitle, EbookDayReport, ProducerId, SpanSet};
@@ -16,6 +16,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
 use utoipa::ToSchema;
+
+/// No reader reported spans before this protocol existed. An earlier day comes from a wrong
+/// device clock, and under the earliest-day rule it would own those characters for good.
+const FIRST_DAY: NaiveDate = match NaiveDate::from_ymd_opt(2026, 10, 1) {
+    Some(day) => day,
+    None => panic!("valid date"),
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct EbookDescriptor {
@@ -77,7 +84,7 @@ pub struct EbookLegacyBookRequest {
     params(
         ("producer" = String, Path, description = "Canonical lowercase UUID of the reporting ttu origin"),
         ("book_key" = String, Path, description = "ttu-text-v1: followed by 64 lowercase hex characters"),
-        ("day" = String, Path, description = "Strict YYYY-MM-DD reading day (client local, 04:00 rollover)")
+        ("day" = String, Path, description = "Strict YYYY-MM-DD reading day (client local, 04:00 rollover), from 2026-10-01 to two days after the server local date")
     ),
     request_body = EbookDayRequest,
     responses(
@@ -109,6 +116,12 @@ where
         return Err(IntegrationApiError::invalid(
             Some("day"),
             "Day must be at most two days after the server local date",
+        ));
+    }
+    if day < FIRST_DAY {
+        return Err(IntegrationApiError::invalid(
+            Some("day"),
+            "Day must be on or after 2026-10-01",
         ));
     }
     let report = EbookDayReport::new(

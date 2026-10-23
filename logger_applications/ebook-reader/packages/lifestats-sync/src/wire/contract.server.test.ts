@@ -185,6 +185,18 @@ describe.skipIf(!raw)('contract with an isolated Lifestats server', () => {
       })
     ).toEqual({ kind: 'delivered' });
 
+    expect(
+      await putDay(
+        fetch,
+        base,
+        producer,
+        record(key, length, [[0, 10]], '2000-01-01' as ReadingDay)
+      )
+    ).toMatchObject({
+      kind: 'needs_fix',
+      problem: { httpStatus: 422, field: 'day' }
+    });
+
     const notLifestats = url(`${base}/no-such-prefix`);
     expect(await describeServer(fetch, notLifestats)).toMatchObject({
       kind: 'needs_fix',

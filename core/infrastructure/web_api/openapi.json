@@ -314,7 +314,7 @@
             }
           },
           {
-            "description": "Strict YYYY-MM-DD reading day (client local, 04:00 rollover)",
+            "description": "Strict YYYY-MM-DD reading day (client local, 04:00 rollover), from 2026-10-01 to two days after the server local date",
             "in": "path",
             "name": "day",
             "required": true,
