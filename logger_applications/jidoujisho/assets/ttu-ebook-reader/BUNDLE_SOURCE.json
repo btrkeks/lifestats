@@ -7,7 +7,6 @@
     },
     "name": "embedded"
   },
-  "commit": "f73281f26f5d574579da3faa6c27d1e42a0f9338",
   "contentHash": "bafa1256217738717cbbc5ed88a1333da8fcd8732f64c01079d08334679eeb5d",
   "dirty": false,
   "files": {
@@ -107,7 +106,8 @@
     "settings.html": "7cd6fbfa75772b220a9da822a9a30495b62eef98708fe7ea9ea29545bfac6c38",
     "statistics.html": "a732797fb260a24568b1309808157259a9ce7f2d8529f01ec9443e152bcf5960"
   },
-  "repository": "https://github.com/btrkeks/lifestats.git",
+  "generation": "f73281f26f5d-b152b562ca0d1270",
+  "path": "../ebook-reader",
   "sourceHash": "9186c45a66130b41995f5cf1c4dafb2826ed838c61965aa84e5404d75d60fa89",
   "toolchain": {
     "image": "node:20.11.1-bookworm-slim@sha256:357deca6eb61149534d32faaf5e4b2e4fa3549c2be610ee1019bf340ea8c51ec",

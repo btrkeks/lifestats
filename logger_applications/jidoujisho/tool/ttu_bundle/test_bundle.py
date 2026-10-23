@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -23,9 +24,14 @@ class BundleVerificationTest(unittest.TestCase):
         (self.assets / '_app/version.json').write_text('{"version":"test-build"}')
         (self.assets / '_app/reader.js').write_text('".book-content";"/auth.html?ttu-init-auth=1";')
         self.lock = self.yuuna / 'bundle.lock.json'
+        self.fork = self.yuuna.parent / 'ebook-reader'
+        self.fork.mkdir(exist_ok=True)
+        self.addCleanup(lambda: __import__('shutil').rmtree(self.fork))
+        subprocess.run(['git', 'init', '-q', str(self.fork)], check=True)
+        (self.fork / 'reader.js').write_text('source')
         config = {
-            'repository': 'https://example.test/fork', 'commit': 'a' * 40,
-            'dirty': False, 'sourceHash': 'b' * 64,
+            'path': '../ebook-reader', 'generation': 'test-build',
+            'dirty': False, 'sourceHash': bundle.source_hash({'reader.js': self.fork / 'reader.js'}),
             'buildProfile': {'env': {'VITE_SERVICE_WORKER': 'off'}},
             'toolchain': {'node': '20.11.1', 'pnpm': '9.15.9'}
         }
@@ -69,10 +75,19 @@ class BundleVerificationTest(unittest.TestCase):
 
     def test_source_pin_drift_fails(self):
         data = json.loads(self.lock.read_text())
-        data['commit'] = 'c' * 40
+        data['generation'] = 'other-generation'
         self.lock.write_text(bundle.encoded(data))
-        with self.assertRaisesRegex(ValueError, 'commit'):
+        with self.assertRaisesRegex(ValueError, 'generation'):
             self.verify()
+
+    def test_sibling_source_drift_fails_and_restore_passes(self):
+        self.verify()
+        file = self.fork / 'reader.js'
+        file.write_text('changed')
+        with self.assertRaisesRegex(ValueError, 'Sibling ebook-reader source drift'):
+            self.verify()
+        file.write_text('source')
+        self.verify()
 
     def test_matching_dirty_lock_and_provenance_fail_verification(self):
         self.verify()
@@ -80,7 +95,7 @@ class BundleVerificationTest(unittest.TestCase):
             data = json.loads(file.read_text())
             data['dirty'] = True
             file.write_text(bundle.encoded(data))
-        with self.assertRaisesRegex(ValueError, 'clean pinned source'):
+        with self.assertRaisesRegex(ValueError, 'clean source'):
             self.verify()
 
     def test_host_contracts_reject_worker_auth_and_live_default(self):
