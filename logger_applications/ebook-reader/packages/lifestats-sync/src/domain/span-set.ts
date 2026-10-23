@@ -66,6 +66,15 @@ export class SpanSet {
     return true;
   }
 
+  /** The part of this set before `end`. */
+  below(end: number): SpanSet {
+    if (this.end <= end) return this;
+    const pairs = this.toPairs()
+      .filter(([start]) => start < end)
+      .map(([start, stop]) => [start, Math.min(stop, end)]);
+    return SpanSet.fromPairs(pairs) ?? SpanSet.empty;
+  }
+
   get size(): number {
     let total = 0;
     for (let i = 0; i < this.bounds.length; i += 2) total += this.bounds[i + 1] - this.bounds[i];
