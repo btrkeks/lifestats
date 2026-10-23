@@ -77,6 +77,11 @@ export interface ReaderBinding {
   setBook(book: LocalBook | null): void;
   /** Every position change. The first one after `relocate()` only moves the anchor. */
   observe(position: number): void;
+  /**
+   * The user turned past the last screen or completed the book. ttu's position stops at the
+   * start of the last screen, so this observes the end of the book under the same rules.
+   */
+  reachedEnd(): void;
   close(): Promise<void>;
 }
 

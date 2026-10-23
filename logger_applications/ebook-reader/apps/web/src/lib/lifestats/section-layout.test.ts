@@ -13,6 +13,7 @@ function recorder() {
   const binding: ReaderBinding = {
     setBook: () => undefined,
     observe: (position) => seen.push(position),
+    reachedEnd: () => undefined,
     close: async () => undefined
   };
   return { seen, binding };

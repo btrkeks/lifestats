@@ -20,7 +20,7 @@ import { legacySource } from './legacy-source';
 import { withoutSectionLayout } from './section-layout';
 
 let sync: LifestatsSync | undefined;
-let layout: ((started: boolean) => void) | undefined;
+let reader: ReturnType<typeof withoutSectionLayout> | undefined;
 
 export function toLocalBook(data: BooksDbBookData): LocalBook {
   return {
@@ -55,12 +55,16 @@ export function relocateReading(): void {
 
 /** The reader page's binding. One per page. */
 export function startReader(options: ReaderOptions): ReaderBinding {
-  const reader = withoutSectionLayout(startSync().reader(options));
-  layout = reader.layout;
+  reader = withoutSectionLayout(startSync().reader(options));
   return reader.binding;
 }
 
 /** The paginated reader is laying out a section; its position until then is not reading. */
 export function sectionLayout(started: boolean): void {
-  layout?.(started);
+  reader?.layout(started);
+}
+
+/** A page turn found no next section: the last screen was read. */
+export function readingReachedEnd(): void {
+  reader?.binding.reachedEnd();
 }

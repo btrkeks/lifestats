@@ -434,6 +434,28 @@ describe('recording', () => {
     expect((await storedSpans(r.name)).toPairs()).toEqual([]);
   });
 
+  it('credits the last screen when the reader reaches the end', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    read(r, binding, 9000, 9600);
+    r.clock.advance(10);
+    binding.reachedEnd();
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[9000, 10_000]]);
+  });
+
+  it('credits nothing for a jump to the end', async () => {
+    const r = await open(new FakeServer());
+    const binding = await readerFor(r);
+    binding.observe(1000);
+    r.clock.advance(600);
+    binding.reachedEnd();
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([]);
+  });
+
   it('credits the first page turned after opening a book', async () => {
     const r = await open(new FakeServer());
     const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });

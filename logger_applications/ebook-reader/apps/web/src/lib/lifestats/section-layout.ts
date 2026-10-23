@@ -19,6 +19,7 @@ export function withoutSectionLayout(binding: ReaderBinding) {
       observe(position) {
         if (!layingOut) binding.observe(position);
       },
+      reachedEnd: () => binding.reachedEnd(),
       close: () => binding.close()
     } satisfies ReaderBinding,
     layout(started: boolean) {

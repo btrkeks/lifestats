@@ -595,6 +595,11 @@ class Binding implements ReaderBinding {
     };
   }
 
+  reachedEnd(): void {
+    const length = this.book?.identity?.length;
+    if (length !== undefined) this.observe(length);
+  }
+
   /** Hidden time is not reading time, so it neither credits nor refills the budget. */
   hide(): void {
     this.trail = release(this.trail);

@@ -619,6 +619,8 @@
       return;
     }
 
+    lifestatsReader?.reachedEnd();
+
     dialogManager.dialogs$.next([
       {
         component: '<div/>',
