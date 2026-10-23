@@ -93,7 +93,7 @@
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function animateRipple(node: HTMLElement, params: any) {
+  function animateRipple(node: HTMLElement, params?: any) {
     return {
       delay: 0,
       duration: 400,
