@@ -333,6 +333,19 @@ describe('recording', () => {
     expect((await storedSpans(r.name)).toPairs()).toEqual([[5000, 5300]]);
   });
 
+  it('credits the first page turned after opening a book', async () => {
+    const r = await open(new FakeServer());
+    const binding = r.engine.reader({ forwardSkipThreshold: () => 2700 });
+    binding.observe(0);
+    binding.setBook(book(1, TEXT));
+    await r.engine.flush();
+    r.clock.advance(30);
+    binding.observe(700);
+    await r.engine.flush();
+
+    expect((await storedSpans(r.name)).toPairs()).toEqual([[0, 700]]);
+  });
+
   it('credits a page turn into the next section despite the layout reset to 0', async () => {
     const r = await open(new FakeServer());
     const binding = await readerFor(r);

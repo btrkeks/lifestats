@@ -557,6 +557,8 @@ class Binding implements ReaderBinding {
   private book: { readonly local: LocalBook; identity: BookIdentity | null | undefined } | null =
     null;
   private unkeyed: { spans: SpanSet; position: number; atMs: number }[] = [];
+  /** The reader reports a position only when it changes, often before the book is known. */
+  private lastPosition: number | null = null;
 
   constructor(
     private readonly engine: Engine,
@@ -570,7 +572,10 @@ class Binding implements ReaderBinding {
     ) {
       return;
     }
-    this.trail = emptyTrail;
+    this.trail =
+      this.lastPosition === null
+        ? emptyTrail
+        : relocate(emptyTrail, this.lastPosition, this.engine.now(), this.policy()).trail;
     this.unkeyed = [];
     this.engine.openBook.set(null);
     if (!local) {
@@ -600,16 +605,21 @@ class Binding implements ReaderBinding {
     // ttu reports 0 while it lays out a new section, so a page turn into the next section is
     // not a move back to the start. Programmatic moves to 0 still re-anchor.
     if (position === 0 && !settling && (this.trail.anchor?.position ?? 0) > 0) return;
-    const threshold = this.options.forwardSkipThreshold();
-    const policy = {
-      forwardSkipThreshold:
-        Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SKIP_THRESHOLD
-    };
+    this.lastPosition = position;
+    const policy = this.policy();
     const step = settling
       ? relocate(this.trail, position, atMs, policy)
       : observe(this.trail, position, atMs, policy);
     this.trail = step.trail;
     this.emit(step.kind === 'read' ? step.spans : SpanSet.empty, position, atMs);
+  }
+
+  private policy() {
+    const threshold = this.options.forwardSkipThreshold();
+    return {
+      forwardSkipThreshold:
+        Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SKIP_THRESHOLD
+    };
   }
 
   release(): void {
