@@ -46,3 +46,8 @@ For emulator verification, the shared harness accepts `JIDOUJISHO_PACKAGE` with
 The launcher component is
 `com.btrkeks.jidoujisho/app.arianneorpilla.yuuna.MainActivity`.
 Hold the shared emulator lock and always use an explicit emulator serial.
+
+The [cutover runbook](cutover.md) records the server, laptop, and phone steps.
+Its matching state copy is `~/.local/state/pstack-t3/jidoujisho-lifestats/cutover.md`.
+Phone commands there are future operator steps. The phone was off limits during
+vendor implementation.
