@@ -566,6 +566,54 @@ describe('legacy v7 rows', () => {
     expect(server.legacyTotal()).toBe(800);
   });
 
+  it('holds only the book of a rejected row and delivers everything else', async () => {
+    const server = new FakeServer();
+    const other = '犬'.repeat(5_000);
+    const legacy = v7Source();
+    legacy.queuedRows.push({
+      ...legacyRow('b0b0b0b0-0000-4000-8000-000000000002', 100, 100, 3, 2),
+      title: ' '
+    });
+    legacy.library.set(2, { title: 'Book 2', characters: 5_000 });
+    const r = await open(server, dbName(), {
+      legacy,
+      books: [book(1, TEXT), book(2, other, 'Book 2')]
+    });
+    await configure(r);
+    const first = await readerFor(r);
+    read(r, first, 0, 600);
+    await first.close();
+    const second = r.engine.reader({ forwardSkipThreshold: () => 2700 });
+    second.setBook(book(2, other, 'Book 2'));
+    await r.engine.flush();
+    read(r, second, 0, 900);
+    await r.engine.drain(5_000);
+
+    expect(server.legacyTotal()).toBe(800);
+    expect(server.claims.has(1)).toBe(true);
+    expect(server.credited(await key())).toBe(600);
+    expect(server.claims.has(2)).toBe(false);
+    const otherKey = (await bookIdentity(other))?.key ?? '';
+    expect(server.credited(otherKey)).toBe(0);
+    expect(status(r)).toMatchObject({
+      kind: 'blocked',
+      blockedBooks: [{ title: 'Book 2', problem: { kind: 'rejected', httpStatus: 400 } }]
+    });
+  });
+
+  it('sends a stored target of 0 as a positive target', async () => {
+    const server = new FakeServer();
+    const legacy = v7Source();
+    legacy.queuedRows[0] = { ...legacy.queuedRows[0], targetCharacters: 0 };
+    const r = await open(server, dbName(), { legacy });
+    await configure(r);
+
+    expect(server.legacyEvents.get(legacy.queuedRows[0].eventId)).toMatchObject({
+      book_target_characters: 300
+    });
+    expect(status(r).kind).toBe('synced');
+  });
+
   it('reports a legacy book that left the library and still drains its rows', async () => {
     const server = new FakeServer();
     const r = await open(server, dbName(), { legacy: v7Source(), books: [] });

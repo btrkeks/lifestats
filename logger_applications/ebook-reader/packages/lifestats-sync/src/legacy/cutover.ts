@@ -116,12 +116,26 @@ export class LegacyCutover {
       if (provisioned.kind !== 'delivered') return provisioned;
     }
 
+    // A rejected row parks itself and holds its book; the other books keep moving.
+    const rejected = new Map<number, DeliveryProblem>();
     for (const unit of open) {
-      const delivery = receipts.get(unit.id)?.delivery ?? ready;
-      if (!isDue(delivery, context)) continue;
+      const receipt = receipts.get(unit.id);
+      const delivery = receipt?.delivery ?? ready;
+      if (!isDue(delivery, context)) {
+        if (delivery.kind === 'parked') rejected.set(unit.readerDataId, delivery.problem);
+        continue;
+      }
       const outcome = await postLegacyEvent(fetch, base, unit.event);
-      if (outcome.kind !== 'delivered') return outcome;
-      await this.write(receipts, unit.id, { sentTo: serverId, delivery: ready });
+      if (outcome.kind === 'retryable') return outcome;
+      if (outcome.kind === 'delivered') {
+        await this.write(receipts, unit.id, { sentTo: serverId, delivery: ready });
+        continue;
+      }
+      await this.write(receipts, unit.id, {
+        sentTo: receipt?.sentTo ?? null,
+        delivery: nextDeliveryState(delivery, outcome, context, target.random)
+      });
+      rejected.set(unit.readerDataId, outcome.problem);
     }
 
     const held = new Set<BookKey>();
@@ -133,10 +147,11 @@ export class LegacyCutover {
       if (ackedBy(receipt, serverId)) continue;
       const local = await this.library.book(readerDataId);
       const identity = local && (await this.identityFor(local).catch(() => undefined));
+      const rejection = rejected.get(readerDataId);
       if (!local || !identity) {
         blocked.push({
           title: titles.get(readerDataId) ?? `ttu book ${readerDataId}`,
-          problem: { kind: 'not_in_library', readerDataId }
+          problem: rejection ?? { kind: 'not_in_library', readerDataId }
         });
         continue;
       }
@@ -144,6 +159,10 @@ export class LegacyCutover {
         held.add(identity.key);
         if (problem) blocked.push({ title: local.title, problem });
       };
+      if (rejection) {
+        hold(rejection);
+        continue;
+      }
       const delivery = receipt?.delivery ?? ready;
       if (!isDue(delivery, context)) {
         hold(delivery.kind === 'parked' ? delivery.problem : null);
@@ -211,7 +230,7 @@ export class LegacyCutover {
           book_id: row.readerDataId,
           book_title: row.title,
           confirmed_position_after: row.positionAfter,
-          book_target_characters: row.targetCharacters ?? Math.max(row.positionAfter, 1)
+          book_target_characters: row.targetCharacters || Math.max(row.positionAfter, 1)
         }
       }));
     for (const tail of tails) {

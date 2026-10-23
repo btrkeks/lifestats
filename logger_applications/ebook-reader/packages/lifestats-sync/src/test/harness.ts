@@ -69,6 +69,9 @@ export class FakeServer {
     }
     if (method === 'POST' && path === '/integrations/ebook') return json(200, { ebook: 1 });
     if (method === 'POST' && path === '/integrations/ebook/events' && body) {
+      if (String(body.book_title).trim() === '' || Number(body.book_target_characters) <= 0) {
+        return json(400, { error: { code: 'bad_request', field: null, message: 'Invalid event' } });
+      }
       const id = String(body.event_id);
       const duplicate = this.legacyEvents.has(id);
       if (!duplicate) this.legacyEvents.set(id, body);
