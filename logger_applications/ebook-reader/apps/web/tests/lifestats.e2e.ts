@@ -95,7 +95,7 @@ async function closePanel(page: Page) {
 
 async function configure(page: Page) {
   await openPanel(page);
-  await page.locator('[data-lifestats-url]').fill('http://user:secret@127.0.0.1:3920');
+  await page.locator('[data-lifestats-url]').fill(SERVER.replace('://', '://user:secret@'));
   await page.locator('[data-lifestats-save]').click();
   await expect(page.locator('[data-lifestats-result]')).toHaveText(
     'Remove the user name and password from the address.'
@@ -130,6 +130,31 @@ async function advance(page: Page, mode: 'page' | 'scroll', steps: number) {
 
 async function position(page: Page): Promise<number> {
   return Number((await page.locator('#ttu-page-footer').innerText()).split(' ')[0]);
+}
+
+/** Page turns or scroll steps at a creditable pace until the position stops moving. */
+async function readToEnd(page: Page, mode: 'page' | 'scroll') {
+  await page.clock.fastForward(30_000);
+  let last = await position(page);
+  for (let still = 0, steps = 0; still < 2 && steps < 400; steps += 1) {
+    await advance(page, mode, 1);
+    const now = await position(page);
+    still = now === last ? still + 1 : 0;
+    last = now;
+  }
+  return last;
+}
+
+/** What the browser does when the user switches to another app and back. */
+async function setVisibility(page: Page, state: 'hidden' | 'visible') {
+  await page.evaluate((value) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value });
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => value === 'hidden'
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
 }
 
 async function stored(page: Page) {
@@ -393,6 +418,105 @@ test.describe('browser profile', () => {
     const after = await spansOf(page);
     expect(after.length).toBe(before.length + 1);
     expect(after[after.length - 1][0]).toBeGreaterThan(before[before.length - 1][1] + 2700);
+    await expectServerMatches(page);
+  });
+
+  test('reading the whole book page by page credits every character, the last screen too', async ({
+    browser
+  }) => {
+    const { context, page } = await profile(browser, {
+      viewMode: 'paginated',
+      writingMode: 'vertical-rl'
+    });
+    contexts.push(context);
+    await importBook(page);
+    await openBook(page);
+    await configure(page);
+    expect(await readToEnd(page, 'page')).toBeLessThan(LENGTH);
+
+    expect(await drain(page)).toBe('idle');
+    expect(await spansOf(page)).toEqual([[0, LENGTH]]);
+    await expectServerMatches(page);
+  });
+
+  test('completing the book in continuous mode credits the last screen', async ({ browser }) => {
+    const { context, page } = await profile(browser, {
+      viewMode: 'continuous',
+      writingMode: 'horizontal-tb'
+    });
+    contexts.push(context);
+    await importBook(page);
+    await openBook(page);
+    await configure(page);
+    const end = await readToEnd(page, 'scroll');
+    expect(end).toBeLessThan(LENGTH);
+    await page.clock.fastForward(30_000);
+    await page.mouse.click(640, 8);
+    await page.getByTitle('Complete Book').click();
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    await page.waitForTimeout(500);
+
+    expect(await drain(page)).toBe('idle');
+    const spans = await spansOf(page);
+    expect(spans[spans.length - 1]).toEqual([expect.any(Number), LENGTH]);
+    expect(size(spans)).toBeGreaterThan(LENGTH - end);
+    await expectServerMatches(page);
+  });
+
+  test('the first page read after returning to the reader counts', async ({ browser }) => {
+    const { context, page } = await profile(browser, {
+      viewMode: 'paginated',
+      writingMode: 'vertical-rl'
+    });
+    contexts.push(context);
+    await importBook(page);
+    await openBook(page);
+    await configure(page);
+    await page.clock.fastForward(30_000);
+    await advance(page, 'page', 3);
+    await setVisibility(page, 'hidden');
+    await page.clock.fastForward(120_000);
+    await setVisibility(page, 'visible');
+    await page.clock.fastForward(30_000);
+    await advance(page, 'page', 2);
+
+    expect(await drain(page)).toBe('idle');
+    expect(await spansOf(page)).toEqual([[0, await position(page)]]);
+    await expectServerMatches(page);
+  });
+
+  test('a chapter jump whose section loads late credits nothing', async ({ browser }) => {
+    const { context, page } = await profile(browser, {
+      viewMode: 'paginated',
+      writingMode: 'vertical-rl'
+    });
+    contexts.push(context);
+    await importBook(page);
+    await openBook(page);
+    await configure(page);
+    await advance(page, 'page', 3);
+    expect(await drain(page)).toBe('idle');
+    const before = await spansOf(page);
+    const from = await position(page);
+    await page.clock.fastForward(120_000);
+
+    // ttu renders a section on animation frames, which the paused fake clock holds back.
+    const pressedAt = await page.evaluate(() => Date.now());
+    await page.clock.pauseAt(pressedAt + 10);
+    await page.keyboard.press('n');
+    await page.waitForTimeout(200);
+    await page.clock.fastForward(1_000);
+    await page.clock.resume();
+    await expect.poll(() => position(page), { timeout: 30_000 }).toBeGreaterThan(from);
+    const loadMs = (await page.evaluate(() => Date.now())) - pressedAt;
+    test.info().annotations.push({ type: 'chapter load', description: `${loadMs} ms` });
+    const chapter = await position(page);
+    expect(chapter - from).toBeGreaterThan(0);
+    expect(chapter - from).toBeLessThan(2700);
+    expect(loadMs).toBeGreaterThan(750);
+
+    expect(await drain(page)).toBe('idle');
+    expect(await spansOf(page)).toEqual(before);
     await expectServerMatches(page);
   });
 
