@@ -1,0 +1,112 @@
+{"command": "python3 /home/daniel/.local/state/lifestats-architecture-review/2026-10-23-prototypes/storage/run.py --variant all", "data": "synthetic only; temporary SQLite databases below storage/ removed at exit", "exit_policy": "Nonzero only for runner failures. Unsupported operations and design limitations are observations.", "numeric_boundary": "Python arbitrary precision, explicitly checked i128 intermediates and i64 final totals, manual/source amounts. Contributor residuals are decimal TEXT. Not a Rust execution.", "python": "3.14.8", "source_revision_matches": true, "source_revision_observed": "607978998c72b1e14a95518d32fbfeafe2f7fed6", "source_revision_requested": "607978998c72b1e14a95518d32fbfeafe2f7fed6", "sqlite": "3.54.0"}
+aggregate_ledger source_identity_and_clear/A10_B5: ['applied', 'applied'] totals 2026-10-20=15
+aggregate_ledger source_identity_and_clear/A12_preserves_B: ['applied'] totals 2026-10-20=17
+aggregate_ledger source_identity_and_clear/identical_snapshot: ['unchanged'] totals 2026-10-20=17
+aggregate_ledger source_identity_and_clear/same_value_new_revision: ['applied'] totals 2026-10-20=17
+aggregate_ledger source_identity_and_clear/same_revision_different_value: ['revision_conflict'] totals 2026-10-20=17
+aggregate_ledger source_identity_and_clear/second_day: ['applied'] totals 2026-10-20=17,2026-10-21=7
+aggregate_ledger source_identity_and_clear/clear_A_omits_second_day: ['applied'] totals 2026-10-20=5,2026-10-21=7
+aggregate_ledger source_identity_and_clear/older_snapshot_after_clear: ['stale'] totals 2026-10-20=5,2026-10-21=7
+aggregate_ledger manual_add/A10_B5: ['applied', 'applied'] totals 2026-10-20=15
+aggregate_ledger manual_add/add_manual_3: ['applied_but_manual_attribution_not_stored'] totals 2026-10-20=18
+aggregate_ledger manual_add/correct_A12: ['applied'] totals 2026-10-20=20
+aggregate_ledger manual_contribution_set_10_4_12/source10: ['applied'] totals 2026-10-20=10
+aggregate_ledger manual_contribution_set_10_4_12/set_manual_contribution4: ['unsupported_independent_manual_contribution'] totals 2026-10-20=10
+aggregate_ledger manual_contribution_set_10_4_12/source12: ['applied'] totals 2026-10-20=12
+aggregate_ledger legacy_aggregate_set_10_4_12/source10: ['applied'] totals 2026-10-20=10
+aggregate_ledger legacy_aggregate_set_10_4_12/set_aggregate4: ['applied'] totals 2026-10-20=4
+aggregate_ledger legacy_aggregate_set_10_4_12/source12: ['applied'] totals 2026-10-20=6
+aggregate_ledger aggregate_set_preserves_known_manual/source10: ['applied'] totals 2026-10-20=10
+aggregate_ledger aggregate_set_preserves_known_manual/manual_add3: ['applied_but_manual_attribution_not_stored'] totals 2026-10-20=13
+aggregate_ledger aggregate_set_preserves_known_manual/set_aggregate4: ['applied'] totals 2026-10-20=4
+aggregate_ledger aggregate_set_preserves_known_manual/source12: ['applied'] totals 2026-10-20=6
+aggregate_ledger negative_legacy_remainder/migrate_aggregate4_source10: ['applied'] totals 2026-10-20=4
+aggregate_ledger negative_legacy_remainder/source12: ['applied'] totals 2026-10-20=6
+aggregate_ledger wide_legacy_remainder/migrate_MIN_source1: ['applied'] totals 2026-10-20=-9223372036854775808
+aggregate_ledger wide_legacy_remainder/source1_replacement_final_fits: ['applied'] totals 2026-10-20=-9223372036854775808
+aggregate_ledger wide_legacy_remainder/clear_would_overflow_final: ['i64_range'] totals 2026-10-20=-9223372036854775808
+aggregate_ledger mixed_baseline/opaque_total10: ['applied'] totals 2026-10-20=10
+aggregate_ledger mixed_baseline/full_A_backfill10_refused: ['needs_reconciliation'] totals 2026-10-20=10
+aggregate_ledger mixed_baseline/exclusive_adoption_without_evidence_refused: ['needs_reconciliation'] totals 2026-10-20=10
+aggregate_ledger known_exclusive_adoption/known_A_exclusive_total10: ['applied'] totals 2026-10-20=10
+aggregate_ledger known_exclusive_adoption/mismatched_adoption_refused: ['exclusive_totals_mismatch'] totals 2026-10-20=10
+aggregate_ledger known_exclusive_adoption/adopt_matching_A10: ['applied'] totals 2026-10-20=10
+aggregate_ledger known_exclusive_adoption/source12: ['applied'] totals 2026-10-20=12
+aggregate_ledger source_record_move/record_old_day10_new_day_B5: ['applied', 'applied'] totals 2026-10-20=10,2026-10-21=5
+aggregate_ledger source_record_move/move_rollback: ['applied'] totals 2026-10-20=10,2026-10-21=5
+aggregate_ledger source_record_move/move_commit: ['applied', 'applied'] totals 2026-10-20=0,2026-10-21=15
+contributor_rows source_identity_and_clear/A10_B5: ['applied', 'applied'] totals 2026-10-20=15
+contributor_rows source_identity_and_clear/A12_preserves_B: ['applied'] totals 2026-10-20=17
+contributor_rows source_identity_and_clear/identical_snapshot: ['unchanged'] totals 2026-10-20=17
+contributor_rows source_identity_and_clear/same_value_new_revision: ['applied'] totals 2026-10-20=17
+contributor_rows source_identity_and_clear/same_revision_different_value: ['revision_conflict'] totals 2026-10-20=17
+contributor_rows source_identity_and_clear/second_day: ['applied'] totals 2026-10-20=17,2026-10-21=7
+contributor_rows source_identity_and_clear/clear_A_omits_second_day: ['applied'] totals 2026-10-20=5,2026-10-21=7
+contributor_rows source_identity_and_clear/older_snapshot_after_clear: ['stale'] totals 2026-10-20=5,2026-10-21=7
+contributor_rows manual_add/A10_B5: ['applied', 'applied'] totals 2026-10-20=15
+contributor_rows manual_add/add_manual_3: ['applied'] totals 2026-10-20=18
+contributor_rows manual_add/correct_A12: ['applied'] totals 2026-10-20=20
+contributor_rows manual_contribution_set_10_4_12/source10: ['applied'] totals 2026-10-20=10
+contributor_rows manual_contribution_set_10_4_12/set_manual_contribution4: ['applied'] totals 2026-10-20=14
+contributor_rows manual_contribution_set_10_4_12/source12: ['applied'] totals 2026-10-20=16
+contributor_rows legacy_aggregate_set_10_4_12/source10: ['applied'] totals 2026-10-20=10
+contributor_rows legacy_aggregate_set_10_4_12/set_aggregate4: ['applied'] totals 2026-10-20=4
+contributor_rows legacy_aggregate_set_10_4_12/source12: ['applied'] totals 2026-10-20=6
+contributor_rows aggregate_set_preserves_known_manual/source10: ['applied'] totals 2026-10-20=10
+contributor_rows aggregate_set_preserves_known_manual/manual_add3: ['applied'] totals 2026-10-20=13
+contributor_rows aggregate_set_preserves_known_manual/set_aggregate4: ['applied'] totals 2026-10-20=4
+contributor_rows aggregate_set_preserves_known_manual/source12: ['applied'] totals 2026-10-20=6
+contributor_rows negative_legacy_remainder/migrate_aggregate4_source10: ['applied'] totals 2026-10-20=4
+contributor_rows negative_legacy_remainder/source12: ['applied'] totals 2026-10-20=6
+contributor_rows wide_legacy_remainder/migrate_MIN_source1: ['applied'] totals 2026-10-20=-9223372036854775808
+contributor_rows wide_legacy_remainder/source1_replacement_final_fits: ['applied'] totals 2026-10-20=-9223372036854775808
+contributor_rows wide_legacy_remainder/clear_would_overflow_final: ['i64_range'] totals 2026-10-20=-9223372036854775808
+contributor_rows mixed_baseline/opaque_total10: ['applied'] totals 2026-10-20=10
+contributor_rows mixed_baseline/full_A_backfill10_refused: ['needs_reconciliation'] totals 2026-10-20=10
+contributor_rows mixed_baseline/exclusive_adoption_without_evidence_refused: ['needs_reconciliation'] totals 2026-10-20=10
+contributor_rows known_exclusive_adoption/known_A_exclusive_total10: ['applied'] totals 2026-10-20=10
+contributor_rows known_exclusive_adoption/mismatched_adoption_refused: ['exclusive_totals_mismatch'] totals 2026-10-20=10
+contributor_rows known_exclusive_adoption/adopt_matching_A10: ['applied'] totals 2026-10-20=10
+contributor_rows known_exclusive_adoption/source12: ['applied'] totals 2026-10-20=12
+contributor_rows source_record_move/record_old_day10_new_day_B5: ['applied', 'applied'] totals 2026-10-20=10,2026-10-21=5
+contributor_rows source_record_move/move_rollback: ['applied'] totals 2026-10-20=10,2026-10-21=5
+contributor_rows source_record_move/move_commit: ['applied', 'applied'] totals 2026-10-20=0,2026-10-21=15
+command_log source_identity_and_clear/A10_B5: ['applied', 'applied'] totals 2026-10-20=15
+command_log source_identity_and_clear/A12_preserves_B: ['applied'] totals 2026-10-20=17
+command_log source_identity_and_clear/identical_snapshot: ['unchanged'] totals 2026-10-20=17
+command_log source_identity_and_clear/same_value_new_revision: ['applied'] totals 2026-10-20=17
+command_log source_identity_and_clear/same_revision_different_value: ['revision_conflict'] totals 2026-10-20=17
+command_log source_identity_and_clear/second_day: ['applied'] totals 2026-10-20=17,2026-10-21=7
+command_log source_identity_and_clear/clear_A_omits_second_day: ['applied'] totals 2026-10-20=5,2026-10-21=7
+command_log source_identity_and_clear/older_snapshot_after_clear: ['stale'] totals 2026-10-20=5,2026-10-21=7
+command_log manual_add/A10_B5: ['applied', 'applied'] totals 2026-10-20=15
+command_log manual_add/add_manual_3: ['applied'] totals 2026-10-20=18
+command_log manual_add/correct_A12: ['applied'] totals 2026-10-20=20
+command_log manual_contribution_set_10_4_12/source10: ['applied'] totals 2026-10-20=10
+command_log manual_contribution_set_10_4_12/set_manual_contribution4: ['applied'] totals 2026-10-20=14
+command_log manual_contribution_set_10_4_12/source12: ['applied'] totals 2026-10-20=16
+command_log legacy_aggregate_set_10_4_12/source10: ['applied'] totals 2026-10-20=10
+command_log legacy_aggregate_set_10_4_12/set_aggregate4: ['applied'] totals 2026-10-20=4
+command_log legacy_aggregate_set_10_4_12/source12: ['applied'] totals 2026-10-20=6
+command_log aggregate_set_preserves_known_manual/source10: ['applied'] totals 2026-10-20=10
+command_log aggregate_set_preserves_known_manual/manual_add3: ['applied'] totals 2026-10-20=13
+command_log aggregate_set_preserves_known_manual/set_aggregate4: ['applied'] totals 2026-10-20=4
+command_log aggregate_set_preserves_known_manual/source12: ['applied'] totals 2026-10-20=6
+command_log negative_legacy_remainder/migrate_aggregate4_source10: ['applied'] totals 2026-10-20=4
+command_log negative_legacy_remainder/source12: ['applied'] totals 2026-10-20=6
+command_log wide_legacy_remainder/migrate_MIN_source1: ['applied'] totals 2026-10-20=-9223372036854775808
+command_log wide_legacy_remainder/source1_replacement_final_fits: ['applied'] totals 2026-10-20=-9223372036854775808
+command_log wide_legacy_remainder/clear_would_overflow_final: ['i64_range'] totals 2026-10-20=-9223372036854775808
+command_log mixed_baseline/opaque_total10: ['applied'] totals 2026-10-20=10
+command_log mixed_baseline/full_A_backfill10_refused: ['needs_reconciliation'] totals 2026-10-20=10
+command_log mixed_baseline/exclusive_adoption_without_evidence_refused: ['needs_reconciliation'] totals 2026-10-20=10
+command_log known_exclusive_adoption/known_A_exclusive_total10: ['applied'] totals 2026-10-20=10
+command_log known_exclusive_adoption/mismatched_adoption_refused: ['exclusive_totals_mismatch'] totals 2026-10-20=10
+command_log known_exclusive_adoption/adopt_matching_A10: ['applied'] totals 2026-10-20=10
+command_log known_exclusive_adoption/source12: ['applied'] totals 2026-10-20=12
+command_log source_record_move/record_old_day10_new_day_B5: ['applied', 'applied'] totals 2026-10-20=10,2026-10-21=5
+command_log source_record_move/move_rollback: ['applied'] totals 2026-10-20=10,2026-10-21=5
+command_log source_record_move/move_commit: ['applied', 'applied'] totals 2026-10-20=0,2026-10-21=15
+i64 boundary: residual=-9223372036854775809, native bind=unsupported, SQL SUM(TEXT) type=real
+interval rows: same overlap gives sum=20 and union=15; the metric chooses its policy
+ISSUES. Comparison completed. Observations saved to /home/daniel/.local/state/lifestats-architecture-review/2026-10-23-prototypes/storage/results.json

@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scratch.invalid/SafeNumber",
+  "$ref": "#/components/schemas/SafeNumber",
+  "components": {
+    "schemas": {
+      "Contract": {
+        "type": "object",
+        "required": [
+          "activity_date",
+          "observed_at",
+          "value",
+          "goal",
+          "note"
+        ],
+        "properties": {
+          "activity_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "value": {
+            "$ref": "#/components/schemas/MetricValue"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DecimalAmount": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "amount"
+                ]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DecimalI64"
+              }
+            }
+          }
+        ]
+      },
+      "DecimalI64": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*|-[1-9][0-9]*)$"
+      },
+      "DecimalRevision": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "invalid_input",
+          "out_of_range",
+          "invalid_decimal",
+          "stale",
+          "operation_payload_mismatch"
+        ]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "required": [
+          "code",
+          "field",
+          "message",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "field": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Goal": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "inherited"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "explicit"
+                ]
+              },
+              "value": {
+                "$ref": "#/components/schemas/MetricValue"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "suppressed"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "MetricValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "amount"
+                ]
+              },
+              "value": {
+                "$ref": "#/components/schemas/SafeNumber"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "start",
+              "end",
+              "kind"
+            ],
+            "properties": {
+              "end": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "time_span"
+                ]
+              },
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "completed",
+              "kind"
+            ],
+            "properties": {
+              "completed": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "habit"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "OpaqueRevision": {
+        "type": "string",
+        "minLength": 1
+      },
+      "RawI64Number": {
+        "type": "integer",
+        "format": "int64"
+      },
+      "SafeNumber": {
+        "type": "integer",
+        "maximum": 9007199254740991,
+        "minimum": -9007199254740991
+      }
+    }
+  }
+}

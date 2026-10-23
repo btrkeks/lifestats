@@ -1,0 +1,19 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-audit-r1",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-audit-r1",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A5f6e714d-a8eb-44d4-a012-3a7026b748f2%253Adelegate-task%253Alifestats-prototype-20261023-audit-r1:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-audit-r1",
+  "status": "running",
+  "workState": "working",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": null,
+  "latestTerminalStatus": null,
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "claudeAgent",
+  "model": "claude-opus-5-5",
+  "summary": null,
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "waitTimedOut": false
+}

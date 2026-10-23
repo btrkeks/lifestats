@@ -1,0 +1,7 @@
+{
+  "source_citations_checked": 41,
+  "local_links_checked": 27,
+  "tabs_checked": 7,
+  "errors": [],
+  "scope": "Static artifact checks. Browser layout and interaction are verified separately with html_preview."
+}

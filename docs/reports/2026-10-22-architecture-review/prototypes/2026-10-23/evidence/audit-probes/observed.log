@@ -1,0 +1,2 @@
+P1 plain restore: phone-2 base token server-a:2 -> conditional set outcome applied against a base it never saw; total 1
+P2 reused op id for new identical add: applied duplicate total 5 (user intended 10)

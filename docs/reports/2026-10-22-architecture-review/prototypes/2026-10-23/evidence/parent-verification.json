@@ -1,0 +1,61 @@
+{
+  "sourceRevision": "607978998c72b1e14a95518d32fbfeafe2f7fed6",
+  "storage": {
+    "command": "python3 storage/run.py --variant all",
+    "exitCode": 0,
+    "output": "storage/parent-rerun.log",
+    "scope": "Three SQLite organizations, shared semantics, synthetic only."
+  },
+  "api": {
+    "command": "bash api/run.sh",
+    "exitCode": 0,
+    "output": "api/parent-rerun.log",
+    "typecheck": "tsc --noEmit executed inside observe.cjs",
+    "workerManifest": {
+      "stableSourcesAndSemanticResultsMatched": true,
+      "diagnosticLogMismatches": [
+        "console.log",
+        "rust-run.log",
+        "types-generation.log"
+      ],
+      "fullOriginalManifestPassed": false,
+      "evidence": "api/parent-manifest-check.log"
+    }
+  },
+  "sync": {
+    "command": "python3 sync/run.py --variant all --output sync/results.json",
+    "exitCode": 0,
+    "output": "sync/run.log",
+    "scope": "Real SQLite effects/receipts, close/reopen and backup; deterministic schedules. Loopback HTTP for cache only."
+  },
+  "viewer": {
+    "builder": "python3 build_report.py",
+    "exitCode": 0,
+    "qa": "evidence/browser-qa-final.json",
+    "scope": "728px light and 360px dark; all tabs, last selectors, expanded details; no overflow or browser errors observed.",
+    "publication": "evidence/publication.json"
+  },
+  "archive": {
+    "path": "/home/daniel/.local/share/src/lifestats/docs/reports/2026-10-22-architecture-review/prototypes/2026-10-23",
+    "capturedFiles": 242,
+    "hashAndReadmeLinkCheck": "passed",
+    "scope": "Final capture after audit response and publication; dependencies, build targets, databases and pycache excluded."
+  },
+  "auditTaskId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-audit-r1",
+  "remaining": [],
+  "postAudit": {
+    "review": "evidence/audit-review.md",
+    "response": "evidence/audit-response.md",
+    "affectedReruns": [
+      "storage/parent-post-audit.log",
+      "sync/run.log",
+      "evidence/audit-probes/observed.log"
+    ],
+    "newObservations": [
+      "known total adjustment retains unknown legacy residual",
+      "plain restore accepts a stale reused version token",
+      "restored-client operation-ID reuse drops a new identical intent"
+    ],
+    "independentlyReaudited": false
+  }
+}

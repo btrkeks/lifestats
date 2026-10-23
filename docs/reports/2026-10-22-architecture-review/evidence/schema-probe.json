@@ -1,0 +1,9 @@
+{
+  "migrations_loaded": 14,
+  "logging_data_foreign_keys": [],
+  "duplicate_canonical_source_rows": 2,
+  "forced_read_read_write_write_final_value": "1",
+  "orphan_log_rows_accepted": 1,
+  "new_statistic_id_after_highest_id_deleted": 2,
+  "scope": "Actual migrations; synthetic in-memory rows and forced sequential statement schedule. Not Rust runtime concurrency or production incidence."
+}

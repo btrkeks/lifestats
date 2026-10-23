@@ -1,0 +1,7 @@
+{
+  "attachmentId": "4bdd446d-98fd-4fbe-b5c1-5eb16fead519-139405d1-66f1-4d0d-b23d-f3f4fba5c645-html",
+  "title": "Lifestats architecture review",
+  "artifact": "report.html",
+  "status": "Published inline through T3 html_render after final desktop/light and phone/dark previews.",
+  "scope": "Analysis and proposed design only; no application implementation, live data change, commit, or deployment."
+}

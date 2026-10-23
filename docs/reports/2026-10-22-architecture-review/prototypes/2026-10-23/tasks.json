@@ -1,0 +1,26 @@
+[
+  {
+    "status": "fulfilled",
+    "value": {
+      "slice": "lifestats-prototype-20261023-storage-r1",
+      "taskId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-storage-r1",
+      "status": "completed"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "slice": "lifestats-prototype-20261023-api-r1",
+      "taskId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-api-r1",
+      "status": "completed"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "slice": "lifestats-prototype-20261023-audit-r1",
+      "taskId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-audit-r1",
+      "status": "completed"
+    }
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "amount_goal_target": 10,
+  "amount_reported_percentage": 44,
+  "amount_value": 30,
+  "overlapping_intervals_raw_total_seconds": 14400,
+  "reversed_interval_deserialization_accepted": true,
+  "scope": "Pure public domain methods, debug build, no database or HTTP. Diagnostic results describe this revision; no production incidence claimed.",
+  "second_append_panics": true
+}

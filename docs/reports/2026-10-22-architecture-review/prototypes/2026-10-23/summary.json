@@ -1,0 +1,39 @@
+{
+  "lead": "The experiments support explicit contributions, Rust-described API contracts with generated clients and explicit bounds, stable operation identities, and complete cached-scope refreshes. The audit exposed important restore and provenance assumptions.",
+  "choices": [
+    {
+      "status": "Working storage choice",
+      "title": "Explicit contributor rows",
+      "text": "Keep source, manual, known total-setting adjustments and unknown legacy adjustments distinct. Source corrections replace one contribution. Full command history was not required by the exercised behaviors."
+    },
+    {
+      "status": "Toolchain candidate",
+      "title": "Generated types plus validators",
+      "text": "Rust/utoipa with openapi-typescript and Ajv standalone is the stronger of the two exercised pipelines. Enum closure, suppression, dates and numeric range still need explicit contract decisions."
+    },
+    {
+      "status": "Simpler delivery model",
+      "title": "Stable operation IDs",
+      "text": "Deduplicate by client installation and immutable operation ID. Conditional versions still depend on a controlled restore that mints a new generation before serving. A plain file restore can reuse stale tokens."
+    },
+    {
+      "status": "Initial read strategy",
+      "title": "Complete scope refreshes",
+      "text": "Replace cached date ranges and preserve the separate outbox. Validators need temporal identity only when the representation depends on today. No initial change feed was required by the exercised scenarios."
+    }
+  ],
+  "product_choices": "Define manual contribution set separately from aggregate replacement or a pinned override. Decide activity-day attribution and who may make restored source history authoritative. Passing traces cannot choose those meanings.",
+  "next": "Specify contributor rows and a small versioned API, then build one manual observation, one versioned source-day replacement and one chart-independent series query through the real Rust HTTP adapter and generated client. Prove migration and device behavior before replacing current consumers.",
+  "limits": "Synthetic observations, not production acceptance. Storage variants share a reducer; sync uses a simplified INTEGER table rather than the selected full codec. SQLite restore and cache-only HTTP were exercised. Real migration, concurrent writers, process kills, automatic restore detection, pending-write overlays and RN/Hermes remain unproved. No performance benefit was measured.",
+  "review": "Reviewed by claude-opus-5-5. Exploratory evidence accepted. Parent added restore/ID-reuse counterexamples and corrected known-adjustment provenance; those narrow revisions were rerun, not independently re-audited.",
+  "api_summary": "Both generated paths accepted all 64 exercised Rust-serialized outputs, but four full-i64 fixtures changed decimal spelling or value in the JavaScript round trip. Neither path exactly matched raw Rust parsing.",
+  "api_lessons": [
+    "SafeNumber and OpaqueRevision constraints were handwritten Rust schema builders. The contract was not inferred automatically from every constructor.",
+    "Full-i64 JSON numbers lost digits in JavaScript. Safe-range numbers worked for the exercised ordinary values. Decide the supported product range before narrowing any legacy contract; opaque version tokens avoid arithmetic encoding.",
+    "Canonical decimal strings preserved full-i64 values, but generated regex validation did not enforce i64 arithmetic bounds. The matching BigInt refinement is handwritten and remains a second authority.",
+    "Unknown enum fields and suppressed goals behaved differently across Rust, emitted schema and decoders. Ajv followed the emitted schema more closely; it cannot repair a schema that does not describe Rust's behavior.",
+    "The comparison Zod generator is deprecated and its exported scalar roots lost constraints. This supports a toolchain candidate, not a claim that every Zod-based generator fails.",
+    "Dates, duplicate JSON keys, lexical integers and interval ordering need explicit boundary/domain rules. Generated types compile; that alone does not prove parser or product equivalence.",
+    "Choose unknown-field policy separately for requests and responses. Closed response schemas can break installed mobile clients when compatible fields are added."
+  ]
+}

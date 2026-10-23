@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running `rust/target/debug/api-contract-prototype`
+Source 607978998c72b1e14a95518d32fbfeafe2f7fed6. rustc 1.97.1 (8bab26f4f 2026-07-14). serde 1.0.228, serde_json 1.0.145, utoipa 5.5.0, chrono 0.4.45, serde_path_to_error 0.1.20. Command: env RUSTC_WRAPPER= CARGO_TARGET_DIR="$PWD/rust/target" cargo run --locked --manifest-path rust/Cargo.toml
+Rust/serde observed 158 fixtures, 64 accepted and 94 rejected. OpenAPI "3.1.0" emitted with utoipa 5.5.0.

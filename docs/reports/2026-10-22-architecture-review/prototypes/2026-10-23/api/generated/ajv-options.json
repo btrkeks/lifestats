@@ -1,0 +1,14 @@
+{
+  "source_revision": "607978998c72b1e14a95518d32fbfeafe2f7fed6",
+  "command": "node generate-ajv.cjs",
+  "generator": "ajv standalone",
+  "version": "8.17.1",
+  "dialect": "2020-12",
+  "strict": false,
+  "allErrors": true,
+  "coercion": false,
+  "removeAdditional": false,
+  "validateFormats": "ajv-formats full",
+  "int64Format": "annotation only, no range validation",
+  "schemaExtraction": "unmodified components embedded with root $ref; no schema field patches"
+}

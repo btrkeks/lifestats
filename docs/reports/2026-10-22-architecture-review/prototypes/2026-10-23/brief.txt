@@ -1,0 +1,17 @@
+# Lifestats architecture prototypes
+
+Source baseline: 607978998c72b1e14a95518d32fbfeafe2f7fed6.
+Purpose: answer the open storage, API-generation, offline-delivery, and cached-read design questions before revising the architecture. This is throwaway exploration, not production implementation.
+
+Data shapes: source snapshots are identified by metric, activity day and publisher/stream, with an explicit revision. Manual operations have immutable client installation + operation IDs and semantic payloads. Legacy residuals retain unknown provenance. Goal reads distinguish inherited, explicit and suppressed states. Cached scopes and pending commands are separate records.
+
+Done: each of four slices has executable synthetic scenarios, observed outcomes for named alternatives, a bounded recommendation and stated limits. API slice must use real Rust/utoipa/TypeScript tools, not invented generators. Storage and sync slices use temporary SQLite databases and deterministic schedules. No performance claims. Independent review checks observations and the decision trail. No production DBs, service changes, repo implementation edits, or deployments.
+
+Coverage partition: storage worker owns storage/; API worker owns api/; parent owns sync/, shared evidence and final synthesis. Both workers use the configured swarm-worker Codex model. This is coverage, not a race.
+
+Prior evidence: /home/daniel/.local/share/src/lifestats/docs/reports/2026-10-22-architecture-review/{brief.md,design.md,evidence/claude-review.md,evidence/claude-review-response.md}. The original baseline predates integrated Yomikata code ea68f0c; current main includes it.
+
+Throughput checkpoint: two independent first-stage workers; deterministic scripts provide repeated scenarios, not per-case delegated work. Run offline/read experiments against the selected contribution shape, not every storage/protocol combination.
+
+Product questions remain visible: manual set versus total override; activity-day attribution; authority after source restore/transfer. Scripts display alternatives and cannot infer intent.
+

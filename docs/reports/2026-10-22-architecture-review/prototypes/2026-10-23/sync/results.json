@@ -1,0 +1,795 @@
+{
+  "source_revision": "607978998c72b1e14a95518d32fbfeafe2f7fed6",
+  "python_sqlite_version": "3.54.0",
+  "scope": "Synthetic throwaway model; SQLite commit/rollback, file reopen and backup API plus cache-only loopback HTTP are real. No actual process kill, concurrent writer race, production adapter, RN runtime or production DB.",
+  "data_shape": "Contributor rows plus immutable client operations; source revision tombstones; cached scopes separate from outbox.",
+  "outcomes": {
+    "receipts": [
+      {
+        "variant": "stable_client_identity",
+        "scenario": "response_lost",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "duplicate",
+            "original_outcome": {
+              "manual_contribution": 5,
+              "status": "applied"
+            }
+          }
+        ],
+        "total_after": 5,
+        "receipt_rows": 1,
+        "persisted_pending_commands": 0,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "stable_client_identity",
+        "scenario": "before_receipt_failure",
+        "trace": [
+          {
+            "status": "rolled_back",
+            "reason": "injected failure before receipt"
+          },
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          }
+        ],
+        "total_after": 5,
+        "receipt_rows": 1,
+        "persisted_pending_commands": 0,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "stable_client_identity",
+        "scenario": "restore_before_unacknowledged",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          }
+        ],
+        "total_after": 5,
+        "receipt_rows": 1,
+        "persisted_pending_commands": 0,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "stable_client_identity",
+        "scenario": "restore_after_unacknowledged",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "duplicate",
+            "original_outcome": {
+              "manual_contribution": 5,
+              "status": "applied"
+            }
+          }
+        ],
+        "total_after": 5,
+        "receipt_rows": 1,
+        "persisted_pending_commands": 0,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "stable_client_identity",
+        "scenario": "acknowledged_after_backup",
+        "trace": [
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          }
+        ],
+        "total_after": 0,
+        "receipt_rows": 0,
+        "persisted_pending_commands": 0,
+        "observation": "Acknowledged operation already removed from outbox; neither design can replay it."
+      },
+      {
+        "variant": "stable_client_identity",
+        "scenario": "same_id_changed_payload",
+        "trace": [
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          },
+          {
+            "status": "operation_payload_mismatch",
+            "retryable": false
+          }
+        ],
+        "total_after": 5
+      },
+      {
+        "variant": "generation_bound",
+        "scenario": "response_lost",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "duplicate",
+            "original_outcome": {
+              "manual_contribution": 5,
+              "status": "applied"
+            }
+          }
+        ],
+        "total_after": 5,
+        "receipt_rows": 1,
+        "persisted_pending_commands": 0,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "generation_bound",
+        "scenario": "before_receipt_failure",
+        "trace": [
+          {
+            "status": "rolled_back",
+            "reason": "injected failure before receipt"
+          },
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          }
+        ],
+        "total_after": 5,
+        "receipt_rows": 1,
+        "persisted_pending_commands": 0,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "generation_bound",
+        "scenario": "restore_before_unacknowledged",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "reconcile_required",
+            "retryable": false
+          }
+        ],
+        "total_after": 0,
+        "receipt_rows": 0,
+        "persisted_pending_commands": 1,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "generation_bound",
+        "scenario": "restore_after_unacknowledged",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "reconcile_required",
+            "retryable": false
+          }
+        ],
+        "total_after": 5,
+        "receipt_rows": 1,
+        "persisted_pending_commands": 1,
+        "observation": "Effect and receipt reopened or restored together in SQLite."
+      },
+      {
+        "variant": "generation_bound",
+        "scenario": "acknowledged_after_backup",
+        "trace": [
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          }
+        ],
+        "total_after": 0,
+        "receipt_rows": 0,
+        "persisted_pending_commands": 0,
+        "observation": "Acknowledged operation already removed from outbox; neither design can replay it."
+      },
+      {
+        "variant": "generation_bound",
+        "scenario": "same_id_changed_payload",
+        "trace": [
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          },
+          {
+            "status": "operation_payload_mismatch",
+            "retryable": false
+          }
+        ],
+        "total_after": 5
+      },
+      {
+        "variant": "unsafe_client_rekeys_on_restore",
+        "scenario": "preserved_effect_new_namespace",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "applied",
+            "manual_contribution": 10
+          }
+        ],
+        "total_after": 10,
+        "observation": "Counterexample to blindly rebinding IDs; the strict generation-bound candidate pauses instead."
+      },
+      {
+        "variant": "unmanaged_restore_reuses_generation",
+        "scenario": "plain_restore_version_counter_reuse",
+        "stale_precondition": "server-a:2",
+        "trace": [
+          {
+            "status": "applied",
+            "manual_contribution": 105
+          },
+          {
+            "status": "applied",
+            "manual_contribution": 1
+          }
+        ],
+        "total_after": 1,
+        "note": "Counterexample: restoring without a fresh generation lets an old token match a different base. The controlled restore procedure is an explicit requirement, not automatic detection."
+      },
+      {
+        "variant": "restored_client_reuses_operation_identity",
+        "scenario": "new_identical_intent_collides_with_old_operation",
+        "trace": [
+          {
+            "status": "applied",
+            "manual_contribution": 5
+          },
+          {
+            "status": "duplicate",
+            "original_outcome": {
+              "manual_contribution": 5,
+              "status": "applied"
+            }
+          }
+        ],
+        "total_after": 5,
+        "user_intended_total": 10,
+        "note": "Counter-based IDs that roll back with client restore can drop a new intent as a duplicate. Generate new identities with non-reused randomness; retain stored IDs for retries."
+      }
+    ],
+    "edits": [
+      {
+        "variant": "stable_identity_opaque_precondition",
+        "scenario": "two_devices_conditional_set",
+        "trace": [
+          {
+            "status": "applied",
+            "manual_contribution": 4
+          },
+          {
+            "status": "version_conflict",
+            "retryable": false,
+            "current_version": "server-a:1"
+          },
+          {
+            "status": "duplicate",
+            "original_outcome": {
+              "manual_contribution": 4,
+              "status": "applied"
+            }
+          },
+          {
+            "status": "operation_payload_mismatch",
+            "retryable": false
+          }
+        ],
+        "total_after": 4,
+        "note": "Conflict outcome binds immutable payload too; resolving it requires a new operation ID."
+      },
+      {
+        "variant": "stable_identity_opaque_precondition",
+        "scenario": "restore_conditional_edit_without_receipt",
+        "trace": [
+          {
+            "status": "response_lost",
+            "client_outcome": "unknown"
+          },
+          {
+            "status": "version_conflict",
+            "retryable": false,
+            "current_version": "server-b:1"
+          }
+        ],
+        "total_after": 5,
+        "note": "Stable ID does not waive edit preconditions. Generation-bearing version rejects a potentially different restored base."
+      }
+    ],
+    "ordering": [
+      {
+        "variant": "persisted_counter",
+        "scenario": "older_local_snapshot_after_clear",
+        "trace": [
+          {
+            "status": "applied"
+          },
+          {
+            "status": "applied"
+          },
+          {
+            "status": "stale"
+          }
+        ],
+        "total_after": 0,
+        "tombstone": {
+          "epoch": "epoch-a",
+          "revision": 1001,
+          "payload": "{\"amount\":0,\"cleared\":true}",
+          "cleared": 1
+        }
+      },
+      {
+        "variant": "clock_revision",
+        "scenario": "older_local_snapshot_after_clear",
+        "trace": [
+          {
+            "status": "applied"
+          },
+          {
+            "status": "applied"
+          },
+          {
+            "status": "applied"
+          }
+        ],
+        "total_after": 10,
+        "tombstone": {
+          "epoch": "epoch-a",
+          "revision": 2000,
+          "payload": "{\"amount\":10,\"cleared\":false}",
+          "cleared": 0
+        }
+      },
+      {
+        "variant": "epoch_with_reconciliation",
+        "scenario": "older_local_snapshot_after_clear",
+        "trace": [
+          {
+            "status": "applied"
+          },
+          {
+            "status": "applied"
+          },
+          {
+            "status": "needs_reconciliation",
+            "candidate_matches_accepted_payload": false,
+            "policy": "compare_accepted_day_before_enabling"
+          },
+          {
+            "status": "needs_reconciliation"
+          },
+          {
+            "status": "fenced"
+          },
+          {
+            "status": "authority_granted",
+            "candidate_matches_accepted_payload": true,
+            "policy": "compare_accepted_day_before_enabling"
+          },
+          {
+            "status": "applied"
+          }
+        ],
+        "total_after": 0,
+        "tombstone": {
+          "epoch": "epoch-b",
+          "revision": 1,
+          "payload": "{\"amount\":0,\"cleared\":true}",
+          "cleared": 1
+        }
+      },
+      {
+        "variant": "epoch_without_reconciliation",
+        "scenario": "older_local_snapshot_after_clear",
+        "trace": [
+          {
+            "status": "applied"
+          },
+          {
+            "status": "applied"
+          },
+          {
+            "status": "authority_granted",
+            "candidate_matches_accepted_payload": false,
+            "policy": "unchecked_reset"
+          },
+          {
+            "status": "applied"
+          },
+          {
+            "status": "fenced"
+          }
+        ],
+        "total_after": 10,
+        "tombstone": {
+          "epoch": "epoch-b",
+          "revision": 1,
+          "payload": "{\"amount\":10,\"cleared\":false}",
+          "cleared": 0
+        }
+      },
+      {
+        "variant": "clock_revision",
+        "scenario": "clock_rollback_and_lost_local_counter",
+        "trace": [
+          {
+            "status": "applied"
+          },
+          {
+            "status": "stale"
+          }
+        ],
+        "total_after": 0
+      },
+      {
+        "variant": "revision_comparison",
+        "scenario": "same_clear_changed_payload_late_update",
+        "trace": [
+          {
+            "status": "unchanged"
+          },
+          {
+            "status": "revision_payload_conflict"
+          },
+          {
+            "status": "stale"
+          }
+        ],
+        "total_after": 0
+      }
+    ],
+    "cache": [
+      {
+        "variant": "database_version_only",
+        "scenario": "rollover_scope_generation",
+        "initial": {
+          "status": 200,
+          "etag": "\"1\"",
+          "body": {
+            "scope": [
+              "2026-10-23",
+              "2026-10-23"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-23",
+            "generation": "server-a",
+            "rows": [
+              {
+                "metric": "cards",
+                "day": "2026-10-23",
+                "contributor": "yomikata",
+                "amount": 10
+              }
+            ]
+          }
+        },
+        "rollover": {
+          "status": 304,
+          "etag": "\"1\"",
+          "body": {
+            "scope": [
+              "2026-10-23",
+              "2026-10-23"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-24",
+            "generation": "server-a",
+            "rows": [
+              {
+                "metric": "cards",
+                "day": "2026-10-23",
+                "contributor": "yomikata",
+                "amount": 10
+              }
+            ]
+          }
+        },
+        "changed_scope": {
+          "status": 304,
+          "etag": "\"1\"",
+          "body": {
+            "scope": [
+              "2026-10-24",
+              "2026-10-24"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-24",
+            "generation": "server-a",
+            "rows": []
+          }
+        },
+        "changed_generation": {
+          "status": 304,
+          "etag": "\"1\"",
+          "body": {
+            "scope": [
+              "2026-10-23",
+              "2026-10-23"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-23",
+            "generation": "server-b",
+            "rows": [
+              {
+                "metric": "cards",
+                "day": "2026-10-23",
+                "contributor": "yomikata",
+                "amount": 10
+              }
+            ]
+          }
+        },
+        "note": "304 bodies shown only for instrumentation. Cross-scope validator reuse is an intentionally incorrect client; URL/scope-specific cache keys also prevent it. Rollover concerns views that display home_today, not every historical series."
+      },
+      {
+        "variant": "database_version_only",
+        "scenario": "deletion_racing_response_pending_queue",
+        "trace": [
+          "replaced_complete_scope",
+          "replaced_complete_scope",
+          "ignored_older_response",
+          "replaced_complete_scope"
+        ],
+        "cached_rows_after_delete": [],
+        "persisted_pending_commands": 1
+      },
+      {
+        "variant": "representation_etag",
+        "scenario": "rollover_scope_generation",
+        "initial": {
+          "status": 200,
+          "etag": "\"66ed18ee860e05240c15bc849eeb3aff33e8b67807b46e2a3937a09fa3a28078\"",
+          "body": {
+            "scope": [
+              "2026-10-23",
+              "2026-10-23"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-23",
+            "generation": "server-a",
+            "rows": [
+              {
+                "metric": "cards",
+                "day": "2026-10-23",
+                "contributor": "yomikata",
+                "amount": 10
+              }
+            ]
+          }
+        },
+        "rollover": {
+          "status": 200,
+          "etag": "\"8ad37d8a009f9e4f908b32215baf33d0bb5973677a55526aa0af97d58401a8a4\"",
+          "body": {
+            "scope": [
+              "2026-10-23",
+              "2026-10-23"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-24",
+            "generation": "server-a",
+            "rows": [
+              {
+                "metric": "cards",
+                "day": "2026-10-23",
+                "contributor": "yomikata",
+                "amount": 10
+              }
+            ]
+          }
+        },
+        "changed_scope": {
+          "status": 200,
+          "etag": "\"658bc7731b860ac9ef0c57c08517dfedb7e85ff5a66cb44e1443787d4263bb4a\"",
+          "body": {
+            "scope": [
+              "2026-10-24",
+              "2026-10-24"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-24",
+            "generation": "server-a",
+            "rows": []
+          }
+        },
+        "changed_generation": {
+          "status": 200,
+          "etag": "\"63c5f93e5e1dfac8f5d1f6dc4079babe2bce3e4bec7de4772d232a8047d591e3\"",
+          "body": {
+            "scope": [
+              "2026-10-23",
+              "2026-10-23"
+            ],
+            "schema": "daily-v1",
+            "home_timezone": "Europe/Berlin",
+            "home_today": "2026-10-23",
+            "generation": "server-b",
+            "rows": [
+              {
+                "metric": "cards",
+                "day": "2026-10-23",
+                "contributor": "yomikata",
+                "amount": 10
+              }
+            ]
+          }
+        },
+        "note": "304 bodies shown only for instrumentation. Cross-scope validator reuse is an intentionally incorrect client; URL/scope-specific cache keys also prevent it. Rollover concerns views that display home_today, not every historical series."
+      },
+      {
+        "variant": "representation_etag",
+        "scenario": "deletion_racing_response_pending_queue",
+        "trace": [
+          "replaced_complete_scope",
+          "replaced_complete_scope",
+          "ignored_older_response",
+          "replaced_complete_scope"
+        ],
+        "cached_rows_after_delete": [],
+        "persisted_pending_commands": 1
+      },
+      {
+        "variant": "database_version_only",
+        "scenario": "actual_http_conditional_get_and_url_scoping",
+        "trace": [
+          {
+            "status": 200,
+            "sent_validator": false,
+            "body_present": true,
+            "body": {
+              "generation": "server-a",
+              "home_timezone": "Europe/Berlin",
+              "home_today": "2026-10-23",
+              "rows": [
+                {
+                  "amount": 10,
+                  "contributor": "yomikata",
+                  "day": "2026-10-23",
+                  "metric": "cards"
+                }
+              ],
+              "schema": "daily-v1",
+              "scope": [
+                "2026-10-23",
+                "2026-10-23"
+              ]
+            }
+          },
+          {
+            "status": 304,
+            "sent_validator": true,
+            "body_present": false,
+            "body": null
+          },
+          {
+            "status": 304,
+            "sent_validator": true,
+            "body_present": false,
+            "body": null
+          },
+          {
+            "status": 200,
+            "sent_validator": false,
+            "body_present": true,
+            "body": {
+              "generation": "server-a",
+              "home_timezone": "Europe/Berlin",
+              "home_today": "2026-10-24",
+              "rows": [],
+              "schema": "daily-v1",
+              "scope": [
+                "2026-10-24",
+                "2026-10-24"
+              ]
+            }
+          }
+        ],
+        "note": "Real ephemeral localhost HTTP server and urllib client; second request is unchanged, third crosses rollover, fourth has a distinct URL and no borrowed validator."
+      },
+      {
+        "variant": "representation_etag",
+        "scenario": "actual_http_conditional_get_and_url_scoping",
+        "trace": [
+          {
+            "status": 200,
+            "sent_validator": false,
+            "body_present": true,
+            "body": {
+              "generation": "server-a",
+              "home_timezone": "Europe/Berlin",
+              "home_today": "2026-10-23",
+              "rows": [
+                {
+                  "amount": 10,
+                  "contributor": "yomikata",
+                  "day": "2026-10-23",
+                  "metric": "cards"
+                }
+              ],
+              "schema": "daily-v1",
+              "scope": [
+                "2026-10-23",
+                "2026-10-23"
+              ]
+            }
+          },
+          {
+            "status": 304,
+            "sent_validator": true,
+            "body_present": false,
+            "body": null
+          },
+          {
+            "status": 200,
+            "sent_validator": true,
+            "body_present": true,
+            "body": {
+              "generation": "server-a",
+              "home_timezone": "Europe/Berlin",
+              "home_today": "2026-10-24",
+              "rows": [
+                {
+                  "amount": 10,
+                  "contributor": "yomikata",
+                  "day": "2026-10-23",
+                  "metric": "cards"
+                }
+              ],
+              "schema": "daily-v1",
+              "scope": [
+                "2026-10-23",
+                "2026-10-23"
+              ]
+            }
+          },
+          {
+            "status": 200,
+            "sent_validator": false,
+            "body_present": true,
+            "body": {
+              "generation": "server-a",
+              "home_timezone": "Europe/Berlin",
+              "home_today": "2026-10-24",
+              "rows": [],
+              "schema": "daily-v1",
+              "scope": [
+                "2026-10-24",
+                "2026-10-24"
+              ]
+            }
+          }
+        ],
+        "note": "Real ephemeral localhost HTTP server and urllib client; second request is unchanged, third crosses rollover, fourth has a distinct URL and no borrowed validator."
+      }
+    ]
+  }
+}

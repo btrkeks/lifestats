@@ -1,0 +1,8 @@
+{
+  "valid_updateendvalue_accepted": false,
+  "unsupported_max_accepted": true,
+  "metadata_preserves_default_goal": false,
+  "suppressed_daily_goal_result": {},
+  "null_default_goal_accepted": false,
+  "scope": "Actual SDK schema source; installed web UI TypeScript and Zod v3 compatibility export. No HTTP, full SDK build, or RN runtime validation."
+}

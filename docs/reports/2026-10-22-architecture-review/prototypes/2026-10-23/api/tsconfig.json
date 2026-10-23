@@ -1,0 +1,4 @@
+{
+  "compilerOptions": {"strict":true,"target":"ES2022","module":"Node16","moduleResolution":"Node16","noEmit":true,"skipLibCheck":false},
+  "include":["consumer.ts","generated/*.ts"]
+}

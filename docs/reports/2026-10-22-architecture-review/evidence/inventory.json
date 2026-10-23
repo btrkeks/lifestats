@@ -1,0 +1,772 @@
+{
+  "revision": "06e4e70888b2fca062e3fdf2fd6fed60fd39d389",
+  "method": "Cargo manifests and offline locked metadata; tracked/nonignored package manifests; literal Axum routes. No runtime or behavior inference.",
+  "rust_packages": [
+    {
+      "name": "lifestats-application",
+      "manifest": "core/application/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "lifestats-core",
+      "manifest": "core/core/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "lifestats-fitbit-client",
+      "manifest": "core/infrastructure/fitbit_client/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "lifestats-persistence",
+      "manifest": "core/infrastructure/persistence/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "lifestats-plotting",
+      "manifest": "core/infrastructure/plotting/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "lifestats-system-clock",
+      "manifest": "core/infrastructure/system_clock/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "lifestats-web-api",
+      "manifest": "core/infrastructure/web_api/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "plot-domain",
+      "manifest": "core/plot-domain/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "events",
+      "manifest": "events/event_impl/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "event_sender",
+      "manifest": "events/event_sender/Cargo.toml",
+      "workspace_member": false
+    },
+    {
+      "name": "lifestats-bootstrap",
+      "manifest": "lifestats-bootstrap/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "midi_logger",
+      "manifest": "logger_applications/midi_logger/Cargo.toml",
+      "workspace_member": true
+    },
+    {
+      "name": "lifestats-stopwatch-service",
+      "manifest": "logger_applications/stopwatch/stopwatch-service/Cargo.toml",
+      "workspace_member": false
+    },
+    {
+      "name": "lifestats-stopwatch-logger",
+      "manifest": "logger_applications/stopwatch/stopwatch_logger/Cargo.toml",
+      "workspace_member": false
+    },
+    {
+      "name": "wallpaper",
+      "manifest": "ui/wallpaper/Cargo.toml",
+      "workspace_member": false
+    }
+  ],
+  "local_edges": [
+    {
+      "from": "core/application/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/application/Cargo.toml",
+      "to": "core/plot-domain/Cargo.toml",
+      "dependency": "plot-domain",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/application/Cargo.toml",
+      "to": "core/infrastructure/plotting/Cargo.toml",
+      "dependency": "lifestats-plotting",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/application/Cargo.toml",
+      "to": "events/event_impl/Cargo.toml",
+      "dependency": "events",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/application/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dev-dependencies"
+    },
+    {
+      "from": "core/application/Cargo.toml",
+      "to": "core/plot-domain/Cargo.toml",
+      "dependency": "plot-domain",
+      "kind": "dev-dependencies"
+    },
+    {
+      "from": "core/infrastructure/fitbit_client/Cargo.toml",
+      "to": "core/application/Cargo.toml",
+      "dependency": "lifestats-application",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/persistence/Cargo.toml",
+      "to": "core/application/Cargo.toml",
+      "dependency": "lifestats-application",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/persistence/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/plotting/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/plotting/Cargo.toml",
+      "to": "core/plot-domain/Cargo.toml",
+      "dependency": "plot-domain",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/system_clock/Cargo.toml",
+      "to": "core/application/Cargo.toml",
+      "dependency": "lifestats-application",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/application/Cargo.toml",
+      "dependency": "lifestats-application",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/plot-domain/Cargo.toml",
+      "dependency": "plot-domain",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "lifestats-bootstrap/Cargo.toml",
+      "dependency": "lifestats-bootstrap",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/infrastructure/persistence/Cargo.toml",
+      "dependency": "lifestats-persistence",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/infrastructure/plotting/Cargo.toml",
+      "dependency": "lifestats-plotting",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/infrastructure/system_clock/Cargo.toml",
+      "dependency": "lifestats-system-clock",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "events/event_impl/Cargo.toml",
+      "dependency": "events",
+      "kind": "dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dev-dependencies"
+    },
+    {
+      "from": "core/infrastructure/web_api/Cargo.toml",
+      "to": "core/plot-domain/Cargo.toml",
+      "dependency": "plot-domain",
+      "kind": "dev-dependencies"
+    },
+    {
+      "from": "core/plot-domain/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "events/event_impl/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "events/event_sender/Cargo.toml",
+      "to": "events/Cargo.toml",
+      "dependency": "events",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "core/application/Cargo.toml",
+      "dependency": "lifestats-application",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "core/plot-domain/Cargo.toml",
+      "dependency": "plot-domain",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "events/event_impl/Cargo.toml",
+      "dependency": "events",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "core/infrastructure/persistence/Cargo.toml",
+      "dependency": "lifestats-persistence",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "core/infrastructure/plotting/Cargo.toml",
+      "dependency": "lifestats-plotting",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "core/infrastructure/fitbit_client/Cargo.toml",
+      "dependency": "lifestats-fitbit-client",
+      "kind": "dependencies"
+    },
+    {
+      "from": "lifestats-bootstrap/Cargo.toml",
+      "to": "core/infrastructure/system_clock/Cargo.toml",
+      "dependency": "lifestats-system-clock",
+      "kind": "dependencies"
+    },
+    {
+      "from": "logger_applications/midi_logger/Cargo.toml",
+      "to": "lifestats-bootstrap/Cargo.toml",
+      "dependency": "lifestats-bootstrap",
+      "kind": "dependencies"
+    },
+    {
+      "from": "logger_applications/midi_logger/Cargo.toml",
+      "to": "core/application/Cargo.toml",
+      "dependency": "lifestats-application",
+      "kind": "dependencies"
+    },
+    {
+      "from": "logger_applications/midi_logger/Cargo.toml",
+      "to": "core/core/Cargo.toml",
+      "dependency": "lifestats-core",
+      "kind": "dependencies"
+    },
+    {
+      "from": "logger_applications/stopwatch/stopwatch_logger/Cargo.toml",
+      "to": "logger_applications/core/application/Cargo.toml",
+      "dependency": "lifestats-application",
+      "kind": "dependencies"
+    },
+    {
+      "from": "logger_applications/stopwatch/stopwatch_logger/Cargo.toml",
+      "to": "logger_applications/lifestats-bootstrap/Cargo.toml",
+      "dependency": "lifestats-bootstrap",
+      "kind": "dependencies"
+    },
+    {
+      "from": "ui/wallpaper/Cargo.toml",
+      "to": "logging_core/core/application_service/Cargo.toml",
+      "dependency": "application_service",
+      "kind": "dependencies"
+    },
+    {
+      "from": "ui/wallpaper/Cargo.toml",
+      "to": "transfer_objects/Cargo.toml",
+      "dependency": "transfer_objects",
+      "kind": "dependencies"
+    },
+    {
+      "from": "ui/wallpaper/Cargo.toml",
+      "to": "util/Cargo.toml",
+      "dependency": "util",
+      "kind": "dependencies"
+    },
+    {
+      "from": "ui/wallpaper/Cargo.toml",
+      "to": "events/Cargo.toml",
+      "dependency": "events",
+      "kind": "dependencies"
+    }
+  ],
+  "node_packages": [
+    {
+      "manifest": "clients/lifestats-js/package.json",
+      "name": "@lifestats/client",
+      "scripts": [
+        "build",
+        "dev",
+        "type-check"
+      ]
+    },
+    {
+      "manifest": "logger_applications/LiftLog/app/package.json",
+      "name": "liftlog-react",
+      "scripts": [
+        "android",
+        "android:release",
+        "build:android:release",
+        "dev",
+        "e2e",
+        "e2e:ci",
+        "format",
+        "format:check",
+        "ios",
+        "json-schema",
+        "lint",
+        "lint:fix",
+        "patch-package",
+        "postinstall",
+        "prebuild",
+        "start",
+        "test",
+        "test:coverage",
+        "typecheck"
+      ]
+    },
+    {
+      "manifest": "logger_applications/LiftLog/examples/remote-backup/reference-server-implementation/aws-lambda-s3-deployable/src/package.json",
+      "name": "lambda-backup",
+      "scripts": [
+        "build",
+        "package",
+        "test",
+        "typecheck"
+      ]
+    },
+    {
+      "manifest": "logger_applications/LiftLog/scripts/package.json",
+      "name": "scripts",
+      "scripts": [
+        "create-release",
+        "release-plan-builder-skill"
+      ]
+    },
+    {
+      "manifest": "logger_applications/ebook-reader/apps/web/package.json",
+      "name": "web",
+      "scripts": [
+        "build",
+        "check",
+        "check:types",
+        "check:watch",
+        "dev",
+        "preview",
+        "test"
+      ]
+    },
+    {
+      "manifest": "logger_applications/ebook-reader/package.json",
+      "name": "ttu-reader",
+      "scripts": [
+        "build",
+        "check",
+        "check:pretty",
+        "dev",
+        "format",
+        "lint",
+        "prepare"
+      ]
+    },
+    {
+      "manifest": "logger_applications/web-activity-time-tracker/package.json",
+      "name": "web-activity-time-tracker",
+      "scripts": [
+        "dev",
+        "format",
+        "script:zip",
+        "start"
+      ]
+    },
+    {
+      "manifest": "ui/web-ui/package.json",
+      "name": "web-ui",
+      "scripts": [
+        "build",
+        "dev",
+        "lint",
+        "start",
+        "test",
+        "type-check"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "path": "/statistics",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 31
+    },
+    {
+      "path": "/statistics/loggable",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 35
+    },
+    {
+      "path": "/statistics/{id}",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 39
+    },
+    {
+      "path": "/statistics/{id}/log/{date}",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 43
+    },
+    {
+      "path": "/statistics/{id}/log_time_frame/{date}",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 44
+    },
+    {
+      "path": "/statistics/{id}/logged/{date}",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 48
+    },
+    {
+      "path": "/statistics/{id}/time_spans/total",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 52
+    },
+    {
+      "path": "/statistics/{id}/integer_amount/total",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 56
+    },
+    {
+      "path": "/statistics/{id}/consistency",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 60
+    },
+    {
+      "path": "/statistics/{id}/score",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 64
+    },
+    {
+      "path": "/statistics/{id}/achievements",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 68
+    },
+    {
+      "path": "/statistics/{id}/performance",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 72
+    },
+    {
+      "path": "/statistics/{id}/streak",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 76
+    },
+    {
+      "path": "/progress-items",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 78
+    },
+    {
+      "path": "/progress-items/{id}",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 82
+    },
+    {
+      "path": "/progress-items/{id}/target",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 83
+    },
+    {
+      "path": "/progress-items/{id}/checkpoints",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 87
+    },
+    {
+      "path": "/progress-items/{id}/summary",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 91
+    },
+    {
+      "path": "/progress-items/{id}/daily-deltas",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 95
+    },
+    {
+      "path": "/statistics/dashboard",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 100
+    },
+    {
+      "path": "/statistics/{id}/goals/default",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 102
+    },
+    {
+      "path": "/statistics/{id}/goals/{date}",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 108
+    },
+    {
+      "path": "/statistics/{id}/plot/image",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 115
+    },
+    {
+      "path": "/statistics/{id}/plot/data",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 119
+    },
+    {
+      "path": "/plots/timeline/{date}",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 124
+    },
+    {
+      "path": "/sessions",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 129
+    },
+    {
+      "path": "/sessions/{statistic_id}/start",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 130
+    },
+    {
+      "path": "/sessions/{statistic_id}/beat",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 134
+    },
+    {
+      "path": "/sessions/{statistic_id}/stop",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 138
+    },
+    {
+      "path": "/sessions/{statistic_id}",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 142
+    },
+    {
+      "path": "/integrations/ebook/events",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 147
+    },
+    {
+      "path": "/integrations/liftlog/days",
+      "methods": [
+        "PUT"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 151
+    },
+    {
+      "path": "/integrations/{source}",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 155
+    },
+    {
+      "path": "/integrations/fitbit/auth/begin",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 160
+    },
+    {
+      "path": "/integrations/fitbit/auth/callback",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 164
+    },
+    {
+      "path": "/integrations/fitbit/sync",
+      "methods": [
+        "POST"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 168
+    },
+    {
+      "path": "/daily_summary/{date}",
+      "methods": [
+        "GET"
+      ],
+      "file": "core/infrastructure/web_api/src/routes/mod.rs",
+      "line": 173
+    }
+  ],
+  "service_units": [
+    "logger_applications/clef_sync/systemd/lifestats-clef-sync.service",
+    "logger_applications/clef_sync/systemd/lifestats-clef-sync.timer",
+    "systemd/lifestats-fitbit-sync.service",
+    "systemd/lifestats-fitbit-sync.timer",
+    "systemd/lifestats-web-api.service",
+    "systemd/lifestats-web-ui.service"
+  ],
+  "contract_files": [],
+  "errors": [],
+  "workspace_members": [
+    "core/application/Cargo.toml",
+    "core/core/Cargo.toml",
+    "core/infrastructure/fitbit_client/Cargo.toml",
+    "core/infrastructure/persistence/Cargo.toml",
+    "core/infrastructure/plotting/Cargo.toml",
+    "core/infrastructure/system_clock/Cargo.toml",
+    "core/infrastructure/web_api/Cargo.toml",
+    "core/plot-domain/Cargo.toml",
+    "events/event_impl/Cargo.toml",
+    "lifestats-bootstrap/Cargo.toml",
+    "logger_applications/midi_logger/Cargo.toml"
+  ],
+  "fingerprints": {
+    "Cargo.toml": "d0d207e34b5ac236d772fb0cfd2a733347df3d49bff96f0456bb9c9c7bfdab36",
+    "core/application/Cargo.toml": "883b22ad21e5661bac402ae0360a281abcadd5a588ca70441f71167b0be6eeaf",
+    "core/core/Cargo.toml": "454057b97a38468e72c8db62b4a25281be06afd25e9fe91929ee1331e84dbbaf",
+    "core/infrastructure/web_api/src/routes/mod.rs": "9fe92c4f4b8692f88488c711d35f8943df44b98f72613450d13c053b4a001fb8"
+  }
+}

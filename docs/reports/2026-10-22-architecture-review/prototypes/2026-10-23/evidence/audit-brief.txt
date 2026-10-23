@@ -1,0 +1,23 @@
+Review the EVIDENCE AND DECISION TRAIL for the authorized Lifestats prototype phase, independently as Claude. This is an observation audit, not a production code/style review. No editing inputs, no application changes, no live API/database, no deployments, no further delegation. You may run focused checks in your own temporary/scratch directory. Do not run npm ci or overwrite worker results while auditing; parent has rerun complete toolchains. Return your report as final text; parent archives it.
+
+Read T3 adapter/model policy at /home/daniel/.local/share/src/pstack-t3/.pstack-t3/current/{t3-adapter.md,pstack-models.md}. Read relevant skills show-me-your-work and poteto-mode (this is one assigned audit step, not playbook ownership).
+Parent thread 4bdd446d-98fd-4fbe-b5c1-5eb16fead519. User said "Great! Let's do this then" to our proposal of isolated storage, real API roundtrip, offline/restore, and cached-read prototypes before finalizing architecture. Single person/multiple devices+loggers; mobile cached reads+durable queued writes. Images optional legacy Obsidian presentation. No production changes requested.
+
+Main baseline 607978998c72b1e14a95518d32fbfeafe2f7fed6 (/home/daniel/.local/share/src/lifestats). Original docs/reports/2026-10-22-architecture-review contains brief/design + evidence/claude-review.md and claude-review-response.md. Yomikata ea68f0c is on main; reference worktree missing. Existing untracked report docs intentionally preserved.
+
+PRIMARY INPUT directory /home/daniel/.local/state/lifestats-architecture-review/2026-10-23-prototypes:
+- brief.txt, decisions.tsv (append-only canonical phase trail), tasks.json, phase-state.json
+- evidence/thread-messages.json: relevant scoped T3 parent message transcript, no truncated messages. Tool execution evidence is the source and output files below.
+- storage/{run.py,sketch.md,findings.md,results.json,parent-rerun.log}; parent reran all3variants, actual SQLite schemas/rows, shared semantic reducer explicitly disclosed.
+- api/{run.sh,shape.md,findings.md,results.json,openapi.json,observe.cjs,generate-ajv.cjs,consumer.ts,rust/src/main.rs,package.json,package-lock.json,rust/Cargo.lock,fixtures/,generated/,parent-rerun.log,parent-manifest-check.log,source-results.sha256}. Parent fully reran run.sh exit0 (tsc and real Rust+2 generators), all captured sources/generated schemas/semantic JSON matched worker manifest. Three diagnostic log files changed: console.log, rust-run.log, types-generation.log. Parent will archive fresh checksums and record this, not claim full original manifest passed.
+- sync/{run.py,results.json,run.log,findings.md}; SQLite transactions/restore and persisted outbox real; deterministic schedules not concurrency/process-kill proof; cache subset actual stdlib loopback HTTP. Parent observed initial ETag quoting mistake, fixed same-token comparison and reran. No production adapters or RN.
+- summary.json, build_report.py, report.html: proposed final synthesis/interactive viewer. Report rendering QA still pending; "review pending" intentionally provisional.
+
+Questions:
+1. Are recommendations supported by observations, or are simulation assumptions mistaken for proof?
+2. Any material logical defects in runners or synthesis, especially aggregate vs manual-set meanings, unknown legacy provenance/wide residuals, immutable receipt/precondition separation, restore guarantees, source epochs/reconciliation, cache validators and URL scoping?
+3. Any API false claims? Both paths accepting 64 Rust outputs DOES NOT mean preserving full-i64 digits. Check examples of raw output precision, enum closure/unit suppressed behavior, unknown fields, canonical dates/duplicates, custom decimal refinement and deprecated Zod-generator limitation. Ajv is only the stronger of the exercised candidates, not proven universal best/RN-ready.
+4. Does the trail/transcript omit material pivots, claim checks that did not happen, or hide future acceptance gaps? Focus on flags the user needs to see.
+5. Propose minimum corrections to evidence/report wording or runnable probe. Do not invent a finding quota. Distinguish blocking invalid evidence from valid exploratory outcomes and product choices experiments cannot settle.
+
+Return clear verdict, prioritized actionable flags with file:line/scenario evidence, limits, and an "Attention" list suitable for parent final. Note no production-code proof or performance claims. Do not require full implementation/migration/device testing just to accept throwaway design experiments. No code-polish rituals.

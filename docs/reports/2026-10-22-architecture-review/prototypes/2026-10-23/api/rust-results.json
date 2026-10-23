@@ -1,0 +1,1906 @@
+{
+  "cases": [
+    {
+      "id": "amount_inherited",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "habit_suppressed",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"habit\",\"completed\":true},\"goal\":{\"kind\":\"suppressed\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"habit\",\"completed\":true},\"goal\":{\"kind\":\"suppressed\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "time_span_explicit",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"time_span\",\"start\":\"2026-10-23T08:00:00+02:00\",\"end\":\"2026-10-23T08:30:00+02:00\"},\"goal\":{\"kind\":\"explicit\",\"value\":{\"kind\":\"amount\",\"value\":10}},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"time_span\",\"start\":\"2026-10-23T08:00:00+02:00\",\"end\":\"2026-10-23T08:30:00+02:00\"},\"goal\":{\"kind\":\"explicit\",\"value\":{\"kind\":\"amount\",\"value\":10}},\"note\":null}"
+      }
+    },
+    {
+      "id": "missing_note",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"}}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "missing field `note` at line 1 column 136",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "note_text",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":\"hello\"}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":\"hello\"}"
+      }
+    },
+    {
+      "id": "optional_label_null",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null,\"label\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "optional_label_text",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null,\"label\":\"x\"}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null,\"label\":\"x\"}"
+      }
+    },
+    {
+      "id": "unknown_top",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null,\"unexpected\":1}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "unexpected",
+          "message": "unknown field `unexpected`, expected one of `activity_date`, `observed_at`, `value`, `goal`, `note`, `label` at line 1 column 160",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "unknown_value",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5,\"unexpected\":1},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "unknown field `unexpected`, expected `value` at line 1 column 122",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "suppression_with_value",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"suppressed\",\"value\":{\"kind\":\"amount\",\"value\":1}},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"suppressed\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "goal_explicit_missing_value",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"explicit\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "goal",
+          "message": "missing field `value` at line 1 column 134",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "missing_value_tag",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "missing field `kind` at line 1 column 91",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "wrong_value_tag",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"duration\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value.kind",
+          "message": "unknown variant `duration`, expected one of `amount`, `time_span`, `habit` at line 1 column 98",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "wrong_tag_type",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":3,\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value.kind",
+          "message": "invalid type: integer `3`, expected variant identifier at line 1 column 89",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "wrong_goal_tag",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"unset\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "goal.kind",
+          "message": "unknown variant `unset`, expected one of `inherited`, `explicit`, `suppressed` at line 1 column 130",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "missing_goal_tag",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "goal",
+          "message": "missing field `kind` at line 1 column 117",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_wrong_type",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":\"5\"},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid type: string \"5\", expected i64 at line 1 column 109",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "date_impossible",
+      "raw": "{\"activity_date\":\"2026-02-30\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "activity_date",
+          "message": "input is out of range at line 1 column 29",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "date_not_padded",
+      "raw": "{\"activity_date\":\"2026-1-2\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-01-02\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "timestamp_missing_offset",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "observed_at",
+          "message": "premature end of input at line 1 column 65",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "timestamp_bad_offset",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+25:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "observed_at",
+          "message": "input is out of range at line 1 column 71",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "timestamp_utc",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00Z\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00Z\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "duplicate_value",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5,\"value\":6},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "duplicate field `value` at line 1 column 117",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "duplicate_note",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null,\"note\":\"last\"}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "duplicate field `note` at line 1 column 154",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "duplicate_tag",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"habit\",\"kind\":\"amount\",\"value\":5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "duplicate field `kind` at line 1 column 102",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "time_reversed",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"time_span\",\"start\":\"2026-10-23T08:30:00+02:00\",\"end\":\"2026-10-23T08:00:00+02:00\"},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"time_span\",\"start\":\"2026-10-23T08:30:00+02:00\",\"end\":\"2026-10-23T08:00:00+02:00\"},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "safe_zero",
+      "raw": "0",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "0"
+      }
+    },
+    {
+      "id": "raw_i64_zero",
+      "raw": "0",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "0"
+      }
+    },
+    {
+      "id": "amount_zero",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":0},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":0},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "safe_negative_zero",
+      "raw": "-0",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `-0.0`, expected i64 at line 1 column 2",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_negative_zero",
+      "raw": "-0",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `-0.0`, expected i64 at line 1 column 2",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_negative_zero",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":-0},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid type: floating point `-0.0`, expected i64 at line 1 column 108",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_positive_safe",
+      "raw": "9007199254740991",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "9007199254740991"
+      }
+    },
+    {
+      "id": "raw_i64_positive_safe",
+      "raw": "9007199254740991",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "9007199254740991"
+      }
+    },
+    {
+      "id": "amount_positive_safe",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":9007199254740991},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":9007199254740991},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "safe_negative_safe",
+      "raw": "-9007199254740991",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "-9007199254740991"
+      }
+    },
+    {
+      "id": "raw_i64_negative_safe",
+      "raw": "-9007199254740991",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "-9007199254740991"
+      }
+    },
+    {
+      "id": "amount_negative_safe",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":-9007199254740991},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":-9007199254740991},\"goal\":{\"kind\":\"inherited\"},\"note\":null}"
+      }
+    },
+    {
+      "id": "safe_positive_unsafe",
+      "raw": "9007199254740992",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected safe JSON integer",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_positive_unsafe",
+      "raw": "9007199254740992",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "9007199254740992"
+      }
+    },
+    {
+      "id": "amount_positive_unsafe",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":9007199254740992},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": "value",
+          "message": "out_of_range: expected safe JSON integer at line 1 column 122",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_positive_rounded",
+      "raw": "9007199254740993",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected safe JSON integer",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_positive_rounded",
+      "raw": "9007199254740993",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "9007199254740993"
+      }
+    },
+    {
+      "id": "amount_positive_rounded",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":9007199254740993},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": "value",
+          "message": "out_of_range: expected safe JSON integer at line 1 column 122",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_negative_unsafe",
+      "raw": "-9007199254740992",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected safe JSON integer",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_negative_unsafe",
+      "raw": "-9007199254740992",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "-9007199254740992"
+      }
+    },
+    {
+      "id": "amount_negative_unsafe",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":-9007199254740992},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": "value",
+          "message": "out_of_range: expected safe JSON integer at line 1 column 123",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_negative_rounded",
+      "raw": "-9007199254740993",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected safe JSON integer",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_negative_rounded",
+      "raw": "-9007199254740993",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "-9007199254740993"
+      }
+    },
+    {
+      "id": "amount_negative_rounded",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":-9007199254740993},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": "value",
+          "message": "out_of_range: expected safe JSON integer at line 1 column 123",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_i64_max",
+      "raw": "9223372036854775807",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected safe JSON integer",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_i64_max",
+      "raw": "9223372036854775807",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "9223372036854775807"
+      }
+    },
+    {
+      "id": "amount_i64_max",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":9223372036854775807},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": "value",
+          "message": "out_of_range: expected safe JSON integer at line 1 column 125",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_i64_min",
+      "raw": "-9223372036854775808",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected safe JSON integer",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_i64_min",
+      "raw": "-9223372036854775808",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "-9223372036854775808"
+      }
+    },
+    {
+      "id": "amount_i64_min",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":-9223372036854775808},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": "value",
+          "message": "out_of_range: expected safe JSON integer at line 1 column 126",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_above_i64",
+      "raw": "9223372036854775808",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid value: integer `9223372036854775808`, expected i64 at line 1 column 19",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_above_i64",
+      "raw": "9223372036854775808",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid value: integer `9223372036854775808`, expected i64 at line 1 column 19",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_above_i64",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":9223372036854775808},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid value: integer `9223372036854775808`, expected i64 at line 1 column 125",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_below_i64",
+      "raw": "-9223372036854775809",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `-9.223372036854776e18`, expected i64 at line 1 column 20",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_below_i64",
+      "raw": "-9223372036854775809",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `-9.223372036854776e18`, expected i64 at line 1 column 20",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_below_i64",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":-9223372036854775809},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid type: floating point `-9.223372036854776e18`, expected i64 at line 1 column 126",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_float_lexical",
+      "raw": "1.0",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `1.0`, expected i64 at line 1 column 3",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_float_lexical",
+      "raw": "1.0",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `1.0`, expected i64 at line 1 column 3",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_float_lexical",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":1.0},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid type: floating point `1.0`, expected i64 at line 1 column 109",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_exponent_lexical",
+      "raw": "1e0",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `1.0`, expected i64 at line 1 column 3",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_exponent_lexical",
+      "raw": "1e0",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `1.0`, expected i64 at line 1 column 3",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_exponent_lexical",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":1e0},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid type: floating point `1.0`, expected i64 at line 1 column 109",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_fractional",
+      "raw": "1.5",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `1.5`, expected i64 at line 1 column 3",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_fractional",
+      "raw": "1.5",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `1.5`, expected i64 at line 1 column 3",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_fractional",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":1.5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid type: floating point `1.5`, expected i64 at line 1 column 109",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "safe_float_near_safe",
+      "raw": "9007199254740990.5",
+      "root": "SafeNumber",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `9007199254740990.0`, expected i64 at line 1 column 18",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "raw_i64_float_near_safe",
+      "raw": "9007199254740990.5",
+      "root": "RawI64Number",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: floating point `9007199254740990.0`, expected i64 at line 1 column 18",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "amount_float_near_safe",
+      "raw": "{\"activity_date\":\"2026-10-23\",\"observed_at\":\"2026-10-23T08:00:00+02:00\",\"value\":{\"kind\":\"amount\",\"value\":9007199254740990.5},\"goal\":{\"kind\":\"inherited\"},\"note\":null}",
+      "root": "Contract",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "value",
+          "message": "invalid type: floating point `9007199254740990.0`, expected i64 at line 1 column 124",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_zero",
+      "raw": "\"0\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"0\""
+      }
+    },
+    {
+      "id": "decimal_amount_zero",
+      "raw": "{\"kind\":\"amount\",\"value\":\"0\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"kind\":\"amount\",\"value\":\"0\"}"
+      }
+    },
+    {
+      "id": "revision_zero",
+      "raw": "\"0\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"0\""
+      }
+    },
+    {
+      "id": "opaque_zero",
+      "raw": "\"0\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"0\""
+      }
+    },
+    {
+      "id": "decimal_one",
+      "raw": "\"1\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"1\""
+      }
+    },
+    {
+      "id": "decimal_amount_one",
+      "raw": "{\"kind\":\"amount\",\"value\":\"1\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"kind\":\"amount\",\"value\":\"1\"}"
+      }
+    },
+    {
+      "id": "revision_one",
+      "raw": "\"1\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"1\""
+      }
+    },
+    {
+      "id": "opaque_one",
+      "raw": "\"1\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"1\""
+      }
+    },
+    {
+      "id": "decimal_negative",
+      "raw": "\"-5\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"-5\""
+      }
+    },
+    {
+      "id": "decimal_amount_negative",
+      "raw": "{\"kind\":\"amount\",\"value\":\"-5\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"kind\":\"amount\",\"value\":\"-5\"}"
+      }
+    },
+    {
+      "id": "revision_negative",
+      "raw": "\"-5\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: revision must be nonnegative",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_negative",
+      "raw": "\"-5\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"-5\""
+      }
+    },
+    {
+      "id": "decimal_safe",
+      "raw": "\"9007199254740991\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9007199254740991\""
+      }
+    },
+    {
+      "id": "decimal_amount_safe",
+      "raw": "{\"kind\":\"amount\",\"value\":\"9007199254740991\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"kind\":\"amount\",\"value\":\"9007199254740991\"}"
+      }
+    },
+    {
+      "id": "revision_safe",
+      "raw": "\"9007199254740991\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9007199254740991\""
+      }
+    },
+    {
+      "id": "opaque_safe",
+      "raw": "\"9007199254740991\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9007199254740991\""
+      }
+    },
+    {
+      "id": "decimal_beyond_safe",
+      "raw": "\"9007199254740993\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9007199254740993\""
+      }
+    },
+    {
+      "id": "decimal_amount_beyond_safe",
+      "raw": "{\"kind\":\"amount\",\"value\":\"9007199254740993\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"kind\":\"amount\",\"value\":\"9007199254740993\"}"
+      }
+    },
+    {
+      "id": "revision_beyond_safe",
+      "raw": "\"9007199254740993\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9007199254740993\""
+      }
+    },
+    {
+      "id": "opaque_beyond_safe",
+      "raw": "\"9007199254740993\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9007199254740993\""
+      }
+    },
+    {
+      "id": "decimal_i64_max",
+      "raw": "\"9223372036854775807\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9223372036854775807\""
+      }
+    },
+    {
+      "id": "decimal_amount_i64_max",
+      "raw": "{\"kind\":\"amount\",\"value\":\"9223372036854775807\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"kind\":\"amount\",\"value\":\"9223372036854775807\"}"
+      }
+    },
+    {
+      "id": "revision_i64_max",
+      "raw": "\"9223372036854775807\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9223372036854775807\""
+      }
+    },
+    {
+      "id": "opaque_i64_max",
+      "raw": "\"9223372036854775807\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9223372036854775807\""
+      }
+    },
+    {
+      "id": "decimal_i64_min",
+      "raw": "\"-9223372036854775808\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"-9223372036854775808\""
+      }
+    },
+    {
+      "id": "decimal_amount_i64_min",
+      "raw": "{\"kind\":\"amount\",\"value\":\"-9223372036854775808\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"kind\":\"amount\",\"value\":\"-9223372036854775808\"}"
+      }
+    },
+    {
+      "id": "revision_i64_min",
+      "raw": "\"-9223372036854775808\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: revision must be nonnegative",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_i64_min",
+      "raw": "\"-9223372036854775808\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"-9223372036854775808\""
+      }
+    },
+    {
+      "id": "decimal_above_i64",
+      "raw": "\"9223372036854775808\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_above_i64",
+      "raw": "{\"kind\":\"amount\",\"value\":\"9223372036854775808\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_above_i64",
+      "raw": "\"9223372036854775808\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_above_i64",
+      "raw": "\"9223372036854775808\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9223372036854775808\""
+      }
+    },
+    {
+      "id": "decimal_below_i64",
+      "raw": "\"-9223372036854775809\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_below_i64",
+      "raw": "{\"kind\":\"amount\",\"value\":\"-9223372036854775809\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_below_i64",
+      "raw": "\"-9223372036854775809\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_below_i64",
+      "raw": "\"-9223372036854775809\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"-9223372036854775809\""
+      }
+    },
+    {
+      "id": "decimal_huge",
+      "raw": "\"9999999999999999999999999999999999999999999999999999\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_huge",
+      "raw": "{\"kind\":\"amount\",\"value\":\"9999999999999999999999999999999999999999999999999999\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_huge",
+      "raw": "\"9999999999999999999999999999999999999999999999999999\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "out_of_range",
+          "field": ".",
+          "message": "out_of_range: expected i64 decimal",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_huge",
+      "raw": "\"9999999999999999999999999999999999999999999999999999\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"9999999999999999999999999999999999999999999999999999\""
+      }
+    },
+    {
+      "id": "decimal_negative_zero",
+      "raw": "\"-0\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_negative_zero",
+      "raw": "{\"kind\":\"amount\",\"value\":\"-0\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_negative_zero",
+      "raw": "\"-0\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_negative_zero",
+      "raw": "\"-0\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"-0\""
+      }
+    },
+    {
+      "id": "decimal_leading_zero",
+      "raw": "\"01\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_leading_zero",
+      "raw": "{\"kind\":\"amount\",\"value\":\"01\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_leading_zero",
+      "raw": "\"01\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_leading_zero",
+      "raw": "\"01\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"01\""
+      }
+    },
+    {
+      "id": "decimal_plus",
+      "raw": "\"+1\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_plus",
+      "raw": "{\"kind\":\"amount\",\"value\":\"+1\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_plus",
+      "raw": "\"+1\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_plus",
+      "raw": "\"+1\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"+1\""
+      }
+    },
+    {
+      "id": "decimal_space",
+      "raw": "\" 1\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_space",
+      "raw": "{\"kind\":\"amount\",\"value\":\" 1\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_space",
+      "raw": "\" 1\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_space",
+      "raw": "\" 1\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\" 1\""
+      }
+    },
+    {
+      "id": "decimal_trailing_newline",
+      "raw": "\"1\\n\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_trailing_newline",
+      "raw": "{\"kind\":\"amount\",\"value\":\"1\\n\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_trailing_newline",
+      "raw": "\"1\\n\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_trailing_newline",
+      "raw": "\"1\\n\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"1\\n\""
+      }
+    },
+    {
+      "id": "decimal_exponent",
+      "raw": "\"1e3\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_exponent",
+      "raw": "{\"kind\":\"amount\",\"value\":\"1e3\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_exponent",
+      "raw": "\"1e3\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_exponent",
+      "raw": "\"1e3\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"1e3\""
+      }
+    },
+    {
+      "id": "decimal_decimal",
+      "raw": "\"1.0\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_decimal",
+      "raw": "{\"kind\":\"amount\",\"value\":\"1.0\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_decimal",
+      "raw": "\"1.0\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_decimal",
+      "raw": "\"1.0\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"1.0\""
+      }
+    },
+    {
+      "id": "decimal_empty",
+      "raw": "\"\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_empty",
+      "raw": "{\"kind\":\"amount\",\"value\":\"\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_empty",
+      "raw": "\"\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_empty",
+      "raw": "\"\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid_revision: nonempty token required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_unicode",
+      "raw": "\"١\"",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_unicode",
+      "raw": "{\"kind\":\"amount\",\"value\":\"١\"}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_unicode",
+      "raw": "\"١\"",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_decimal",
+          "field": ".",
+          "message": "invalid_decimal: canonical decimal required",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_unicode",
+      "raw": "\"١\"",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "\"١\""
+      }
+    },
+    {
+      "id": "decimal_number",
+      "raw": "5",
+      "root": "DecimalI64",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: integer `5`, expected a string at line 1 column 1",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "decimal_amount_number",
+      "raw": "{\"kind\":\"amount\",\"value\":5}",
+      "root": "DecimalAmount",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: integer `5`, expected a string",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "revision_number",
+      "raw": "5",
+      "root": "DecimalRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: integer `5`, expected a string at line 1 column 1",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "opaque_number",
+      "raw": "5",
+      "root": "OpaqueRevision",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": ".",
+          "message": "invalid type: integer `5`, expected a string at line 1 column 1",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "error_valid",
+      "raw": "{\"error\":{\"code\":\"out_of_range\",\"field\":\"value.value\",\"message\":\"too large\",\"retryable\":false}}",
+      "root": "ErrorEnvelope",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"error\":{\"code\":\"out_of_range\",\"field\":\"value.value\",\"message\":\"too large\",\"retryable\":false}}"
+      }
+    },
+    {
+      "id": "error_null_field",
+      "raw": "{\"error\":{\"code\":\"stale\",\"field\":null,\"message\":\"old revision\",\"retryable\":false}}",
+      "root": "ErrorEnvelope",
+      "rust": {
+        "accepted": true,
+        "round_trip_raw": "{\"error\":{\"code\":\"stale\",\"field\":null,\"message\":\"old revision\",\"retryable\":false}}"
+      }
+    },
+    {
+      "id": "error_missing_field",
+      "raw": "{\"error\":{\"code\":\"stale\",\"message\":\"old revision\",\"retryable\":false}}",
+      "root": "ErrorEnvelope",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "error",
+          "message": "missing field `field` at line 1 column 68",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "id": "error_bad_code",
+      "raw": "{\"error\":{\"code\":\"surprise\",\"field\":null,\"message\":\"bad\",\"retryable\":false}}",
+      "root": "ErrorEnvelope",
+      "rust": {
+        "accepted": false,
+        "error": {
+          "code": "invalid_input",
+          "field": "error.code",
+          "message": "unknown variant `surprise`, expected one of `invalid_input`, `out_of_range`, `invalid_decimal`, `stale`, `operation_payload_mismatch` at line 1 column 27",
+          "retryable": false
+        }
+      }
+    }
+  ],
+  "command": "env RUSTC_WRAPPER= CARGO_TARGET_DIR=$PWD/rust/target cargo run --locked --manifest-path rust/Cargo.toml",
+  "direct_versions": {
+    "chrono": "0.4.45",
+    "serde": "1.0.228",
+    "serde_json": "1.0.145",
+    "serde_path_to_error": "0.1.20",
+    "utoipa": "5.5.0"
+  },
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "source_revision": "607978998c72b1e14a95518d32fbfeafe2f7fed6"
+}

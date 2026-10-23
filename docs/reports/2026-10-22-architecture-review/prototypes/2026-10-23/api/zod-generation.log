@@ -1,0 +1,3 @@
+Retrieving OpenAPI document from openapi.json
+DeprecationWarning: 'createTypeAliasDeclaration' has been deprecated since v4.8.0. Decorators are no longer supported for this function. Callers should switch to an overload that does not accept a 'decorators' parameter.
+Done generating <generated/zod.ts> !

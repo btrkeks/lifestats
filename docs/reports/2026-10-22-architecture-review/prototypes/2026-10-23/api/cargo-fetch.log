@@ -1,0 +1,7 @@
+    Updating crates.io index
+     Locking 50 packages to latest compatible versions
+      Adding serde v1.0.228 (available: v1.0.229)
+      Adding serde_core v1.0.228 (available: v1.0.229)
+      Adding serde_derive v1.0.228 (available: v1.0.229)
+      Adding serde_json v1.0.145 (available: v1.0.154)
+      Adding utoipa v5.5.0 (available: v6.0.0)

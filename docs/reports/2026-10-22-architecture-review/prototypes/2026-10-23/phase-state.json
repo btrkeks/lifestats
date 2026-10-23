@@ -1,0 +1,37 @@
+{
+  "scope": "Authorized prototype phase; no production implementation or live data mutation.",
+  "sourceRevision": "607978998c72b1e14a95518d32fbfeafe2f7fed6",
+  "storage": {
+    "status": "completed and parent-rerun",
+    "runner": "storage/run.py",
+    "results": "storage/results.json",
+    "findings": "storage/findings.md",
+    "working_choice": "typed contributor rows; preserve unknown legacy adjustments with exact wide arithmetic"
+  },
+  "api": "completed; full parent toolchain rerun completed",
+  "sync": {
+    "status": "post-audit rerun completed; controlled restore requirement and ID-reuse counterexamples recorded",
+    "runner": "sync/run.py",
+    "results": "sync/results.json",
+    "log": "sync/run.log",
+    "findings": "sync/findings.md",
+    "scope": "Synthetic SQLite operations/receipts/restore/ordering plus real ephemeral HTTP cache probe; no production adapters, RN or concurrent process failures."
+  },
+  "tasks": [
+    {
+      "slice": "lifestats-prototype-20261023-storage-r1",
+      "taskId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-storage-r1",
+      "status": "completed"
+    },
+    {
+      "slice": "lifestats-prototype-20261023-api-r1",
+      "taskId": "node:delegated-task:command%3Amcp%3A5f6e714d-a8eb-44d4-a012-3a7026b748f2%3Adelegate-task%3Alifestats-prototype-20261023-api-r1",
+      "status": "completed"
+    }
+  ],
+  "report_builder": "build_report.py; requires final api/results.json and summary.json before rendering",
+  "audit": "completed; exploratory evidence accepted with parent corrections in evidence/audit-response.md",
+  "remaining": [],
+  "status": "complete",
+  "publication": "evidence/publication.json"
+}

@@ -1,0 +1,48 @@
+{
+  "baseline": "06e4e70888b2fca062e3fdf2fd6fed60fd39d389",
+  "checks": [
+    {
+      "appearance": "light",
+      "width": 728,
+      "contentHeight": 1578,
+      "capturedHeight": 1578,
+      "consoleMessages": [
+        {
+          "level": "log",
+          "text": "Report self-check {\"tabs\":7,\"sources\":41,\"panels\":7,\"maxPanelWidth\":728,\"viewportWidth\":728,\"overflow\":false}"
+        }
+      ],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 728,
+        "height": 1578
+      }
+    },
+    {
+      "appearance": "dark",
+      "width": 360,
+      "contentHeight": 2536,
+      "capturedHeight": 2536,
+      "consoleMessages": [
+        {
+          "level": "log",
+          "text": "Report self-check {\"tabs\":7,\"sources\":41,\"panels\":7,\"maxPanelWidth\":360,\"viewportWidth\":360,\"overflow\":false}"
+        }
+      ],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 360,
+        "height": 2536
+      }
+    }
+  ],
+  "observations": [
+    "Inspected both rendered screenshots. Final text and controls are readable at desktop and phone widths.",
+    "All seven tabs were selected programmatically; exactly one panel remained visible. Each panel was measured with its details expanded; no horizontal overflow.",
+    "The first dark preview exposed a transparent white backdrop; using the host theme background corrected it.",
+    "Plotting follow-up added Obsidian and the optional image frontend. Expanded-panel self-checks pass at 728px/light and 360px/dark; 41 citations."
+  ],
+  "limits": "Only this report artifact was rendered. No application UI, new API implementation, or mobile client was tested.",
+  "report_sha256": "76ca707b2da19a8f7ff6b868e5df74b9fe7bab8ae6e2a41690c26c038b24cbf8",
+  "finalVersion": "Plotting ownership clarification: seven tabs, expanded widths, and source links rechecked; previous visual QA retained as historical evidence."
+}

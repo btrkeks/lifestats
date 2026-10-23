@@ -1,0 +1,54 @@
+[
+  {
+    "width": 728,
+    "appearance": "light",
+    "metadata": [
+      {
+        "width": 728,
+        "contentHeight": 1253,
+        "capturedHeight": 1253,
+        "consoleMessages": [
+          {
+            "level": "log",
+            "text": "Prototype viewer ready Object"
+          },
+          {
+            "level": "log",
+            "text": "Final QA [{\"tab\":\"Decisions\",\"visible\":true,\"overflow\":false},{\"tab\":\"Storage\",\"visible\":true,\"overflow\":false},{\"tab\":\"API\",\"visible\":true,\"overflow\":false},{\"tab\":\"Offline\",\"visible\":true,\"overflow\":false},{\"tab\":\"Cache\",\"visible\":true,\"overflow\":false}]"
+          }
+        ],
+        "screenshot": {
+          "mimeType": "image/png",
+          "width": 728,
+          "height": 1253
+        }
+      }
+    ]
+  },
+  {
+    "width": 360,
+    "appearance": "dark",
+    "metadata": [
+      {
+        "width": 360,
+        "contentHeight": 2033,
+        "capturedHeight": 2033,
+        "consoleMessages": [
+          {
+            "level": "log",
+            "text": "Prototype viewer ready Object"
+          },
+          {
+            "level": "log",
+            "text": "Final QA [{\"tab\":\"Decisions\",\"visible\":true,\"overflow\":false},{\"tab\":\"Storage\",\"visible\":true,\"overflow\":false},{\"tab\":\"API\",\"visible\":true,\"overflow\":false},{\"tab\":\"Offline\",\"visible\":true,\"overflow\":false},{\"tab\":\"Cache\",\"visible\":true,\"overflow\":false}]"
+          }
+        ],
+        "screenshot": {
+          "mimeType": "image/png",
+          "width": 360,
+          "height": 2033
+        }
+      }
+    ]
+  }
+]

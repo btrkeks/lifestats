@@ -1,0 +1,17 @@
+{
+  "name": "lifestats-api-contract-prototype",
+  "private": true,
+  "version": "0.0.0",
+  "devDependencies": {
+    "openapi-typescript": "7.10.1",
+    "openapi-zod-client": "1.18.3",
+    "zod": "3.25.76",
+    "@zodios/core": "10.9.6",
+    "axios": "1.12.2",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
+    "typescript": "5.9.3",
+    "tsx": "4.20.6",
+    "@types/node": "22.18.6"
+  }
+}
