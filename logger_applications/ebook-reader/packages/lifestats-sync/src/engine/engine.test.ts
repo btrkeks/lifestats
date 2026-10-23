@@ -503,6 +503,22 @@ describe('legacy v7 rows', () => {
     expect(server.requests.length).toBe(requests);
   });
 
+  it('delivers every legacy row and claim again to a new server identity', async () => {
+    const server = new FakeServer();
+    const r = await open(server, dbName(), { legacy: v7Source() });
+    await configure(r);
+    expect(server.legacyTotal()).toBe(800);
+
+    server.serverId = '5b0c1f8e-2f4d-4c43-9a43-7c1fd0b5a002';
+    server.legacyEvents.clear();
+    server.claims.clear();
+    await r.engine.retryNow();
+
+    expect(server.legacyTotal()).toBe(800);
+    expect(server.claims.has(1)).toBe(true);
+    expect(status(r)).toMatchObject({ kind: 'synced', pending: { older: 0 } });
+  });
+
   it('holds new reports for a legacy book until its claim lands', async () => {
     const server = new FakeServer();
     const r = await open(server, dbName(), { legacy: v7Source() });

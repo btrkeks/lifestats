@@ -25,7 +25,9 @@ import { postLegacyEvent, provisionLegacy, putLegacyBook, type LegacyEvent } fro
  * TEMPORARY, for one release. Delivers what the retired v7 patch left behind, then binds each
  * of its books to a content key on the server. Rows go through the legacy events route with
  * their original ids, so the server's primary key decides what it already counted. Nothing
- * is converted into spans. Removing this module and its call in the engine is the cleanup.
+ * is converted into spans, and the v7 rows are never changed: each server that answers gets
+ * every row, so a test server configured first cannot consume them. Removing this module and
+ * its call in the engine is the cleanup.
  */
 
 interface ReceiptRow {
@@ -76,11 +78,6 @@ function ackedBy(receipt: Receipt | undefined, serverId: ServerId | null): boole
   return serverId !== null && receipt?.sentTo === serverId;
 }
 
-/** A row any server accepted is done, as when the drain deleted it. */
-function acknowledged(receipt: Receipt | undefined): boolean {
-  return receipt?.sentTo != null;
-}
-
 export class LegacyCutover {
   private readonly receipts: Promise<IDBPDatabase<ReceiptSchema>>;
 
@@ -113,7 +110,7 @@ export class LegacyCutover {
   ): Promise<CutoverReport | FailedAttempt> {
     const { fetch, base, serverId, context } = target;
     const [units, receipts] = await Promise.all([this.units(), this.read()]);
-    const open = units.filter((unit) => !acknowledged(receipts.get(unit.id)));
+    const open = units.filter((unit) => !ackedBy(receipts.get(unit.id), serverId));
     if (open.some((unit) => isDue(receipts.get(unit.id)?.delivery ?? ready, context))) {
       const provisioned = await provisionLegacy(fetch, base);
       if (provisioned.kind !== 'delivered') return provisioned;
@@ -191,7 +188,7 @@ export class LegacyCutover {
     receipts: ReadonlyMap<string, Receipt>,
     serverId: ServerId | null
   ): number {
-    const rows = units.filter((unit) => !acknowledged(receipts.get(unit.id))).length;
+    const rows = units.filter((unit) => !ackedBy(receipts.get(unit.id), serverId)).length;
     const claims = [...new Set(units.map((unit) => unit.readerDataId))].filter(
       (readerDataId) => !ackedBy(receipts.get(`claim:${readerDataId}`), serverId)
     ).length;
