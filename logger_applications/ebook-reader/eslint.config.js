@@ -53,6 +53,12 @@ module.exports = tseslint.config(
     }
   },
   {
+    files: ['packages/**'],
+    languageOptions: {
+      parserOptions: { project: './packages/*/tsconfig.json', tsconfigRootDir: '.' }
+    }
+  },
+  {
     files: ['**/!(*.d).ts'],
     rules: {
       '@typescript-eslint/no-unused-vars': [
