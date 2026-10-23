@@ -59,9 +59,14 @@ export function startReader(options: ReaderOptions): ReaderBinding {
   return reader.binding;
 }
 
-/** The paginated reader is laying out a section; its position until then is not reading. */
-export function sectionLayout(started: boolean): void {
-  reader?.layout(started);
+/** The paginated reader is laying out a section; its position until it ends is not reading. */
+export function sectionLayoutStarted(): void {
+  reader?.startLayout();
+}
+
+/** The section is displayed and the reader measured its real position. */
+export function sectionLayoutEnded(position: number): void {
+  reader?.endLayout(position);
 }
 
 /** A page turn found no next section: the last screen was read. */

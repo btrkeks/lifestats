@@ -485,6 +485,42 @@ test.describe('browser profile', () => {
     await expectServerMatches(page);
   });
 
+  test('the last screen of a chapter counts when one page turn reaches the next chapter', async ({
+    browser
+  }) => {
+    const { context, page } = await profile(browser, {
+      viewMode: 'paginated',
+      writingMode: 'vertical-rl'
+    });
+    contexts.push(context);
+    await importBook(page);
+    await openBook(page);
+    await configure(page);
+    await page.keyboard.press('n');
+    await page.waitForTimeout(800);
+    const chapter = await position(page);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(800);
+    const last = await position(page);
+    expect(last).toBeLessThan(chapter);
+    await page.mouse.click(640, 8);
+    await page.getByTitle('Create Bookmark').click();
+    await page.mouse.click(640, 400);
+    await page.reload();
+    await expect(page.getByText(`${last} / ${LENGTH}`)).toBeVisible();
+    expect(await drain(page)).toBe('idle');
+    const before = await spansOf(page);
+
+    await page.clock.fastForward(30_000);
+    await page.keyboard.press('ArrowLeft');
+    await expect.poll(() => position(page)).toBe(chapter);
+    await page.clock.fastForward(15_000);
+
+    expect(await drain(page)).toBe('idle');
+    expect(await spansOf(page)).toEqual(union(before, [[last, chapter]]));
+    await expectServerMatches(page);
+  });
+
   test('a chapter jump whose section loads late credits nothing', async ({ browser }) => {
     const { context, page } = await profile(browser, {
       viewMode: 'paginated',

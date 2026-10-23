@@ -20,16 +20,26 @@ function recorder() {
 }
 
 describe('withoutSectionLayout', () => {
-  it('drops the 0 a section load reports and keeps the measured position after it', () => {
+  it('drops the 0 a section load reports and passes on the measured position', () => {
     const { seen, binding } = recorder();
     const reader = withoutSectionLayout(binding);
     reader.binding.observe(2600);
-    reader.layout(true);
+    reader.startLayout();
     reader.binding.observe(0);
-    reader.layout(false);
-    reader.binding.observe(2900);
+    reader.endLayout(2900);
 
     expect(seen).toEqual([2600, 2900]);
+  });
+
+  it('passes on the position a section load ends at, even when it was reported during the load', () => {
+    const { seen, binding } = recorder();
+    const reader = withoutSectionLayout(binding);
+    reader.binding.observe(2282);
+    reader.startLayout();
+    reader.binding.observe(2638);
+    reader.endLayout(2638);
+
+    expect(seen).toEqual([2282, 2638]);
   });
 
   it('passes a position of 0 outside a section load', () => {

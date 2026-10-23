@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
-  import { relocateReading, sectionLayout } from '$lib/lifestats/sync';
+  import { relocateReading, sectionLayoutEnded, sectionLayoutStarted } from '$lib/lifestats/sync';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { SECTION_CHANGE } from '$lib/data/events';
@@ -498,7 +498,7 @@
       scrollEl,
       document
     );
-    sectionLayout(true);
+    sectionLayoutStarted();
     exploredCharCount = 0;
     previousIntendedCount = 0;
     bookCharCount = calculator.charCount;
@@ -540,8 +540,8 @@
   function onContentDisplayChange(_calculator: SectionCharacterStatsCalculator) {
     if (scrollWhenReady) relocateReading();
     _calculator.updateParagraphPos();
-    sectionLayout(false);
     exploredCharCount = _calculator.calcExploredCharCount(customReadingPointRange);
+    sectionLayoutEnded(exploredCharCount);
     sectionReady$.next(_calculator);
 
     if (scrollWhenReady) {
