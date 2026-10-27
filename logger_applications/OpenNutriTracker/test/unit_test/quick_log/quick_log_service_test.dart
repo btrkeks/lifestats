@@ -8,6 +8,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:opennutritracker/core/data/data_source/intake_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/tracked_day_data_source.dart';
 import 'package:opennutritracker/core/data/dbo/intake_dbo.dart';
+import 'package:opennutritracker/core/data/dbo/tracked_day_dbo.dart';
 import 'package:opennutritracker/core/data/repository/intake_repository.dart';
 import 'package:opennutritracker/core/data/repository/tracked_day_repository.dart';
 import 'package:opennutritracker/core/domain/entity/app_theme_entity.dart';
@@ -327,6 +328,12 @@ void main() {
         await seed(intake('w3', now, meal: quark));
         await Future<void>.delayed(const Duration(milliseconds: 80));
         expect(published, 3);
+
+        await db.trackedDayBox.add(
+          TrackedDayDBO(day: now, calorieGoal: 2400, caloriesTracked: 168),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        expect(published, 4);
       },
     );
   });

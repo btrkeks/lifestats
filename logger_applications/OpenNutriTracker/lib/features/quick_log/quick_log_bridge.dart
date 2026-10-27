@@ -113,6 +113,7 @@ class QuickLogPublisher {
     _unsubscribe();
     for (final box in <BoxBase<Object?>>[
       _db.intakeBox,
+      _db.trackedDayBox,
       _db.configBox,
       _db.userBox,
       _db.userActivityBox,
