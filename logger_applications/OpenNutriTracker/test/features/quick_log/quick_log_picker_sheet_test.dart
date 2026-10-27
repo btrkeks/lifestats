@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opennutritracker/features/quick_log/picker/picker_request.dart';
 import 'package:opennutritracker/features/quick_log/picker/quick_log_picker.dart';
@@ -19,16 +20,19 @@ Map<String, Object?> _speisequark() {
 
 Future<List<PickerChoice>> _pump(
   WidgetTester tester,
-  Map<String, Object?> json,
-) async {
+  Map<String, Object?> json, {
+  Future<bool> Function(PickerChoice)? onSubmit,
+}) async {
   final submitted = <PickerChoice>[];
   await tester.pumpWidget(
     QuickLogPickerApp(
       request: PickerRequest.fromJson(json)!,
-      onSubmit: (choice) async {
-        submitted.add(choice);
-        return true;
-      },
+      onSubmit:
+          onSubmit ??
+          (choice) async {
+            submitted.add(choice);
+            return true;
+          },
       onDismiss: () {},
     ),
   );
@@ -108,6 +112,53 @@ void main() {
     await tester.tap(find.text('Add'));
     await tester.pump();
     expect(submitted.single.toJson(), {'baseAmount': 500.0, 'unit': 'serving'});
+  });
+
+  testWidgets(
+    'a channel error re-enables Add and retry keeps the original choice',
+    (tester) async {
+      final attempts = <PickerChoice>[];
+      await _pump(
+        tester,
+        _speisequark(),
+        onSubmit: (choice) async {
+          attempts.add(choice);
+          if (attempts.length == 1) {
+            throw PlatformException(code: 'unavailable');
+          }
+          return true;
+        },
+      );
+      await tester.tap(find.text('Add'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.text('Add'));
+      await tester.pump();
+      expect(attempts.map((choice) => choice.toJson()), [
+        {'baseAmount': 250.0, 'unit': 'g'},
+        {'baseAmount': 250.0, 'unit': 'g'},
+      ]);
+    },
+  );
+
+  testWidgets('quantity and unit are outlined in the app theme', (
+    tester,
+  ) async {
+    await _pump(tester, _speisequark());
+    for (final decorator in tester.widgetList<InputDecorator>(
+      find.byType(InputDecorator),
+    )) {
+      expect(decorator.decoration.filled, isFalse);
+      expect(decorator.decoration.enabledBorder, isA<OutlineInputBorder>());
+      expect(
+        decorator.decoration.enabledBorder!.borderSide.style,
+        BorderStyle.solid,
+      );
+    }
   });
 
   testWidgets('an empty quantity cannot be added', (tester) async {

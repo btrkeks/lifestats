@@ -132,6 +132,7 @@ class _QuickLogPickerSheetState extends State<QuickLogPickerSheet> {
   late final NumberFormat _quantityFormat;
   late String _unit;
   bool _submitting = false;
+  PickerChoice? _pendingChoice;
 
   /// Stands in for a placeholder value so the translated sentence can be
   /// split around it and the value styled on its own.
@@ -181,8 +182,15 @@ class _QuickLogPickerSheetState extends State<QuickLogPickerSheet> {
 
   Future<void> _add(double baseAmount) async {
     setState(() => _submitting = true);
-    final closing = await widget.onSubmit(PickerChoice(baseAmount, _unit));
-    if (!closing && mounted) setState(() => _submitting = false);
+    _pendingChoice ??= PickerChoice(baseAmount, _unit);
+    var closing = false;
+    try {
+      closing = await widget.onSubmit(_pendingChoice!);
+    } on PlatformException {
+      // A reply can be lost after commit; retry the original submission.
+    } finally {
+      if (!closing && mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -193,6 +201,19 @@ class _QuickLogPickerSheetState extends State<QuickLogPickerSheet> {
     final protein = scheme.secondary;
     final muted = TextStyle(color: scheme.onSurfaceVariant);
     final preview = previewFor(_request, _quantity.text, _unit);
+    InputDecoration outlinedField(String label) => InputDecoration(
+      labelText: label,
+      filled: false,
+      border: const OutlineInputBorder(borderRadius: Dimens.borderRadiusM),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: Dimens.borderRadiusM,
+        borderSide: BorderSide(color: scheme.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: Dimens.borderRadiusM,
+        borderSide: BorderSide(color: scheme.primary, width: 2),
+      ),
+    );
     final proteinFormat = NumberFormat.decimalPattern(_localeName)
       ..maximumFractionDigits = 1;
     final integer = NumberFormat.decimalPattern(_localeName);
@@ -286,7 +307,9 @@ class _QuickLogPickerSheetState extends State<QuickLogPickerSheet> {
                             '${_formatQuantity(amount.quantity)} ${_unitLabel(amount.unit)}',
                           ),
                           selected: _isSelected(amount),
-                          onSelected: (_) => _select(amount),
+                          onSelected: _pendingChoice == null
+                              ? (_) => _select(amount)
+                              : null,
                         ),
                       ),
                   ],
@@ -301,13 +324,14 @@ class _QuickLogPickerSheetState extends State<QuickLogPickerSheet> {
                       identifier: 'quick-log-picker-quantity',
                       child: TextField(
                         controller: _quantity,
+                        enabled: _pendingChoice == null,
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                         ],
-                        decoration: InputDecoration(labelText: s.quantityLabel),
+                        decoration: outlinedField(s.quantityLabel),
                       ),
                     ),
                   ),
@@ -319,7 +343,7 @@ class _QuickLogPickerSheetState extends State<QuickLogPickerSheet> {
                       child: DropdownButtonFormField<String>(
                         initialValue: _unit,
                         isExpanded: true,
-                        decoration: InputDecoration(labelText: s.unitLabel),
+                        decoration: outlinedField(s.unitLabel),
                         items: [
                           for (final unit in _request.units)
                             DropdownMenuItem(
@@ -330,9 +354,13 @@ class _QuickLogPickerSheetState extends State<QuickLogPickerSheet> {
                               ),
                             ),
                         ],
-                        onChanged: (token) {
-                          if (token != null) setState(() => _unit = token);
-                        },
+                        onChanged: _pendingChoice != null
+                            ? null
+                            : (token) {
+                                if (token != null) {
+                                  setState(() => _unit = token);
+                                }
+                              },
                       ),
                     ),
                   ),

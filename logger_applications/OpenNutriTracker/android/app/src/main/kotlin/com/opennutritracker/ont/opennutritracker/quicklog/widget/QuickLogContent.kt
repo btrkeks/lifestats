@@ -107,7 +107,8 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
     val frame = surface.padding(Padding)
     when (val snapshot = model.snapshot) {
         is WidgetSnapshot.Ready -> if (size.height < CompactBelow) {
-            Compact(snapshot, model, nowMs, scan, search, surface.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp))
+            val verticalPadding = ((size.height - 22.dp - 6.dp - ButtonHeight) / 2f).coerceIn(0.dp, 10.dp)
+            Compact(snapshot, model, nowMs, scan, search, surface.padding(start = 12.dp, end = 12.dp, top = verticalPadding, bottom = verticalPadding))
         } else Row(frame) {
             val ringSize = min(StatusWidth, size.height - Padding * 2 - ButtonHeight - RowGap)
             if (snapshot.rows.isEmpty()) {
