@@ -7,7 +7,9 @@ use anyhow::{anyhow, Result};
 use chrono::Timelike;
 use lifestats_core::shared::percentage::Percentage;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
+use lifestats_core::shared::timed_amount_list::TimedAmountList;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::value_objects::goals::timed_amounts_goal::TimedAmountsGoal;
 use plot_domain::plot::data::{DrawableData, DrawableGoal, ScalarValue};
 use serde_json::Value;
 
@@ -31,6 +33,43 @@ fn integer_amount_scalar(statistic: &AnyStatistic, value: i64) -> ScalarValue {
         }
     } else {
         ScalarValue::number(value)
+    }
+}
+
+/// Whether `plot_type` can draw `statistic`. Only TimeSpans values have the time
+/// frames that `TimeFrames` and `CircularProgress` plots draw; TimedAmounts plots its
+/// daily total. Callers check this before collecting points, so an empty range is
+/// rejected too.
+pub fn supports_plot_type(
+    statistic: &AnyStatistic,
+    plot_type: plot_domain::plot::plot_type::PlotType,
+) -> bool {
+    use plot_domain::plot::plot_type::PlotType;
+    match statistic {
+        AnyStatistic::TimedAmounts(_) => matches!(
+            plot_type,
+            PlotType::BarChart | PlotType::LineChart | PlotType::Scatter
+        ),
+        AnyStatistic::Habit(_)
+        | AnyStatistic::IntegerAmount(_)
+        | AnyStatistic::PointInTime(_)
+        | AnyStatistic::TimeSpans(_)
+        | AnyStatistic::Summing(_)
+        | AnyStatistic::TimeDifference(_) => true,
+    }
+}
+
+fn ensure_scalar_plot_type(
+    statistic: &AnyStatistic,
+    plot_type: plot_domain::plot::plot_type::PlotType,
+) -> Result<()> {
+    if supports_plot_type(statistic, plot_type) {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Plot type {:?} is not supported for this statistic",
+            plot_type
+        ))
     }
 }
 
@@ -100,6 +139,12 @@ pub fn json_value_to_drawable_data(
                     Ok(DrawableData::TimeFrames(time_frame_list))
                 }
             }
+        }
+        AnyStatistic::TimedAmounts(_) => {
+            ensure_scalar_plot_type(statistic, plot_type)?;
+            let list = serde_json::from_value::<TimedAmountList>(value.clone())
+                .map_err(|e| anyhow!("Failed to parse TimedAmountList: {}", e))?;
+            Ok(DrawableData::Scalar(ScalarValue::number(list.total())))
         }
         AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
             // Derived statistics - currently not fully supported for plotting
@@ -204,6 +249,14 @@ pub fn json_value_to_drawable_goal(
                     Ok(DrawableGoal::TimeFrames(time_frame_list))
                 }
             }
+        }
+        AnyStatistic::TimedAmounts(_) => {
+            ensure_scalar_plot_type(statistic, plot_type)?;
+            let goal = serde_json::from_value::<TimedAmountsGoal>(value.clone())
+                .map_err(|e| anyhow!("Failed to parse TimedAmountsGoal: {}", e))?;
+            Ok(DrawableGoal::Scalar(ScalarValue::number(
+                goal.target_amount(),
+            )))
         }
         AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
             // Derived statistics - goals would be in seconds

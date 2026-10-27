@@ -28,6 +28,7 @@ mock! {
         fn record_ebook_day(&self, producer: lifestats_core::ebook::ProducerId, book: lifestats_core::ebook::BookKey, day: NaiveDate, report: lifestats_core::ebook::EbookDayReport) -> Result<lifestats_core::ebook::EbookWriteOutcome, lifestats_core::ebook::EbookError>;
 
         fn replace_yomikata_day(&self, day: NaiveDate, totals: lifestats_core::yomikata::YomikataDayTotals) -> Result<lifestats_core::yomikata::YomikataDayReplacement,lifestats_core::yomikata::YomikataDayError>;
+        fn replace_opennutritracker_day(&self, day: NaiveDate, values: lifestats_core::opennutritracker::OpenNutriTrackerDay) -> Result<lifestats_core::opennutritracker::OpenNutriTrackerDayReplacement, lifestats_core::opennutritracker::OpenNutriTrackerDayError>;
 
         fn provision_bundle(
             &self,

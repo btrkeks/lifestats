@@ -255,6 +255,13 @@ where
                 update_policy,
             }
         }
+        AnyStatistic::TimedAmounts(_) => {
+            return Err(ApiError::BadRequest(
+                "TimedAmounts statistics are written by their source integration \
+                 (PUT /integrations/opennutritracker/days/{day})"
+                    .to_string(),
+            ));
+        }
         AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
             return Err(ApiError::BadRequest(
                 "Cannot log values to derived statistics (Summing, TimeDifference)".to_string(),
@@ -427,9 +434,8 @@ where
         app_state.statistic_repository.clone(),
         app_state.event_publisher.clone(),
     );
-    let created_statistic = handler
-        .handle(command)
-        .map_err(|e| ApiError::InternalError(format!("Failed to create statistic: {}", e)))?;
+    // InvalidInput (e.g. a source-owned type) is 400; storage failures stay 500.
+    let created_statistic = handler.handle(command).map_err(ApiError::from)?;
 
     // Convert to response DTO
     let response = StatisticMetadataResponse::from(&created_statistic);
@@ -547,7 +553,9 @@ where
             date_range,
         })
         .map_err(|e| {
-            if e.to_string().contains("not an IntegerAmount type") {
+            if e.to_string()
+                .contains("not an IntegerAmount or TimedAmounts type")
+            {
                 ApiError::BadRequest(e.to_string())
             } else if e.to_string().contains("not found") {
                 ApiError::NotFound(e.to_string())

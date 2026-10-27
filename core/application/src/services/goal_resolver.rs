@@ -22,6 +22,7 @@ pub fn any_goal_to_json(goal: &AnyGoal) -> serde_json::Result<serde_json::Value>
         AnyGoal::FinishedInTime(g) => serde_json::to_value(g),
         AnyGoal::TimeSpans(g) => serde_json::to_value(g),
         AnyGoal::SecondsAmount(g) => serde_json::to_value(g),
+        AnyGoal::TimedAmounts(g) => serde_json::to_value(g),
     }
 }
 

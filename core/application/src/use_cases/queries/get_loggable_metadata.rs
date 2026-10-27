@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::cqrs::{Query, QueryHandler};
-use crate::dto::{StatisticSummary, StatisticType};
+use crate::dto::StatisticSummary;
 use crate::error::ApplicationResult;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 
@@ -36,19 +36,12 @@ where
     R: StatisticRepository + Send + Sync + 'static,
 {
     fn handle(&self, _query: GetLoggableMetadataQuery) -> ApplicationResult<Vec<StatisticSummary>> {
-        const LOGGABLE_TYPES: [StatisticType; 4] = [
-            StatisticType::IntegerAmount,
-            StatisticType::Habit,
-            StatisticType::PointInTime,
-            StatisticType::TimeSpans,
-        ];
-
         let statistics = self.statistic_repository.find_all_metadata()?;
 
         let summaries = statistics
             .iter()
             .map(StatisticSummary::from)
-            .filter(|summary| LOGGABLE_TYPES.contains(&summary.statistic_type))
+            .filter(|summary| summary.statistic_type.is_manually_loggable())
             .collect();
 
         Ok(summaries)
@@ -58,12 +51,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dto::StatisticType;
     use chrono::Local;
     use lifestats_core::shared::ids::StatisticId;
     use lifestats_core::statistic::any_statistic::AnyStatistic;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::derived_statistics::summing_statistic::SummingStatistic;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+    use lifestats_core::statistic::types::logable_statistics::timed_amounts::TimedAmountsStatistic;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 
     #[test]
@@ -88,10 +83,16 @@ mod tests {
             today,
         ));
 
+        let source_owned_stat = AnyStatistic::TimedAmounts(TimedAmountsStatistic::new(
+            StatisticMetadata::new(StatisticId(3), "OpenNutriTracker".into(), "Caffeine".into()),
+            None,
+            today,
+        ));
+
         repository
             .expect_find_all_metadata()
             .times(1)
-            .return_once(move || Ok(vec![loggable_stat, derived_stat]));
+            .return_once(move || Ok(vec![loggable_stat, derived_stat, source_owned_stat]));
 
         let handler = GetLoggableMetadataQueryHandler::new(Arc::new(repository));
         let result = handler.handle(GetLoggableMetadataQuery).unwrap();

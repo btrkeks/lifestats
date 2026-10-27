@@ -1,5 +1,6 @@
 use crate::shared::seconds::Seconds;
 use crate::shared::time_frame_list::TimeFrameList;
+use crate::shared::timed_amount_list::TimedAmountList;
 use crate::statistic::error::{DomainError, DomainResult};
 use crate::statistic::traits::base_statistic::Statistic;
 use crate::statistic::traits::integer_statistic::IntegerStatistic;
@@ -9,11 +10,13 @@ use crate::statistic::types::logable_statistics::habit::HabitStatistic;
 use crate::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use crate::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;
 use crate::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
+use crate::statistic::types::logable_statistics::timed_amounts::TimedAmountsStatistic;
 use crate::statistic::value_objects::goals::amount_goal::AmountGoal;
 use crate::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
 use crate::statistic::value_objects::goals::goal_trait::Goal;
 use crate::statistic::value_objects::goals::habit_goal::HabitGoal;
 use crate::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
+use crate::statistic::value_objects::goals::timed_amounts_goal::TimedAmountsGoal;
 use crate::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use chrono::{NaiveDate, NaiveTime};
 use std::any::{type_name, Any};
@@ -68,6 +71,7 @@ pub enum AnyGoal {
     FinishedInTime(FinishedInTimeGoal),
     TimeSpans(TimeSpansGoal),
     SecondsAmount(AmountGoal<Seconds>),
+    TimedAmounts(TimedAmountsGoal),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +88,7 @@ pub enum AnyStatistic {
     IntegerAmount(IntegerAmountStatistic),
     PointInTime(PointInTimeStatistic),
     TimeSpans(TimeSpansStatistic),
+    TimedAmounts(TimedAmountsStatistic),
     Summing(SummingStatistic),
     TimeDifference(TimeDifferenceStatistic),
 }
@@ -96,6 +101,7 @@ macro_rules! dispatch_statistic {
             AnyStatistic::IntegerAmount(s) => s.$method($($args)*),
             AnyStatistic::PointInTime(s) => s.$method($($args)*),
             AnyStatistic::TimeSpans(s) => s.$method($($args)*),
+            AnyStatistic::TimedAmounts(s) => s.$method($($args)*),
             AnyStatistic::Summing(s) => s.$method($($args)*),
             AnyStatistic::TimeDifference(s) => s.$method($($args)*),
         }
@@ -149,6 +155,12 @@ impl AnyStatistic {
                 let value: TimeFrameList = deserialize(value_json, metadata, "time frame list")?;
                 Ok(s.value_as_i64(&value))
             }
+            AnyStatistic::TimedAmounts(s) => {
+                let metadata = s.get_metadata();
+                let value: TimedAmountList =
+                    deserialize(value_json, metadata, "timed amount list")?;
+                Ok(s.value_as_i64(&value))
+            }
             AnyStatistic::Summing(s) => {
                 let metadata = s.get_metadata();
                 let value: Seconds = deserialize(value_json, metadata, "seconds duration")?;
@@ -180,6 +192,9 @@ impl AnyStatistic {
             AnyStatistic::TimeSpans(s) => {
                 s.get_default_goal().map(|g| AnyGoal::TimeSpans(g.clone()))
             }
+            AnyStatistic::TimedAmounts(s) => s
+                .get_default_goal()
+                .map(|g| AnyGoal::TimedAmounts(g.clone())),
             AnyStatistic::Summing(s) => s
                 .get_default_goal()
                 .map(|g| AnyGoal::SecondsAmount(g.clone())),
@@ -215,6 +230,10 @@ impl AnyStatistic {
             AnyStatistic::TimeSpans(_) => evaluate_streak_for_day_inner::<
                 TimeFrameList,
                 TimeSpansGoal,
+            >(metadata, log_value, goal),
+            AnyStatistic::TimedAmounts(_) => evaluate_streak_for_day_inner::<
+                TimedAmountList,
+                TimedAmountsGoal,
             >(metadata, log_value, goal),
             AnyStatistic::Summing(_) => {
                 evaluate_streak_for_day_inner::<Seconds, AmountGoal<Seconds>>(

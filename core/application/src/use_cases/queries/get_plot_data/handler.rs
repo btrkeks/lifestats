@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use crate::cqrs::QueryHandler;
-use crate::error::ApplicationResult;
+use crate::error::{ApplicationError, ApplicationResult};
 use crate::services::goal_resolver::GoalResolver;
 use crate::services::plot_data_builder::{
     json_value_to_drawable_data, json_value_to_drawable_goal, percentage_to_color,
+    supports_plot_type,
 };
 use anyhow::anyhow;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
@@ -108,6 +109,19 @@ where
                     goal_obj.get_percentage_achieved(parsed_value.as_ref()),
                 ))
             }
+            AnyStatistic::TimedAmounts(_) => {
+                use lifestats_core::shared::timed_amount_list::TimedAmountList;
+                use lifestats_core::statistic::value_objects::goals::timed_amounts_goal::TimedAmountsGoal;
+                let parsed_value = log_value
+                    .map(|v| serde_json::from_value::<TimedAmountList>(v.clone()))
+                    .transpose()
+                    .map_err(|e| anyhow!("Failed to parse TimedAmountList: {}", e))?;
+                let goal_obj = serde_json::from_value::<TimedAmountsGoal>(goal.clone())
+                    .map_err(|e| anyhow!("Failed to parse TimedAmountsGoal: {}", e))?;
+                Ok(Some(
+                    goal_obj.get_percentage_achieved(parsed_value.as_ref()),
+                ))
+            }
             AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
                 // These use Seconds - skip for now as they're derived statistics
                 Ok(None)
@@ -125,6 +139,12 @@ where
         let statistic = self
             .statistic_repository
             .find_metadata_by_id(query.statistic_id)?;
+        if !supports_plot_type(&statistic, query.plot_type) {
+            return Err(ApplicationError::InvalidInput(format!(
+                "Plot type {:?} is not supported for statistic {}",
+                query.plot_type, query.statistic_id
+            )));
+        }
 
         // 2. Load log values for the date range
         let log_values = self

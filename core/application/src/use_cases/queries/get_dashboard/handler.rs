@@ -65,6 +65,7 @@ where
             AnyStatistic::IntegerAmount(_) => "IntegerAmount",
             AnyStatistic::PointInTime(_) => "PointInTime",
             AnyStatistic::TimeSpans(_) => "TimeSpans",
+            AnyStatistic::TimedAmounts(_) => "TimedAmounts",
             AnyStatistic::Summing(_) => "Summing",
             AnyStatistic::TimeDifference(_) => "TimeDifference",
         }

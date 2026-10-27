@@ -16,6 +16,8 @@ chrono = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+strum = "0.27"
+strum_macros = "0.27"
 async-trait = "0.1"
 chrono-tz = "0.10.4"
 futures = "0.3"

@@ -87,6 +87,13 @@ where
             StatisticTypeDto::TimeSpans => {
                 AnyStatistic::TimeSpans(TimeSpansStatistic::new(metadata, None, today))
             }
+            StatisticTypeDto::TimedAmounts => {
+                // Created by the source integration with its identity tags; a statistic
+                // made here could never receive data.
+                return Err(ApplicationError::InvalidInput(
+                    "TimedAmounts statistics are created by their source integration".to_string(),
+                ));
+            }
             StatisticTypeDto::Summing => {
                 let source_ids = Self::ensure_sources(&source_statistic_ids)?;
                 AnyStatistic::Summing(SummingStatistic::new(metadata, source_ids, None, today))

@@ -186,7 +186,7 @@ web_api/
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/statistics` | List all statistics metadata |
-| `GET` | `/statistics/loggable` | List only loggable statistics (excludes derived) |
+| `GET` | `/statistics/loggable` | List only manually loggable statistics (excludes derived and source-owned TimedAmounts) |
 | `POST` | `/statistics` | Create a new statistic |
 | `GET` | `/statistics/{id}` | Get metadata for a specific statistic |
 | `DELETE` | `/statistics/{id}` | Delete a statistic |
@@ -194,7 +194,7 @@ web_api/
 | `POST` | `/statistics/{id}/log_time_frame/{date}` | Log a time frame for TimeSpans |
 | `GET` | `/statistics/{id}/logged/{date}` | Check if a value has been logged for a specific date |
 | `GET` | `/statistics/{id}/time_spans/total` | Get total duration for date range |
-| `GET` | `/statistics/{id}/integer_amount/total` | Get total amount for date range |
+| `GET` | `/statistics/{id}/integer_amount/total` | Get total amount for date range (IntegerAmount, or the sum of TimedAmounts daily totals) |
 | `GET` | `/statistics/{id}/consistency` | Get consistency score (% of days achieved) |
 | `GET` | `/statistics/{id}/score` | Get mean goal achievement score over date range |
 | `GET` | `/statistics/{id}/achievements` | Per-day goal achievement + daily-override state over date range |
@@ -287,6 +287,9 @@ human units. Format these values to one decimal place with ` kg` or ` %`.
 PNG axes and value labels apply the same conversion (`67.5 kg`, `15.6 %`);
 storage and generic logged-value endpoints retain the original integers.
 Habit values use `binary`, with `0` for false and `1` for true.
+TimedAmounts statistics plot their daily total and goal target as `number`
+(bar, line and scatter only); `time_frames` and `circular_progress` return `400`,
+even for a range without data.
 Axis label formats are `number`, `duration_hh_mm`, `time_of_day_hh_mm`, `percent`,
 `kilograms_one_decimal`, and `percent_one_decimal`.
 
@@ -310,7 +313,8 @@ Heartbeat sessions track ongoing activity for a single statistic. Only one activ
 | `POST` | `/integrations/ebook/events` | Ingest an idempotent ebook reading event and log per-book progress |
 | `PUT` | `/integrations/beurer/days/{day}` | Atomically provision scale metrics and overwrite supplied daily readings |
 | `PUT` | `/integrations/yomikata/days/{day}` | Atomically replace source-owned daily cards and exact study seconds |
-| `GET` | `/openapi.json` | Generated integration contract (Beurer, Yomikata and ebook) |
+| `PUT` | `/integrations/opennutritracker/days/{day}` | Atomically provision caffeine/nicotine TimedAmounts and replace both lists for the day |
+| `GET` | `/openapi.json` | Generated integration contract (Beurer, OpenNutriTracker, Yomikata and ebook) |
 | `GET` | `/integrations/ebook` | Persistent server UUID and protocol version |
 | `PUT` | `/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}` | Merge read spans atomically |
 | `POST` | `/integrations/ebook` and `/integrations/ebook/events` | Retired clients receive 410 `client_upgrade_required` |
@@ -536,6 +540,74 @@ Errors on this route use the following scoped envelope. Legacy routes keep their
 `GET /openapi.json` derives this scoped contract from the request and error DTOs and the handler annotation.
 It does not describe the other Lifestats routes.
 
+### Replacing OpenNutriTracker daily intake
+
+```http
+PUT /integrations/opennutritracker/days/2026-10-27
+Content-Type: application/json
+
+{"caffeine":[{"time":"08:12:00","amount_mg":120},{"time":"13:40:00","amount_mg":60},{"time":null,"amount_mg":40}],"nicotine":[]}
+```
+
+The body is the app's complete day for both metrics. `day` is a strict valid
+`YYYY-MM-DD` date, the day the app counts the entries toward. Rules:
+
+- `caffeine` and `nicotine` are both required arrays of at most 1000 entries.
+  `[]` is a confirmed zero, not an omission.
+- Each entry has exactly `time` and `amount_mg`. `time` is a required key: exactly
+  `HH:MM:SS` local wall-clock time from the app's entry, or `null` when the app
+  knows the day but not the time. `amount_mg` is a JSON integer from `1` to
+  `9007199254740991`; floats, exponents, strings, `0` and negatives are invalid.
+- The per-metric daily sum must stay at or below `9007199254740991`
+  (`422 projection_overflow`).
+- Order does not matter. The server sorts entries (unknown times first) and keeps
+  identical entries as separate intakes.
+- Unknown and duplicate keys are rejected at every depth.
+
+Success is `204 No Content`, also for an unchanged replay. No provisioning
+request is needed: the first PUT creates both `TimedAmounts` statistics in
+category `OpenNutriTracker`, without default goals:
+
+| Tags | Name |
+| --- | --- |
+| `source=opennutritracker`, `metric=caffeine`, `unit=mg` | `[OpenNutriTracker] Caffeine (mg)` |
+| `source=opennutritracker`, `metric=nicotine`, `unit=mg` | `[OpenNutriTracker] Nicotine (mg)` |
+
+Later PUTs resolve statistics by the `source` and `metric` tags, regardless of
+names. Each PUT replaces both lists on that day and touches no other day.
+Provisioning and both writes share one SQLite transaction. Duplicate tagged
+statistics, a tagged statistic of another type, or a `unit` tag other than `mg`
+return `409 bundle_conflict` and nothing is written. Last write wins; there is
+no freshness check. The app is expected to resend the complete lists for a fixed
+recent window (about the last 14 days) on every sync, so days without intake
+arrive as `[]` and deletes propagate.
+
+TimedAmounts statistics are written only by this route. `POST /statistics/{id}/log/{date}`
+and `POST /statistics` return `400` for them, and `/statistics/loggable` omits them.
+
+Errors use the scoped integration envelope; `field` names the exact entry, e.g.
+`caffeine[2].time` or `nicotine[0].amount_mg`:
+
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | `malformed_json` or `invalid_body` | Malformed JSON or unreadable body |
+| 409 | `bundle_conflict` | Ambiguous, wrongly typed or non-mg tagged statistic |
+| 415 | `unsupported_media_type` | Content type is not JSON |
+| 422 | `invalid_field` | Invalid date, metric array, entry, time or amount |
+| 422 | `projection_overflow` | A metric's daily sum exceeds the supported range |
+| 500 | `storage_error` | Storage failed and the transaction did not commit |
+
+Reading it back:
+
+- `GET /statistics/{id}/logged/{day}` returns the stored list, e.g.
+  `[{"time":null,"amount":40},{"time":"08:12:00","amount":120}]` (stored entries
+  use the key `amount`). A never-sent day has `has_value: false`.
+- Achievements, dashboard values, `integer_amount/total` and plots use the
+  daily total in mg.
+- Goals use the IntegerAmount `goal_data` (`target`, `is_at_least`), so
+  `{"target":"400","is_at_least":"false"}` caps the day at 400 mg. Unlike
+  IntegerAmount, a never-sent day does not achieve the goal; `[]` counts as 0 mg.
+
 ### Syncing LiftLog Workout Days
 
 **Request:** `PUT /integrations/liftlog/days`
@@ -615,6 +687,11 @@ Nothing is written when the request is rejected.
 }
 ```
 
+`statistic_type` is one of `IntegerAmount`, `Habit`, `PointInTime`, `TimeSpans`,
+`Summing` or `TimeDifference`. Metadata responses can also contain `TimedAmounts`,
+which cannot be created here (`400`); its integration creates it. Clients should
+tolerate statistic types they don't know.
+
 `default_goal` is always present on statistic metadata responses (`GET /statistics`, `GET /statistics/loggable`, `GET /statistics/{id}`, `POST /statistics`): `null` when no default goal is set, otherwise the same object as `goal_data` from `GET /statistics/{id}/goals/default`.
 
 ### Logging a Value
@@ -629,6 +706,9 @@ Nothing is written when the request is rejected.
 ```
 
 **Response:** `204 No Content`
+
+Returns `400` for derived statistics and for TimedAmounts, which only their
+integration writes (see "Replacing OpenNutriTracker daily intake").
 
 ### Logging a Time Frame
 
@@ -674,6 +754,7 @@ Nothing is written when the request is rejected.
 **Notes:**
 - Returns 404 if statistic doesn't exist
 - Returns 400 for derived statistics (Summing, TimeDifference) - they are computed, not logged
+- For TimedAmounts, `value` is the stored list of `{"time","amount"}` entries; `[]` is a confirmed zero
 - The `value` field is omitted when `has_value` is false
 - Date must be in `YYYY-MM-DD` format
 
@@ -693,6 +774,7 @@ Nothing is written when the request is rejected.
 All `goal_data` values are strings; the fields depend on the statistic type:
 
 - IntegerAmount / Summing / TimeDifference: `target`, optional `is_at_least` (default `"true"`; the two derived types take seconds)
+- TimedAmounts: `target` (daily total, `0`-`9007199254740991`), optional `is_at_least`, as for IntegerAmount
 - Habit: `occurred` (`"true"` / `"false"`)
 - PointInTime: `deadline` (`"HH:MM"` or `"HH:MM:SS"`)
 - TimeSpans: `target` (JSON string of a TimeFrameList, e.g. `"[{\"start\":\"09:00:00\",\"end\":\"17:00:00\"}]"`), `efficiency` (`"0"`-`"100"`)
@@ -768,7 +850,7 @@ Returns 400 when `start > end`, the range covers more than 366 days or `goal_dat
 
 **Notes:**
 - One entry per day in the range, ascending. `percentage_achieved` is 0-255 (can exceed 100) or `null` when no goal applied that day.
-- `value` is what was logged that day, or `null`: a number for IntegerAmount and Summing, total seconds for TimeSpans (same-day frames merged) and TimeDifference, `true`/`false` for Habit, `"HH:MM:SS"` for PointInTime.
+- `value` is what was logged that day, or `null`: a number for IntegerAmount and Summing, total seconds for TimeSpans (same-day frames merged) and TimeDifference, `true`/`false` for Habit, `"HH:MM:SS"` for PointInTime, the daily total for TimedAmounts (`0` for a sent empty list). A TimedAmounts day that was never sent has `value: null` and does not achieve its goal.
 - `goal` is the goal that applied that day (daily override, else the default goal valid then), in the same shape as `goal_data` from `GET /statistics/{id}/goals/default`; `null` when no goal applied.
 - `override` is `none` (default goal applies), `suppressed`, or `goal` (a daily override is set). Use `PUT /statistics/{id}/goals/{date}` with `{"kind": "suppressed"}` to excuse a missed day.
 - Returns 404 for unknown statistics and 400 for malformed dates or `start > end`.
@@ -1213,6 +1295,19 @@ async fn test_my_new_endpoint() {
 ```
 
 ### Adding a New Integration
+
+For a source that owns whole days of its statistics (Beurer, Yomikata, OpenNutriTracker):
+
+1. Define the validated day request, error and a `…DayStore` port in `core/core/src/<source>.rs`.
+   Keep the source's identity (`source` and `metric` tags) in one place that both
+   creation and lookup use (see `OpenNutriTrackerMetric`).
+2. Implement the port on `SqliteStatisticRepository` in `persistence/src/<source>_day_store.rs`
+   inside one `immediate_transaction`, using only that connection.
+3. Add a service method and `with_<source>_day_store` to `IntegrationService`, and inject the
+   store in `lifestats-bootstrap` (otherwise the route returns `500 storage_error`).
+4. Add a strict route under `src/routes/<source>.rs`, register it in `routes/mod.rs` and
+   `routes/openapi.rs`, and regenerate `openapi.json`
+   (`UPDATE_OPENAPI=1 cargo test -p lifestats-web-api --test yomikata_days_e2e served_openapi_matches_committed_snapshot`).
 
 For complex integrations like Fitbit:
 
