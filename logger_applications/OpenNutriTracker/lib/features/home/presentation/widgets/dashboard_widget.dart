@@ -1,3 +1,4 @@
+import 'package:opennutritracker/core/utils/calc/kcal_gauge_calc.dart';
 import 'package:animated_flip_counter/animated_flip_counter.dart';
 import 'package:flutter/material.dart';
 import 'package:opennutritracker/core/presentation/widgets/app_card.dart';
@@ -51,28 +52,22 @@ class _DashboardWidgetState extends State<DashboardWidget> {
 
   @override
   Widget build(BuildContext context) {
-    double kcalValue = 0;
-    double gaugeValue = 0;
+    final gauge = KcalGaugeCalc.of(
+      kcalLeft: widget.totalKcalLeft,
+      kcalGoal: widget.totalKcalDaily,
+    );
+    final gaugeValue = gauge.fraction;
     final usesKilojoules = context.watch<EnergyUnitProvider>().usesKilojoules;
-    String kcalLabelText = usesKilojoules
-        ? '${S.of(context).kjLabel} ${S.of(context).energyLeftLabel}'
-        : S.of(context).kcalLeftLabel;
-
-    if (widget.totalKcalLeft > widget.totalKcalDaily) {
-      kcalValue = widget.totalKcalDaily;
-      gaugeValue = 0;
-    } else if (widget.totalKcalLeft < 0) {
-      kcalValue = widget.totalKcalLeft.abs();
-      gaugeValue = 1;
-      kcalLabelText = usesKilojoules
-          ? '${S.of(context).kjLabel} ${S.of(context).energyTooMuchLabel}'
-          : S.of(context).kcalTooMuchLabel;
-    } else {
-      kcalValue = widget.totalKcalLeft;
-      gaugeValue =
-          (widget.totalKcalDaily - widget.totalKcalLeft) / widget.totalKcalDaily;
-    }
-    final displayValue = usesKilojoules ? UnitCalc.kcalToKj(kcalValue) : kcalValue;
+    final kcalLabelText = gauge.isOver
+        ? (usesKilojoules
+            ? '${S.of(context).kjLabel} ${S.of(context).energyTooMuchLabel}'
+            : S.of(context).kcalTooMuchLabel)
+        : (usesKilojoules
+            ? '${S.of(context).kjLabel} ${S.of(context).energyLeftLabel}'
+            : S.of(context).kcalLeftLabel);
+    final displayValue = usesKilojoules
+        ? UnitCalc.kcalToKj(gauge.value)
+        : gauge.value;
     final displaySupplied = usesKilojoules
         ? UnitCalc.kcalToKj(widget.totalKcalSupplied)
         : widget.totalKcalSupplied;
