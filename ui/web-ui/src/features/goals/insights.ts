@@ -42,6 +42,7 @@ export function goalLevel(goal: GoalData | null): number | null {
   if (!goal) return null;
   switch (goal.type) {
     case 'IntegerAmount':
+    case 'TimedAmounts':
     case 'Summing':
     case 'TimeDifference':
       return goal.data.target;

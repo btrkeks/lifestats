@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { STATISTIC_TYPES } from './statisticTypes';
 import type { FieldValues } from 'react-hook-form';
 import type {
   DailyGoalState,
@@ -23,6 +24,11 @@ const booleanish = z
 // IntegerAmount and Summing goals
 export const integerAmountGoalSchema = z.object({
   target: z.coerce.number().int(),
+  is_at_least: booleanish,
+});
+
+export const timedAmountsGoalSchema = z.object({
+  target: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   is_at_least: booleanish,
 });
 
@@ -64,6 +70,8 @@ export function goalFormSchemaFor(
     case 'IntegerAmount':
     case 'Summing':
       return integerAmountGoalSchema;
+    case 'TimedAmounts':
+      return timedAmountsGoalSchema;
     case 'Habit':
       return habitGoalSchema;
     case 'PointInTime':
@@ -82,6 +90,8 @@ export function goalFormDefaultsFor(statisticType: StatisticType): FieldValues {
     case 'Summing':
     case 'TimeDifference':
       return { target: 0, is_at_least: true };
+    case 'TimedAmounts':
+      return { target: 0, is_at_least: false };
     case 'Habit':
       return { occurred: true };
     case 'PointInTime':
@@ -99,6 +109,10 @@ export function formGoal(statisticType: StatisticType, values: unknown): GoalDat
     case 'TimeDifference': {
       const parsed = integerAmountGoalSchema.safeParse(values);
       return parsed.success ? { type: statisticType, data: parsed.data } : null;
+    }
+    case 'TimedAmounts': {
+      const parsed = timedAmountsGoalSchema.safeParse(values);
+      return parsed.success ? { type: 'TimedAmounts', data: parsed.data } : null;
     }
     case 'Habit': {
       const parsed = habitGoalSchema.safeParse(values);
@@ -122,6 +136,13 @@ export function formGoal(statisticType: StatisticType, values: unknown): GoalDat
 // AmountGoal → {"target_amount": 10, "is_at_least": true}
 const amountGoalResponseSchema = z
   .object({ target_amount: z.number(), is_at_least: z.boolean() })
+  .transform((raw) => ({ target: raw.target_amount, is_at_least: raw.is_at_least }));
+
+const timedAmountsGoalResponseSchema = z
+  .object({
+    target_amount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    is_at_least: z.boolean(),
+  })
   .transform((raw) => ({ target: raw.target_amount, is_at_least: raw.is_at_least }));
 
 // HabitGoal → {"target": true}
@@ -160,6 +181,8 @@ export function parseGoalData(
   switch (statisticType) {
     case 'IntegerAmount':
       return { type: 'IntegerAmount', data: amountGoalResponseSchema.parse(rawData) };
+    case 'TimedAmounts':
+      return { type: 'TimedAmounts', data: timedAmountsGoalResponseSchema.parse(rawData) };
     case 'Summing':
       return { type: 'Summing', data: amountGoalResponseSchema.parse(rawData) };
     case 'TimeDifference':
@@ -244,3 +267,24 @@ export function createGoalRequest(goalData: Record<string, unknown>): SetDailyGo
 export function createSuppressedRequest(): SetDailyGoalRequest {
   return { kind: 'suppressed' };
 }
+
+/** Known types remain validated; future statistic types are omitted from lists. */
+const statisticTypeSchema = z.custom<StatisticType>(
+  (value) => typeof value === 'string' && Object.prototype.hasOwnProperty.call(STATISTIC_TYPES, value)
+);
+
+const statisticMetadataSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string(),
+  category: z.string(),
+  statistic_type: statisticTypeSchema,
+  default_goal: z.record(z.string(), z.unknown()).nullable(),
+});
+
+export const statisticListSchema = z
+  .array(z.object({ statistic_type: z.string() }).passthrough())
+  .transform((statistics): StatisticMetadata[] =>
+    statistics
+      .filter((statistic) => statisticTypeSchema.safeParse(statistic.statistic_type).success)
+      .map((statistic) => statisticMetadataSchema.parse(statistic))
+  );

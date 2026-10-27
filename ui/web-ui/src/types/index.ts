@@ -14,7 +14,7 @@ export interface StatisticMetadata {
 
 // Statistic types matching backend enums
 export type StatisticType =
-  'IntegerAmount' | 'Habit' | 'PointInTime' | 'TimeSpans' | 'Summing' | 'TimeDifference';
+  'IntegerAmount' | 'TimedAmounts' | 'Habit' | 'PointInTime' | 'TimeSpans' | 'Summing' | 'TimeDifference';
 
 export interface CreateStatisticRequest {
   name: string;
@@ -53,6 +53,7 @@ export interface SecondsAmountGoalData {
 // Discriminated union for all possible goal types
 export type GoalData =
   | { type: 'IntegerAmount'; data: IntegerAmountGoalData }
+  | { type: 'TimedAmounts'; data: IntegerAmountGoalData }
   | { type: 'Habit'; data: HabitGoalData }
   | { type: 'PointInTime'; data: PointInTimeGoalData }
   | { type: 'TimeSpans'; data: TimeSpansGoalData }

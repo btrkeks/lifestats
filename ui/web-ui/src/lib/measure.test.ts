@@ -47,3 +47,14 @@ describe('formatting', () => {
     expect(formatValue({ kind: 'spans' }, 3600)).toBe('1 h');
   });
 });
+
+describe('TimedAmounts measures', () => {
+  it('recognizes mg and never guesses duration from the name', () => {
+    const measure = measureOf({ name: '[OpenNutriTracker] Caffeine (mg)', statistic_type: 'TimedAmounts' });
+    expect(measure).toEqual({ kind: 'count', unit: 'mg' });
+    expect(formatValueWithUnit(measure, 180)).toBe('180 mg');
+    expect(formatValueWithUnit(measure, 0)).toBe('0 mg');
+    expect(measureOf({ name: 'Duration', statistic_type: 'TimedAmounts' })).toEqual({ kind: 'count', unit: null });
+    expect(measureOf({ name: 'Nicotine (MG)', statistic_type: 'TimedAmounts' })).toEqual({ kind: 'count', unit: 'mg' });
+  });
+});

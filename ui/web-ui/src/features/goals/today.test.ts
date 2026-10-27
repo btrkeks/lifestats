@@ -72,3 +72,31 @@ describe('todayCounts', () => {
     expect(todayCounts(days)).toEqual({ met: 1, open: 1, missed: 0, suppressed: 1 });
   });
 });
+
+describe('TimedAmounts today', () => {
+  const mg = { kind: 'count', unit: 'mg' } as const;
+  const cap: GoalData = { type: 'TimedAmounts', data: { target: 400, is_at_least: false } };
+  const minimum: GoalData = { type: 'TimedAmounts', data: { target: 400, is_at_least: true } };
+
+  it('preserves missing data for both goal directions', () => {
+    for (const goal of [cap, minimum]) {
+      const day = today('open', null, goal);
+      expect(todayProgress(day, mg)).toEqual({ text: 'No data', tone: 'muted' });
+      expect(todayFigure(day, mg)).toBe('No data');
+    }
+  });
+
+  it('shows confirmed zero intake as 0 mg', () => {
+    const day = today('met', 0, cap);
+    expect(todayProgress(day, mg)).toEqual({ text: '0 mg used', tone: 'met' });
+    expect(todayFigure(day, mg)).toBe('0 / 400 mg');
+  });
+
+  it('formats upper limits and minimums with their units and status', () => {
+    expect(todayProgress(today('met', 180, cap), mg)).toEqual({ text: '180 mg used', tone: 'met' });
+    expect(todayProgress(today('missed', 500, cap), mg)).toEqual({ text: '500 mg used', tone: 'missed' });
+    expect(todayProgress(today('open', 180, minimum), mg)).toEqual({ text: '180 of 400 mg', tone: 'open' });
+    expect(todayProgress(today('met', 400, minimum), mg)).toEqual({ text: '400 of 400 mg', tone: 'met' });
+    expect(todayFigure(today('met', 180, cap), mg)).toBe('180 / 400 mg');
+  });
+});

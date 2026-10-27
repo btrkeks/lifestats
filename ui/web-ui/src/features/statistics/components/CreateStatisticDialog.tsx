@@ -207,7 +207,7 @@ export function CreateStatisticDialog({
   const [category, setCategory] = useState('');
   const [sources, setSources] = useState<number[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
-  const derived = STATISTIC_TYPES[type].derived;
+  const derived = STATISTIC_TYPES[type].origin === 'derived';
   const loggable = useLoggableStatistics(open && derived);
   const create = useCreateStatistic();
   const nameId = useId();

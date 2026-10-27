@@ -14,6 +14,7 @@ export type Measure =
   | { kind: 'spans' }; // total seconds inside the logged windows
 
 const COUNT_UNITS: [RegExp, string][] = [
+  [/\(mg\)/i, 'mg'],
   [/\((minutes|mins?)\)/i, 'min'],
   [/\breps\b/i, 'reps'],
   [/\bcards\b/i, 'cards'],
@@ -34,6 +35,7 @@ export function measureOf(statistic: Pick<StatisticMetadata, 'name' | 'statistic
       return { kind: 'spans' };
     case 'TimeDifference':
       return { kind: 'duration' };
+    case 'TimedAmounts':
     case 'IntegerAmount':
     case 'Summing': {
       const unit = COUNT_UNITS.find(([pattern]) => pattern.test(statistic.name))?.[1] ?? null;
