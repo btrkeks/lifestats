@@ -9,6 +9,7 @@ import 'package:opennutritracker/core/presentation/widgets/app_card.dart';
 import 'package:opennutritracker/core/presentation/widgets/meal_value_unit_text.dart';
 import 'package:opennutritracker/core/styles/app_palette.dart';
 import 'package:opennutritracker/core/styles/dimens.dart';
+import 'package:opennutritracker/core/utils/calc/intake_time_calc.dart';
 import 'package:opennutritracker/core/utils/energy_display.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/core/utils/user_image_storage.dart';
@@ -79,6 +80,7 @@ class IntakeCard extends StatelessWidget {
                         value: intake.amount,
                         meal: intake.meal,
                         usesImperialUnits: usesImperialUnits,
+                        suffix: _timeSuffix(context),
                         textStyle: textTheme.bodySmall?.copyWith(color: palette.textMuted),
                       ),
                     ],
@@ -98,6 +100,14 @@ class IntakeCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// " · 08:12" in the device's clock format, or nothing for an intake
+  /// that only knows its day.
+  String _timeSuffix(BuildContext context) {
+    final dateTime = intake.dateTime;
+    if (!IntakeTimeCalc.hasClockTime(dateTime)) return '';
+    return ' · ${TimeOfDay.fromDateTime(dateTime.toLocal()).format(context)}';
   }
 
   void onLongPressedItem(BuildContext context) {

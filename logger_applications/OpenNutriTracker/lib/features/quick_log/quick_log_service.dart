@@ -109,6 +109,7 @@ class QuickLogService {
           meal: latest.meal,
           type: MealTypeSuggester.suggestFromTime(command.tappedAt),
           day: command.tappedAt,
+          loggedAt: command.tappedAt,
           baseAmount: command.baseAmount,
           unit: command.unit,
         ),

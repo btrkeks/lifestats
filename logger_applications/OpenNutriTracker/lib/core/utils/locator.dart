@@ -400,6 +400,7 @@ Future<void> initLocator() async {
       locator(),
       locator(),
       locator(),
+      config: locator(),
     ),
   );
   locator.registerLazySingleton<QuickLogService>(

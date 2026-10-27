@@ -450,17 +450,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     IntakeEntity intakeEntity,
     bool usesImperialUnits,
   ) async {
-    final changeIntakeAmount = await showDialog<double>(
+    final result = await showDialog<EditIntakeResult>(
       context: context,
       builder: (context) => EditDialog(
         intakeEntity: intakeEntity,
         usesImperialUnits: usesImperialUnits,
       ),
     );
-    if (changeIntakeAmount != null) {
-      _homeBloc.updateIntakeItem(intakeEntity.id, {
-        'amount': changeIntakeAmount,
-      });
+    if (result != null) {
+      await _homeBloc.updateIntakeItem(
+        intakeEntity.id,
+        await editedIntakeFields(intakeEntity, result),
+      );
       _homeBloc.add(const LoadItemsEvent());
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

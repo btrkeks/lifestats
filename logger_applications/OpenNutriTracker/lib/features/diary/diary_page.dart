@@ -292,17 +292,17 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     IntakeEntity intakeEntity,
     bool usesImperialUnits,
   ) async {
-    final changeIntakeAmount = await showDialog<double>(
+    final result = await showDialog<EditIntakeResult>(
       context: context,
       builder: (context) => EditDialog(
         intakeEntity: intakeEntity,
         usesImperialUnits: usesImperialUnits,
       ),
     );
-    if (changeIntakeAmount != null) {
+    if (result != null) {
       await _calendarDayBloc.updateIntakeItem(
         intakeEntity.id,
-        {'amount': changeIntakeAmount},
+        await editedIntakeFields(intakeEntity, result),
         _selectedDate,
       );
       _diaryBloc.add(const LoadDiaryYearEvent());

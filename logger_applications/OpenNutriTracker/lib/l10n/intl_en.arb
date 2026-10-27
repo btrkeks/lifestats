@@ -391,6 +391,8 @@
   "duplicateRecipeLabel": "Duplicate",
   "duplicateRecipeNameSuffix": "(copy)",
   "editItemDialogTitle": "Edit item",
+  "intakeTimeLabel": "Time",
+  "intakeTimeNotSetLabel": "Not recorded",
   "editMealLabel": "Edit meal",
   "editRecipeTitle": "Edit Recipe",
   "energyLabel": "energy",

@@ -49,6 +49,7 @@ class IntakeDataSource {
       return null;
     }
     intakeObject.$2.amount = fields['amount'] ?? intakeObject.$2.amount;
+    intakeObject.$2.dateTime = fields['dateTime'] ?? intakeObject.$2.dateTime;
     await _intakeBox.putAt(intakeObject.$1, intakeObject.$2);
     return _intakeBox.getAt(intakeObject.$1);
   }

@@ -143,10 +143,11 @@ class DayBoundaryCalc {
   /// y-m-d" (see [isMomentInLogicalDayMinutes]). Two writers produce
   /// one, in two different spellings:
   ///
-  ///  * adding from the diary stamps the calendar cell itself —
+  ///  * adding from the diary used to stamp the calendar cell itself —
   ///    table_calendar hands out `DateTime.utc(y, m, d)`, which
   ///    DayInfoWidget passes through AddMealScreenArguments into
-  ///    MealDetailBloc.addIntake as the intake's `dateTime`;
+  ///    MealDetailBloc.addIntake. Intakes logged that way before
+  ///    `IntakeTimeCalc` keep it; new ones get a clock time;
   ///  * JsonMealImporter dates an entry `DateTime(y, m, d)` — *local*
   ///    midnight — from the optional `date` field (or today's date when
   ///    it is omitted), and CSV import can round-trip the same shape.
@@ -163,6 +164,10 @@ class DayBoundaryCalc {
       value.second == 0 &&
       value.millisecond == 0 &&
       value.microsecond == 0;
+
+  /// Public view of [_isDayLabel]: true when [value] names a calendar
+  /// day rather than a clock reading.
+  static bool isDayLabel(DateTime value) => _isDayLabel(value);
 
   static int _sanitiseHours(int? offsetHours) {
     if (offsetHours == null) return 0;

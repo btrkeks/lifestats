@@ -10,6 +10,7 @@ class MealValueUnitText extends StatelessWidget {
   final bool usesImperialUnits;
   final TextStyle? textStyle;
   final String? prefix;
+  final String suffix;
 
   const MealValueUnitText({
     super.key,
@@ -19,6 +20,7 @@ class MealValueUnitText extends StatelessWidget {
     required this.usesImperialUnits,
     this.textStyle,
     this.prefix = '',
+    this.suffix = '',
   });
 
   @override
@@ -28,7 +30,7 @@ class MealValueUnitText extends StatelessWidget {
     final convertedValue = _convertValue(value, mealUnit, unitToDisplay);
 
     return Text(
-      '$prefix${_formatValue(convertedValue)} $unitToDisplay',
+      '$prefix${_formatValue(convertedValue)} $unitToDisplay$suffix',
       style: textStyle,
       overflow: TextOverflow.ellipsis,
       maxLines: 1,

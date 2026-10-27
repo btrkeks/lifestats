@@ -74,7 +74,7 @@ Array of intake records:
     "unit": "g",                     // or "ml", "serving", ...
     "amount": 120.0,                 // numeric amount in `unit`
     "type": "breakfast",             // breakfast | lunch | dinner | snack
-    "dateTime": "2026-05-13T08:15:00.000",
+    "dateTime": "2026-05-13T08:15:00.000", // when it was eaten; a bare midnight is a day without a time
     "meal": {
       "code": "1234567890123",       // barcode or null
       "name": "Whole Milk",
@@ -226,7 +226,7 @@ Header lookup is case-insensitive.
 | Column                          | Type   | Required | Notes                                          |
 | ------------------------------- | ------ | -------- | ---------------------------------------------- |
 | `id`                            | string | yes      | Intake UUID.                                   |
-| `date_time`                     | string | yes      | ISO-8601 timestamp.                            |
+| `date_time`                     | string | yes      | ISO-8601 timestamp. A bare midnight means the day without a time (older diary entries, date-only imports). |
 | `type`                          | enum   | yes      | `breakfast` / `lunch` / `dinner` / `snack`.    |
 | `amount`                        | number | yes      | Quantity logged.                               |
 | `unit`                          | string | yes      | e.g. `g`, `ml`, `serving`.                     |

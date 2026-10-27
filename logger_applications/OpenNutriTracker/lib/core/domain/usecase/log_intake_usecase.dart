@@ -3,9 +3,11 @@ import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/delete_intake_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
+import 'package:opennutritracker/core/utils/calc/intake_time_calc.dart';
 import 'package:opennutritracker/core/utils/hive_db_provider.dart';
 import 'package:opennutritracker/core/utils/id_generator.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_entity.dart';
@@ -15,7 +17,14 @@ class LogIntakeRequest {
   final String? profileId;
   final MealEntity meal;
   final IntakeTypeEntity type;
+
+  /// The day the intake is logged into: a diary day label, or a clock
+  /// reading meaning "today". See [IntakeTimeCalc.stampFor].
   final DateTime day;
+
+  /// When the intake happened, if the caller knows better than the save
+  /// time (the widget's tap time). Overrides [day].
+  final DateTime? loggedAt;
   final double baseAmount;
   final String unit;
 
@@ -25,6 +34,7 @@ class LogIntakeRequest {
     required this.meal,
     required this.type,
     required this.day,
+    this.loggedAt,
     required this.baseAmount,
     required this.unit,
   });
@@ -59,6 +69,10 @@ class LogIntakeUsecase {
   final GetMacroGoalUsecase _macroGoal;
   final HiveDBProvider _db;
 
+  /// Source of the day-start offset. Null reads as midnight.
+  final GetConfigUsecase? _config;
+  final DateTime Function() _clock;
+
   LogIntakeUsecase(
     this._addIntake,
     this._getIntake,
@@ -66,8 +80,11 @@ class LogIntakeUsecase {
     this._trackedDay,
     this._kcalGoal,
     this._macroGoal,
-    this._db,
-  );
+    this._db, {
+    GetConfigUsecase? config,
+    DateTime Function() clock = DateTime.now,
+  }) : _config = config,
+       _clock = clock;
 
   /// The calendar accounting key intentionally retains the app Add semantics.
   Future<IntakeReceipt> log(LogIntakeRequest request) =>
@@ -77,13 +94,21 @@ class LogIntakeUsecase {
             ? null
             : await _getIntake.getIntakeById(request.intakeId!);
         if (existing != null) return _receipt(existing, created: false);
+        // Stamped here, at save, not when the calling screen was built.
+        final dateTime =
+            request.loggedAt ??
+            IntakeTimeCalc.stampFor(
+              request.day,
+              _clock(),
+              (await _config?.getConfig())?.dayStartOffsetTotalMinutes,
+            );
         final intake = IntakeEntity(
           id: request.intakeId ?? IdGenerator.getUniqueID(),
           unit: request.unit,
           amount: request.baseAmount,
           type: request.type,
           meal: request.meal,
-          dateTime: request.day,
+          dateTime: dateTime,
         );
         await _addIntake.addIntake(intake);
         await _accountAdd(intake);

@@ -5,8 +5,10 @@ import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
+import 'package:opennutritracker/core/utils/calc/intake_time_calc.dart';
 import 'package:opennutritracker/core/utils/calc/unit_calc.dart';
 import 'package:opennutritracker/core/utils/energy_unit_provider.dart';
 import 'package:opennutritracker/core/utils/id_generator.dart';
@@ -94,12 +96,18 @@ class _QuickAddBottomSheetState extends State<QuickAddBottomSheet> {
     final title = _titleController.text.trim();
 
     try {
+      final config = await locator<GetConfigUsecase>().getConfig();
       final intake = _buildIntake(
         kcal: kcal,
         carbs: carbs,
         fat: fat,
         protein: protein,
         title: title,
+        dateTime: IntakeTimeCalc.stampFor(
+          widget.day,
+          DateTime.now(),
+          config.dayStartOffsetTotalMinutes,
+        ),
       );
       await locator<AddIntakeUsecase>().addIntake(intake);
       await _updateTrackedDay(intake);
@@ -138,6 +146,7 @@ class _QuickAddBottomSheetState extends State<QuickAddBottomSheet> {
     required double? fat,
     required double? protein,
     required String title,
+    required DateTime dateTime,
   }) {
     // Store per-100g, intake amount = 100g, so totals math returns the
     // exact values the user typed.
@@ -168,27 +177,29 @@ class _QuickAddBottomSheetState extends State<QuickAddBottomSheet> {
       amount: 100,
       type: widget.intakeType,
       meal: meal,
-      dateTime: widget.day,
+      dateTime: dateTime,
     );
   }
 
   Future<void> _updateTrackedDay(IntakeEntity intake) async {
+    // Keyed like LogIntakeUsecase keys it: by the intake's timestamp.
+    final day = intake.dateTime;
     final addTrackedDay = locator<AddTrackedDayUsecase>();
-    final hasTrackedDay = await addTrackedDay.hasTrackedDay(widget.day);
+    final hasTrackedDay = await addTrackedDay.hasTrackedDay(day);
     if (!hasTrackedDay) {
       final kcalGoal = await locator<GetKcalGoalUsecase>().getKcalGoal();
       final macroGoal = locator<GetMacroGoalUsecase>();
       await addTrackedDay.addNewTrackedDay(
-        widget.day,
+        day,
         kcalGoal,
         await macroGoal.getCarbsGoal(kcalGoal),
         await macroGoal.getFatsGoal(kcalGoal),
         await macroGoal.getProteinsGoal(kcalGoal),
       );
     }
-    await addTrackedDay.addDayCaloriesTracked(widget.day, intake.totalKcal);
+    await addTrackedDay.addDayCaloriesTracked(day, intake.totalKcal);
     await addTrackedDay.addDayMacrosTracked(
-      widget.day,
+      day,
       carbsTracked: intake.totalCarbsGram,
       fatTracked: intake.totalFatsGram,
       proteinTracked: intake.totalProteinsGram,

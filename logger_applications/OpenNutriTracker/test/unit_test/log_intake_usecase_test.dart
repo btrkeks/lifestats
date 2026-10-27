@@ -48,7 +48,7 @@ class _MacroGoal extends Fake implements GetMacroGoalUsecase {
   Future<double> getProteinsGoal(double totalCalorieGoal) async => 100;
 }
 
-LogIntakeUsecase _writer(HiveDBProvider db) {
+LogIntakeUsecase _writer(HiveDBProvider db, DateTime Function() clock) {
   final intakes = IntakeRepository(IntakeDataSource(db));
   return LogIntakeUsecase(
     AddIntakeUsecase(intakes),
@@ -58,6 +58,7 @@ LogIntakeUsecase _writer(HiveDBProvider db) {
     _KcalGoal(),
     _MacroGoal(),
     db,
+    clock: clock,
   );
 }
 
@@ -68,6 +69,9 @@ void main() {
   late LogIntakeUsecase writer;
   late PathProviderPlatform original;
   final day = DateTime(2026, 10, 27, 12);
+  // The save happens at the moment the request names, unless a test moves
+  // the clock.
+  var now = day;
   final meal = MealEntity(
     code: 'quark',
     name: 'Quark',
@@ -92,12 +96,15 @@ void main() {
     String? id, {
     double amount = 250,
     String? profile,
+    DateTime? on,
+    DateTime? loggedAt,
   }) => LogIntakeRequest(
     intakeId: id,
     profileId: profile,
     meal: meal,
     type: IntakeTypeEntity.lunch,
-    day: day,
+    day: on ?? day,
+    loggedAt: loggedAt,
     baseAmount: amount,
     unit: 'g',
   );
@@ -114,7 +121,9 @@ void main() {
         intakeBox: realDb.intakeBox,
         trackedDayBox: realDb.trackedDayBox,
       ),
+      () => now,
     );
+    now = day;
   });
 
   tearDown(() async {
@@ -135,6 +144,32 @@ void main() {
     expect(totals.fatTracked, 0.5);
     expect(totals.proteinTracked, 30);
     expect(totals.calorieGoal, 2000);
+  });
+
+  group('timestamp', () {
+    test('is the save time, not the moment the screen was built', () async {
+      now = DateTime(2026, 10, 27, 14, 5, 9);
+      final receipt = await writer.log(request(null));
+      expect(realDb.intakeBox.values.single.dateTime, now);
+      expect(receipt.day, now);
+    });
+
+    test('a diary day label gets the clock time on that day', () async {
+      now = DateTime(2026, 10, 27, 8, 12, 30);
+      await writer.log(request(null, on: DateTime.utc(2026, 10, 20)));
+      expect(
+        realDb.intakeBox.values.single.dateTime,
+        DateTime(2026, 10, 20, 8, 12, 30),
+      );
+      expect(realDb.trackedDayBox.keys.single, '2026-10-20');
+    });
+
+    test('loggedAt wins over the save time', () async {
+      final tappedAt = DateTime(2026, 10, 27, 7, 59);
+      now = DateTime(2026, 10, 27, 8, 3);
+      await writer.log(request(null, loggedAt: tappedAt));
+      expect(realDb.intakeBox.values.single.dateTime, tappedAt);
+    });
   });
 
   test('20 concurrent logs preserve every calorie and macro', () async {
@@ -184,7 +219,7 @@ void main() {
   test(
     'log started during switch waits and writes only the new profile',
     () async {
-      final writer = _writer(realDb);
+      final writer = _writer(realDb, () => now);
       var switched = false;
       realDb.addListener(() => switched = true);
       final switching = realDb.switchProfile('b', 'b');
@@ -204,7 +239,7 @@ void main() {
   );
 
   test('profile-bound log and revert reject after a queued switch', () async {
-    final writer = _writer(realDb);
+    final writer = _writer(realDb, () => now);
     final switching = realDb.switchProfile('b', 'b');
     final logging = writer.log(request('stale', profile: 'a'));
     await expectLater(logging, throwsA(isA<StaleIntakeProfile>()));

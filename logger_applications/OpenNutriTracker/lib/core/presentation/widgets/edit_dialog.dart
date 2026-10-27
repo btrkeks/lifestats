@@ -1,8 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
+import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
+import 'package:opennutritracker/core/utils/calc/intake_time_calc.dart';
 import 'package:opennutritracker/core/utils/calc/unit_calc.dart';
 import 'package:opennutritracker/core/utils/custom_text_input_formatter.dart';
+import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/generated/l10n.dart';
+
+/// What the user confirmed in [EditDialog].
+class EditIntakeResult {
+  /// The amount in metric units.
+  final double amount;
+
+  /// The newly picked time of day, or null when the time was left alone.
+  final TimeOfDay? time;
+
+  const EditIntakeResult({required this.amount, this.time});
+}
+
+/// The `updateIntakeItem` fields for [result]: the amount, and the new
+/// timestamp when a time was picked, kept on [intake]'s logical day.
+Future<Map<String, dynamic>> editedIntakeFields(
+  IntakeEntity intake,
+  EditIntakeResult result,
+) async {
+  final time = result.time;
+  if (time == null) return {'amount': result.amount};
+  final config = await locator<GetConfigUsecase>().getConfig();
+  return {
+    'amount': result.amount,
+    'dateTime': IntakeTimeCalc.withTimeOfDay(
+      intake.dateTime,
+      time.hour,
+      time.minute,
+      config.dayStartOffsetTotalMinutes,
+    ),
+  };
+}
 
 class EditDialog extends StatefulWidget {
   final IntakeEntity intakeEntity;
@@ -21,6 +55,10 @@ class EditDialog extends StatefulWidget {
 class _EditDialogState extends State<EditDialog> {
   late TextEditingController amountEditingController;
 
+  /// The stored time, or null for an intake that only knows its day.
+  late final TimeOfDay? _storedTime;
+  TimeOfDay? _pickedTime;
+
   @override
   void initState() {
     super.initState();
@@ -31,10 +69,23 @@ class _EditDialogState extends State<EditDialog> {
     amountEditingController = TextEditingController(
       text: initialAmount.toStringAsFixed(2),
     );
+    final dateTime = widget.intakeEntity.dateTime;
+    _storedTime = IntakeTimeCalc.hasClockTime(dateTime)
+        ? TimeOfDay.fromDateTime(dateTime.toLocal())
+        : null;
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _pickedTime ?? _storedTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) setState(() => _pickedTime = picked);
   }
 
   @override
   Widget build(BuildContext context) {
+    final shownTime = _pickedTime ?? _storedTime;
     return AlertDialog(
       title: Text(S.of(context).editItemDialogTitle),
       content: Column(
@@ -49,6 +100,24 @@ class _EditDialogState extends State<EditDialog> {
               suffixText: _convertUnit(widget.intakeEntity.meal.mealUnit ?? ''),
             ),
           ),
+          const SizedBox(height: 16),
+          Semantics(
+            identifier: 'edit-intake-time',
+            button: true,
+            child: InkWell(
+              onTap: _pickTime,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: S.of(context).intakeTimeLabel,
+                  suffixIcon: const Icon(Icons.schedule),
+                ),
+                child: Text(
+                  shownTime?.format(context) ??
+                      S.of(context).intakeTimeNotSetLabel,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       actions: [
@@ -59,9 +128,12 @@ class _EditDialogState extends State<EditDialog> {
             );
             if (newAmount == null) return;
             Navigator.of(context).pop(
-              _convertBackToMetricValue(
-                newAmount,
-                widget.intakeEntity.meal.mealUnit,
+              EditIntakeResult(
+                amount: _convertBackToMetricValue(
+                  newAmount,
+                  widget.intakeEntity.meal.mealUnit,
+                ),
+                time: _pickedTime != _storedTime ? _pickedTime : null,
               ),
             );
           },
