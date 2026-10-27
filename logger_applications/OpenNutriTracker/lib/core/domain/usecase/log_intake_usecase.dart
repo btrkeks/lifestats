@@ -73,11 +73,6 @@ class LogIntakeUsecase {
   Future<IntakeReceipt> log(LogIntakeRequest request) =>
       _db.intakeWriteLock.synchronized(() async {
         _checkProfile(request.profileId);
-        if (!request.baseAmount.isFinite ||
-            request.baseAmount <= 0 ||
-            request.baseAmount > 10000) {
-          throw ArgumentError.value(request.baseAmount, 'baseAmount');
-        }
         final existing = request.intakeId == null
             ? null
             : await _getIntake.getIntakeById(request.intakeId!);

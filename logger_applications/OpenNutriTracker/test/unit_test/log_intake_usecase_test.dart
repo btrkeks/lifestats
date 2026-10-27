@@ -174,15 +174,11 @@ void main() {
     expect(totals.proteinTracked, 12);
   });
 
-  test('invalid amounts never write', () async {
-    for (final amount in [0.0, -1.0, 10001.0, double.nan, double.infinity]) {
-      await expectLater(
-        writer.log(request('invalid', amount: amount)),
-        throwsArgumentError,
-      );
-    }
-    expect(realDb.intakeBox.isEmpty, isTrue);
-    expect(realDb.trackedDayBox.isEmpty, isTrue);
+  test('in-app Add retains support for 50 servings of 250 g', () async {
+    final receipt = await writer.log(request('large-serving', amount: 12500));
+    expect(receipt.intake.amount, 12500);
+    expect(realDb.intakeBox.values.single.amount, 12500);
+    expect(realDb.trackedDayBox.values.single.caloriesTracked, 8375);
   });
 
   test(

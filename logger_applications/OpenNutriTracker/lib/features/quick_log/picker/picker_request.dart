@@ -1,3 +1,5 @@
+import 'package:opennutritracker/features/quick_log/domain/quick_log_amount.dart';
+
 class PickerUnit {
   final String token;
   final String label;
@@ -173,7 +175,9 @@ PickerQuantity? _quantity(Object? raw, List<PickerUnit> units) {
   final token = raw['unit'];
   if (quantity == null || quantity == 0 || token is! String) return null;
   final unit = units.where((unit) => unit.token == token).firstOrNull;
-  if (unit == null || !_validAmount(quantity * unit.basePerUnit)) return null;
+  if (unit == null || !isValidQuickLogAmount(quantity * unit.basePerUnit)) {
+    return null;
+  }
   return PickerQuantity(quantity, token);
 }
 
@@ -195,7 +199,7 @@ class PickerChoice {
   final selected = request.units.where((u) => u.token == unit).firstOrNull;
   if (quantity == null || selected == null) return null;
   final base = quantity * selected.basePerUnit;
-  if (!_validAmount(base)) return null;
+  if (!isValidQuickLogAmount(base)) return null;
   final protein = base * request.proteinPerBase;
   final energy = request.energyPerBase == null
       ? null
@@ -207,6 +211,3 @@ class PickerChoice {
     energy: energy?.roundToDouble(),
   );
 }
-
-bool _validAmount(double amount) =>
-    amount.isFinite && amount > 0 && amount <= 10000;

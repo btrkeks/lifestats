@@ -15,6 +15,7 @@ import 'package:opennutritracker/core/utils/calc/day_boundary_calc.dart';
 import 'package:opennutritracker/core/utils/hive_db_provider.dart';
 import 'package:opennutritracker/core/utils/meal_type_suggester.dart';
 import 'package:opennutritracker/features/quick_log/domain/food_key.dart';
+import 'package:opennutritracker/features/quick_log/domain/quick_log_amount.dart';
 import 'package:opennutritracker/features/quick_log/domain/quick_log_command.dart';
 import 'package:opennutritracker/features/quick_log/domain/quick_log_snapshot.dart';
 import 'package:opennutritracker/features/quick_log/domain/suggestion_ranking.dart';
@@ -85,20 +86,24 @@ class QuickLogService {
   }
 
   Future<QuickLogResult> _log(LogCommand command) async {
-    if (!await _user.hasUserData()) {
-      return const QuickLogRejected(RejectReason.notSetUp);
-    }
-    if (command.profileId != _db.activeProfileId) {
-      return const QuickLogRejected(RejectReason.staleProfile);
-    }
-    if (command.baseAmount <= 0 || command.baseAmount > 10000) {
+    if (!isValidQuickLogAmount(command.baseAmount)) {
       return const QuickLogRejected(RejectReason.invalid);
     }
-    final latest = _latestOf(command.foodKey, await _allIntakes());
-    if (latest == null) return const QuickLogRejected(RejectReason.unknownFood);
-    try {
-      await _logIntake.log(
-        LogIntakeRequest(
+    final prepared = await _db.intakeWriteLock.synchronized(() async {
+      if (command.profileId != _db.activeProfileId) {
+        return (request: null, text: null, reason: RejectReason.staleProfile);
+      }
+      if (!await _user.hasUserData()) {
+        return (request: null, text: null, reason: RejectReason.notSetUp);
+      }
+      final latest = _latestOf(command.foodKey, await _allIntakes());
+      if (latest == null) {
+        return (request: null, text: null, reason: RejectReason.unknownFood);
+      }
+      final s = await _strings(await _config.getConfig());
+      final protein = latest.meal.nutriments.proteinsPerUnit;
+      return (
+        request: LogIntakeRequest(
           intakeId: command.opId,
           profileId: command.profileId,
           meal: latest.meal,
@@ -107,17 +112,26 @@ class QuickLogService {
           baseAmount: command.baseAmount,
           unit: command.unit,
         ),
+        text: protein == null
+            ? s.quickLogAddedNeutralLabel
+            : addedTextFor(command.baseAmount * protein, s),
+        reason: null,
       );
+    });
+    if (prepared.reason != null) return QuickLogRejected(prepared.reason!);
+    try {
+      await _logIntake.log(prepared.request!);
     } on StaleIntakeProfile {
       return const QuickLogRejected(RejectReason.staleProfile);
     }
-    final protein = latest.meal.nutriments.proteinsPerUnit ?? 0;
-    final s = await _strings(await _config.getConfig());
-    return QuickLogOk(addedText: addedTextFor(command.baseAmount * protein, s));
+    return QuickLogOk(addedText: prepared.text);
   }
 
   /// The same inputs, in the same order, as Home's `LoadItemsEvent`.
-  Future<QuickLogSnapshot> snapshot() async {
+  Future<QuickLogSnapshot> snapshot() =>
+      _db.intakeWriteLock.synchronized(_snapshot);
+
+  Future<QuickLogSnapshot> _snapshot() async {
     final config = await _config.getConfig();
     final s = await _strings(config);
     if (!await _user.hasUserData()) return QuickLogNeedsSetup(s.appTitle);

@@ -44,15 +44,25 @@ class _PathProvider extends PathProviderPlatform {
 }
 
 class _Config extends Fake implements GetConfigUsecase {
+  final HiveDBProvider db;
+  _Config(this.db);
   @override
-  Future<ConfigEntity> getConfig() async =>
-      const ConfigEntity(true, true, false, AppThemeEntity.system);
+  Future<ConfigEntity> getConfig() async {
+    db.configBox;
+    return const ConfigEntity(true, true, false, AppThemeEntity.system);
+  }
 }
 
 class _User extends Fake implements GetUserUsecase {
+  final HiveDBProvider db;
+  _User(this.db);
   bool initialized = true;
   @override
-  Future<bool> hasUserData() async => initialized;
+  Future<bool> hasUserData() async {
+    db.userBox;
+    return initialized;
+  }
+
   @override
   Future<UserEntity> getUserData() async => _UserEntity();
 }
@@ -60,12 +70,16 @@ class _User extends Fake implements GetUserUsecase {
 class _UserEntity extends Fake implements UserEntity {}
 
 class _KcalGoal extends Fake implements GetKcalGoalUsecase {
+  void Function()? onGet;
   @override
   Future<double> getKcalGoal({
     UserEntity? userEntity,
     double? totalKcalActivitiesParam,
     double? kcalUserAdjustment,
-  }) async => 2400;
+  }) async {
+    onGet?.call();
+    return 2400;
+  }
 }
 
 class _MacroGoal extends Fake implements GetMacroGoalUsecase {
@@ -84,6 +98,7 @@ void main() {
   late HiveDBProvider db;
   late _User user;
   late QuickLogService service;
+  late _KcalGoal kcalGoal;
   final now = DateTime(2026, 10, 27, 20);
   final yesterday = DateTime(2026, 10, 26, 12);
   final quark = food(code: '4005500000000', name: 'Speisequark');
@@ -114,7 +129,8 @@ void main() {
     db = HiveDBProvider();
     await db.initHiveDB(Uint8List.fromList(List.filled(32, 7)));
     await db.openProfileBoxes('a', '');
-    user = _User();
+    user = _User(db);
+    kcalGoal = _KcalGoal();
     final intakes = IntakeRepository(IntakeDataSource(db));
     service = QuickLogService(
       db,
@@ -124,11 +140,11 @@ void main() {
         GetIntakeUsecase(intakes),
         DeleteIntakeUsecase(intakes),
         AddTrackedDayUsecase(TrackedDayRepository(TrackedDayDataSource(db))),
-        _KcalGoal(),
+        kcalGoal,
         _MacroGoal(),
         db,
       ),
-      _Config(),
+      _Config(db),
       user,
       _KcalGoal(),
       _MacroGoal(),
@@ -201,6 +217,61 @@ void main() {
     expect(await reason(log('setup')), 'notSetUp');
     expect(db.intakeBox.values.map((i) => i.id), ['old']);
   });
+
+  test(
+    'widget rejects nonfinite, nonpositive and excessive base amounts',
+    () async {
+      for (final amount in [0.0, -1.0, 10001.0, double.nan, double.infinity]) {
+        expect((await service.run(log('invalid', amount: amount))).toWire(), {
+          'status': 'rejected',
+          'reason': 'invalid',
+        });
+      }
+      expect(db.intakeBox.values.map((i) => i.id), ['old']);
+    },
+  );
+
+  test(
+    'a command arriving during profile replacement rejects as stale',
+    () async {
+      final switching = db.switchProfile('b', 'b');
+      final result = await service
+          .run(log('during-switch'))
+          .whenComplete(() => switching);
+      expect(result.toWire(), {'status': 'rejected', 'reason': 'staleProfile'});
+      expect(db.intakeBox.isEmpty, isTrue);
+    },
+  );
+
+  test(
+    'a switch queued behind commit cannot invalidate its confirmation',
+    () async {
+      Future<void>? switching;
+      kcalGoal.onGet = () {
+        switching ??= db.switchProfile('b', 'b');
+      };
+      final result = await service.run(log('before-switch')).whenComplete(
+        () async {
+          await switching;
+        },
+      );
+      expect(result.toWire(), {'status': 'ok', 'addedText': 'Added · +30 g'});
+      await db.switchProfile('a', '');
+      expect(db.intakeBox.values.map((i) => i.id), contains('before-switch'));
+    },
+  );
+
+  test(
+    'unknown protein confirms Added without claiming zero protein',
+    () async {
+      final unknown = food(code: 'unknown-protein', protein: null);
+      await seed(intake('unknown-old', yesterday, meal: unknown));
+      final result = await service.run(
+        log('unknown-new', key: FoodKey.of(unknown)),
+      );
+      expect(result.toWire(), {'status': 'ok', 'addedText': 'Added'});
+    },
+  );
 
   test('snapshot shows today\'s totals and the ranked foods', () async {
     await service.run(log('op-1'));
