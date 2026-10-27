@@ -91,6 +91,17 @@ impl PlottersRenderer {
         }
     }
 
+    /// Width of the y label column. 52 px fits five 20 px IPAMincho characters ("07:00");
+    /// longer labels such as "67.5 kg" or "100.0 %" get 10 px per character.
+    fn y_label_area_size(label_format: AxisLabelFormat, y_min: i64, y_max: i64) -> u32 {
+        let longest = [y_min, y_max]
+            .iter()
+            .map(|value| Self::format_y_label(label_format, value).chars().count() as u32)
+            .max()
+            .unwrap_or(0);
+        52.max(longest * 10 + 2)
+    }
+
     /// Y-axis tick positions. Clock and duration axes snap to round times with
     /// readable spacing; plain numbers keep plotters' default "nice number" ticks.
     fn y_key_points(
@@ -205,7 +216,11 @@ impl PlottersRenderer {
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
-            .y_label_area_size(52)
+            .y_label_area_size(Self::y_label_area_size(
+                label_format,
+                y_axis_min,
+                y_axis_max,
+            ))
             .margin_right(7)
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
@@ -339,7 +354,11 @@ impl PlottersRenderer {
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
-            .y_label_area_size(52)
+            .y_label_area_size(Self::y_label_area_size(
+                label_format,
+                y_axis_min,
+                y_axis_max,
+            ))
             .margin_right(7)
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
@@ -477,7 +496,11 @@ impl PlottersRenderer {
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
-            .y_label_area_size(52)
+            .y_label_area_size(Self::y_label_area_size(
+                label_format,
+                y_axis_min,
+                y_axis_max,
+            ))
             .margin_right(7)
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
@@ -602,7 +625,11 @@ impl PlottersRenderer {
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(25)
-            .y_label_area_size(52)
+            .y_label_area_size(Self::y_label_area_size(
+                label_format,
+                y_axis_min,
+                y_axis_max,
+            ))
             .margin_right(7)
             .caption(&data.title, ("IPAMincho", 20).into_font().color(&WHITE))
             .build_cartesian_2d(
@@ -794,6 +821,26 @@ mod tests {
         assert_eq!(
             PlottersRenderer::format_y_label(AxisLabelFormat::Percent, &15),
             "15%"
+        );
+    }
+
+    #[test]
+    fn y_label_area_widens_only_for_labels_longer_than_clock_times() {
+        assert_eq!(
+            PlottersRenderer::y_label_area_size(AxisLabelFormat::DurationHhMm, 0, 25200),
+            52
+        );
+        assert_eq!(
+            PlottersRenderer::y_label_area_size(AxisLabelFormat::Number, 0, 99999),
+            52
+        );
+        assert_eq!(
+            PlottersRenderer::y_label_area_size(AxisLabelFormat::KilogramsOneDecimal, 0, 68500),
+            72
+        );
+        assert_eq!(
+            PlottersRenderer::y_label_area_size(AxisLabelFormat::PercentOneDecimal, 0, 1000),
+            72
         );
     }
 
