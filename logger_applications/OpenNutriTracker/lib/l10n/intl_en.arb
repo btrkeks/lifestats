@@ -493,7 +493,7 @@
   "kcalGoalInfoMaleReferenceLabel": "Male reference",
   "kcalGoalInfoManualExplanation": "A fixed offset you set yourself in Settings, for when you know your needs differ from the estimate.",
   "kcalGoalInfoManualSection": "Step 3 · Manual adjustment",
-  "kcalGoalInfoProteinExplanation": "Protein follows your body weight, not your calories: grams per kg (default 1.8 g/kg) times your average weight over the last 7 days, rounded to the nearest 5 g. Carbs and fat share the calories that are left, in the ratio set under Settings → Macro split. Carbohydrates and protein provide 4 kcal per gram, fat 9 kcal per gram.",
+  "kcalGoalInfoProteinExplanation": "Protein follows your body weight, not your calories: grams per kg (default 1.8 g/kg) times your average weight over the last 7 days, rounded to the nearest 5 g. Carbs and fat share the calories that are left, in the ratio set under Settings → Macro split. Carbohydrates and protein provide 4 kcal per gram, fat 9 kcal per gram.",
   "kcalGoalInfoProteinWeightFromLog": "{count, plural, one{Your weigh-in from the last 7 days} other{Average of your {count} weigh-ins from the last 7 days}}",
   "@kcalGoalInfoProteinWeightFromLog": {"placeholders": {"count": {"type": "int"}}},
   "kcalGoalInfoProteinWeightFromProfile": "Your profile weight, because there are no weigh-ins from the last 7 days",
