@@ -99,7 +99,7 @@ class ComputeRecipeNutritionUseCase {
   }
 }
 
-/// Single-pass accumulator for the 24 nutrient fields tracked on
+/// Single-pass accumulator for the 26 nutrient fields tracked on
 /// [MealNutrimentsEntity]. Each field has a running sum and a flag for
 /// "did any ingredient ever carry a non-null value for this field?". The
 /// flag drives the existing "hide unknown micros" UI behaviour: if every
@@ -112,6 +112,7 @@ class _NutrientAccumulator {
   double _sodium = 0, _potassium = 0, _magnesium = 0, _calcium = 0;
   double _iron = 0, _zinc = 0, _phosphorus = 0;
   double _vitA = 0, _vitC = 0, _vitD = 0, _vitB6 = 0, _vitB12 = 0, _niacin = 0;
+  double _caffeine = 0, _nicotine = 0;
 
   bool _hasEnergy = false, _hasCarbs = false, _hasFat = false, _hasProtein = false;
   bool _hasSugars = false, _hasSatFat = false, _hasFiber = false;
@@ -120,6 +121,7 @@ class _NutrientAccumulator {
   bool _hasIron = false, _hasZinc = false, _hasPhosphorus = false;
   bool _hasVitA = false, _hasVitC = false, _hasVitD = false;
   bool _hasVitB6 = false, _hasVitB12 = false, _hasNiacin = false;
+  bool _hasCaffeine = false, _hasNicotine = false;
 
   void addFrom(MealNutrimentsEntity n, double convertedAmountG) {
     final ratio = convertedAmountG / 100;
@@ -195,6 +197,12 @@ class _NutrientAccumulator {
 
     if (n.niacin100 != null) _hasNiacin = true;
     _niacin += (n.niacin100 ?? 0) * ratio;
+
+    if (n.caffeine100 != null) _hasCaffeine = true;
+    _caffeine += (n.caffeine100 ?? 0) * ratio;
+
+    if (n.nicotine100 != null) _hasNicotine = true;
+    _nicotine += (n.nicotine100 ?? 0) * ratio;
   }
 
   MealNutrimentsEntity toEntityPerHundredG(double totalWeightG) {
@@ -226,6 +234,8 @@ class _NutrientAccumulator {
       vitaminB6100: norm(_vitB6, _hasVitB6),
       vitaminB12100: norm(_vitB12, _hasVitB12),
       niacin100: norm(_niacin, _hasNiacin),
+      caffeine100: norm(_caffeine, _hasCaffeine),
+      nicotine100: norm(_nicotine, _hasNicotine),
     );
   }
 }

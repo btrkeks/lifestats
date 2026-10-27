@@ -77,6 +77,8 @@ class _EditMealScreenState extends State<EditMealScreen> {
   final _magnesiumTextController = TextEditingController();
   final _vitaminDTextController = TextEditingController();
   final _vitaminB12TextController = TextEditingController();
+  final _caffeineTextController = TextEditingController();
+  final _nicotineTextController = TextEditingController();
 
   final _units = ['g', 'ml', 'g/ml'];
   String? selectedUnit;
@@ -181,6 +183,10 @@ class _EditMealScreenState extends State<EditMealScreen> {
         _mealEntity.nutriments.vitaminD100.toStringOrEmpty();
     _vitaminB12TextController.text =
         _mealEntity.nutriments.vitaminB12100.toStringOrEmpty();
+    _caffeineTextController.text =
+        _mealEntity.nutriments.caffeine100.toStringOrEmpty();
+    _nicotineTextController.text =
+        _mealEntity.nutriments.nicotine100.toStringOrEmpty();
     _localImagePath = _mealEntity.localImagePath;
     selectedUnit = _switchButtonUnit(_mealEntity.mealUnit);
 
@@ -588,6 +594,12 @@ class _EditMealScreenState extends State<EditMealScreen> {
           _buildMicroField(_vitaminDTextController, S.of(context).vitaminDLabel, 'µg', perQtyHelper),
           const SizedBox(height: 16),
           _buildMicroField(_vitaminB12TextController, S.of(context).vitaminB12Label, 'µg', perQtyHelper),
+          const SizedBox(height: 16),
+          _buildMicroField(_caffeineTextController, S.of(context).caffeineLabel, 'mg', perQtyHelper,
+              identifier: 'edit-meal-caffeine'),
+          const SizedBox(height: 16),
+          _buildMicroField(_nicotineTextController, S.of(context).nicotineLabel, 'mg', perQtyHelper,
+              identifier: 'edit-meal-nicotine'),
         ],
         if (!_editOnly) ...[
           const SizedBox(height: 24),
@@ -608,9 +620,10 @@ class _EditMealScreenState extends State<EditMealScreen> {
     TextEditingController controller,
     String label,
     String unit,
-    String? helperText,
-  ) {
-    return TextFormField(
+    String? helperText, {
+    String? identifier,
+  }) {
+    final field = TextFormField(
       controller: controller,
       inputFormatters: CustomTextInputFormatter.doubleOnly(),
       decoration: InputDecoration(
@@ -621,6 +634,9 @@ class _EditMealScreenState extends State<EditMealScreen> {
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
     );
+    return identifier == null
+        ? field
+        : Semantics(identifier: identifier, child: field);
   }
 
   /// Returns "0" for empty / whitespace-only text, otherwise the original
@@ -839,6 +855,8 @@ class _EditMealScreenState extends State<EditMealScreen> {
         String magnesiumText = _magnesiumTextController.text;
         String vitaminDText = _vitaminDTextController.text;
         String vitaminB12Text = _vitaminB12TextController.text;
+        String caffeineText = _caffeineTextController.text;
+        String nicotineText = _nicotineTextController.text;
         if (_isTotal) {
           final mealQty = double.tryParse(mealQuantity) ?? 0.0;
           final baseQtyForConversion =
@@ -864,6 +882,8 @@ class _EditMealScreenState extends State<EditMealScreen> {
             magnesiumText = convertTotal(magnesiumText);
             vitaminDText = convertTotal(vitaminDText);
             vitaminB12Text = convertTotal(vitaminB12Text);
+            caffeineText = convertTotal(caffeineText);
+            nicotineText = convertTotal(nicotineText);
           }
         }
 
@@ -889,6 +909,8 @@ class _EditMealScreenState extends State<EditMealScreen> {
           magnesiumText: magnesiumText,
           vitaminDText: vitaminDText,
           vitaminB12Text: vitaminB12Text,
+          caffeineText: caffeineText,
+          nicotineText: nicotineText,
           barcodeOverride: rawBarcode.isEmpty ? null : rawBarcode,
           localImagePathOverride: _localImagePath,
           clearLocalImagePath: _localImageCleared && _localImagePath == null,

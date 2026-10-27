@@ -92,6 +92,9 @@ class OFFProductNutrimentsDTO {
   @JsonKey(name: 'vitamin-pp_100g')
   final dynamic niacin_100g;
 
+  // Grams, like the minerals.
+  final dynamic caffeine_100g;
+
   OFFProductNutrimentsDTO({
     //required this.energy_kcal,
     required this.energy_kcal_100g,
@@ -145,6 +148,7 @@ class OFFProductNutrimentsDTO {
     this.vitamin_b6_100g,
     this.vitamin_b12_100g,
     this.niacin_100g,
+    this.caffeine_100g,
   });
 
   factory OFFProductNutrimentsDTO.fromJson(Map<String, dynamic> json) =>

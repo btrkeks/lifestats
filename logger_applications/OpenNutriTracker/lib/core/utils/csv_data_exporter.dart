@@ -71,6 +71,9 @@ class CsvDataExporter {
     // here was written before #775 and holds its micronutrients in raw
     // grams, which the importer scales into app units (#1152).
     'meal_data_version',
+    // Appended after `meal_data_version` for the same reason.
+    'caffeine_per_100g',
+    'nicotine_per_100g',
   ];
 
   static const userActivityColumns = <String>[
@@ -155,6 +158,8 @@ class CsvDataExporter {
         _num(n.vitaminB12100),
         _num(n.niacin100),
         _num(meal.dataVersion?.toDouble()),
+        _num(n.caffeine100),
+        _num(n.nicotine100),
       ];
       buf.writeln(cells.join(','));
     }
@@ -253,6 +258,8 @@ class CsvDataExporter {
         vitaminB12100:
             CsvRowParser.parseDoubleOrNull(row['vitamin_b12_per_100g']),
         niacin100: CsvRowParser.parseDoubleOrNull(row['niacin_per_100g']),
+        caffeine100: CsvRowParser.parseDoubleOrNull(row['caffeine_per_100g']),
+        nicotine100: CsvRowParser.parseDoubleOrNull(row['nicotine_per_100g']),
       );
       final meal = MealDBO(
         code: _nullable(row['meal_code']),

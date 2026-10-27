@@ -41,13 +41,15 @@ class MealNutrimentsDBOAdapter extends TypeAdapter<MealNutrimentsDBO> {
       vitaminB6100: (fields[21] as num?)?.toDouble(),
       vitaminB12100: (fields[22] as num?)?.toDouble(),
       niacin100: (fields[23] as num?)?.toDouble(),
+      caffeine100: (fields[24] as num?)?.toDouble(),
+      nicotine100: (fields[25] as num?)?.toDouble(),
     );
   }
 
   @override
   void write(BinaryWriter writer, MealNutrimentsDBO obj) {
     writer
-      ..writeByte(24)
+      ..writeByte(26)
       ..writeByte(0)
       ..write(obj.energyKcal100)
       ..writeByte(1)
@@ -95,7 +97,11 @@ class MealNutrimentsDBOAdapter extends TypeAdapter<MealNutrimentsDBO> {
       ..writeByte(22)
       ..write(obj.vitaminB12100)
       ..writeByte(23)
-      ..write(obj.niacin100);
+      ..write(obj.niacin100)
+      ..writeByte(24)
+      ..write(obj.caffeine100)
+      ..writeByte(25)
+      ..write(obj.nicotine100);
   }
 
   @override
@@ -140,6 +146,8 @@ MealNutrimentsDBO _$MealNutrimentsDBOFromJson(
   vitaminB6100: (json['vitaminB6100'] as num?)?.toDouble(),
   vitaminB12100: (json['vitaminB12100'] as num?)?.toDouble(),
   niacin100: (json['niacin100'] as num?)?.toDouble(),
+  caffeine100: (json['caffeine100'] as num?)?.toDouble(),
+  nicotine100: (json['nicotine100'] as num?)?.toDouble(),
 );
 
 Map<String, dynamic> _$MealNutrimentsDBOToJson(MealNutrimentsDBO instance) =>
@@ -168,4 +176,6 @@ Map<String, dynamic> _$MealNutrimentsDBOToJson(MealNutrimentsDBO instance) =>
       'vitaminB6100': instance.vitaminB6100,
       'vitaminB12100': instance.vitaminB12100,
       'niacin100': instance.niacin100,
+      'caffeine100': instance.caffeine100,
+      'nicotine100': instance.nicotine100,
     };

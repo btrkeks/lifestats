@@ -227,7 +227,7 @@ void main() {
     });
 
     test('full-nutrient coverage: every MealNutrimentsEntity field aggregates', () {
-      // Three ingredients each populating all 24 fields with the same value v.
+      // Three ingredients each populating all 26 fields with the same value v.
       // The weighted-mean of identical values is the same value back —
       // ensures every field is summed (not just kcal/carbs/fat/protein).
       const v = 10.0;
@@ -256,6 +256,8 @@ void main() {
         vitaminB6100: v,
         vitaminB12100: v,
         niacin100: v,
+        caffeine100: v,
+        nicotine100: v,
       );
       final m1 = _meal(code: 'a', nutriments: fullN);
       final m2 = _meal(code: 'b', nutriments: fullN);
@@ -292,6 +294,8 @@ void main() {
       expect(p.vitaminB6100, closeTo(v, 0.001));
       expect(p.vitaminB12100, closeTo(v, 0.001));
       expect(p.niacin100, closeTo(v, 0.001));
+      expect(p.caffeine100, closeTo(v, 0.001));
+      expect(p.nicotine100, closeTo(v, 0.001));
     });
   });
 }

@@ -19,6 +19,7 @@ import 'package:opennutritracker/generated/l10n.dart';
 /// Iron and magnesium open at gender-aware defaults — 8 / 18 / 14 mg
 /// and 400 / 310 / 355 mg for male / female / non-binary — matching
 /// the panel's own reference choices so the dialog and panel agree.
+/// Caffeine opens at EFSA's 400 mg limit; nicotine has no goal.
 class NutrientGoalsScreen extends StatefulWidget {
   final SettingsBloc settingsBloc;
   final ProfileBloc profileBloc;
@@ -70,6 +71,9 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
   static const double _vitaminB12Min = 0;
   static const double _vitaminB12Max = 10;
   static const int _vitaminB12Divisions = 100;
+  static const double _caffeineMin = 0;
+  static const double _caffeineMax = 1000;
+  static const int _caffeineDivisions = 100;
 
   double? _fibre;
   double? _satFat;
@@ -81,6 +85,7 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
   double? _magnesium;
   double? _vitaminD;
   double? _vitaminB12;
+  double? _caffeine;
   UserEntity? _user;
   bool _loaded = false;
 
@@ -94,6 +99,7 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
   late final TextEditingController _magnesiumController;
   late final TextEditingController _vitaminDController;
   late final TextEditingController _vitaminB12Controller;
+  late final TextEditingController _caffeineController;
 
   @override
   void initState() {
@@ -108,6 +114,7 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
     _magnesiumController = TextEditingController();
     _vitaminDController = TextEditingController();
     _vitaminB12Controller = TextEditingController();
+    _caffeineController = TextEditingController();
     _load();
   }
 
@@ -123,6 +130,7 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
     _magnesiumController.dispose();
     _vitaminDController.dispose();
     _vitaminB12Controller.dispose();
+    _caffeineController.dispose();
     super.dispose();
   }
 
@@ -174,6 +182,7 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
       _magnesium = today?.magnesiumGoal;
       _vitaminD = today?.vitaminDGoal;
       _vitaminB12 = today?.vitaminB12Goal;
+      _caffeine = today?.caffeineGoal;
       _loaded = true;
     });
     _syncControllers();
@@ -207,6 +216,10 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
     _vitaminB12Controller.text = _formatGoal(
       _vitaminB12 ?? DailyNutrientPanel.defaultVitaminB12RefUg,
     );
+    _caffeineController.text =
+        (_caffeine ?? DailyNutrientPanel.defaultCaffeineLimitMg)
+            .round()
+            .toString();
   }
 
   void _resetAll() {
@@ -221,6 +234,7 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
       _magnesium = null;
       _vitaminD = null;
       _vitaminB12 = null;
+      _caffeine = null;
     });
     _syncControllers();
   }
@@ -243,6 +257,7 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
       magnesiumGoal: _magnesium,
       vitaminDGoal: _vitaminD,
       vitaminB12Goal: _vitaminB12,
+      caffeineGoal: _caffeine,
     );
     widget.settingsBloc.add(LoadSettingsEvent());
     widget.homeBloc.add(const LoadItemsEvent());
@@ -452,6 +467,21 @@ class _NutrientGoalsScreenState extends State<NutrientGoalsScreen> {
                     (v) => _vitaminB12 = v,
                     decimalStep: true,
                   ),
+                ),
+                _NutrientRow(
+                  label: s.settingsCaffeineGoalLabel,
+                  description: s.settingsCaffeineGoalDescription,
+                  value:
+                      _caffeine ?? DailyNutrientPanel.defaultCaffeineLimitMg,
+                  min: _caffeineMin,
+                  max: _caffeineMax,
+                  divisions: _caffeineDivisions,
+                  controller: _caffeineController,
+                  unit: 'mg',
+                  identifier: 'nutrient-caffeine-slider',
+                  onSliderChanged: (v) => setState(() => _caffeine = v),
+                  onTextSubmitted: () => _applyText(_caffeineController,
+                      _caffeineMin, _caffeineMax, (v) => _caffeine = v),
                 ),
                 const SizedBox(height: 32),
               ],

@@ -22,6 +22,8 @@ import 'package:url_launcher/url_launcher.dart';
 /// asking for — fibre, sodium, saturated fat, sugar, calcium, iron, potassium,
 /// vitamin D, vitamin B12, and magnesium — across the day's intake list and
 /// renders each as a "value / reference" row with a small progress bar.
+/// Caffeine and nicotine follow: caffeine against a soft upper limit,
+/// nicotine as a bare total because no reference intake exists for it.
 ///
 /// The references are sensible DRIs for an average adult (FDA Daily Values
 /// where applicable). Iron and magnesium are gender-aware because the gap
@@ -75,6 +77,11 @@ class DailyNutrientPanel extends StatefulWidget {
   static const double defaultVitaminB12RefUg = 2.4;
   static const double defaultMagnesiumRefMg = 355.0; // non-binary midpoint
 
+  /// EFSA's 2015 scientific opinion on caffeine safety: up to 400 mg a day
+  /// raises no safety concerns for healthy adults outside pregnancy. A
+  /// ceiling to stay under, not a target.
+  static const double defaultCaffeineLimitMg = 400.0;
+
   /// Pure helpers that prefer the user's [TrackedDayEntity] per-nutrient
   /// goal when set, falling back to the published default otherwise.
   /// Public because the unit test suite asserts each one in isolation.
@@ -113,6 +120,9 @@ class DailyNutrientPanel extends StatefulWidget {
 
   static double resolveMagnesiumReference(TrackedDayEntity? trackedDay) =>
       trackedDay?.magnesiumGoal ?? defaultMagnesiumRefMg;
+
+  static double resolveCaffeineReference(TrackedDayEntity? trackedDay) =>
+      trackedDay?.caffeineGoal ?? defaultCaffeineLimitMg;
 
   @override
   State<DailyNutrientPanel> createState() => _DailyNutrientPanelState();
@@ -226,6 +236,8 @@ class _DailyNutrientPanelState extends State<DailyNutrientPanel> {
     final vitaminDMcg = totals.vitaminDMcg;
     final vitaminB12Mcg = totals.vitaminB12Mcg;
     final magnesiumMg = totals.magnesiumMg;
+    final caffeineMg = totals.caffeineMg;
+    final nicotineMg = totals.nicotineMg;
 
     // Reference values are sensible adult DRIs / FDA Daily Values. Iron's
     // reference uses UserEntity.gender so women see 18mg and men see 8mg;
@@ -298,6 +310,8 @@ class _DailyNutrientPanelState extends State<DailyNutrientPanel> {
       NutrientPanelKeys.magnesium,
       _magnesiumRefForUser(user),
     );
+    // No IOM row for caffeine; EFSA's limit is the fallback.
+    final caffeineRefMg = DailyNutrientPanel.resolveCaffeineReference(td);
 
     final s = S.of(context);
     final allRows = <_PanelRow>[
@@ -380,6 +394,22 @@ class _DailyNutrientPanelState extends State<DailyNutrientPanel> {
         reference: magnesiumRefMg,
         unit: 'mg',
         excessMatters: false,
+      ),
+      _PanelRow(
+        key: NutrientPanelKeys.caffeine,
+        label: s.caffeineLabel,
+        value: caffeineMg,
+        reference: caffeineRefMg,
+        unit: 'mg',
+        excessMatters: true,
+      ),
+      _PanelRow(
+        key: NutrientPanelKeys.nicotine,
+        label: s.nicotineLabel,
+        value: nicotineMg,
+        reference: null,
+        unit: 'mg',
+        excessMatters: true,
       ),
     ];
 
@@ -639,6 +669,8 @@ class NutrientPanelTotals {
   final double vitaminDMcg;
   final double vitaminB12Mcg;
   final double magnesiumMg;
+  final double caffeineMg;
+  final double nicotineMg;
 
   const NutrientPanelTotals({
     required this.fiberG,
@@ -651,6 +683,8 @@ class NutrientPanelTotals {
     required this.vitaminDMcg,
     required this.vitaminB12Mcg,
     required this.magnesiumMg,
+    required this.caffeineMg,
+    required this.nicotineMg,
   });
 
   factory NutrientPanelTotals.fromIntakes(
@@ -678,6 +712,8 @@ class NutrientPanelTotals {
       vitaminDMcg: sum((n) => n.vitaminD100),
       vitaminB12Mcg: sum((n) => n.vitaminB12100),
       magnesiumMg: sum((n) => n.magnesium100),
+      caffeineMg: sum((n) => n.caffeine100),
+      nicotineMg: sum((n) => n.nicotine100),
     );
   }
 }
@@ -699,6 +735,8 @@ class NutrientPanelKeys {
   static const String vitaminD = 'vitamin_d';
   static const String vitaminB12 = 'vitamin_b12';
   static const String magnesium = 'magnesium';
+  static const String caffeine = 'caffeine';
+  static const String nicotine = 'nicotine';
 
   static const List<String> all = <String>[
     fiber,
@@ -711,6 +749,8 @@ class NutrientPanelKeys {
     vitaminD,
     vitaminB12,
     magnesium,
+    caffeine,
+    nicotine,
   ];
 }
 
@@ -730,7 +770,7 @@ class _PanelRow {
   final String key;
   final String label;
   final double value;
-  final double reference;
+  final double? reference;
   final String unit;
   final bool excessMatters;
 
@@ -747,7 +787,10 @@ class _PanelRow {
 class _NutrientRow extends StatelessWidget {
   final String label;
   final double value;
-  final double reference;
+
+  /// Null for a nutrient without a reference intake (nicotine): the row
+  /// shows the total alone, without a bar.
+  final double? reference;
   final String unit;
 
   /// Whether going over the reference is a problem (sodium, saturated fat,
@@ -770,11 +813,16 @@ class _NutrientRow extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final palette = isDark ? AppPalette.dark : AppPalette.light;
     final textTheme = Theme.of(context).textTheme;
-    final ratio = reference > 0 ? value / reference : 0.0;
+    final reference = this.reference;
+    final ratio =
+        reference != null && reference > 0 ? value / reference : 0.0;
     final clamped = ratio.clamp(0.0, 1.0).toDouble();
     final color = _colorForRatio(context, ratio);
-    final valueLabel = '${value.toStringAsFixed(value >= 10 ? 0 : 1)}'
-        ' / ${reference.toStringAsFixed(reference >= 10 ? 0 : 1)}$unit';
+    final valueText = value.toStringAsFixed(value >= 10 ? 0 : 1);
+    final valueLabel = reference == null
+        ? '$valueText$unit'
+        : '$valueText'
+            ' / ${reference.toStringAsFixed(reference >= 10 ? 0 : 1)}$unit';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Dimens.spacing8),
@@ -798,7 +846,7 @@ class _NutrientRow extends StatelessWidget {
                   // reference is a limit to stay under, not a target to reach.
                   // A small qualifier says so, since the bare "x / y" reads as
                   // a goal otherwise.
-                  if (excessMatters) ...[
+                  if (excessMatters && reference != null) ...[
                     Text(
                       s.nutrientPanelLimitLabel,
                       style: textTheme.labelSmall?.copyWith(
@@ -819,16 +867,18 @@ class _NutrientRow extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: Dimens.spacing8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8.0),
-            child: LinearProgressIndicator(
-              value: clamped,
-              minHeight: 8.0,
-              backgroundColor: palette.surfaceMuted,
-              valueColor: AlwaysStoppedAnimation<Color>(color),
+          if (reference != null) ...[
+            const SizedBox(height: Dimens.spacing8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8.0),
+              child: LinearProgressIndicator(
+                value: clamped,
+                minHeight: 8.0,
+                backgroundColor: palette.surfaceMuted,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

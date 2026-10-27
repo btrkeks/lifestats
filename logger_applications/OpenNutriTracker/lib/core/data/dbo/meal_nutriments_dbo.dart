@@ -58,6 +58,12 @@ class MealNutrimentsDBO extends HiveObject {
   final double? vitaminB12100; // µg
   @HiveField(23)
   final double? niacin100; // mg (B3)
+  // Stimulants (mg per 100g). Caffeine comes from Open Food Facts or a
+  // custom food; nicotine only from custom foods.
+  @HiveField(24)
+  final double? caffeine100;
+  @HiveField(25)
+  final double? nicotine100;
 
   MealNutrimentsDBO({
     required this.energyKcal100,
@@ -84,6 +90,8 @@ class MealNutrimentsDBO extends HiveObject {
     this.vitaminB6100,
     this.vitaminB12100,
     this.niacin100,
+    this.caffeine100,
+    this.nicotine100,
   });
 
   factory MealNutrimentsDBO.fromProductNutrimentsEntity(
@@ -114,6 +122,8 @@ class MealNutrimentsDBO extends HiveObject {
       vitaminB6100: nutriments.vitaminB6100,
       vitaminB12100: nutriments.vitaminB12100,
       niacin100: nutriments.niacin100,
+      caffeine100: nutriments.caffeine100,
+      nicotine100: nutriments.nicotine100,
     );
   }
 

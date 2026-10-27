@@ -226,7 +226,7 @@ class TrackedDayDataSource {
   // remain nullable on disk, with null meaning "no override, use the
   // default reference". Units follow the convention documented on
   // TrackedDayDBO: g for fibre/satFat/sugars; mg for sodium, calcium,
-  // iron, potassium, magnesium, B12; µg for vitamin D.
+  // iron, potassium, magnesium, B12, caffeine; µg for vitamin D.
   Future<void> updateDayNutrientGoals(
     DateTime day, {
     double? fibreGoal,
@@ -239,6 +239,7 @@ class TrackedDayDataSource {
     double? vitaminDGoal,
     double? vitaminB12Goal,
     double? magnesiumGoal,
+    double? caffeineGoal,
   }) async {
     log.fine('Updating tracked day nutrient goals');
     final updateDay = await getTrackedDay(day);
@@ -272,6 +273,9 @@ class TrackedDayDataSource {
       }
       if (magnesiumGoal != null) {
         updateDay.magnesiumGoal = magnesiumGoal;
+      }
+      if (caffeineGoal != null) {
+        updateDay.caffeineGoal = caffeineGoal;
       }
       await updateDay.save();
     }

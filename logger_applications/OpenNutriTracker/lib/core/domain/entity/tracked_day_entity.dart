@@ -23,7 +23,8 @@ class TrackedDayEntity extends Equatable {
   // Unit convention (mirrors TrackedDayDBO):
   //   fibreGoal, satFatGoal, sugarsGoal               — grams
   //   sodiumGoal, calciumGoal, ironGoal,
-  //   potassiumGoal, magnesiumGoal, vitaminB12Goal    — milligrams
+  //   potassiumGoal, magnesiumGoal, vitaminB12Goal,
+  //   caffeineGoal                                    — milligrams
   //   vitaminDGoal                                    — micrograms
   final double? fibreGoal;
   final double? satFatGoal;
@@ -38,6 +39,7 @@ class TrackedDayEntity extends Equatable {
   final double? vitaminDGoal;
   final double? vitaminB12Goal;
   final double? magnesiumGoal;
+  final double? caffeineGoal;
 
   const TrackedDayEntity({
     required this.day,
@@ -59,6 +61,7 @@ class TrackedDayEntity extends Equatable {
     this.vitaminDGoal,
     this.vitaminB12Goal,
     this.magnesiumGoal,
+    this.caffeineGoal,
   });
 
   factory TrackedDayEntity.fromTrackedDayDBO(TrackedDayDBO trackedDayDBO) {
@@ -89,6 +92,7 @@ class TrackedDayEntity extends Equatable {
       vitaminDGoal: trackedDayDBO.vitaminDGoal,
       vitaminB12Goal: trackedDayDBO.vitaminB12Goal,
       magnesiumGoal: trackedDayDBO.magnesiumGoal,
+      caffeineGoal: trackedDayDBO.caffeineGoal,
     );
   }
 
@@ -148,5 +152,6 @@ class TrackedDayEntity extends Equatable {
         vitaminDGoal,
         vitaminB12Goal,
         magnesiumGoal,
+        caffeineGoal,
       ];
 }

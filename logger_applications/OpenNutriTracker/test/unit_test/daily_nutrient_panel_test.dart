@@ -243,8 +243,8 @@ void main() {
   });
 
   group('NutrientPanelKeys', () {
-    test('exposes all ten nutrient identifiers', () {
-      expect(NutrientPanelKeys.all, hasLength(10));
+    test('exposes all twelve nutrient identifiers', () {
+      expect(NutrientPanelKeys.all, hasLength(12));
       expect(
         NutrientPanelKeys.all.toSet(),
         equals(<String>{
@@ -258,6 +258,8 @@ void main() {
           NutrientPanelKeys.vitaminD,
           NutrientPanelKeys.vitaminB12,
           NutrientPanelKeys.magnesium,
+          NutrientPanelKeys.caffeine,
+          NutrientPanelKeys.nicotine,
         }),
       );
     });

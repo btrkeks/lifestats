@@ -237,6 +237,19 @@ class MealDetailNutrimentsTable extends StatelessWidget {
                       'mg',
                       textStyleNormal,
                     ),
+                    // Stimulants
+                    _microRow(
+                      S.of(context).caffeineLabel,
+                      n.caffeine100,
+                      'mg',
+                      textStyleNormal,
+                    ),
+                    _microRow(
+                      S.of(context).nicotineLabel,
+                      n.nicotine100,
+                      'mg',
+                      textStyleNormal,
+                    ),
                     ],
                   ),
                 ),

@@ -36,6 +36,9 @@ class MealNutrimentsEntity extends Equatable {
   final double? vitaminB6100; // mg
   final double? vitaminB12100; // µg
   final double? niacin100; // mg (B3)
+  // Stimulants (mg per 100g)
+  final double? caffeine100;
+  final double? nicotine100;
 
   double? get energyPerUnit => _getValuePerUnit(energyKcal100);
 
@@ -64,7 +67,9 @@ class MealNutrimentsEntity extends Equatable {
       vitaminD100 != null ||
       vitaminB6100 != null ||
       vitaminB12100 != null ||
-      niacin100 != null;
+      niacin100 != null ||
+      caffeine100 != null ||
+      nicotine100 != null;
 
   const MealNutrimentsEntity({
     required this.energyKcal100,
@@ -91,6 +96,8 @@ class MealNutrimentsEntity extends Equatable {
     this.vitaminB6100,
     this.vitaminB12100,
     this.niacin100,
+    this.caffeine100,
+    this.nicotine100,
   });
 
   factory MealNutrimentsEntity.empty() => const MealNutrimentsEntity(
@@ -137,6 +144,8 @@ class MealNutrimentsEntity extends Equatable {
       vitaminB6100: finite(nutriments.vitaminB6100),
       vitaminB12100: finite(nutriments.vitaminB12100),
       niacin100: finite(nutriments.niacin100),
+      caffeine100: finite(nutriments.caffeine100),
+      nicotine100: finite(nutriments.nicotine100),
     );
   }
 
@@ -206,6 +215,11 @@ class MealNutrimentsEntity extends Equatable {
       niacin100: _gToMg(
         (offNutriments.niacin_100g as Object?).asDoubleOrNull(),
       ),
+      // Grams like the minerals (`caffeine_unit` is "g"): Red Bull's
+      // 32 mg / 100 ml arrives as 0.032.
+      caffeine100: _gToMg(
+        (offNutriments.caffeine_100g as Object?).asDoubleOrNull(),
+      ),
     );
   }
 
@@ -221,7 +235,8 @@ class MealNutrimentsEntity extends Equatable {
   ///
   /// The other two sources need no conversion: the Supabase view already
   /// pivots into the app's units, and FDC publishes these nutrients in mg and
-  /// µg natively.
+  /// µg natively. The Supabase view carries no caffeine column, so caffeine
+  /// comes from Open Food Facts, FDC or a custom food only.
   static double? _gToMg(double? grams) => grams == null ? null : grams * 1000;
 
   static double? _gToUg(double? grams) =>
@@ -301,6 +316,7 @@ class MealNutrimentsEntity extends Equatable {
       vitaminB6100: fdcAmount(FDCConst.fdcVitaminB6Id),
       vitaminB12100: fdcAmount(FDCConst.fdcVitaminB12Id),
       niacin100: fdcAmount(FDCConst.fdcNiacinId),
+      caffeine100: fdcAmount(FDCConst.fdcCaffeineId),
     );
   }
 

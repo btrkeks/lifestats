@@ -183,6 +183,7 @@ class FDCConst {
   static const fdcVitaminB6Id = 1175; // number 415, mg
   static const fdcVitaminB12Id = 1178; // number 418, µg
   static const fdcNiacinId = 1167; // number 406, mg (B3)
+  static const fdcCaffeineId = 1057; // number 262, mg
 
   // Measure unit codes
   static const fdcPortionServingId = 1049;

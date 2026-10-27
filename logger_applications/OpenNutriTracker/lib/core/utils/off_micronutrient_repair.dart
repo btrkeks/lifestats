@@ -101,6 +101,9 @@ class OffMicronutrientRepair {
         vitaminB6100: _scale(n.vitaminB6100, _gToMg),
         vitaminB12100: _scale(n.vitaminB12100, _gToUg),
         niacin100: _scale(n.niacin100, _gToMg),
+        // Added after #775, so never written in grams.
+        caffeine100: n.caffeine100,
+        nicotine100: n.nicotine100,
       ),
       localImagePath: meal.localImagePath,
       detailed: meal.detailed,

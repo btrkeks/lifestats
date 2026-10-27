@@ -281,6 +281,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     double? vitaminDGoal,
     double? vitaminB12Goal,
     double? magnesiumGoal,
+    double? caffeineGoal,
   }) async {
     await _addTrackedDayUsecase.updateDayNutrientGoals(
       day,
@@ -294,6 +295,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       vitaminDGoal: vitaminDGoal,
       vitaminB12Goal: vitaminB12Goal,
       magnesiumGoal: magnesiumGoal,
+      caffeineGoal: caffeineGoal,
     );
   }
 

@@ -113,7 +113,10 @@ Array of intake records:
         "vitaminD100": null,
         "vitaminB6100": null,
         "vitaminB12100": null,
-        "niacin100": null
+        "niacin100": null,
+        // Optional stimulants, mg per 100 g/ml:
+        "caffeine100": null,
+        "nicotine100": null
       },
       "dataVersion": 1                // see "Micronutrient units" below
     }
@@ -264,6 +267,8 @@ Header lookup is case-insensitive.
 | `vitamin_b12_per_100g`          | number | no       | µg.                                            |
 | `niacin_per_100g`               | number | no       | mg (B3).                                       |
 | `meal_data_version`             | number | no       | See [Micronutrient units](#micronutrient-units-on-open-food-facts-rows). |
+| `caffeine_per_100g`             | number | no       | mg. After `meal_data_version`, so older CSVs still parse. |
+| `nicotine_per_100g`             | number | no       | mg. Custom foods only.                         |
 
 ### `user_activity.csv`
 
@@ -306,9 +311,9 @@ empty-string-vs-null normalisation on nullable fields). The unit test
 `test/unit_test/csv_data_exporter_test.dart` pins this behaviour.
 
 **Tracked days do not round-trip.** `trackedDayColumns` carries nine columns
-while `TrackedDayDBO` has nineteen fields: the ten per-nutrient goals — fibre,
-saturated fat, sugars, sodium, calcium, iron, potassium, magnesium, vitamin B12
-and vitamin D — have no column and are lost on a CSV export. The JSON bundle
+while `TrackedDayDBO` has twenty fields: the eleven per-nutrient goals — fibre,
+saturated fat, sugars, sodium, calcium, iron, potassium, magnesium, vitamin B12,
+vitamin D and the caffeine limit — have no column and are lost on a CSV export. The JSON bundle
 keeps them. Use JSON if you intend to restore from the bundle rather than read
 it in a spreadsheet.
 

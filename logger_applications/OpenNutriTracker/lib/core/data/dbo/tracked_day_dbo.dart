@@ -33,7 +33,8 @@ class TrackedDayDBO extends HiveObject {
   // Unit convention (preserved across DBO / Entity / panel):
   //   fibreGoal, satFatGoal, sugarsGoal               — grams
   //   sodiumGoal, calciumGoal, ironGoal,
-  //   potassiumGoal, magnesiumGoal, vitaminB12Goal    — milligrams
+  //   potassiumGoal, magnesiumGoal, vitaminB12Goal,
+  //   caffeineGoal                                    — milligrams
   //   vitaminDGoal                                    — micrograms
   // The diary panel renders each row in its own native unit, so storing
   // the goal in the same unit avoids any conversion math at read time.
@@ -63,6 +64,9 @@ class TrackedDayDBO extends HiveObject {
   double? vitaminB12Goal;
   @HiveField(18)
   double? magnesiumGoal;
+  // An upper limit, like sodium. Nicotine has no goal.
+  @HiveField(19)
+  double? caffeineGoal;
 
   TrackedDayDBO({
     required this.day,
@@ -84,6 +88,7 @@ class TrackedDayDBO extends HiveObject {
     this.vitaminDGoal,
     this.vitaminB12Goal,
     this.magnesiumGoal,
+    this.caffeineGoal,
   });
 
   factory TrackedDayDBO.fromTrackedDayEntity(TrackedDayEntity entity) {
@@ -107,6 +112,7 @@ class TrackedDayDBO extends HiveObject {
       vitaminDGoal: entity.vitaminDGoal,
       vitaminB12Goal: entity.vitaminB12Goal,
       magnesiumGoal: entity.magnesiumGoal,
+      caffeineGoal: entity.caffeineGoal,
     );
   }
 

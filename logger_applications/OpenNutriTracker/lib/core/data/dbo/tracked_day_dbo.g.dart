@@ -36,13 +36,14 @@ class TrackedDayDBOAdapter extends TypeAdapter<TrackedDayDBO> {
       vitaminDGoal: (fields[16] as num?)?.toDouble(),
       vitaminB12Goal: (fields[17] as num?)?.toDouble(),
       magnesiumGoal: (fields[18] as num?)?.toDouble(),
+      caffeineGoal: (fields[19] as num?)?.toDouble(),
     );
   }
 
   @override
   void write(BinaryWriter writer, TrackedDayDBO obj) {
     writer
-      ..writeByte(19)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.day)
       ..writeByte(1)
@@ -80,7 +81,9 @@ class TrackedDayDBOAdapter extends TypeAdapter<TrackedDayDBO> {
       ..writeByte(17)
       ..write(obj.vitaminB12Goal)
       ..writeByte(18)
-      ..write(obj.magnesiumGoal);
+      ..write(obj.magnesiumGoal)
+      ..writeByte(19)
+      ..write(obj.caffeineGoal);
   }
 
   @override
@@ -119,6 +122,7 @@ TrackedDayDBO _$TrackedDayDBOFromJson(Map<String, dynamic> json) =>
       vitaminDGoal: (json['vitaminDGoal'] as num?)?.toDouble(),
       vitaminB12Goal: (json['vitaminB12Goal'] as num?)?.toDouble(),
       magnesiumGoal: (json['magnesiumGoal'] as num?)?.toDouble(),
+      caffeineGoal: (json['caffeineGoal'] as num?)?.toDouble(),
     );
 
 Map<String, dynamic> _$TrackedDayDBOToJson(TrackedDayDBO instance) =>
@@ -142,4 +146,5 @@ Map<String, dynamic> _$TrackedDayDBOToJson(TrackedDayDBO instance) =>
       'vitaminDGoal': instance.vitaminDGoal,
       'vitaminB12Goal': instance.vitaminB12Goal,
       'magnesiumGoal': instance.magnesiumGoal,
+      'caffeineGoal': instance.caffeineGoal,
     };

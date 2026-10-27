@@ -95,6 +95,8 @@ class EditMealBloc extends Bloc<EditMealEvent, EditMealState> {
     String? magnesiumText,
     String? vitaminDText,
     String? vitaminB12Text,
+    String? caffeineText,
+    String? nicotineText,
     String? barcodeOverride,
     String? localImagePathOverride,
     bool clearLocalImagePath = false,
@@ -123,6 +125,8 @@ class EditMealBloc extends Bloc<EditMealEvent, EditMealState> {
       magnesium100: fromTextOrOld(magnesiumText, oldMealEntity.nutriments.magnesium100),
       vitaminD100: fromTextOrOld(vitaminDText, oldMealEntity.nutriments.vitaminD100),
       vitaminB12100: fromTextOrOld(vitaminB12Text, oldMealEntity.nutriments.vitaminB12100),
+      caffeine100: fromTextOrOld(caffeineText, oldMealEntity.nutriments.caffeine100),
+      nicotine100: fromTextOrOld(nicotineText, oldMealEntity.nutriments.nicotine100),
     );
 
     return MealEntity(
