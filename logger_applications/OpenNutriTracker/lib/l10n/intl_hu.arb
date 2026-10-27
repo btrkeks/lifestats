@@ -253,7 +253,6 @@
   "dailyKjAdjustmentLabel": "Napi kJ beállítás:",
   "deleteAllLabel": "Összes törlése",
   "settingsDeleteAllDataLabel": "Profiladatok visszaállítása",
-  "settingsDeleteAllDataSubtitle": "Profil, étkezések, tevékenységek, súlyváltozás és böjtölési időszakok",
   "settingsDeleteAllDataConfirmTitle": "Visszaállítja a profiladatokat?",
   "settingsDeleteAllDataConfirmAction": "Profil visszaállítása",
   "lowKcalWarningTitle": "Ez a napi célérték kissé alacsony",
@@ -1165,40 +1164,6 @@
     }
   },
   "zincLabel": "cink",
-  "profileFastingEntry": "Böjt időzítő",
-  "fastingTitle": "Böjt időzítő",
-  "fastingSubtitle": "Egy egyszerű időzítő az étkezések közötti idő nyomon követéséhez. Nincsenek sorozatok, nincsenek célok, csak az óra.",
-  "fastingWarningTitle": "Mielőtt elkezdené",
-  "fastingWarningBody": "Az éhgyomri idő nyomon követése egyesek számára hasznos lehet, mások számára viszont megterhelő, különösen azok számára, akiknek étkezési rendellenességek szerepelnek a kórtörténetében. Ha ez Önre is vonatkozik, kérjük, először is gondoskodjon magáról. Segítséget kaphat a BEAT (Egyesült Királyság) és a NEDA (Egyesült Államok) szervezetektől.",
-  "fastingWarningDecline": "Ez nem nekem való",
-  "fastingWarningAccept": "Értem, aktiválom az időzítőt",
-  "fastingPresetCustom": "Egyéni",
-  "fastingStart": "Időzítő indítása",
-  "fastingCancel": "A böjt vége",
-  "fastingCancelConfirmTitle": "Befejezzük most a böjtöt?",
-  "fastingCancelConfirmBody": "Ezzel az aktuális munkamenet lezárul.",
-  "fastingComplete": "A munkamenet befejeződött",
-  "fastingLinkBeat": "BEAT (UK)",
-  "fastingLinkNeda": "NEDA (US)",
-  "fastingElapsedLabel": "Eltelt",
-  "fastingRemainingValue": "{value} maradt",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Cél: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "óra",
-  "dialogCloseLabel": "Bezárás",
   "customMealsRowMoreTooltip": "További műveletek",
   "customMealsMergeAction": "Összevonás egy másik egyéni étellel",
   "customMealsMergePickerTitle": "Válasza ki azt az egyéni ételt, amivel szeretné összevonni",
@@ -1236,18 +1201,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Böjt · {remaining} van még hátra",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Böjtölési időzítő",
-  "fastingNotificationChannelDescription": "Egyszeri értesítések, amikor egy éhezési szakasz eléri a kitűzött célt.",
-  "fastingNotificationCompleteTitle": "A böjt befejeződött",
-  "fastingNotificationCompleteBody": "Elérte a kitűzött időt.",
   "profileImageLabel": "Fotó hozzáadása",
   "profileImageReplace": "Fotó módosítása",
   "profileImageRemove": "Fotó eltávolítása",
@@ -1273,7 +1226,6 @@
   "scannerLockOrientationTooltip": "Álló formátumra rögzítés",
   "scannerUnlockOrientationTooltip": "Elforgatás engedélyezése",
   "dataCollectionLabel": "Küldj összeomlási jelentéseket, hogy segítsd a hibákat. Nincs élelmiszer-napló vagy súlyadat.",
-  "settingsDeleteAllDataConfirmContent": "Ez kizárólag az aktuális profilhoz tartozó adatokat – a profilt, az étkezéseket, a tevékenységeket, a súlyelőzményeket és a böjtölési alkalmakat – törli. Eltávolítja továbbá az AI-szolgáltató kulcsát és a szervercímet is, amelyek az eszközön található összes profil esetében közösek. A megosztott tartalmakat (egyedi étkezések, receptek, tevékenységsablonok), valamint az Open Food Facts és az USDA Food Data Central katalógusait ez nem érinti. A művelet nem vonható vissza.",
   "policyChangeNoticeTitle": "Frissítettük az adatvédelmi irányelveket",
   "policyChangeNoticeBody": "Az alkalmazás működése nem változott; csupán az változott, hogy ebből mennyit osztunk meg Önnel.\n\nMostantól megnevezzük azokat a szolgáltatásokat, amelyek eddig is megkapták a keresési adatait. Új rész foglalkozik az egészségügyi adatokkal – ide tartozik például az edzésadatok importálásának lehetősége is. Emellett tájékoztatjuk arról, hogy az ételkereső háttérrendszerünk a kérésekkel együtt rögzíti, majd 24 órán át megőrzi a hozzávetőleges tartózkodási helyét.\n\nA naplója továbbra is kizárólag az eszközén marad, ahogyan eddig is.",
   "policyChangeNoticeReadAction": "Szabályzat elolvasása",

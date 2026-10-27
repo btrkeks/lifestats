@@ -253,7 +253,6 @@
   "dailyKjAdjustmentLabel": "Дневная корректировка кДж:",
   "deleteAllLabel": "Удалить все",
   "settingsDeleteAllDataLabel": "Сбросить данные профиля",
-  "settingsDeleteAllDataSubtitle": "Профиль, приёмы пищи, активности, история веса и сессии голодания",
   "settingsDeleteAllDataConfirmTitle": "Сбросить данные профиля?",
   "settingsDeleteAllDataConfirmAction": "Сбросить профиль",
   "lowKcalWarningTitle": "Эта дневная норма довольно низкая",
@@ -1165,40 +1164,6 @@
     }
   },
   "zincLabel": "цинк",
-  "profileFastingEntry": "Таймер голодания",
-  "fastingTitle": "Таймер голодания",
-  "fastingSubtitle": "Простой таймер для отслеживания времени между приёмами пищи. Без серий, без целей — просто часы.",
-  "fastingWarningTitle": "Перед началом",
-  "fastingWarningBody": "Отслеживание времени голодания может быть полезным для одних людей и тревожным для других, особенно для тех, у кого в прошлом были расстройства пищевого поведения. Если это про вас, пожалуйста, позаботьтесь о себе в первую очередь. Поддержка доступна от BEAT (Великобритания) и NEDA (США).",
-  "fastingWarningDecline": "Это не для меня",
-  "fastingWarningAccept": "Понимаю, включить таймер",
-  "fastingPresetCustom": "Свой",
-  "fastingStart": "Начать таймер",
-  "fastingCancel": "Завершить голодание",
-  "fastingCancelConfirmTitle": "Завершить голодание сейчас?",
-  "fastingCancelConfirmBody": "Это закроет текущую сессию.",
-  "fastingComplete": "Сессия завершена",
-  "fastingLinkBeat": "BEAT (Великобритания)",
-  "fastingLinkNeda": "NEDA (США)",
-  "fastingElapsedLabel": "Прошло",
-  "fastingRemainingValue": "осталось {value}",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Цель: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "часы",
-  "dialogCloseLabel": "Закрыть",
   "customMealsRowMoreTooltip": "Ещё действия",
   "customMealsMergeAction": "Объединить с другим своим продуктом",
   "customMealsMergePickerTitle": "Выберите свой продукт для объединения",
@@ -1236,18 +1201,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Голодание · осталось {remaining}",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Таймер голодания",
-  "fastingNotificationChannelDescription": "Разовые уведомления по достижении цели сессии голодания.",
-  "fastingNotificationCompleteTitle": "Сессия голодания завершена",
-  "fastingNotificationCompleteBody": "Вы достигли целевого времени.",
   "profileImageLabel": "Добавить фото",
   "profileImageReplace": "Изменить фото",
   "profileImageRemove": "Удалить фото",

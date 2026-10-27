@@ -412,10 +412,9 @@ Concretely, the things to never write:
 - "medically supervised weight loss" or anything implying a clinical protocol;
 - linking the output to a clinician or to a treatment decision.
 
-Note the app already ships an intermittent-fasting timer behind a "content-warning
-gate" and a low-kcal warning that advises consulting a healthcare professional.
-Those are the right instincts — they push away from a medical purpose, not toward
-one.
+Note the app already ships a low-kcal warning that advises consulting a
+healthcare professional. That is the right instinct. It pushes away from a
+medical purpose.
 
 ### Does the `estimated` flag or a disclaimer change the analysis?
 

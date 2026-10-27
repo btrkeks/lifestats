@@ -11,7 +11,7 @@ void main() {
   setUpAll(tzdata.initializeTimeZones);
 
   test(
-    'initialize uses the native timezone identifier and initializes notifications',
+    'initialize retires the old alarm once and preserves daily reminders',
     () async {
       const timezoneChannel = MethodChannel('flutter_timezone');
       const notificationsChannel = MethodChannel(
@@ -34,10 +34,16 @@ void main() {
       });
 
       try {
-        await NotificationService().initialize();
+        final service = NotificationService();
+        await service.initialize();
+        await service.initialize();
 
         expect(tz.local.name, 'Europe/Berlin');
-        expect(notificationCalls.map((call) => call.method), ['initialize']);
+        expect(notificationCalls.map((call) => call.method), [
+          'initialize',
+          'cancel',
+        ]);
+        expect(notificationCalls.last.arguments, {'id': 1, 'tag': null});
       } finally {
         messenger.setMockMethodCallHandler(timezoneChannel, null);
         messenger.setMockMethodCallHandler(notificationsChannel, null);

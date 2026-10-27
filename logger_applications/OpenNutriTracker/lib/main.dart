@@ -39,7 +39,6 @@ import 'package:opennutritracker/features/edit_meal/presentation/edit_meal_scree
 import 'package:opennutritracker/features/onboarding/onboarding_screen.dart';
 import 'package:opennutritracker/features/quick_log/picker/quick_log_picker.dart';
 import 'package:opennutritracker/features/quick_log/quick_log_bridge.dart';
-import 'package:opennutritracker/features/fasting/presentation/fasting_screen.dart';
 import 'package:opennutritracker/features/profile/presentation/screens/manage_profiles_screen.dart';
 import 'package:opennutritracker/features/profile/presentation/weight_history_screen.dart';
 import 'package:opennutritracker/features/recipes/presentation/screens/import_recipe_scanner_screen.dart';
@@ -124,6 +123,8 @@ Future<void> _bootstrapApp() async {
   );
   final savedLocale = localeCode != null ? Locale(localeCode) : null;
 
+  await locator<NotificationService>().initialize();
+
   // #312: Restore scheduled notifications after app start / device reboot.
   // Look up the user's localized strings first — there's no widget tree yet,
   // so S is driven directly off the saved (or device) locale, resolved against
@@ -138,7 +139,6 @@ Future<void> _bootstrapApp() async {
       ], _appLocales),
     );
     final notificationService = locator<NotificationService>();
-    await notificationService.initialize();
     await notificationService.scheduleDailyReminder(
       hour: config.notificationHour,
       minute: config.notificationMinute,
@@ -353,7 +353,6 @@ class _OpenNutriTrackerAppState extends State<OpenNutriTrackerApp>
             const ImportRecipeScannerScreen(),
         NavigationOptions.weightHistoryRoute: (context) =>
             const WeightHistoryScreen(),
-        NavigationOptions.fastingRoute: (context) => const FastingScreen(),
         NavigationOptions.manageProfilesRoute: (context) =>
             const ManageProfilesScreen(),
       },

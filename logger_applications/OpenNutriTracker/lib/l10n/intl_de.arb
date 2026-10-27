@@ -233,9 +233,7 @@
   "dataCollectionLabel": "Absturzberichte senden, um bei der Fehlerbehebung zu helfen. Es werden keine Ernährungsdaten oder Gewichtsdaten übermittelt.",
   "deleteAllLabel": "Alle löschen",
   "settingsDeleteAllDataLabel": "Profildaten zurücksetzen",
-  "settingsDeleteAllDataSubtitle": "Profil, Mahlzeiten, Aktivitäten, Gewichtsverlauf und Fastenzeiten",
   "settingsDeleteAllDataConfirmTitle": "Profildaten zurücksetzen?",
-  "settingsDeleteAllDataConfirmContent": "Dies entfernt dein Profil, deine Mahlzeiten, Aktivitäten, deinen Gewichtsverlauf und deine Fastenzeiten – nur für das aktuelle Profil. Außerdem werden der API-Schlüssel und die Serveradresse für die KI-Funktionen entfernt, die alle Profile auf diesem Gerät gemeinsam nutzen. Geteilte Inhalte (eigene Mahlzeiten, Rezepte, Aktivitätsvorlagen) sowie die Kataloge von Open Food Facts und USDA Food Data Central sind nicht betroffen. Dies kann nicht rückgängig gemacht werden.",
   "policyChangeNoticeTitle": "Wir haben die Datenschutzerklärung aktualisiert",
   "policyChangeNoticeBody": "An dem, was die App tut, hat sich nichts geändert. Geändert hat sich, wie viel wir dir davon sagen.\n\nDienste, die deine Suchanfragen schon immer erhalten haben, werden jetzt namentlich genannt. Es gibt einen neuen Abschnitt zu Gesundheitsdaten für den Trainingsimport, den du aktivieren kannst. Und wir legen jetzt den ungefähren Standort offen, den unser Backend für die Lebensmittelsuche zu einer Anfrage speichert und 24 Stunden aufbewahrt.\n\nDein Tagebuch bleibt auf deinem Gerät, so wie immer.",
   "policyChangeNoticeReadAction": "Erklärung lesen",
@@ -1123,40 +1121,6 @@
   "settingsWaterGoalLabel": "Tägliches Wasserziel",
   "waterChipLabel": "{current} / {goal} ml",
   "zincLabel": "Zink",
-  "profileFastingEntry": "Fasten-Timer",
-  "fastingTitle": "Fasten-Timer",
-  "fastingSubtitle": "Ein einfacher Timer für die Zeit zwischen den Mahlzeiten. Keine Serien, keine Ziele, nur die Uhr.",
-  "fastingWarningTitle": "Bevor du beginnst",
-  "fastingWarningBody": "Das Verfolgen von Fastenzeiten kann für manche hilfreich und für andere belastend sein, besonders wenn eine Essstörung Teil deiner Geschichte ist. Bitte achte zuerst auf dich. Unterstützung findest du bei BEAT (UK) und NEDA (US).",
-  "fastingWarningDecline": "Nichts für mich",
-  "fastingWarningAccept": "Verstanden, Timer aktivieren",
-  "fastingPresetCustom": "Eigene Dauer",
-  "fastingStart": "Timer starten",
-  "fastingCancel": "Fasten beenden",
-  "fastingCancelConfirmTitle": "Fasten jetzt beenden?",
-  "fastingCancelConfirmBody": "Damit wird die aktuelle Sitzung geschlossen.",
-  "fastingComplete": "Sitzung abgeschlossen",
-  "fastingLinkBeat": "BEAT (UK)",
-  "fastingLinkNeda": "NEDA (US)",
-  "fastingElapsedLabel": "Vergangen",
-  "fastingRemainingValue": "Noch {value}",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Ziel: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "Stunden",
-  "dialogCloseLabel": "Schließen",
   "customMealsRowMoreTooltip": "Weitere Aktionen",
   "customMealsMergeAction": "Mit einer anderen eigenen Mahlzeit zusammenführen",
   "customMealsMergePickerTitle": "Wähle die eigene Mahlzeit zum Zusammenführen",
@@ -1194,18 +1158,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Fasten · noch {remaining}",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Fasten-Timer",
-  "fastingNotificationChannelDescription": "Einmalige Hinweise, wenn eine Fastenphase ihr Ziel erreicht.",
-  "fastingNotificationCompleteTitle": "Fastenzeit abgeschlossen",
-  "fastingNotificationCompleteBody": "Deine Zielzeit wurde erreicht.",
   "profileImageLabel": "Foto hinzufügen",
   "profileImageReplace": "Foto ändern",
   "profileImageRemove": "Foto entfernen",

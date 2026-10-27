@@ -233,9 +233,7 @@
   "dataCollectionLabel": "Wysyłaj raporty o awariach, aby pomóc w naprawianiu błędów. Nie są przesyłane dane o posiłkach ani wadze.",
   "deleteAllLabel": "Usuń wszystko",
   "settingsDeleteAllDataLabel": "Zresetuj dane profilu",
-  "settingsDeleteAllDataSubtitle": "Profil, posiłki, aktywność, historia wagi i posty",
   "settingsDeleteAllDataConfirmTitle": "Zresetować dane profilu?",
-  "settingsDeleteAllDataConfirmContent": "Spowoduje to usunięcie Twojego profilu, posiłków, aktywności, historii wagi oraz postów – tylko dla bieżącego profilu. Usunie także ewentualny klucz API i adres serwera funkcji AI, wspólne dla wszystkich profili na tym urządzeniu. Treści współdzielone (własne posiłki, przepisy, szablony aktywności) oraz katalogi Open Food Facts i USDA Food Data Central pozostają nienaruszone. Tej operacji nie można cofnąć.",
   "policyChangeNoticeTitle": "Zaktualizowaliśmy politykę prywatności",
   "policyChangeNoticeBody": "To, co robi aplikacja, się nie zmieniło. Zmieniło się to, ile ci o tym mówimy.\n\nUsługi, które zawsze otrzymywały twoje wyszukiwania, są teraz wymienione z nazwy. Pojawiła się nowa sekcja o danych zdrowotnych — dotyczy importu treningów, który możesz włączyć. Ujawniamy też przybliżoną lokalizację, którą nasz backend wyszukiwania żywności zapisuje przy żądaniu i przechowuje przez 24 godziny.\n\nTwój dziennik pozostaje na twoim urządzeniu, tak jak dotychczas.",
   "policyChangeNoticeReadAction": "Przeczytaj politykę",
@@ -1092,40 +1090,6 @@
   "settingsWaterGoalLabel": "Dzienny cel wody",
   "waterChipLabel": "{current} / {goal} ml",
   "zincLabel": "cynk",
-  "profileFastingEntry": "Minutnik postu",
-  "fastingTitle": "Minutnik postu",
-  "fastingSubtitle": "Prosty minutnik do śledzenia czasu między posiłkami. Bez serii, bez celów, tylko zegar.",
-  "fastingWarningTitle": "Zanim zaczniesz",
-  "fastingWarningBody": "Śledzenie czasu postu jednym pomaga, a innym może szkodzić, szczególnie osobom z historią zaburzeń odżywiania. Jeśli to o tobie, zadbaj najpierw o siebie. Wsparcie oferują BEAT (UK) i NEDA (US).",
-  "fastingWarningDecline": "To nie dla mnie",
-  "fastingWarningAccept": "Rozumiem, włącz minutnik",
-  "fastingPresetCustom": "Własny",
-  "fastingStart": "Uruchom minutnik",
-  "fastingCancel": "Zakończ post",
-  "fastingCancelConfirmTitle": "Zakończyć post teraz?",
-  "fastingCancelConfirmBody": "Bieżąca sesja zostanie zamknięta.",
-  "fastingComplete": "Sesja zakończona",
-  "fastingLinkBeat": "BEAT (UK)",
-  "fastingLinkNeda": "NEDA (US)",
-  "fastingElapsedLabel": "Upłynęło",
-  "fastingRemainingValue": "Pozostało {value}",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Cel: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "godziny",
-  "dialogCloseLabel": "Zamknij",
   "customMealsRowMoreTooltip": "Więcej akcji",
   "customMealsMergeAction": "Połącz z innym własnym produktem",
   "customMealsMergePickerTitle": "Wybierz własny produkt do połączenia",
@@ -1163,18 +1127,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Post · pozostało {remaining}",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Minutnik postu",
-  "fastingNotificationChannelDescription": "Jednorazowe powiadomienia, gdy post osiągnie swój cel.",
-  "fastingNotificationCompleteTitle": "Sesja postu zakończona",
-  "fastingNotificationCompleteBody": "Czas docelowy został osiągnięty.",
   "profileImageLabel": "Dodaj zdjęcie",
   "profileImageReplace": "Zmień zdjęcie",
   "profileImageRemove": "Usuń zdjęcie",

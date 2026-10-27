@@ -80,7 +80,6 @@ whether that is losing weight, gaining it, managing a condition, or simply knowi
 |  | |
 | :-- | :-- |
 | **Cited** | Calorie targets follow IOM 2005, BMI follows WHO, macros follow WHO TRS 916, activity burn follows the 2024 Compendium. The in-app Sources & References screen links every paper ([`sources_screen.dart`](lib/core/presentation/sources_screen.dart)). |
-| **Careful** | The fasting timer opens with a content warning linking BEAT and NEDA, and "Not for me" is a first-class answer ([`fasting_warning_dialog.dart`](lib/features/fasting/presentation/widgets/fasting_warning_dialog.dart)). No streak guilt, and no notification you didn't ask for. The daily reminder is off until you enable it. |
 | **Free** | No paid tier and no ads, with zero advertising or analytics SDKs in [`pubspec.yaml`](pubspec.yaml) to add them with. That includes the micronutrient panel the big-name trackers put behind a subscription. No investors, and GPLv3 leaves no exit that could paywall it later. |
 | **Private** | No account to create. Your diary lives in AES-256-encrypted storage with the key held in the Android Keystore / iOS Keychain, every destination that receives a request is listed under [Privacy](#privacy) with what it's sent, and the release signing fingerprint is published so you can verify your download. |
 | **Portable** | Export your diary, activities, tracked days, recipes, weight history and custom activity templates as JSON — or diary, activities and tracked days as CSV — re-import it, or share an entry by QR. The [export format](docs/export-format.md) documents the schema and what it leaves out. |
@@ -99,7 +98,7 @@ whether that is losing weight, gaining it, managing a condition, or simply knowi
 | 🍽️ | **Meals and recipes** | Reusable recipes with photo, brand, and barcode. |
 | 🏃 | **Activities and weight** | Workout catalogue or custom activities; weight trend against a target. |
 | 📱 | **Home-screen widget** | Android: today's kcal and protein rings and one-tap logging of your usual foods. |
-| 💧 | **Water and fasting** | A home-screen water chip and an optional intermittent-fasting timer. |
+| 💧 | **Water** | A home-screen water chip. |
 | 🎨 | **Themes and units** | Material You accent on Android 12+, sixteen built-in themes, kcal or kJ. |
 | 📤 | **Export and import** | JSON and CSV export, JSON import, and QR sharing. |
 
@@ -114,19 +113,18 @@ whether that is losing weight, gaining it, managing a condition, or simply knowi
 - **⚡ Quick add:** When you already know roughly how much you ate, skip the search flow entirely. Quick add takes a title plus kcal (and optional macros) and logs it straight to the meal section.
 - **📷 Barcode scanner:** Scan packaged items for instant lookup, paste a barcode manually when the camera struggles, or attach a barcode to a custom meal so future scans recognise your own foods.
 - **🏃 Activities:** Log workouts from a categorised activity catalogue or define your own custom activities with direct kcal entry and reusable templates.
-- **📱 Quick-log widget (Android):** A 4×2 home-screen widget, resizable to 4×1, with today's kcal and protein rings and the foods you logged most in the last seven days. Tap a food's pill to log its last amount (with a few seconds to undo), or the rest of its row to pick another amount over the home screen. It also opens the scanner, and the app icon's long-press menu has a Scan Product shortcut. Snapshot updates and day jobs run only while a widget is placed. Android retains the app engine after Back so widget writes share its storage owner; existing periodic timers (including an active fasting timer) can continue until the OS reclaims the process. Activity-dependent startup work waits until the app resumes.
+- **📱 Quick-log widget (Android):** A 4×2 home-screen widget, resizable to 4×1, with today's kcal and protein rings and the foods you logged most in the last seven days. Tap a food's pill to log its last amount (with a few seconds to undo), or the rest of its row to pick another amount over the home screen. It also opens the scanner, and the app icon's long-press menu has a Scan Product shortcut. Snapshot updates and day jobs run only while a widget is placed. Android retains the app engine after Back so widget writes share its storage owner; existing periodic timers can continue until the OS reclaims the process. Activity-dependent startup work waits until the app resumes.
 - **💧 Water tracker:** A water chip on the home screen with quick-add increments, an editable goal, and undo for the last entry.
-- **⏱️ Fasting timer:** Optional intermittent-fasting timer with content-warning gate, a home chip showing time remaining, and a completion notification when you reach your window.
 - **⚖️ Weight history:** Capture weight during onboarding and on demand, see the trend on a chart with a dashed line at your target weight, and optionally taper the calorie goal as you approach it.
 - **🎨 Material You + theme picker:** Adopt the system accent colour on Android 12+, or pick from sixteen built-in presets. The app icon adapts to iOS dark and tinted appearances and to Android themed icons.
 - **🔢 kcal or kJ:** Switch the energy unit globally; every diary entry, target, and chart reflects the choice.
-- **📤 Export and import:** Export your diary entries, activities, tracked days, recipes, weight history and custom activity templates to a JSON zip (recipe and custom-meal photos included), or diary, activities and tracked days as a CSV zip — you pick one format, the bundle carries only that one ([bundle format](docs/export-format.md)). Paste a JSON blob to import meals, and share a single meal or activity as a QR code another phone can scan. Your profile, custom-meal catalogue, water and fasting history stay out of the bundle.
+- **📤 Export and import:** Export your diary entries, activities, tracked days, recipes, weight history and custom activity templates to a JSON zip (recipe and custom-meal photos included), or diary, activities and tracked days as a CSV zip — you pick one format, the bundle carries only that one ([bundle format](docs/export-format.md)). Paste a JSON blob to import meals, and share a single meal or activity as a QR code another phone can scan. Your profile, custom-meal catalogue, and water history stay out of the bundle.
 
 </details>
 
 ## Privacy
 
-No account, no sign-in, no analytics, no ads. Your profile, diary, activities, weight, water and fasting history, custom meals, and recipes live in local [Hive](https://pub.dev/packages/hive_ce) boxes encrypted with AES-256. The key is generated on first launch, kept in the Android Keystore / iOS Keychain, and never transmitted ([source](lib/core/utils/secure_app_storage_provider.dart)). **Settings → Delete all my data** wipes the active profile. Formal policy: [Data Protection](https://www.iubenda.com/privacy-policy/53501884).
+No account, no sign-in, no analytics, no ads. Your profile, diary, activities, weight, water history, custom meals, and recipes live in local [Hive](https://pub.dev/packages/hive_ce) boxes encrypted with AES-256. The key is generated on first launch, kept in the Android Keystore / iOS Keychain, and never transmitted ([source](lib/core/utils/secure_app_storage_provider.dart)). **Settings → Delete all my data** wipes the active profile. Formal policy: [Data Protection](https://www.iubenda.com/privacy-policy/53501884).
 
 **What leaves your device.** These destinations, nothing else, and the last four only if you turn them on — plus one more, set out below, if you point the app at a server of your own:
 
@@ -176,7 +174,7 @@ Searches and product lookups to Open Food Facts carry a User-Agent naming the ap
 
 **Crash reporting** is off until you enable it, and initializes only in release builds ([`main.dart:119`](lib/main.dart:119)). `sendDefaultPii` stays `false`, so no username, email, or IP-derived identity is attached. Disabling it, or deleting your data, closes the SDK immediately.
 
-**Permissions:** camera (barcode scanning, meal photos), photo library (meal photos, exports), notifications (daily reminder, fasting timer), internet (food lookups), and receive-boot-completed (re-registering the reminder after a reboot). Health data — workouts, and on iOS the body fat percentage — is read only if you turn on workout import under Settings → Health sync, which is off by default; the access is read-only, nothing is ever written back to Health Connect or Apple Health, and the imported workouts stay on your device. No location, contacts, or microphone access.
+**Permissions:** camera (barcode scanning, meal photos), photo library (meal photos, exports), notifications (daily reminder), internet (food lookups), and receive-boot-completed (re-registering the reminder after a reboot). Health data — workouts, and on iOS the body fat percentage — is read only if you turn on workout import under Settings → Health sync, which is off by default; the access is read-only, nothing is ever written back to Health Connect or Apple Health, and the imported workouts stay on your device. No location, contacts, or microphone access.
 
 **Not collected:** no account, email, or phone number. The backend is read with an anonymous key and there is no sign-in path. No advertising ID and no cross-app tracking: `NSPrivacyTracking` is `false` with an empty tracking-domains list, and crash and performance data are declared *not linked to the user* ([`PrivacyInfo.xcprivacy`](ios/Runner/PrivacyInfo.xcprivacy)).
 

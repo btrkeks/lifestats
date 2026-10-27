@@ -14,7 +14,7 @@ import 'package:opennutritracker/main.dart';
 
 /// Dev-only entry point: wipes the active profile and reseeds it with
 /// realistic demo data (user, a year of meals and activities, weight/water
-/// history, a recipe, fasting sessions), then boots straight past
+/// history, a recipe), then boots straight past
 /// onboarding.
 ///
 /// Run with `flutter run -t lib/dev/main_dev.dart` (or `just dev_seed`)

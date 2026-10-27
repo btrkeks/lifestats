@@ -2,7 +2,6 @@ import 'package:hive_ce/hive.dart';
 import 'package:opennutritracker/core/data/data_source/custom_activity_template_dbo.dart';
 import 'package:opennutritracker/core/data/data_source/user_activity_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/config_dbo.dart';
-import 'package:opennutritracker/core/data/dbo/fasting_session_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/intake_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/meal_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/recipe_dbo.dart';
@@ -29,7 +28,6 @@ class FakeHiveDBProvider extends HiveDBProvider {
   final Box<CustomActivityTemplateDBO>? _customActivityTemplateBox;
   final Box<WeightLogDBO>? _weightLogBox;
   final Box<WaterIntakeDBO>? _waterIntakeBox;
-  final Box<FastingSessionDBO>? _fastingBox;
 
   /// The profile the injected boxes belong to.
   ///
@@ -54,7 +52,6 @@ class FakeHiveDBProvider extends HiveDBProvider {
     Box<CustomActivityTemplateDBO>? customActivityTemplateBox,
     Box<WeightLogDBO>? weightLogBox,
     Box<WaterIntakeDBO>? waterIntakeBox,
-    Box<FastingSessionDBO>? fastingBox,
   })  : _configBox = configBox,
         _appConfigBox = appConfigBox ?? configBox,
         _intakeBox = intakeBox,
@@ -66,8 +63,7 @@ class FakeHiveDBProvider extends HiveDBProvider {
         _recipeBox = recipeBox,
         _customActivityTemplateBox = customActivityTemplateBox,
         _weightLogBox = weightLogBox,
-        _waterIntakeBox = waterIntakeBox,
-        _fastingBox = fastingBox;
+        _waterIntakeBox = waterIntakeBox;
 
   T _require<T>(T? box) {
     if (box == null) {
@@ -101,6 +97,4 @@ class FakeHiveDBProvider extends HiveDBProvider {
   Box<WeightLogDBO> get weightLogBox => _require(_weightLogBox);
   @override
   Box<WaterIntakeDBO> get waterIntakeBox => _require(_waterIntakeBox);
-  @override
-  Box<FastingSessionDBO> get fastingBox => _require(_fastingBox);
 }

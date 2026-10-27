@@ -253,7 +253,6 @@
   "dailyKjAdjustmentLabel": "Ajustement quotidien (kJ) :",
   "deleteAllLabel": "Tout supprimer",
   "settingsDeleteAllDataLabel": "Réinitialiser les données du profil",
-  "settingsDeleteAllDataSubtitle": "Profil, repas, activités, historique du poids et sessions de jeûne",
   "settingsDeleteAllDataConfirmTitle": "Réinitialiser les données du profil ?",
   "settingsDeleteAllDataConfirmAction": "Réinitialiser le profil",
   "lowKcalWarningTitle": "Cet objectif quotidien est particulièrement bas",
@@ -1165,40 +1164,6 @@
     }
   },
   "zincLabel": "zinc",
-  "profileFastingEntry": "Minuteur de jeûne",
-  "fastingTitle": "Minuteur de jeûne",
-  "fastingSubtitle": "Un minuteur simple pour suivre le temps entre les repas. Pas de séries, pas d'objectifs, seulement le temps écoulé.",
-  "fastingWarningTitle": "Avant de commencer",
-  "fastingWarningBody": "Le suivi du temps de jeûne peut être utile pour certaines personnes et difficile à vivre pour d'autres, en particulier pour les personnes ayant des antécédents de troubles du comportement alimentaire. Si c'est votre cas, prenez soin de vous avant tout. Une aide est disponible auprès de BEAT (Royaume-Uni) et de la NEDA (États-Unis).",
-  "fastingWarningDecline": "Ce n'est pas pour moi",
-  "fastingWarningAccept": "Je comprends, activer le minuteur",
-  "fastingPresetCustom": "Personnalisé",
-  "fastingStart": "Démarrer le minuteur",
-  "fastingCancel": "Terminer le jeûne",
-  "fastingCancelConfirmTitle": "Terminer le jeûne maintenant ?",
-  "fastingCancelConfirmBody": "Cette action mettra fin à la session en cours.",
-  "fastingComplete": "Session terminée",
-  "fastingLinkBeat": "BEAT (Royaume-Uni)",
-  "fastingLinkNeda": "NEDA (États-Unis)",
-  "fastingElapsedLabel": "Temps écoulé",
-  "fastingRemainingValue": "{value} restant",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Objectif : {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "heures",
-  "dialogCloseLabel": "Fermer",
   "customMealsRowMoreTooltip": "Plus d'actions",
   "customMealsMergeAction": "Fusionner avec un autre aliment personnalisé",
   "customMealsMergePickerTitle": "Choisissez l'aliment personnalisé avec lequel fusionner",
@@ -1236,18 +1201,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Jeûne · {remaining} restant",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Minuteur de jeûne",
-  "fastingNotificationChannelDescription": "Notifications ponctuelles lorsqu'une session de jeûne atteint son objectif.",
-  "fastingNotificationCompleteTitle": "Session de jeûne terminée",
-  "fastingNotificationCompleteBody": "Votre durée cible a été atteinte.",
   "profileImageLabel": "Ajouter une photo",
   "profileImageReplace": "Changer la photo",
   "profileImageRemove": "Supprimer la photo",

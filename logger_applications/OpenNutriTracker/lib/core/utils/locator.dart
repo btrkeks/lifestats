@@ -109,14 +109,6 @@ import 'package:opennutritracker/features/add_meal/presentation/bloc/recent_meal
 import 'package:opennutritracker/features/diary/presentation/bloc/calendar_day_bloc.dart';
 import 'package:opennutritracker/features/diary/presentation/bloc/diary_bloc.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/bloc/edit_meal_bloc.dart';
-import 'package:opennutritracker/features/fasting/data/data_source/fasting_data_source.dart';
-import 'package:opennutritracker/features/fasting/data/repository/fasting_repository.dart';
-import 'package:opennutritracker/features/fasting/domain/usecase/acknowledge_fasting_warning_usecase.dart';
-import 'package:opennutritracker/features/fasting/domain/usecase/cancel_fasting_usecase.dart';
-import 'package:opennutritracker/features/fasting/domain/usecase/complete_fasting_usecase.dart';
-import 'package:opennutritracker/features/fasting/domain/usecase/get_active_fasting_session_usecase.dart';
-import 'package:opennutritracker/features/fasting/domain/usecase/start_fasting_usecase.dart';
-import 'package:opennutritracker/features/fasting/presentation/bloc/fasting_bloc.dart';
 import 'package:opennutritracker/features/home/presentation/bloc/home_bloc.dart';
 import 'package:opennutritracker/features/meal_detail/presentation/bloc/meal_detail_bloc.dart';
 import 'package:opennutritracker/features/onboarding/presentation/bloc/onboarding_bloc.dart';
@@ -340,18 +332,6 @@ Future<void> initLocator() async {
   );
   locator.registerFactory<FoodBloc>(() => FoodBloc(locator(), locator()));
   locator.registerFactory(() => RecentMealBloc(locator(), locator()));
-  // #84: fasting timer. Factory so the screen-scoped timer and dialog
-  // state reset cleanly each time the user opens the screen.
-  locator.registerFactory<FastingBloc>(
-    () => FastingBloc(
-      locator(),
-      locator(),
-      locator(),
-      locator(),
-      locator(),
-      locator(),
-    ),
-  );
 
   // UseCases
   locator.registerLazySingleton<GetConfigUsecase>(
@@ -564,13 +544,6 @@ Future<void> initLocator() async {
   );
   locator.registerLazySingleton(() => ImportRecipesJsonUsecase(locator()));
 
-  // Fasting use cases (#84)
-  locator.registerFactory(() => StartFastingUseCase(locator()));
-  locator.registerFactory(() => CancelFastingUseCase(locator()));
-  locator.registerFactory(() => CompleteFastingUseCase(locator()));
-  locator.registerFactory(() => GetActiveFastingSessionUseCase(locator()));
-  locator.registerFactory(() => AcknowledgeFastingWarningUseCase(locator()));
-
   // Recipe use cases
   locator.registerLazySingleton(() => ComputeRecipeNutritionUseCase());
   locator.registerLazySingleton(() => SaveRecipeUseCase(locator(), locator()));
@@ -612,9 +585,6 @@ Future<void> initLocator() async {
   );
   locator.registerLazySingleton<CustomActivityTemplateRepository>(
     () => CustomActivityTemplateRepository(locator()),
-  );
-  locator.registerLazySingleton<FastingRepository>(
-    () => FastingRepository(locator()),
   );
   locator.registerLazySingleton<ProfileRepository>(
     () => ProfileRepository(locator()),
@@ -659,9 +629,6 @@ Future<void> initLocator() async {
   );
   locator.registerLazySingleton<CustomActivityTemplateDataSource>(
     () => CustomActivityTemplateDataSource(hiveDBProvider),
-  );
-  locator.registerLazySingleton<FastingDataSource>(
-    () => FastingDataSource(hiveDBProvider),
   );
   locator.registerLazySingleton<ProfileDataSource>(
     () => ProfileDataSource(hiveDBProvider),

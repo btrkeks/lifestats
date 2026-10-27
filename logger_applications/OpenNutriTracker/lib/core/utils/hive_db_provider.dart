@@ -7,7 +7,6 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:opennutritracker/core/data/data_source/custom_activity_template_dbo.dart';
 import 'package:opennutritracker/core/data/data_source/user_activity_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/config_dbo.dart';
-import 'package:opennutritracker/core/data/dbo/fasting_session_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/intake_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/meal_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/profile_dbo.dart';
@@ -26,7 +25,7 @@ import 'package:opennutritracker/hive_registrar.g.dart';
 /// app-wide settings (theme, language, units, notifications, ...), and the
 /// reusable content libraries (custom meals, recipes, activity templates).
 /// The **per-profile** ones are each profile's own private data — the meal,
-/// activity, weight, water and fasting logs, tracked-day totals, the user's
+/// activity, weight and water logs, tracked-day totals, the user's
 /// body stats, and the personal nutrition goals in ConfigBox.
 ///
 /// Per-profile boxes are named by appending the active profile's
@@ -61,10 +60,6 @@ class HiveDBProvider extends ChangeNotifier {
   // dialog's "undo last" can roll a single entry back without losing the
   // rest of the day.
   static const waterIntakeBoxName = 'WaterIntakeBox';
-  // #84: persisted fasting sessions, one record per start. The data layer
-  // intentionally keeps cancelled and completed sessions side by side with no
-  // success/failure label on the record — see `FastingSessionDBO`.
-  static const fastingBoxName = 'FastingBox';
   // #471: registry of profiles. Global — shared across every profile so
   // the app can enumerate and switch profiles before any one of them is
   // active.
@@ -87,7 +82,6 @@ class HiveDBProvider extends ChangeNotifier {
     trackedDayBoxName,
     weightLogBoxName,
     waterIntakeBoxName,
-    fastingBoxName,
   ];
 
   // Global boxes — opened once, never closed on a profile switch.
@@ -114,7 +108,6 @@ class HiveDBProvider extends ChangeNotifier {
   Box<TrackedDayDBO>? _trackedDayBox;
   Box<WeightLogDBO>? _weightLogBox;
   Box<WaterIntakeDBO>? _waterIntakeBox;
-  Box<FastingSessionDBO>? _fastingBox;
 
   late final HiveAesCipher _cipher;
   String _activeProfileId = '';
@@ -134,8 +127,6 @@ class HiveDBProvider extends ChangeNotifier {
       _requireBox(_weightLogBox, weightLogBoxName);
   Box<WaterIntakeDBO> get waterIntakeBox =>
       _requireBox(_waterIntakeBox, waterIntakeBoxName);
-  Box<FastingSessionDBO> get fastingBox =>
-      _requireBox(_fastingBox, fastingBoxName);
 
   Box<T> _requireBox<T>(Box<T>? box, String name) {
     if (_switching) {
@@ -228,7 +219,6 @@ class HiveDBProvider extends ChangeNotifier {
     _waterIntakeBox = await _openEncryptedBox(
       boxNameFor(waterIntakeBoxName, suffix),
     );
-    _fastingBox = await _openEncryptedBox(boxNameFor(fastingBoxName, suffix));
   }
 
   Future<void> _closeActiveProfileBoxes() async {
@@ -240,7 +230,6 @@ class HiveDBProvider extends ChangeNotifier {
       if (_trackedDayBox != null) _trackedDayBox!.close(),
       if (_weightLogBox != null) _weightLogBox!.close(),
       if (_waterIntakeBox != null) _waterIntakeBox!.close(),
-      if (_fastingBox != null) _fastingBox!.close(),
     ]);
     _configBox = null;
     _intakeBox = null;
@@ -249,7 +238,6 @@ class HiveDBProvider extends ChangeNotifier {
     _trackedDayBox = null;
     _weightLogBox = null;
     _waterIntakeBox = null;
-    _fastingBox = null;
   }
 
   /// Opens (or returns the already-open) box for an arbitrary profile

@@ -38,7 +38,6 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
         nutrientPanelVisibility: (fields[22] as Map?)?.cast<String, bool>(),
         dayStartOffsetMinutes: (fields[23] as num?)?.toInt(),
         dailyWaterGoalMl: (fields[24] as num?)?.toInt(),
-        fastingWarningAcknowledged: fields[25] as bool?,
         useMaterialYou: fields[20] as bool?,
         accentColor: (fields[26] as num?)?.toInt(),
         scannerPortraitLock: fields[27] as bool?,
@@ -69,7 +68,7 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
   @override
   void write(BinaryWriter writer, ConfigDBO obj) {
     writer
-      ..writeByte(46)
+      ..writeByte(45)
       ..writeByte(0)
       ..write(obj.hasAcceptedDisclaimer)
       ..writeByte(1)
@@ -120,8 +119,6 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
       ..write(obj.dayStartOffsetMinutes)
       ..writeByte(24)
       ..write(obj.dailyWaterGoalMl)
-      ..writeByte(25)
-      ..write(obj.fastingWarningAcknowledged)
       ..writeByte(26)
       ..write(obj.accentColor)
       ..writeByte(27)
@@ -209,7 +206,6 @@ ConfigDBO _$ConfigDBOFromJson(Map<String, dynamic> json) =>
             ),
         dayStartOffsetMinutes: (json['dayStartOffsetMinutes'] as num?)?.toInt(),
         dailyWaterGoalMl: (json['dailyWaterGoalMl'] as num?)?.toInt(),
-        fastingWarningAcknowledged: json['fastingWarningAcknowledged'] as bool?,
         useMaterialYou: json['useMaterialYou'] as bool?,
         accentColor: (json['accentColor'] as num?)?.toInt(),
         scannerPortraitLock: json['scannerPortraitLock'] as bool?,
@@ -278,7 +274,6 @@ Map<String, dynamic> _$ConfigDBOToJson(ConfigDBO instance) => <String, dynamic>{
   'diarySortPreferences': instance.diarySortPreferences,
   'dayStartOffsetMinutes': instance.dayStartOffsetMinutes,
   'dailyWaterGoalMl': instance.dailyWaterGoalMl,
-  'fastingWarningAcknowledged': instance.fastingWarningAcknowledged,
   'useMaterialYou': instance.useMaterialYou,
   'accentColor': instance.accentColor,
   'scannerPortraitLock': instance.scannerPortraitLock,
