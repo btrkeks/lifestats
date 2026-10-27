@@ -104,6 +104,22 @@ class ConfigRepository {
     await _configDataSource.setConfigLifestatsSyncFailed(at, error, statusCode);
   }
 
+  Future<void> setLifestatsIntakeSyncSucceeded(DateTime at) async {
+    await _configDataSource.setConfigLifestatsIntakeSyncSucceeded(at);
+  }
+
+  Future<void> setLifestatsIntakeSyncFailed(
+    DateTime at,
+    String error,
+    int? statusCode,
+  ) async {
+    await _configDataSource.setConfigLifestatsIntakeSyncFailed(
+      at,
+      error,
+      statusCode,
+    );
+  }
+
   Future<void> setConfigShowMealMacros(bool show) async {
     await _configDataSource.setConfigShowMealMacros(show);
   }

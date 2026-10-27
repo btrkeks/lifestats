@@ -59,6 +59,10 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
         lifestatsLastErrorAt: fields[43] as DateTime?,
         lifestatsLastError: fields[44] as String?,
         lifestatsLastErrorStatus: (fields[45] as num?)?.toInt(),
+        lifestatsIntakeLastSyncAt: fields[46] as DateTime?,
+        lifestatsIntakeLastErrorAt: fields[47] as DateTime?,
+        lifestatsIntakeLastError: fields[48] as String?,
+        lifestatsIntakeLastErrorStatus: (fields[49] as num?)?.toInt(),
       )
       ..userCarbGoalPct = (fields[6] as num?)?.toDouble()
       ..userProteinGoalPct = (fields[7] as num?)?.toDouble()
@@ -68,7 +72,7 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
   @override
   void write(BinaryWriter writer, ConfigDBO obj) {
     writer
-      ..writeByte(45)
+      ..writeByte(49)
       ..writeByte(0)
       ..write(obj.hasAcceptedDisclaimer)
       ..writeByte(1)
@@ -158,7 +162,15 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
       ..writeByte(44)
       ..write(obj.lifestatsLastError)
       ..writeByte(45)
-      ..write(obj.lifestatsLastErrorStatus);
+      ..write(obj.lifestatsLastErrorStatus)
+      ..writeByte(46)
+      ..write(obj.lifestatsIntakeLastSyncAt)
+      ..writeByte(47)
+      ..write(obj.lifestatsIntakeLastErrorAt)
+      ..writeByte(48)
+      ..write(obj.lifestatsIntakeLastError)
+      ..writeByte(49)
+      ..write(obj.lifestatsIntakeLastErrorStatus);
   }
 
   @override
@@ -244,6 +256,15 @@ ConfigDBO _$ConfigDBOFromJson(Map<String, dynamic> json) =>
         lifestatsLastError: json['lifestatsLastError'] as String?,
         lifestatsLastErrorStatus: (json['lifestatsLastErrorStatus'] as num?)
             ?.toInt(),
+        lifestatsIntakeLastSyncAt: json['lifestatsIntakeLastSyncAt'] == null
+            ? null
+            : DateTime.parse(json['lifestatsIntakeLastSyncAt'] as String),
+        lifestatsIntakeLastErrorAt: json['lifestatsIntakeLastErrorAt'] == null
+            ? null
+            : DateTime.parse(json['lifestatsIntakeLastErrorAt'] as String),
+        lifestatsIntakeLastError: json['lifestatsIntakeLastError'] as String?,
+        lifestatsIntakeLastErrorStatus:
+            (json['lifestatsIntakeLastErrorStatus'] as num?)?.toInt(),
       )
       ..userCarbGoalPct = (json['userCarbGoalPct'] as num?)?.toDouble()
       ..userProteinGoalPct = (json['userProteinGoalPct'] as num?)?.toDouble()
@@ -297,6 +318,12 @@ Map<String, dynamic> _$ConfigDBOToJson(ConfigDBO instance) => <String, dynamic>{
   'lifestatsLastErrorAt': instance.lifestatsLastErrorAt?.toIso8601String(),
   'lifestatsLastError': instance.lifestatsLastError,
   'lifestatsLastErrorStatus': instance.lifestatsLastErrorStatus,
+  'lifestatsIntakeLastSyncAt': instance.lifestatsIntakeLastSyncAt
+      ?.toIso8601String(),
+  'lifestatsIntakeLastErrorAt': instance.lifestatsIntakeLastErrorAt
+      ?.toIso8601String(),
+  'lifestatsIntakeLastError': instance.lifestatsIntakeLastError,
+  'lifestatsIntakeLastErrorStatus': instance.lifestatsIntakeLastErrorStatus,
 };
 
 const _$AppThemeDBOEnumMap = {

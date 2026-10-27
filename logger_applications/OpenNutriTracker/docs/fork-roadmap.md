@@ -40,9 +40,10 @@ this app. LiftLog already records training.
 
 - **Protein target from body weight:** done on `feature/ont-protein-target` (1.8 g/kg × 7-day average
   weight, Beurer weight synced from Lifestats).
-- **Caffeine and nicotine:** new nutrient fields, entry times shown and editable, a custom "my coffee"
-  food. Lifestats needs a statistic type for several timed amounts per day, designed on
-  `feature/timed-amounts-statistic`.
+- **Caffeine and nicotine:** done on `feature/ont-caffeine-nicotine`. Caffeine and nicotine are
+  nutrient fields (caffeine also from Open Food Facts), intake times are recorded at save, shown on
+  each row and editable, and the last 14 days sync to Lifestats' `TimedAmounts` statistics
+  ([lifestats-sync.md](lifestats-sync.md)). The "my coffee" and nicotine-gum foods are custom foods.
 - **AI-assisted logging:** photo plus weighed grams plus a description, in one request. Builds on
   upstream's AI meal logging ([ai-architecture.md](ai-architecture.md)), which drops gram amounts on the
   photo path today.

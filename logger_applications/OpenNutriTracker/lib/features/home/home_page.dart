@@ -19,6 +19,7 @@ import 'package:opennutritracker/core/presentation/widgets/edit_dialog.dart';
 import 'package:opennutritracker/core/presentation/widgets/delete_dialog.dart';
 import 'package:opennutritracker/core/presentation/widgets/disclaimer_dialog.dart';
 import 'package:opennutritracker/core/domain/usecase/import_workouts_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/sync_lifestats_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/sync_lifestats_weight_usecase.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/features/add_meal/presentation/add_meal_type.dart';
@@ -57,6 +58,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // same diary refresh a resume import does.
     unawaited(_importHealthWorkouts());
     unawaited(_syncLifestatsWeight());
+    unawaited(_syncLifestatsIntake());
     super.initState();
   }
 
@@ -127,6 +129,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _refreshPageOnDayChange();
       unawaited(_importHealthWorkouts());
       unawaited(_syncLifestatsWeight());
+      unawaited(_syncLifestatsIntake());
     }
     super.didChangeAppLifecycleState(state);
   }
@@ -562,5 +565,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (written == 0 || !mounted) return;
     _homeBloc.add(const LoadItemsEvent());
     locator<ProfileBloc>().add(LoadProfileEvent());
+  }
+
+  /// Sends the last 14 days of caffeine and nicotine to Lifestats at launch
+  /// and on resume, with the weight sync's throttle and quiet failure.
+  Future<void> _syncLifestatsIntake() async {
+    await locator<SyncLifestatsIntakeUsecase>().syncIfDue();
   }
 }

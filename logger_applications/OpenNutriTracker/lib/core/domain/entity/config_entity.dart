@@ -181,6 +181,12 @@ class ConfigEntity extends Equatable {
   final String? lifestatsLastError;
   final int? lifestatsLastErrorStatus;
 
+  /// The same status for sending caffeine and nicotine to Lifestats.
+  final DateTime? lifestatsIntakeLastSyncAt;
+  final DateTime? lifestatsIntakeLastErrorAt;
+  final String? lifestatsIntakeLastError;
+  final int? lifestatsIntakeLastErrorStatus;
+
   bool get lifestatsEnabled => (lifestatsBaseUrl?.trim() ?? '').isNotEmpty;
 
   /// Which revision of the privacy policy the user has been shown a *notice*
@@ -285,6 +291,10 @@ class ConfigEntity extends Equatable {
     this.lifestatsLastErrorAt,
     this.lifestatsLastError,
     this.lifestatsLastErrorStatus,
+    this.lifestatsIntakeLastSyncAt,
+    this.lifestatsIntakeLastErrorAt,
+    this.lifestatsIntakeLastError,
+    this.lifestatsIntakeLastErrorStatus,
   });
 
   /// The multiplier the importer actually applies. Falls back to crediting
@@ -411,6 +421,10 @@ class ConfigEntity extends Equatable {
     lifestatsLastErrorAt: dbo.lifestatsLastErrorAt,
     lifestatsLastError: dbo.lifestatsLastError,
     lifestatsLastErrorStatus: dbo.lifestatsLastErrorStatus,
+    lifestatsIntakeLastSyncAt: dbo.lifestatsIntakeLastSyncAt,
+    lifestatsIntakeLastErrorAt: dbo.lifestatsIntakeLastErrorAt,
+    lifestatsIntakeLastError: dbo.lifestatsIntakeLastError,
+    lifestatsIntakeLastErrorStatus: dbo.lifestatsIntakeLastErrorStatus,
   );
 
   /// Returns the recommended kcal target for [mealKey] given a daily goal.
@@ -520,5 +534,9 @@ class ConfigEntity extends Equatable {
     lifestatsLastErrorAt,
     lifestatsLastError,
     lifestatsLastErrorStatus,
+    lifestatsIntakeLastSyncAt,
+    lifestatsIntakeLastErrorAt,
+    lifestatsIntakeLastError,
+    lifestatsIntakeLastErrorStatus,
   ];
 }

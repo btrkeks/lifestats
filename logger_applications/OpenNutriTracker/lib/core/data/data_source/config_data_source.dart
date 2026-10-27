@@ -60,6 +60,11 @@ class ConfigDataSource {
       merged.lifestatsLastErrorAt = profile.lifestatsLastErrorAt;
       merged.lifestatsLastError = profile.lifestatsLastError;
       merged.lifestatsLastErrorStatus = profile.lifestatsLastErrorStatus;
+      merged.lifestatsIntakeLastSyncAt = profile.lifestatsIntakeLastSyncAt;
+      merged.lifestatsIntakeLastErrorAt = profile.lifestatsIntakeLastErrorAt;
+      merged.lifestatsIntakeLastError = profile.lifestatsIntakeLastError;
+      merged.lifestatsIntakeLastErrorStatus =
+          profile.lifestatsIntakeLastErrorStatus;
       merged.mealKcalSharesPct = profile.mealKcalSharesPct;
       merged.dailyWaterGoalMl = profile.dailyWaterGoalMl;
       merged.healthImportEnabled = profile.healthImportEnabled;
@@ -82,6 +87,10 @@ class ConfigDataSource {
       merged.lifestatsLastErrorAt = null;
       merged.lifestatsLastError = null;
       merged.lifestatsLastErrorStatus = null;
+      merged.lifestatsIntakeLastSyncAt = null;
+      merged.lifestatsIntakeLastErrorAt = null;
+      merged.lifestatsIntakeLastError = null;
+      merged.lifestatsIntakeLastErrorStatus = null;
       merged.mealKcalSharesPct = null;
       merged.dailyWaterGoalMl = null;
       merged.healthImportEnabled = null;
@@ -233,6 +242,10 @@ class ConfigDataSource {
       c.lifestatsLastErrorAt = null;
       c.lifestatsLastError = null;
       c.lifestatsLastErrorStatus = null;
+      c.lifestatsIntakeLastSyncAt = null;
+      c.lifestatsIntakeLastErrorAt = null;
+      c.lifestatsIntakeLastError = null;
+      c.lifestatsIntakeLastErrorStatus = null;
     });
   }
 
@@ -254,6 +267,27 @@ class ConfigDataSource {
       c.lifestatsLastErrorAt = at;
       c.lifestatsLastError = error;
       c.lifestatsLastErrorStatus = statusCode;
+    });
+  }
+
+  Future<void> setConfigLifestatsIntakeSyncSucceeded(DateTime at) async {
+    await _update((c) {
+      c.lifestatsIntakeLastSyncAt = at;
+      c.lifestatsIntakeLastErrorAt = null;
+      c.lifestatsIntakeLastError = null;
+      c.lifestatsIntakeLastErrorStatus = null;
+    });
+  }
+
+  Future<void> setConfigLifestatsIntakeSyncFailed(
+    DateTime at,
+    String error,
+    int? statusCode,
+  ) async {
+    await _update((c) {
+      c.lifestatsIntakeLastErrorAt = at;
+      c.lifestatsIntakeLastError = error;
+      c.lifestatsIntakeLastErrorStatus = statusCode;
     });
   }
 

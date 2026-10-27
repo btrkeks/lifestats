@@ -206,6 +206,16 @@ class ConfigDBO extends HiveObject {
   String? lifestatsLastError;
   @HiveField(45)
   int? lifestatsLastErrorStatus;
+  // The same status for sending caffeine and nicotine to Lifestats, kept
+  // apart so a working weight sync can't hide a failing push.
+  @HiveField(46)
+  DateTime? lifestatsIntakeLastSyncAt;
+  @HiveField(47)
+  DateTime? lifestatsIntakeLastErrorAt;
+  @HiveField(48)
+  String? lifestatsIntakeLastError;
+  @HiveField(49)
+  int? lifestatsIntakeLastErrorStatus;
 
   ConfigDBO(
     this.hasAcceptedDisclaimer,
@@ -250,6 +260,10 @@ class ConfigDBO extends HiveObject {
     this.lifestatsLastErrorAt,
     this.lifestatsLastError,
     this.lifestatsLastErrorStatus,
+    this.lifestatsIntakeLastSyncAt,
+    this.lifestatsIntakeLastErrorAt,
+    this.lifestatsIntakeLastError,
+    this.lifestatsIntakeLastErrorStatus,
   });
 
   factory ConfigDBO.empty() =>

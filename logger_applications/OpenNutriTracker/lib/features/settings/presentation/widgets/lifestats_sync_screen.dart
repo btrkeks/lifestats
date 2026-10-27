@@ -4,6 +4,7 @@ import 'package:logging/logging.dart';
 import 'package:opennutritracker/core/data/data_source/lifestats/lifestats_client.dart';
 import 'package:opennutritracker/core/data/repository/config_repository.dart';
 import 'package:opennutritracker/core/domain/entity/config_entity.dart';
+import 'package:opennutritracker/core/domain/usecase/sync_lifestats_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/sync_lifestats_weight_usecase.dart';
 import 'package:opennutritracker/core/styles/dimens.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
@@ -33,8 +34,9 @@ String lifestatsErrorText(S s, LifestatsErrorKind? kind, int? statusCode) {
 }
 
 /// Settings → Lifestats: the server address, a manual sync, and how the
-/// last sync went. The sync itself runs at app start and resume (see
-/// [SyncLifestatsWeightUsecase]).
+/// last weight import and caffeine/nicotine push went. Both also run at
+/// app start and resume (see [SyncLifestatsWeightUsecase] and
+/// [SyncLifestatsIntakeUsecase]).
 class LifestatsSyncScreen extends StatefulWidget {
   const LifestatsSyncScreen({super.key});
 
@@ -88,18 +90,34 @@ class _LifestatsSyncScreenState extends State<LifestatsSyncScreen> {
   Future<void> _syncNow() async {
     if (!mounted) return;
     setState(() => _busy = true);
+    final s = S.of(context);
+    final messages = <String>[];
     try {
-      final written = await locator<SyncLifestatsWeightUsecase>().syncNow();
-      if (written > 0) {
-        locator<HomeBloc>().add(const LoadItemsEvent());
-        locator<ProfileBloc>().add(LoadProfileEvent());
+      try {
+        final written = await locator<SyncLifestatsWeightUsecase>().syncNow();
+        if (written > 0) {
+          locator<HomeBloc>().add(const LoadItemsEvent());
+          locator<ProfileBloc>().add(LoadProfileEvent());
+        }
+        messages.add(s.lifestatsSyncedCountLabel(written));
+      } on LifestatsException catch (e) {
+        _log.info('Lifestats weight sync failed: $e');
+        messages.add(
+          '${s.lifestatsWeightSectionLabel}: '
+          '${lifestatsErrorText(s, e.kind, e.statusCode)}',
+        );
       }
-      if (!mounted) return;
-      _showMessage(S.of(context).lifestatsSyncedCountLabel(written));
-    } on LifestatsException catch (e) {
-      _log.info('Lifestats sync failed: $e');
-      if (!mounted) return;
-      _showMessage(lifestatsErrorText(S.of(context), e.kind, e.statusCode));
+      try {
+        final days = await locator<SyncLifestatsIntakeUsecase>().syncNow();
+        messages.add(s.lifestatsIntakeSentLabel(days));
+      } on LifestatsException catch (e) {
+        _log.info('Lifestats intake sync failed: $e');
+        messages.add(
+          '${s.lifestatsIntakeSectionLabel}: '
+          '${lifestatsErrorText(s, e.kind, e.statusCode)}',
+        );
+      }
+      if (mounted) _showMessage(messages.join('\n'));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -179,36 +197,63 @@ class _LifestatsSyncScreenState extends State<LifestatsSyncScreen> {
                     style: theme.textTheme.bodySmall,
                   )
                 else ...[
-                  Text(
-                    config.lifestatsLastSyncAt != null
-                        ? s.lifestatsLastSyncLabel(
-                            _formatTime(config.lifestatsLastSyncAt!),
-                          )
-                        : s.lifestatsNeverSyncedLabel,
-                    style: theme.textTheme.bodySmall,
+                  ..._syncStatus(
+                    s.lifestatsWeightSectionLabel,
+                    lastSyncAt: config.lifestatsLastSyncAt,
+                    lastErrorAt: config.lifestatsLastErrorAt,
+                    lastError: config.lifestatsLastError,
+                    lastErrorStatus: config.lifestatsLastErrorStatus,
                   ),
-                  if (config.lifestatsLastErrorAt != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: Dimens.spacing8),
-                      child: Text(
-                        s.lifestatsLastErrorLabel(
-                          _formatTime(config.lifestatsLastErrorAt!),
-                          lifestatsErrorText(
-                            s,
-                            LifestatsErrorKind.fromName(
-                              config.lifestatsLastError,
-                            ),
-                            config.lifestatsLastErrorStatus,
-                          ),
-                        ),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
-                        ),
-                      ),
-                    ),
+                  const SizedBox(height: Dimens.spacing16),
+                  ..._syncStatus(
+                    s.lifestatsIntakeSectionLabel,
+                    lastSyncAt: config.lifestatsIntakeLastSyncAt,
+                    lastErrorAt: config.lifestatsIntakeLastErrorAt,
+                    lastError: config.lifestatsIntakeLastError,
+                    lastErrorStatus: config.lifestatsIntakeLastErrorStatus,
+                  ),
                 ],
               ],
             ),
     );
+  }
+
+  /// A titled "last sync" line for one direction, plus the last failure.
+  List<Widget> _syncStatus(
+    String title, {
+    required DateTime? lastSyncAt,
+    required DateTime? lastErrorAt,
+    required String? lastError,
+    required int? lastErrorStatus,
+  }) {
+    final s = S.of(context);
+    final theme = Theme.of(context);
+    return [
+      Text(title, style: theme.textTheme.titleSmall),
+      const SizedBox(height: Dimens.spacing4),
+      Text(
+        lastSyncAt != null
+            ? s.lifestatsLastSyncLabel(_formatTime(lastSyncAt))
+            : s.lifestatsNeverSyncedLabel,
+        style: theme.textTheme.bodySmall,
+      ),
+      if (lastErrorAt != null)
+        Padding(
+          padding: const EdgeInsets.only(top: Dimens.spacing8),
+          child: Text(
+            s.lifestatsLastErrorLabel(
+              _formatTime(lastErrorAt),
+              lifestatsErrorText(
+                s,
+                LifestatsErrorKind.fromName(lastError),
+                lastErrorStatus,
+              ),
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ),
+    ];
   }
 }
