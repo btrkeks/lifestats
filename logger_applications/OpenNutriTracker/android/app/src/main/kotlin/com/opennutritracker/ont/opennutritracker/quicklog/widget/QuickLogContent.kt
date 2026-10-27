@@ -83,19 +83,27 @@ private val ButtonHeight = 48.dp
 /** Under the mock's 70 dp: a real 4×2 cell is narrower than the mock's, and at 70 dp the subtitle ellipsized. */
 private val PillWidth = 62.dp
 
+/** Below this the rings and the scan button no longer fit beside the list: the 4×1 layout. */
+private val CompactBelow = 150.dp
+
+/** The 4×1 has no room to scroll, so it shows the top of the list. */
+private const val CompactChips = 3
+
 /** Pure presentation of [model] at [nowMs]; reads no storage and no clock. */
 @Composable
 fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
     val context = LocalContext.current
     val openApp = actionStartActivity<MainActivity>()
-    val frame = GlanceModifier
+    val surface = GlanceModifier
         .fillMaxSize()
         .appWidgetBackground()
         .background(Palette.background)
         .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-        .padding(Padding)
+    val frame = surface.padding(Padding)
     when (val snapshot = model.snapshot) {
-        is WidgetSnapshot.Ready -> Row(frame) {
+        is WidgetSnapshot.Ready -> if (size.height < CompactBelow) {
+            Compact(snapshot, model, nowMs, openApp, surface.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp))
+        } else Row(frame) {
             val ringSize = min(StatusWidth, size.height - Padding * 2 - ButtonHeight - RowGap)
             if (snapshot.rows.isEmpty()) {
                 Column(
@@ -153,6 +161,143 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
     }
 }
 
+/** s4: one status line, the top foods as chips, an icon-only scan tile. */
+@Composable
+private fun Compact(snapshot: WidgetSnapshot.Ready, model: WidgetModel, nowMs: Long, scan: Action, modifier: GlanceModifier) {
+    val status = snapshot.status
+    Column(modifier) {
+        Row(GlanceModifier.height(22.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            MiniRing(status.energyFraction, Palette.accent)
+            Spacer(GlanceModifier.width(6.dp))
+            Text(
+                status.energyValueText,
+                style = TextStyle(color = Palette.onBackground, fontSize = 17.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+            Spacer(GlanceModifier.width(4.dp))
+            Text(
+                status.energyLabelText,
+                style = TextStyle(color = Palette.onBackgroundVariant, fontSize = 12.sp),
+                maxLines = 1,
+            )
+            Spacer(GlanceModifier.width(18.dp))
+            MiniRing(status.proteinFraction, Palette.protein)
+            Spacer(GlanceModifier.width(6.dp))
+            ProteinProgress(status.proteinCompactText, large = 17.sp)
+        }
+        Spacer(GlanceModifier.height(6.dp))
+        Row(GlanceModifier.fillMaxWidth()) {
+            val added = model.visibleAction(nowMs)
+            if (snapshot.rows.isEmpty()) {
+                Pill(
+                    icon = R.drawable.ql_ic_search,
+                    label = snapshot.labels.searchFood,
+                    background = Palette.row,
+                    content = Palette.onRow,
+                    fontSize = 14.sp,
+                    action = scan,
+                    modifier = GlanceModifier.defaultWeight(),
+                )
+            }
+            snapshot.rows.take(CompactChips).forEachIndexed { i, row ->
+                if (i > 0) Spacer(GlanceModifier.width(RowGap))
+                Box(GlanceModifier.defaultWeight()) {
+                    if (added?.foodKey == row.foodKey) {
+                        AddedChip(row, added, snapshot.labels.undo)
+                    } else {
+                        FoodChip(row, snapshot.profileId, logging = row.foodKey in model.inFlight)
+                    }
+                }
+            }
+            Spacer(GlanceModifier.width(RowGap))
+            Box(
+                GlanceModifier
+                    .size(ButtonHeight)
+                    .background(Palette.scan)
+                    .cornerRadius(16.dp)
+                    .clickable(scan),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.ql_ic_barcode),
+                    contentDescription = snapshot.labels.scanProduct,
+                    modifier = GlanceModifier.size(24.dp),
+                    colorFilter = ColorFilter.tint(Palette.onScan),
+                )
+            }
+        }
+    }
+}
+
+/** The whole chip is the pill: the 4×1 has room for one tap target per food. */
+@Composable
+private fun FoodChip(row: FoodRowData, profileId: String, logging: Boolean) {
+    Column(
+        GlanceModifier
+            .fillMaxWidth()
+            .height(ButtonHeight)
+            .background(Palette.row)
+            .cornerRadius(16.dp)
+            .padding(horizontal = 4.dp)
+            .clickable(actionRunCallback<LogPillAction>(actionParametersOf(FoodKeyParam to row.foodKey, ProfileIdParam to profileId))),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            row.title,
+            style = TextStyle(color = Palette.onRow, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+            maxLines = 1,
+        )
+        Spacer(GlanceModifier.height(3.dp))
+        ChipBadge(row.chipText, if (logging) Palette.proteinPending else Palette.protein, Palette.onProtein)
+    }
+}
+
+@Composable
+private fun AddedChip(row: FoodRowData, action: RecentAction, undoLabel: String) {
+    Column(
+        GlanceModifier
+            .fillMaxWidth()
+            .height(ButtonHeight)
+            .background(Palette.accent)
+            .cornerRadius(16.dp)
+            .padding(horizontal = 4.dp)
+            .clickable(
+                actionRunCallback<UndoAction>(
+                    actionParametersOf(OpIdParam to action.opId, ProfileIdParam to action.profileId),
+                ),
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            row.title,
+            style = TextStyle(color = Palette.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+            maxLines = 1,
+        )
+        Spacer(GlanceModifier.height(3.dp))
+        ChipBadge(undoLabel, Palette.onAccent, Palette.accent)
+    }
+}
+
+@Composable
+private fun ChipBadge(text: String, background: ColorProvider, content: ColorProvider) {
+    Box(
+        GlanceModifier
+            .height(16.dp)
+            .background(background)
+            .cornerRadius(8.dp)
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = TextStyle(color = content, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 private fun Rings(status: Status, size: Dp) {
     Box(GlanceModifier.size(size), contentAlignment = Alignment.Center) {
@@ -176,7 +321,7 @@ private fun Rings(status: Status, size: Dp) {
 
 /** "30/150 g" with the eaten part large, as in the mock. */
 @Composable
-private fun ProteinProgress(text: String) {
+private fun ProteinProgress(text: String, large: TextUnit = 16.sp) {
     val split = text.indexOf('/')
     val style = TextStyle(color = Palette.protein, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     if (split <= 0) {
@@ -186,7 +331,7 @@ private fun ProteinProgress(text: String) {
     Row(verticalAlignment = Alignment.Bottom) {
         Text(
             text.substring(0, split),
-            style = style.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
+            style = style.copy(fontSize = large, fontWeight = FontWeight.Bold),
             maxLines = 1,
         )
         Text(text.substring(split), style = style, maxLines = 1)
@@ -197,13 +342,28 @@ private fun ProteinProgress(text: String) {
 private fun RingImages(energyFraction: Float, proteinFraction: Float, size: Dp) {
     val context = LocalContext.current
     val px = remember(size) { (size.value * context.resources.displayMetrics.density).toInt().coerceAtLeast(1) }
-    val tracks = remember(px) { RingBitmap.tracks(px) }
-    val energy = remember(px, energyFraction) { RingBitmap.arc(px, RingBitmap.OUTER_RADIUS, energyFraction) }
-    val protein = remember(px, proteinFraction) { RingBitmap.arc(px, RingBitmap.INNER_RADIUS, proteinFraction) }
+    val rings = RingBitmap.CONCENTRIC
+    val tracks = remember(px) { RingBitmap.tracks(px, rings) }
+    val energy = remember(px, energyFraction) { RingBitmap.arc(px, rings, rings.radii[0], energyFraction) }
+    val protein = remember(px, proteinFraction) { RingBitmap.arc(px, rings, rings.radii[1], proteinFraction) }
     Box(GlanceModifier.size(size)) {
         RingLayer(tracks, Palette.track, size)
         RingLayer(energy, Palette.accent, size)
         RingLayer(protein, Palette.protein, size)
+    }
+}
+
+@Composable
+private fun MiniRing(fraction: Float, color: ColorProvider) {
+    val context = LocalContext.current
+    val size = 20.dp
+    val px = (size.value * context.resources.displayMetrics.density).toInt()
+    val ring = RingBitmap.MINI
+    val tracks = remember(px) { RingBitmap.tracks(px, ring) }
+    val arc = remember(px, fraction) { RingBitmap.arc(px, ring, ring.radii[0], fraction) }
+    Box(GlanceModifier.size(size)) {
+        RingLayer(tracks, Palette.track, size)
+        RingLayer(arc, color, size)
     }
 }
 
