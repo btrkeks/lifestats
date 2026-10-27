@@ -47,9 +47,12 @@ class QuickLogModelTest {
     @Test
     fun anExpiredActionIsNotDrawn() {
         val action = RecentAction("op", "name:quark", "default", "Added · +30 g", 1_000, 6_000)
-        val model = WidgetModel(WidgetSnapshot.None, action, emptySet())
+        val snapshot = WidgetSnapshot.parse(fixture) as WidgetSnapshot.Ready
+        val model = WidgetModel(snapshot, action, emptySet())
         assertEquals(action, model.visibleAction(5_999))
         assertNull(model.visibleAction(6_000))
+        assertNull(model.copy(snapshot = snapshot.copy(profileId = "other")).visibleAction(5_000))
+        assertNull(model.copy(snapshot = WidgetSnapshot.None).visibleAction(5_000))
         assertEquals(action, RecentAction.parse(action.toJson()))
         assertNull(RecentAction.parse("{}"))
     }

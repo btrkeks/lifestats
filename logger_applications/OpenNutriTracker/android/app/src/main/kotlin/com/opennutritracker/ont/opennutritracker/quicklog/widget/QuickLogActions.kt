@@ -1,0 +1,79 @@
+package com.opennutritracker.ont.opennutritracker.quicklog.widget
+
+import android.content.Context
+import android.util.Log
+import androidx.glance.GlanceId
+import androidx.glance.action.ActionParameters
+import androidx.glance.appwidget.action.ActionCallback
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogBridge
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogCommand
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogReply
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogStore
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogTimers
+import com.opennutritracker.ont.opennutritracker.quicklog.WidgetSnapshot
+import java.util.UUID
+
+private const val TAG = "QuickLogActions"
+
+val FoodKeyParam = ActionParameters.Key<String>("foodKey")
+val OpIdParam = ActionParameters.Key<String>("opId")
+val ProfileIdParam = ActionParameters.Key<String>("profileId")
+
+/**
+ * Undo lands where the pill was, so the second half of a double tap would
+ * otherwise undo the log the first half just made.
+ */
+private const val UNDO_ARM_MS = 600L
+
+class LogPillAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val foodKey = parameters[FoodKeyParam] ?: return
+        val profileId = parameters[ProfileIdParam] ?: return
+        val model = QuickLogStore.current(context)
+        val snapshot = model.snapshot as? WidgetSnapshot.Ready ?: return
+        if (snapshot.profileId != profileId) return
+        val row = model.row(foodKey) ?: return
+        // A second callback may arrive after the first write has already acked.
+        if (model.visibleAction(System.currentTimeMillis())?.foodKey == foodKey) return
+        if (!QuickLogStore.beginLog(context, foodKey)) {
+            Log.i(TAG, "log ignored: $foodKey already in flight")
+            return
+        }
+        try {
+            val opId = UUID.randomUUID().toString()
+            val command = QuickLogCommand.Log(
+                opId = opId,
+                foodKey = foodKey,
+                profileId = snapshot.profileId,
+                baseAmount = row.baseAmount,
+                unit = row.unit,
+                tappedAtMs = System.currentTimeMillis(),
+            )
+            val reply = QuickLogBridge.send(context, command)
+            if (reply is QuickLogReply.Ok && reply.addedText != null) {
+                val action = QuickLogStore.showAdded(context, opId, foodKey, snapshot.profileId, reply.addedText)
+                QuickLogTimers.scheduleUndoExpiry(context, opId, action.expiresAtMs)
+            }
+        } finally {
+            QuickLogStore.endLog(context, foodKey)
+        }
+    }
+}
+
+class UndoAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val opId = parameters[OpIdParam] ?: return
+        val profileId = parameters[ProfileIdParam] ?: return
+        val shown = QuickLogStore.current(context).recentAction?.takeIf { it.opId == opId }
+        if (shown != null && System.currentTimeMillis() - shown.shownAtMs < UNDO_ARM_MS) {
+            Log.i(TAG, "undo ignored: $UNDO_ARM_MS ms not yet passed since Added")
+            return
+        }
+        // Unavailable leaves the intake in place, so the row keeps its Undo
+        // for the rest of the window rather than claiming it was undone.
+        when (QuickLogBridge.send(context, QuickLogCommand.Undo(opId, profileId))) {
+            is QuickLogReply.Unavailable -> Unit
+            else -> QuickLogStore.clearAdded(context, opId)
+        }
+    }
+}

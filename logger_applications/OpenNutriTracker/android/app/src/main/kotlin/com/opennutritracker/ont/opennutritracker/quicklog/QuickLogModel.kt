@@ -164,7 +164,9 @@ data class WidgetModel(
      * every render, so a late expiry job only delays the repaint.
      */
     fun visibleAction(nowMs: Long): RecentAction? =
-        recentAction?.takeIf { it.expiresAtMs > nowMs }
+        recentAction?.takeIf {
+            it.expiresAtMs > nowMs && (snapshot as? WidgetSnapshot.Ready)?.profileId == it.profileId
+        }
 
     fun row(foodKey: String): Row? =
         (snapshot as? WidgetSnapshot.Ready)?.rows?.firstOrNull { it.foodKey == foodKey }

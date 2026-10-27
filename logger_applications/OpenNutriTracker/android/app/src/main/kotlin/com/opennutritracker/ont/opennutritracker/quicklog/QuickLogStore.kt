@@ -75,6 +75,7 @@ object QuickLogStore {
     ): RecentAction {
         val action = RecentAction(opId, foodKey, profileId, addedText, nowMs, nowMs + UNDO_WINDOW_MS)
         prefs(context).edit().putString(KEY_RECENT_ACTION, action.toJson()).commit()
+        Log.i(TAG, "added opId=$opId food=$foodKey expiresAtMs=${action.expiresAtMs}")
         update(context) { it.copy(recentAction = action) }
         return action
     }

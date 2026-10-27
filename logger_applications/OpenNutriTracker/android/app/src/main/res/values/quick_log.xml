@@ -1,0 +1,6 @@
+<resources>
+    <!-- Glance's list style hook applies to its generated RemoteViews layouts. -->
+    <style name="Glance.AppWidget.List" parent="">
+        <item name="android:scrollbars">none</item>
+    </style>
+</resources>

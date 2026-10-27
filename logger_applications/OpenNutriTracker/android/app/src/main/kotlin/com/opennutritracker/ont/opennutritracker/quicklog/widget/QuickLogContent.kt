@@ -16,8 +16,10 @@ import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.action.Action
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -42,6 +44,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.opennutritracker.ont.opennutritracker.MainActivity
 import com.opennutritracker.ont.opennutritracker.R
+import com.opennutritracker.ont.opennutritracker.quicklog.RecentAction
 import com.opennutritracker.ont.opennutritracker.quicklog.Row as FoodRowData
 import com.opennutritracker.ont.opennutritracker.quicklog.Status
 import com.opennutritracker.ont.opennutritracker.quicklog.WidgetModel
@@ -67,6 +70,7 @@ private object Palette {
     val onScan = pair(0xFF001F24, 0xFFBDEAF3)
     val track = pair(0xFFDDE5D9, 0xFF424940)
     val protein = ColorProvider(Color(0xFF2A8C82))
+    val proteinPending = ColorProvider(Color(0x992A8C82))
     val onProtein = ColorProvider(Color.White)
 }
 
@@ -120,9 +124,14 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
                 }
                 Spacer(GlanceModifier.width(ColumnGap))
                 LazyColumn(GlanceModifier.defaultWeight().fillMaxHeight()) {
+                    val added = model.visibleAction(nowMs)
                     items(snapshot.rows, itemId = { it.foodKey.hashCode().toLong() }) { row ->
                         Box(GlanceModifier.fillMaxWidth().padding(bottom = RowGap)) {
-                            FoodRow(row)
+                            if (added?.foodKey == row.foodKey) {
+                                AddedRow(row, added, snapshot.labels.undo)
+                            } else {
+                                FoodRow(row, snapshot.profileId, logging = row.foodKey in model.inFlight)
+                            }
                         }
                     }
                 }
@@ -209,7 +218,7 @@ private fun RingLayer(bitmap: Bitmap, color: ColorProvider, size: Dp) {
 }
 
 @Composable
-private fun FoodRow(row: FoodRowData) {
+private fun FoodRow(row: FoodRowData, profileId: String, logging: Boolean) {
     Row(
         GlanceModifier
             .fillMaxWidth()
@@ -250,13 +259,76 @@ private fun FoodRow(row: FoodRowData) {
             GlanceModifier
                 .width(PillWidth)
                 .height(32.dp)
-                .background(Palette.protein)
-                .cornerRadius(16.dp),
+                .background(if (logging) Palette.proteinPending else Palette.protein)
+                .cornerRadius(16.dp)
+                .clickable(actionRunCallback<LogPillAction>(actionParametersOf(FoodKeyParam to row.foodKey, ProfileIdParam to profileId))),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 row.pillText,
                 style = TextStyle(color = Palette.onProtein, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddedRow(row: FoodRowData, action: RecentAction, undoLabel: String) {
+    Row(
+        GlanceModifier
+            .fillMaxWidth()
+            .height(ButtonHeight)
+            .background(Palette.accent)
+            .cornerRadius(16.dp)
+            .padding(start = 14.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(GlanceModifier.defaultWeight()) {
+            Text(
+                row.title,
+                style = TextStyle(color = Palette.onAccent, fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                maxLines = 1,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    provider = ImageProvider(R.drawable.ql_ic_check),
+                    contentDescription = null,
+                    modifier = GlanceModifier.size(16.dp),
+                    colorFilter = ColorFilter.tint(Palette.onAccent),
+                )
+                Spacer(GlanceModifier.width(2.dp))
+                Text(
+                    action.addedText,
+                    style = TextStyle(color = Palette.onAccent, fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                    maxLines = 1,
+                )
+            }
+        }
+        Spacer(GlanceModifier.width(8.dp))
+        Row(
+            GlanceModifier
+                .height(34.dp)
+                .background(Palette.onAccent)
+                .cornerRadius(17.dp)
+                .padding(start = 8.dp, end = 11.dp)
+                .clickable(
+                    actionRunCallback<UndoAction>(
+                        actionParametersOf(OpIdParam to action.opId, ProfileIdParam to action.profileId),
+                    ),
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ql_ic_undo),
+                contentDescription = null,
+                modifier = GlanceModifier.size(18.dp),
+                colorFilter = ColorFilter.tint(Palette.accent),
+            )
+            Spacer(GlanceModifier.width(4.dp))
+            Text(
+                undoLabel,
+                style = TextStyle(color = Palette.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
         }
