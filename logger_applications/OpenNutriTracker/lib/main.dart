@@ -26,6 +26,7 @@ import 'package:opennutritracker/core/utils/sentry_config.dart';
 import 'package:opennutritracker/core/utils/notification_service.dart';
 import 'package:opennutritracker/core/utils/navigation_options.dart';
 import 'package:opennutritracker/core/utils/energy_unit_provider.dart';
+import 'package:opennutritracker/core/utils/engine_readiness.dart';
 import 'package:opennutritracker/core/utils/locale_provider.dart';
 import 'package:opennutritracker/core/utils/theme_mode_provider.dart';
 import 'package:opennutritracker/features/activity_detail/activity_detail_screen.dart';
@@ -77,9 +78,13 @@ Future<void> _bootstrapApp() async {
       error,
       stackTrace,
     );
+    unawaited(EngineReadiness.signalUnavailable('storage_integrity'));
     runApp(StorageRecoveryApp(errorCode: error.code, onRetry: _bootstrapApp));
     return;
   }
+  // Before the rest of main(): native work waiting on storage needs only
+  // initLocator, not notifications, Sentry or the first frame.
+  await EngineReadiness.signalReady();
 
   // Drop cached remote-search results that haven't been touched in 90
   // days. Done once per app start; no need to schedule a recurring task.

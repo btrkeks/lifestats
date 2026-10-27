@@ -2,21 +2,24 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:opennutritracker/core/utils/health_rationale_service.dart';
+import 'package:opennutritracker/core/utils/launch_request_service.dart';
 
 // #927: Health Connect asks the app to explain what it wants health data for
 // by starting it with one of two intents. The manifest declared both and
 // `MainActivity` ignored them, so the question was answered by dropping the
-// user on the diary. The channel tests pin the Dart contract; the manifest
+// user on the diary. The channel tests pin the Dart contract; the source
 // tests pin the halves that live outside Dart and cannot fail a compile.
 
-const _channel = MethodChannel('com.opennutritracker/health_rationale');
+const _channel = MethodChannel('com.opennutritracker/launch');
 
 /// The two actions, spelled exactly as Android delivers them. Duplicated here
 /// on purpose — a test that read them from the source it checks would agree
 /// with any typo.
 const _rationaleAction = 'androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE';
 const _permissionUsageAction = 'android.intent.action.VIEW_PERMISSION_USAGE';
+
+const _kotlinDir =
+    'android/app/src/main/kotlin/com/opennutritracker/ont/opennutritracker';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -35,39 +38,41 @@ void main() {
   setUp(calls.clear);
   tearDown(() => messenger.setMockMethodCallHandler(_channel, null));
 
-  group('HealthRationaleService', () {
-    test('reports a pending request', () async {
-      handleWith((_) async => true);
+  group('LaunchRequestService', () {
+    test('reports a pending health rationale request', () async {
+      handleWith((_) async => 'healthRationale');
 
-      expect(await HealthRationaleService.consumePendingRequest(), isTrue);
-      expect(calls.single.method, 'consumePendingRequest');
+      expect(
+        await LaunchRequestService.consume(),
+        LaunchRequest.healthRationale,
+      );
+      expect(calls.single.method, 'consume');
     });
 
     test('reports nothing pending on an ordinary launch', () async {
-      handleWith((_) async => false);
-
-      expect(await HealthRationaleService.consumePendingRequest(), isFalse);
-    });
-
-    // A null would mean the platform answered without a value. Opening the
-    // screen on that would put people on a settings page they never asked
-    // for, so the ambiguous answer has to read as "no".
-    test('treats a null answer as nothing pending', () async {
       handleWith((_) async => null);
 
-      expect(await HealthRationaleService.consumePendingRequest(), isFalse);
+      expect(await LaunchRequestService.consume(), isNull);
+    });
+
+    // A newer native side may record a request this build does not know.
+    // Acting on a guess would put people on a screen they never asked for.
+    test('ignores a request it does not recognise', () async {
+      handleWith((_) async => 'somethingNew');
+
+      expect(await LaunchRequestService.consume(), isNull);
     });
 
     // iOS, desktop and every widget test: no native side is registered. The
     // call must answer rather than throw into whatever is driving it.
-    test('answers no on a platform with no native side', () async {
-      expect(await HealthRationaleService.consumePendingRequest(), isFalse);
+    test('answers nothing on a platform with no native side', () async {
+      expect(await LaunchRequestService.consume(), isNull);
     });
 
-    test('answers no when the platform side fails', () async {
+    test('answers nothing when the platform side fails', () async {
       handleWith((_) async => throw PlatformException(code: 'error'));
 
-      expect(await HealthRationaleService.consumePendingRequest(), isFalse);
+      expect(await LaunchRequestService.consume(), isNull);
     });
   });
 
@@ -77,31 +82,36 @@ void main() {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',
     ).readAsStringSync();
-    final activity = File(
-      'android/app/src/main/kotlin/com/opennutritracker/ont/'
-      'opennutritracker/MainActivity.kt',
-    ).readAsStringSync();
+    final activity = File('$_kotlinDir/MainActivity.kt').readAsStringSync();
+    final inbox = File('$_kotlinDir/LaunchInbox.kt').readAsStringSync();
 
     test('the manifest offers both ways in', () {
       expect(manifest, contains(_rationaleAction));
       expect(manifest, contains(_permissionUsageAction));
     });
 
-    test('the activity reads both actions the manifest advertises', () {
-      // Declaring a filter the activity does not handle is precisely the bug
-      // in #927: the user reaches the app and no question gets answered.
+    test('the inbox reads both actions the manifest advertises', () {
+      // Declaring a filter nothing handles is precisely the bug in #927: the
+      // user reaches the app and no question gets answered.
       expect(
-        activity,
+        inbox,
         contains(_rationaleAction),
-        reason: 'manifest advertises the rationale action; MainActivity must '
+        reason:
+            'manifest advertises the rationale action; LaunchInbox must '
             'recognise it or the user lands on the diary',
       );
       expect(
-        activity,
+        inbox,
         contains(_permissionUsageAction),
-        reason: 'manifest advertises the permission-usage action; '
-            'MainActivity must recognise it',
+        reason:
+            'manifest advertises the permission-usage action; '
+            'LaunchInbox must recognise it',
       );
+      expect(inbox, contains('"${LaunchRequest.healthRationale.name}"'));
+    });
+
+    test('the activity hands the inbox both kinds of launch', () {
+      expect(activity, contains('LaunchInbox.offer(intent)'));
     });
 
     // singleTop means a running process is handed the intent through
@@ -112,7 +122,8 @@ void main() {
       expect(
         manifest,
         contains('android:launchMode="singleTop"'),
-        reason: 'the onNewIntent override below is only needed while this '
+        reason:
+            'the onNewIntent override below is only needed while this '
             'holds — if the launch mode changed, re-check the activity',
       );
       expect(activity, contains('onNewIntent'));

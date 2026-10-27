@@ -22,7 +22,7 @@ class NavigationOptions {
   static const accentColourRoute = "accentColour";
 
   /// Named rather than pushed directly because Health Connect can ask for this
-  /// screen from outside the app — see `HealthRationaleService` (#927).
+  /// screen from outside the app — see `LaunchRequestService` (#927).
   static const healthSyncRoute = "healthSync";
   static const manageProfilesRoute = "manageProfiles";
 }

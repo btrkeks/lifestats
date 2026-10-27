@@ -1,9 +1,7 @@
 package com.opennutritracker.ont.opennutritracker
 
-import android.app.LocaleManager
 import android.content.Intent
-import android.os.Build
-import android.os.LocaleList
+import android.os.Bundle
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -18,8 +16,6 @@ import kotlinx.coroutines.launch
 // health plugin: Health Connect permission requests go through
 // registerForActivityResult, which needs a ComponentActivity host.
 class MainActivity : FlutterFragmentActivity() {
-    private val localeChannelName = "com.opennutritracker/locale"
-    private val healthRationaleChannelName = "com.opennutritracker/health_rationale"
     private val healthConnectChannelName = "com.opennutritracker/health_connect"
 
     /**
@@ -28,43 +24,40 @@ class MainActivity : FlutterFragmentActivity() {
      * Main dispatcher because a MethodChannel result has to be posted from the
      * platform thread; the client's own reads move themselves off it. A
      * SupervisorJob so one failed import cannot cancel the scope and leave
-     * every later read dead, and cancelled in [onDestroy] so a read in flight
-     * when the activity goes away does not answer into a dead channel.
+     * every later read dead, and cancelled in [onDestroy] so no read outlives
+     * the activity it was started through.
      */
     private val healthConnectScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Before super: super creates the fragment, which looks the engine up
+        // by [getCachedEngineId]. The engine may already be running and
+        // reading the inbox on resume.
+        OntEngine.obtain(this)
+        // A restored activity carries the intent that first created its task,
+        // which is not a new request: re-offering it reopened the health
+        // screen every time the app came back after process death.
+        if (savedInstanceState == null) LaunchInbox.offer(intent)
+        super.onCreate(savedInstanceState)
+    }
+
     /**
-     * Whether Health Connect started us to ask what the app wants health data
-     * for, and Dart has not picked it up yet.
-     *
-     * A flag that Dart pulls, rather than a call pushed at Dart, because the
-     * intent is known in onCreate while the Flutter engine and the widget tree
-     * that has to react to it are not ready until later. Pushing would mean
-     * racing engine startup for the one launch that most needs to work.
+     * Attaches to the process engine instead of creating one. A cached engine
+     * rather than provideFlutterEngine: FlutterFragment.withNewEngine always
+     * destroys the engine with the fragment, even one the host provided,
+     * which killed Dart when the user backed out and crashed the next launch.
      */
-    private var healthRationalePending = false
+    override fun getCachedEngineId(): String = OntEngine.CACHE_ID
+
+    /**
+     * Dart outlives this activity: the engine may still be needed after the
+     * user backs out. Fixed rather than read from the launching intent's
+     * extra, which any app could set since this activity is exported.
+     */
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        // A cold start: the launching intent is the one held by the activity.
-        // Or-ing rather than assigning so an intent that arrived through
-        // onNewIntent while the engine was being rebuilt is not dropped.
-        healthRationalePending = healthRationalePending || isHealthRationaleIntent(intent)
-
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, healthRationaleChannelName)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    // Reading clears the flag: the request is a one-shot event,
-                    // and leaving it set would reopen the screen on every
-                    // resume for the rest of the session.
-                    "consumePendingRequest" -> {
-                        result.success(healthRationalePending)
-                        healthRationalePending = false
-                    }
-                    else -> result.notImplemented()
-                }
-            }
 
         // Finished workouts, read straight from Health Connect rather than
         // through the health plugin. See [HealthConnectWorkoutReader] for why:
@@ -96,11 +89,11 @@ class MainActivity : FlutterFragmentActivity() {
                                 )
                             } catch (e: CancellationException) {
                                 // The activity went away mid-read and
-                                // [onDestroy] cancelled the scope. Cancellation
-                                // is control flow, not a failure: rethrow it so
-                                // the coroutine actually ends, rather than
-                                // catching it below and answering a channel
-                                // whose engine is gone.
+                                // [onDestroy] cancelled the scope. The engine
+                                // outlives the activity, so Dart is still
+                                // awaiting this read: answer it as failed, then
+                                // rethrow so the coroutine actually ends.
+                                result.error("health_connect_unavailable", "cancelled", null)
                                 throw e
                             } catch (e: SecurityException) {
                                 // A revoked grant. Distinguished from the rest
@@ -117,30 +110,17 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
 
-        // Keeps the app's own language picker and Android's per-app language
-        // picker (Settings -> Apps -> OpenNutriTracker -> Language) telling
-        // the same story. Without this the OS picker is visible but inert for
-        // anyone who has ever chosen a language in the app, because Flutter
-        // reads its locale from our saved config rather than from the system.
-        //
-        // The framework LocaleManager is used rather than AppCompatDelegate:
-        // FlutterFragmentActivity extends FragmentActivity, not
-        // AppCompatActivity, so AppCompatDelegate.setApplicationLocales would
-        // silently do nothing. Below API 33 there is no OS picker to stay in
-        // step with, so both calls answer harmlessly and the in-app picker
-        // remains the only way to change language.
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, localeChannelName)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "getApplicationLocale" -> result.success(applicationLocaleTag())
-                    "setApplicationLocale" -> {
-                        setApplicationLocaleTag(call.argument<String?>("tag"))
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+    /**
+     * The engine survives this activity, and the handler above captures it
+     * through [healthConnectScope] and [applicationContext]. Left in place it
+     * would answer through a destroyed activity.
+     */
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, healthConnectChannelName)
+            .setMethodCallHandler(null)
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     /**
@@ -151,57 +131,11 @@ class MainActivity : FlutterFragmentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (isHealthRationaleIntent(intent)) {
-            healthRationalePending = true
-        }
+        LaunchInbox.offer(intent)
     }
 
     override fun onDestroy() {
         healthConnectScope.cancel()
         super.onDestroy()
-    }
-
-    /**
-     * Both actions declared for this activity in the manifest mean the same
-     * thing to a user: explain the health import. ACTION_SHOW_PERMISSIONS_RATIONALE
-     * comes from the grant dialog, VIEW_PERMISSION_USAGE from Health Connect's
-     * own settings for an app that already holds permissions.
-     *
-     * Matched as literals rather than through the Health Connect client's
-     * constants, so this file stays independent of the plugin's dependencies
-     * and can be read against the manifest side by side.
-     */
-    private fun isHealthRationaleIntent(intent: Intent?): Boolean =
-        when (intent?.action) {
-            ACTION_SHOW_PERMISSIONS_RATIONALE, ACTION_VIEW_PERMISSION_USAGE -> true
-            else -> false
-        }
-
-    /**
-     * The language the user picked in Android's settings, or null when they
-     * have not overridden it and the app should follow the system.
-     */
-    private fun applicationLocaleTag(): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
-        val locales = getSystemService(LocaleManager::class.java)?.applicationLocales
-        if (locales == null || locales.isEmpty) return null
-        return locales[0]?.toLanguageTag()
-    }
-
-    /**
-     * Records [tag] as the app's language with the OS. A null tag clears the
-     * override, which is what "System default" in our own picker means.
-     */
-    private fun setApplicationLocaleTag(tag: String?) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val localeManager = getSystemService(LocaleManager::class.java) ?: return
-        localeManager.applicationLocales =
-            if (tag.isNullOrEmpty()) LocaleList.getEmptyLocaleList()
-            else LocaleList.forLanguageTags(tag)
-    }
-
-    private companion object {
-        const val ACTION_SHOW_PERMISSIONS_RATIONALE = "androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"
-        const val ACTION_VIEW_PERMISSION_USAGE = "android.intent.action.VIEW_PERMISSION_USAGE"
     }
 }

@@ -4,6 +4,7 @@ import 'package:opennutritracker/core/l10n/app_locales.dart';
 import 'package:opennutritracker/core/data/repository/config_repository.dart';
 import 'package:opennutritracker/core/utils/app_locale_service.dart';
 import 'package:opennutritracker/core/utils/app_locale_sync.dart';
+import 'package:opennutritracker/core/utils/engine_readiness.dart';
 import 'package:opennutritracker/core/utils/demo/demo_seeder.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/core/utils/logger_config.dart';
@@ -30,6 +31,7 @@ Future<void> main() async {
   await initLocator();
 
   await seedDemoData(DemoSeedOptions.dev);
+  await EngineReadiness.signalReady();
 
   final configRepo = locator<ConfigRepository>();
   final config = await configRepo.getConfig();
