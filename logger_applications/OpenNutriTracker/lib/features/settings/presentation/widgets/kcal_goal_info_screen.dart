@@ -428,7 +428,8 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
-/// How the calorie goal splits into carb / fat / protein gram targets.
+/// How the macro gram targets follow: protein from body weight, carbs and
+/// fat from the calories protein leaves.
 class _MacroCard extends StatelessWidget {
   final KcalGoalBreakdownEntity breakdown;
 
@@ -437,57 +438,70 @@ class _MacroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
-    final goalKcal = breakdown.totalKcalGoal.toInt();
+    final b = breakdown;
+    final goalKcal = b.totalKcalGoal.toInt();
+    final weight = b.proteinReferenceWeightKg.toStringAsFixed(1);
+    final rawProtein = b.proteinGramsPerKg * b.proteinReferenceWeightKg;
+    final carbsPct = (b.carbsShareOfRemainder * 100).round();
+    // Shown as `(2500 − 150 × 4)` so the subtraction of protein's energy is
+    // visible in each line rather than as a separate intermediate.
+    final remainder =
+        '($goalKcal − ${b.proteinsGoalGrams.toInt()} × '
+        '${MacroCalc.proteinKcalPerGram.toStringAsFixed(0)})';
     return _SectionCard(
       title: l10n.kcalGoalInfoMacroSection,
       children: [
         Text(
-          l10n.kcalGoalInfoMacroExplanation,
+          l10n.kcalGoalInfoProteinExplanation,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: Dimens.spacing12),
+        _ValueRow(
+          label: l10n.kcalGoalInfoProteinWeightLabel,
+          value: '$weight ${l10n.kgLabel}',
+        ),
+        Text(
+          b.proteinWeightFromLog
+              ? l10n.kcalGoalInfoProteinWeightFromLog(
+                  b.proteinWeightSampleCount,
+                )
+              : l10n.kcalGoalInfoProteinWeightFromProfile,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: Dimens.spacing12),
         _FormulaText.raw(
-          text: '${l10n.carbsLabel}: '
-              '${_macroLine(goalKcal, breakdown.carbsFractionGoal, MacroCalc.carbsKcalPerGram, breakdown.carbsGoalGrams)}\n'
-              '${l10n.fatLabel}: '
-              '${_macroLine(goalKcal, breakdown.fatsFractionGoal, MacroCalc.fatKcalPerGram, breakdown.fatsGoalGrams)}\n'
+          // Grams truncate (not round) to match the dashboard's macro tiles;
+          // the protein goal is already a whole multiple of 5.
+          text:
               '${l10n.proteinLabel}: '
-              '${_macroLine(goalKcal, breakdown.proteinsFractionGoal, MacroCalc.proteinKcalPerGram, breakdown.proteinsGoalGrams)}',
+              '${b.proteinGramsPerKg.toStringAsFixed(1)} g/kg × $weight kg '
+              '= ${rawProtein.toStringAsFixed(1)} '
+              '→ ${b.proteinsGoalGrams.toInt()} g\n'
+              '${l10n.carbsLabel}: $remainder × $carbsPct % '
+              '÷ ${MacroCalc.carbsKcalPerGram.toStringAsFixed(0)} '
+              '= ${b.carbsGoalGrams.toInt()} g\n'
+              '${l10n.fatLabel}: $remainder × ${100 - carbsPct} % '
+              '÷ ${MacroCalc.fatKcalPerGram.toStringAsFixed(0)} '
+              '= ${b.fatsGoalGrams.toInt()} g',
         ),
         const Divider(height: Dimens.spacing20),
         _ValueRow(
+          label: l10n.proteinLabel,
+          value: '${b.proteinsGoalGrams.toInt()} g',
+          emphasized: true,
+        ),
+        _ValueRow(
           label: l10n.carbsLabel,
-          value: '${breakdown.carbsGoalGrams.toInt()} g',
+          value: '${b.carbsGoalGrams.toInt()} g',
           emphasized: true,
         ),
         _ValueRow(
           label: l10n.fatLabel,
-          value: '${breakdown.fatsGoalGrams.toInt()} g',
-          emphasized: true,
-        ),
-        _ValueRow(
-          label: l10n.proteinLabel,
-          value: '${breakdown.proteinsGoalGrams.toInt()} g',
+          value: '${b.fatsGoalGrams.toInt()} g',
           emphasized: true,
         ),
       ],
     );
-  }
-
-  /// One substituted line of the gram computation, e.g.
-  /// `2100 × 60 % ÷ 4 = 315 g`. Percentages are shown rounded the way the
-  /// macro-split dialog edits them; the gram result comes from the entity,
-  /// not from re-deriving it here.
-  String _macroLine(
-    int goalKcal,
-    double fraction,
-    double kcalPerGram,
-    double grams,
-  ) {
-    final pct = (fraction * 100).round();
-    final density = kcalPerGram.toStringAsFixed(0);
-    // Grams truncate (not round) to match the dashboard's macro tiles.
-    return '$goalKcal × $pct % ÷ $density = ${grams.toInt()} g';
   }
 }
 

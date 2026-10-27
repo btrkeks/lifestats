@@ -54,6 +54,12 @@ class ConfigDataSource {
       merged.userCarbGoalPct = profile.userCarbGoalPct;
       merged.userProteinGoalPct = profile.userProteinGoalPct;
       merged.userFatGoalPct = profile.userFatGoalPct;
+      merged.userProteinGramsPerKg = profile.userProteinGramsPerKg;
+      merged.lifestatsBaseUrl = profile.lifestatsBaseUrl;
+      merged.lifestatsLastSyncAt = profile.lifestatsLastSyncAt;
+      merged.lifestatsLastErrorAt = profile.lifestatsLastErrorAt;
+      merged.lifestatsLastError = profile.lifestatsLastError;
+      merged.lifestatsLastErrorStatus = profile.lifestatsLastErrorStatus;
       merged.mealKcalSharesPct = profile.mealKcalSharesPct;
       merged.dailyWaterGoalMl = profile.dailyWaterGoalMl;
       merged.healthImportEnabled = profile.healthImportEnabled;
@@ -70,6 +76,12 @@ class ConfigDataSource {
       merged.userCarbGoalPct = null;
       merged.userProteinGoalPct = null;
       merged.userFatGoalPct = null;
+      merged.userProteinGramsPerKg = null;
+      merged.lifestatsBaseUrl = null;
+      merged.lifestatsLastSyncAt = null;
+      merged.lifestatsLastErrorAt = null;
+      merged.lifestatsLastError = null;
+      merged.lifestatsLastErrorStatus = null;
       merged.mealKcalSharesPct = null;
       merged.dailyWaterGoalMl = null;
       merged.healthImportEnabled = null;
@@ -196,20 +208,53 @@ class ConfigDataSource {
     await _update((c) => c.userKcalAdjustment = kcalAdjustment);
   }
 
-  Future<void> setConfigCarbGoalPct(double carbGoalPct) async {
-    await _update((c) => c.userCarbGoalPct = carbGoalPct);
-  }
-
-  Future<void> setConfigProteinGoalPct(double proteinGoalPct) async {
-    await _update((c) => c.userProteinGoalPct = proteinGoalPct);
-  }
-
-  Future<void> setConfigFatGoalPct(double fatGoalPct) async {
-    await _update((c) => c.userFatGoalPct = fatGoalPct);
+  Future<void> setConfigMacroGoals({
+    required double carbGoalPct,
+    required double fatGoalPct,
+    required double proteinGramsPerKg,
+  }) async {
+    await _update((c) {
+      c.userCarbGoalPct = carbGoalPct;
+      c.userFatGoalPct = fatGoalPct;
+      c.userProteinGramsPerKg = proteinGramsPerKg;
+    });
   }
 
   Future<void> setConfigShowActivityTracking(bool show) async {
     await _update((c) => c.showActivityTracking = show);
+  }
+
+  /// Stores the Lifestats base URL (null turns sync off) and forgets the
+  /// previous server's sync status.
+  Future<void> setConfigLifestatsBaseUrl(String? baseUrl) async {
+    await _update((c) {
+      c.lifestatsBaseUrl = baseUrl;
+      c.lifestatsLastSyncAt = null;
+      c.lifestatsLastErrorAt = null;
+      c.lifestatsLastError = null;
+      c.lifestatsLastErrorStatus = null;
+    });
+  }
+
+  Future<void> setConfigLifestatsSyncSucceeded(DateTime at) async {
+    await _update((c) {
+      c.lifestatsLastSyncAt = at;
+      c.lifestatsLastErrorAt = null;
+      c.lifestatsLastError = null;
+      c.lifestatsLastErrorStatus = null;
+    });
+  }
+
+  Future<void> setConfigLifestatsSyncFailed(
+    DateTime at,
+    String error,
+    int? statusCode,
+  ) async {
+    await _update((c) {
+      c.lifestatsLastErrorAt = at;
+      c.lifestatsLastError = error;
+      c.lifestatsLastErrorStatus = statusCode;
+    });
   }
 
   Future<void> setConfigShowMealMacros(bool show) async {

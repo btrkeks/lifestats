@@ -56,15 +56,17 @@ class AddConfigUsecase {
     await _configRepository.setConfigKcalAdjustment(kcalAdjustment);
   }
 
-  Future<void> setConfigMacroGoalPct(
-    double carbGoalPct,
-    double proteinGoalPct,
-    double fatPctGoal,
-  ) async {
-    await _configRepository.setUserMacroPct(
-      carbGoalPct,
-      proteinGoalPct,
-      fatPctGoal,
+  /// Stores the carbs/fat ratio (as fractions, read only relative to each
+  /// other) and the protein goal in g per kg of body weight.
+  Future<void> setConfigMacroGoals({
+    required double carbGoalPct,
+    required double fatGoalPct,
+    required double proteinGramsPerKg,
+  }) async {
+    await _configRepository.setUserMacroGoals(
+      carbGoalPct: carbGoalPct,
+      fatGoalPct: fatGoalPct,
+      proteinGramsPerKg: proteinGramsPerKg,
     );
   }
 

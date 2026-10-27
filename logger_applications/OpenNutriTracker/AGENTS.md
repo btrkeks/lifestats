@@ -297,7 +297,7 @@ Named routes are defined in `NavigationOptions` and registered in `main.dart`. T
 
 | Box                            | DBO type / payload          | Purpose                                                              |
 | ------------------------------ | --------------------------- | -------------------------------------------------------------------- |
-| `ConfigBox`                    | `ConfigDBO`                 | App settings: theme, units, kcal adjustment, per-macro % goals       |
+| `ConfigBox`                    | `ConfigDBO`                 | App settings: theme, units, kcal adjustment, protein g/kg, carbs:fat |
 | `IntakeBox`                    | `IntakeDBO`                 | Meal log entries (links to `MealDBO`, typed by `IntakeTypeDBO`)      |
 | `UserActivityBox`              | `UserActivityDBO`           | Logged physical activities                                           |
 | `UserBox`                      | `UserDBO`                   | User profile: height, weight, birthday, gender, PAL, goal            |
@@ -330,7 +330,7 @@ Calculation utilities live in `lib/core/utils/calc/`:
 
 - **TDEE** — `TDEECalc.getTDEEKcalIOM2005()` (IOM 2005 gender-specific equation). A WHO 2001 formula exists but is unused.
 - **Calorie goal** — TDEE + weight-goal adjustment (±500 kcal) + optional user kcal offset + today's burned activity kcal.
-- **Macro defaults** — 60% carbs / 25% fat / 15% protein of total kcal goal. Per-macro overrides stored in `ConfigEntity`.
+- **Macro goals** — protein = g/kg (default 1.8) × 7-day mean weight from the weight log, else profile weight, rounded to 5 g (`ProteinGoalCalc`). Carbs and fat split the remaining kcal 60:25 by default. Burned activity kcal raise carbs and fat only. Overrides live in `ConfigEntity`.
 - **MET** — `MetCalc` converts MET × weight × hours to burned kcal for activities.
 
 ### Data export / import

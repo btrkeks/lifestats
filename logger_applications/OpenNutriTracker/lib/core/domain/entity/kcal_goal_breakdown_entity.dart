@@ -7,6 +7,7 @@ import 'package:opennutritracker/core/domain/entity/user_weight_goal_entity.dart
 import 'package:opennutritracker/core/utils/calc/calorie_goal_calc.dart';
 import 'package:opennutritracker/core/utils/calc/macro_calc.dart';
 import 'package:opennutritracker/core/utils/calc/pal_calc.dart';
+import 'package:opennutritracker/core/utils/calc/protein_goal_calc.dart';
 import 'package:opennutritracker/core/utils/calc/tdee_calc.dart';
 
 /// Snapshot of every variable and intermediate result that goes into the
@@ -59,13 +60,17 @@ class KcalGoalBreakdownEntity extends Equatable {
   /// equals [CalorieGoalCalc.getTotalKcalGoal] for the same inputs.
   final double totalKcalGoal;
 
-  // Macronutrient split derived from [totalKcalGoal]. The fractions are the
-  // effective ones — the user's custom split when set, otherwise the
-  // [MacroCalc] defaults (0.60 / 0.25 / 0.15) — and the gram goals come from
-  // the same [MacroCalc] calls the home screen uses.
-  final double carbsFractionGoal;
-  final double fatsFractionGoal;
-  final double proteinsFractionGoal;
+  // Macronutrient goals. Protein is [proteinGramsPerKg] ×
+  // [proteinReferenceWeightKg], rounded by [ProteinGoalCalc.goalGrams];
+  // [proteinWeightSampleCount] is how many weigh-ins were averaged into the
+  // weight (0 = the profile weight stood in). Carbs and fat split
+  // [nonProteinKcal], carbs taking [carbsShareOfRemainder]. All of it comes
+  // from the same calls [GetMacroGoalUsecase] makes.
+  final double proteinGramsPerKg;
+  final double proteinReferenceWeightKg;
+  final int proteinWeightSampleCount;
+  final double nonProteinKcal;
+  final double carbsShareOfRemainder;
   final double carbsGoalGrams;
   final double fatsGoalGrams;
   final double proteinsGoalGrams;
@@ -92,9 +97,11 @@ class KcalGoalBreakdownEntity extends Equatable {
     required this.manualKcalAdjustment,
     required this.activityKcal,
     required this.totalKcalGoal,
-    required this.carbsFractionGoal,
-    required this.fatsFractionGoal,
-    required this.proteinsFractionGoal,
+    required this.proteinGramsPerKg,
+    required this.proteinReferenceWeightKg,
+    required this.proteinWeightSampleCount,
+    required this.nonProteinKcal,
+    required this.carbsShareOfRemainder,
     required this.carbsGoalGrams,
     required this.fatsGoalGrams,
     required this.proteinsGoalGrams,
@@ -103,6 +110,9 @@ class KcalGoalBreakdownEntity extends Equatable {
   /// Whether the taper actually changed the adjustment for this snapshot.
   bool get taperChangedAdjustment =>
       taperEnabled && baseAdjustmentKcal != effectiveAdjustmentKcal;
+
+  /// Whether the protein goal used weigh-ins rather than the profile weight.
+  bool get proteinWeightFromLog => proteinWeightSampleCount > 0;
 
   /// Whether the averaged non-binary midpoint is in effect.
   bool get usesAveragedReference =>
@@ -114,7 +124,10 @@ class KcalGoalBreakdownEntity extends Equatable {
     required double totalKcalActivities,
     double? userCarbsGoalPct,
     double? userFatsGoalPct,
-    double? userProteinsGoalPct,
+    double? userProteinGramsPerKg,
+    // Null means no weigh-ins were looked at, e.g. during onboarding: the
+    // profile weight is used.
+    ProteinReferenceWeight? proteinReferenceWeight,
   }) {
     final palValue = PalCalc.getPALValueFromActivityCategory(user);
 
@@ -181,17 +194,26 @@ class KcalGoalBreakdownEntity extends Equatable {
       caloriesTaperEnabled: user.caloriesTaperEnabled,
     );
 
+    final referenceWeight =
+        proteinReferenceWeight ??
+        ProteinReferenceWeight(weightKg: user.weightKG, sampleCount: 0);
+    final gramsPerKg =
+        userProteinGramsPerKg ?? ProteinGoalCalc.defaultGramsPerKg;
+    final proteinsGrams = ProteinGoalCalc.goalGrams(
+      referenceWeight.weightKg,
+      gramsPerKg: gramsPerKg,
+    );
     final carbsGrams = MacroCalc.getTotalCarbsGoal(
       totalGoal,
+      proteinsGrams,
       userCarbsGoal: userCarbsGoalPct,
+      userFatsGoal: userFatsGoalPct,
     );
     final fatsGrams = MacroCalc.getTotalFatsGoal(
       totalGoal,
+      proteinsGrams,
+      userCarbsGoal: userCarbsGoalPct,
       userFatsGoal: userFatsGoalPct,
-    );
-    final proteinsGrams = MacroCalc.getTotalProteinsGoal(
-      totalGoal,
-      userProteinsGoal: userProteinsGoalPct,
     );
 
     return KcalGoalBreakdownEntity(
@@ -216,10 +238,14 @@ class KcalGoalBreakdownEntity extends Equatable {
       manualKcalAdjustment: userKcalAdjustment ?? 0,
       activityKcal: totalKcalActivities,
       totalKcalGoal: totalGoal,
-      carbsFractionGoal: userCarbsGoalPct ?? MacroCalc.defaultCarbsPercentageGoal,
-      fatsFractionGoal: userFatsGoalPct ?? MacroCalc.defaultFatsPercentageGoal,
-      proteinsFractionGoal:
-          userProteinsGoalPct ?? MacroCalc.defaultProteinsPercentageGoal,
+      proteinGramsPerKg: gramsPerKg,
+      proteinReferenceWeightKg: referenceWeight.weightKg,
+      proteinWeightSampleCount: referenceWeight.sampleCount,
+      nonProteinKcal: MacroCalc.kcalLeftAfterProtein(totalGoal, proteinsGrams),
+      carbsShareOfRemainder: MacroCalc.carbsShareOfRemainder(
+        userCarbsGoal: userCarbsGoalPct,
+        userFatsGoal: userFatsGoalPct,
+      ),
       carbsGoalGrams: carbsGrams,
       fatsGoalGrams: fatsGrams,
       proteinsGoalGrams: proteinsGrams,
@@ -249,9 +275,11 @@ class KcalGoalBreakdownEntity extends Equatable {
     manualKcalAdjustment,
     activityKcal,
     totalKcalGoal,
-    carbsFractionGoal,
-    fatsFractionGoal,
-    proteinsFractionGoal,
+    proteinGramsPerKg,
+    proteinReferenceWeightKg,
+    proteinWeightSampleCount,
+    nonProteinKcal,
+    carbsShareOfRemainder,
     carbsGoalGrams,
     fatsGoalGrams,
     proteinsGoalGrams,

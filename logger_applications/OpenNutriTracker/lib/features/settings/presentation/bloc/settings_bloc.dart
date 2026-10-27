@@ -12,6 +12,7 @@ import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart'
 import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/utils/app_const.dart';
+import 'package:opennutritracker/core/utils/calc/protein_goal_calc.dart';
 
 part 'settings_event.dart';
 
@@ -204,10 +205,15 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     return config.userCarbGoalPct;
   }
 
-  Future<double?> getUserProteinGoalPct() async {
+  Future<double?> getUserProteinGramsPerKg() async {
     final config = await _getConfigUsecase.getConfig();
-    return config.userProteinGoalPct;
+    return config.userProteinGramsPerKg;
   }
+
+  /// The body weight the protein goal is scaled from today, so the macro
+  /// dialog can preview the gram goal a g/kg factor gives.
+  Future<ProteinReferenceWeight> getProteinReferenceWeight() =>
+      _getMacroGoalUsecase.getProteinReferenceWeight();
 
   Future<double?> getUserFatGoalPct() async {
     final config = await _getConfigUsecase.getConfig();
@@ -227,15 +233,16 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     await _addConfigUsecase.setConfigDailyWaterGoalMl(goalMl);
   }
 
-  Future<void> setMacroGoals(
-    double carbGoalPct,
-    double proteinGoalPct,
-    double fatGoalPct,
-  ) async {
-    await _addConfigUsecase.setConfigMacroGoalPct(
-      carbGoalPct.toInt() / 100,
-      proteinGoalPct.toInt() / 100,
-      fatGoalPct.toInt() / 100,
+  /// [carbsSharePct] is carbs' whole-percent share of the calories left
+  /// after protein; fat takes the rest.
+  Future<void> setMacroGoals({
+    required int carbsSharePct,
+    required double proteinGramsPerKg,
+  }) async {
+    await _addConfigUsecase.setConfigMacroGoals(
+      carbGoalPct: carbsSharePct / 100,
+      fatGoalPct: (100 - carbsSharePct) / 100,
+      proteinGramsPerKg: proteinGramsPerKg,
     );
   }
 

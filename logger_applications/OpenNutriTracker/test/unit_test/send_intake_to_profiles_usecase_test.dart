@@ -8,6 +8,7 @@ import 'package:opennutritracker/core/data/dbo/user_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/user_gender_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/user_pal_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/user_weight_goal_dbo.dart';
+import 'package:opennutritracker/core/data/dbo/weight_log_dbo.dart';
 import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/entity/profile_entity.dart';
@@ -57,6 +58,7 @@ void main() {
   late Box<UserDBO> userBox;
   late Box<ConfigDBO> configBox;
   late Box<UserActivityDBO> activityBox;
+  late Box<WeightLogDBO> weightLogBox;
   late SendIntakeToProfilesUsecase sut;
   late _TestHiveDBProvider provider;
 
@@ -69,6 +71,7 @@ void main() {
     userBox = await Hive.openBox<UserDBO>('send_user_$tag');
     configBox = await Hive.openBox<ConfigDBO>('send_config_$tag');
     activityBox = await Hive.openBox<UserActivityDBO>('send_activity_$tag');
+    weightLogBox = await Hive.openBox<WeightLogDBO>('send_weight_$tag');
 
     // The target profile must be set up (have user data) for a copy to land.
     await userBox.put(
@@ -90,6 +93,7 @@ void main() {
       HiveDBProvider.userBoxName: userBox,
       HiveDBProvider.configBoxName: configBox,
       HiveDBProvider.userActivityBoxName: activityBox,
+      HiveDBProvider.weightLogBoxName: weightLogBox,
     });
     sut = SendIntakeToProfilesUsecase(provider);
   });
@@ -161,6 +165,26 @@ void main() {
     expect(trackedDayBox.values.first.caloriesTracked, 200);
   });
 
+  test('seeds the protein goal from the target profile\'s weight', () async {
+    final now = DateTime.now();
+    await weightLogBox.put(
+      'today',
+      WeightLogDBO(date: DateTime(now.year, now.month, now.day), weightKg: 60),
+    );
+    final target = ProfileEntity(
+      id: 'target',
+      name: 'Target',
+      createdAt: DateTime(2026, 1, 1),
+      boxSuffix: 'target',
+    );
+
+    await sut.copyToProfiles([buildIntake()], [target]);
+
+    // The target's own weigh-in, not its 70 kg profile weight:
+    // 1.8 × 60 = 108 → 110 g.
+    expect(trackedDayBox.values.first.proteinGoal, 110);
+  });
+
   test('skips a target profile that has no user data', () async {
     await userBox.delete('UserKey');
 
@@ -200,6 +224,7 @@ void main() {
       (HiveDBProvider.userBoxName, 'target'),
       (HiveDBProvider.configBoxName, 'target'),
       (HiveDBProvider.userActivityBoxName, 'target'),
+      (HiveDBProvider.weightLogBoxName, 'target'),
     });
   });
 
@@ -222,6 +247,7 @@ void main() {
         (HiveDBProvider.userBoxName, 'target'),
         (HiveDBProvider.configBoxName, 'target'),
         (HiveDBProvider.userActivityBoxName, 'target'),
+        (HiveDBProvider.weightLogBoxName, 'target'),
       });
     },
   );

@@ -153,16 +153,14 @@ class ActivityDetailBloc
       );
     }
 
-    final carbsIncrease = MacroCalc.getTotalCarbsGoal(caloriesBurned);
-    final fatIncrease = MacroCalc.getTotalFatsGoal(caloriesBurned);
-    final proteinIncrease = MacroCalc.getTotalProteinsGoal(caloriesBurned);
+    final carbsIncrease = MacroCalc.getActivityCarbsIncrease(caloriesBurned);
+    final fatIncrease = MacroCalc.getActivityFatsIncrease(caloriesBurned);
 
     _addTrackedDayUsecase.increaseDayCalorieGoal(day, caloriesBurned);
     _addTrackedDayUsecase.increaseDayMacroGoals(
       day,
       carbsAmount: carbsIncrease,
       fatAmount: fatIncrease,
-      proteinAmount: proteinIncrease,
     );
   }
 }

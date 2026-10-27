@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:opennutritracker/core/data/repository/config_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_activity_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_repository.dart';
+import 'package:opennutritracker/core/data/repository/weight_log_repository.dart';
 import 'package:opennutritracker/core/domain/entity/app_theme_entity.dart';
 import 'package:opennutritracker/core/domain/entity/config_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_activity_entity.dart';
@@ -9,8 +10,10 @@ import 'package:opennutritracker/core/domain/entity/user_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_gender_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_pal_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_weight_goal_entity.dart';
+import 'package:opennutritracker/core/domain/entity/weight_log_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_breakdown_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
 import 'package:opennutritracker/core/utils/calc/day_boundary_calc.dart';
 
 import '../fixture/physical_activity_entity_fixtures.dart';
@@ -71,6 +74,15 @@ class _RecordingUserActivityRepository extends Fake
         )
         .toList();
   }
+}
+
+class _FakeWeightLogRepository extends Fake implements WeightLogRepository {
+  final List<WeightLogEntity> entries;
+
+  _FakeWeightLogRepository(this.entries);
+
+  @override
+  Future<List<WeightLogEntity>> getAllEntries() async => entries;
 }
 
 void main() {
@@ -134,7 +146,25 @@ void main() {
       userRepo,
       configRepo,
       activityRepo,
+      GetMacroGoalUsecase(
+        configRepo,
+        userRepo,
+        // The 13th opens the 7-day window ending on the logical 19th; the
+        // wall-clock 20th is still in the future for the protein goal.
+        _FakeWeightLogRepository([
+          WeightLogEntity(date: DateTime(2026, 7, 13), weightKg: 73.0),
+          WeightLogEntity(date: DateTime(2026, 7, 20), weightKg: 99.0),
+        ]),
+      ),
     );
+  });
+
+  test('the protein reference weight averages the logical day\'s window',
+      () async {
+    final breakdown = await breakdownUsecase.getBreakdown();
+
+    expect(breakdown.proteinWeightSampleCount, 1);
+    expect(breakdown.proteinReferenceWeightKg, 73.0);
   });
 
   test('the kcal goal asks for the logical day, not the wall-clock one',

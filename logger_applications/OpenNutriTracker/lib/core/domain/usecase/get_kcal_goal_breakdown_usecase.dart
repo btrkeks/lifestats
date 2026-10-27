@@ -3,22 +3,26 @@ import 'package:opennutritracker/core/data/repository/config_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_activity_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_repository.dart';
 import 'package:opennutritracker/core/domain/entity/kcal_goal_breakdown_entity.dart';
+import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
 import 'package:opennutritracker/core/utils/calc/day_boundary_calc.dart';
 
 /// Assembles the full transparency breakdown of today's kcal goal.
 ///
 /// Inputs are fetched exactly the way [GetKcalGoalUsecase] fetches them
-/// (same repositories, same activity date) so the breakdown's total always
-/// matches the goal shown on the home screen.
+/// (same repositories, same activity date), and the protein reference
+/// weight comes from [GetMacroGoalUsecase] itself, so the breakdown always
+/// matches the goals shown on the home screen.
 class GetKcalGoalBreakdownUsecase {
   final UserRepository _userRepository;
   final ConfigRepository _configRepository;
   final UserActivityRepository _userActivityRepository;
+  final GetMacroGoalUsecase _getMacroGoalUsecase;
 
   GetKcalGoalBreakdownUsecase(
     this._userRepository,
     this._configRepository,
     this._userActivityRepository,
+    this._getMacroGoalUsecase,
   );
 
   Future<KcalGoalBreakdownEntity> getBreakdown() async {
@@ -42,7 +46,9 @@ class GetKcalGoalBreakdownUsecase {
       totalKcalActivities: totalKcalActivities,
       userCarbsGoalPct: config.userCarbGoalPct,
       userFatsGoalPct: config.userFatGoalPct,
-      userProteinsGoalPct: config.userProteinGoalPct,
+      userProteinGramsPerKg: config.userProteinGramsPerKg,
+      proteinReferenceWeight: await _getMacroGoalUsecase
+          .getProteinReferenceWeight(),
     );
   }
 }

@@ -10,15 +10,18 @@ import 'package:opennutritracker/core/data/data_source/tracked_day_data_source.d
 import 'package:opennutritracker/core/data/data_source/user_activity_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/user_activity_dbo.dart';
 import 'package:opennutritracker/core/data/data_source/user_data_source.dart';
+import 'package:opennutritracker/core/data/data_source/weight_log_data_source.dart';
 import 'package:opennutritracker/core/data/dbo/config_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/tracked_day_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/user_dbo.dart';
+import 'package:opennutritracker/core/data/dbo/weight_log_dbo.dart';
 import 'package:opennutritracker/core/data/repository/config_repository.dart';
 import 'package:opennutritracker/core/data/repository/health_import_repository.dart';
 import 'package:opennutritracker/core/data/repository/physical_activity_repository.dart';
 import 'package:opennutritracker/core/data/repository/tracked_day_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_activity_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_repository.dart';
+import 'package:opennutritracker/core/data/repository/weight_log_repository.dart';
 import 'package:opennutritracker/core/domain/entity/physical_activity_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_activity_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
@@ -100,6 +103,7 @@ void main() {
   late Box<UserActivityDBO> activityBox;
   late Box<TrackedDayDBO> trackedDayBox;
   late Box<UserDBO> userBox;
+  late Box<WeightLogDBO> weightLogBox;
 
   late ConfigDataSource configDataSource;
   late ConfigRepository configRepository;
@@ -127,6 +131,9 @@ void main() {
       'health_import_tracked_day_test',
     );
     userBox = await Hive.openBox<UserDBO>('health_import_user_test');
+    weightLogBox = await Hive.openBox<WeightLogDBO>(
+      'health_import_weight_log_test',
+    );
     // Explicit rather than relying on the teardown's delete: a box that
     // survives into the next test carries a watermark and an already-imported
     // record with it, which is precisely what these tests are checking.
@@ -134,6 +141,7 @@ void main() {
     await activityBox.clear();
     await trackedDayBox.clear();
     await userBox.clear();
+    await weightLogBox.clear();
 
     provider = FakeHiveDBProvider(
       activeProfileId: 'profile-a',
@@ -141,6 +149,7 @@ void main() {
       userActivityBox: activityBox,
       trackedDayBox: trackedDayBox,
       userBox: userBox,
+      weightLogBox: weightLogBox,
     );
 
     configDataSource = ConfigDataSource(provider);
@@ -161,7 +170,11 @@ void main() {
       configRepository,
       userActivityRepository,
     );
-    getMacroGoalUsecase = GetMacroGoalUsecase(configRepository);
+    getMacroGoalUsecase = GetMacroGoalUsecase(
+      configRepository,
+      userRepository,
+      WeightLogRepository(WeightLogDataSource(provider)),
+    );
 
     healthService = _FakeHealthService();
     usecase = ImportWorkoutsUsecase(
@@ -226,23 +239,23 @@ void main() {
         expect(trackedDay!.calorieGoal, closeTo(baseKcalGoal + 500, 0.001));
         expect(
           trackedDay.carbsGoal,
-          closeTo(baseCarbsGoal + MacroCalc.getTotalCarbsGoal(500), 0.001),
+          closeTo(
+            baseCarbsGoal + MacroCalc.getActivityCarbsIncrease(500),
+            0.001,
+          ),
         );
         expect(
           trackedDay.fatGoal,
           closeTo(
             await getMacroGoalUsecase.getFatsGoal(baseKcalGoal) +
-                MacroCalc.getTotalFatsGoal(500),
+                MacroCalc.getActivityFatsIncrease(500),
             0.001,
           ),
         );
+        // Burned energy doesn't raise protein: it follows body weight.
         expect(
           trackedDay.proteinGoal,
-          closeTo(
-            await getMacroGoalUsecase.getProteinsGoal(baseKcalGoal) +
-                MacroCalc.getTotalProteinsGoal(500),
-            0.001,
-          ),
+          await getMacroGoalUsecase.getProteinsGoal(baseKcalGoal),
         );
       },
     );

@@ -27,6 +27,7 @@ import 'package:opennutritracker/core/domain/usecase/get_profiles_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/update_profile_usecase.dart';
 import 'package:opennutritracker/core/utils/calc/calorie_goal_calc.dart';
 import 'package:opennutritracker/core/utils/calc/macro_calc.dart';
+import 'package:opennutritracker/core/utils/calc/protein_goal_calc.dart';
 import 'package:opennutritracker/core/utils/calc/met_calc.dart';
 import 'package:opennutritracker/core/utils/demo/demo_content.dart';
 import 'package:opennutritracker/core/utils/demo/unsplash_attribution.dart';
@@ -138,17 +139,23 @@ Future<void> seedDemoData(DemoSeedOptions options) async {
     kcalUserAdjustment: config.userKcalAdjustment,
     caloriesTaperEnabled: user.caloriesTaperEnabled,
   );
+  // Profile weight, not the weight log: the seeded log is synthetic noise
+  // around it, and the base goal is computed once for every day anyway.
+  final baseProteinGoal = ProteinGoalCalc.goalGrams(
+    user.weightKG,
+    gramsPerKg: config.userProteinGramsPerKg,
+  );
   final baseCarbsGoal = MacroCalc.getTotalCarbsGoal(
     baseKcalGoal,
+    baseProteinGoal,
     userCarbsGoal: config.userCarbGoalPct,
+    userFatsGoal: config.userFatGoalPct,
   );
   final baseFatGoal = MacroCalc.getTotalFatsGoal(
     baseKcalGoal,
+    baseProteinGoal,
+    userCarbsGoal: config.userCarbGoalPct,
     userFatsGoal: config.userFatGoalPct,
-  );
-  final baseProteinGoal = MacroCalc.getTotalProteinsGoal(
-    baseKcalGoal,
-    userProteinsGoal: config.userProteinGoalPct,
   );
 
   final intakeDBOs = <IntakeDBO>[];
@@ -182,14 +189,13 @@ Future<void> seedDemoData(DemoSeedOptions options) async {
     }
 
     // Mirrors ActivityDetailBloc._updateTrackedDay: burned activity kcal
-    // raises the day's calorie (and proportional macro) headroom.
+    // raises the day's calorie, carbs and fat headroom.
     final dayKcalGoal = baseKcalGoal + activityBurnedKcal;
     final dayCarbsGoal =
-        baseCarbsGoal + MacroCalc.getTotalCarbsGoal(activityBurnedKcal);
+        baseCarbsGoal + MacroCalc.getActivityCarbsIncrease(activityBurnedKcal);
     final dayFatGoal =
-        baseFatGoal + MacroCalc.getTotalFatsGoal(activityBurnedKcal);
-    final dayProteinGoal =
-        baseProteinGoal + MacroCalc.getTotalProteinsGoal(activityBurnedKcal);
+        baseFatGoal + MacroCalc.getActivityFatsIncrease(activityBurnedKcal);
+    final dayProteinGoal = baseProteinGoal;
 
     // The most recent [guaranteedStreakDays] are always on-track,
     // guaranteeing a current streak of that length (Trends' "current"

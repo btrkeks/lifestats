@@ -8,6 +8,7 @@ import 'package:opennutritracker/core/domain/entity/user_gender_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_pal_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_weight_goal_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_breakdown_usecase.dart';
+import 'package:opennutritracker/core/utils/calc/protein_goal_calc.dart';
 import 'package:opennutritracker/core/utils/energy_unit_provider.dart';
 import 'package:opennutritracker/features/settings/presentation/widgets/kcal_goal_info_screen.dart';
 import 'package:opennutritracker/generated/l10n.dart';
@@ -105,7 +106,9 @@ void main() {
 
       expect(find.text('30 years'), findsOneWidget);
       expect(find.text('180 cm'), findsOneWidget);
-      expect(find.text('80.0 kg'), findsOneWidget);
+      // Twice: the inputs card and, with no weigh-ins, the protein card's
+      // body weight.
+      expect(find.text('80.0 kg'), findsNWidgets(2));
       expect(find.text('Active'), findsWidgets);
       expect(find.text('Lose Weight'), findsOneWidget);
     });
@@ -164,15 +167,29 @@ void main() {
     ) async {
       await _pump(tester, maleBreakdown());
 
-      // Carbs: 3134.98 × 0.60 ÷ 4 = 470.25 → 470 g (truncated, like the
-      // dashboard tiles). Fat: ×0.25 ÷ 9 = 87.08 → 87 g.
-      // Protein: ×0.15 ÷ 4 = 117.56 → 117 g.
-      expect(find.textContaining('3134 × 60 % ÷ 4 = 470 g'), findsOneWidget);
-      expect(find.textContaining('3134 × 25 % ÷ 9 = 87 g'), findsOneWidget);
-      expect(find.textContaining('3134 × 15 % ÷ 4 = 117 g'), findsOneWidget);
-      expect(find.text('470 g'), findsOneWidget);
-      expect(find.text('87 g'), findsOneWidget);
-      expect(find.text('117 g'), findsOneWidget);
+      // Protein: 1.8 g/kg × 80 kg profile weight = 144 → 145 g.
+      // That leaves 3134.98 − 580 = 2554.98 kcal, split 60:25.
+      // Carbs: × 0.706 ÷ 4 = 450.88 → 450 g (truncated, like the dashboard
+      // tiles). Fat: × 0.294 ÷ 9 = 83.50 → 83 g.
+      expect(
+        find.textContaining('1.8 g/kg × 80.0 kg = 144.0 → 145 g'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('(3134 − 145 × 4) × 71 % ÷ 4 = 450 g'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('(3134 − 145 × 4) × 29 % ÷ 9 = 83 g'),
+        findsOneWidget,
+      );
+      expect(find.text('145 g'), findsOneWidget);
+      expect(find.text('450 g'), findsOneWidget);
+      expect(find.text('83 g'), findsOneWidget);
+      expect(
+        find.text(l10nEn.kcalGoalInfoProteinWeightFromProfile),
+        findsOneWidget,
+      );
     });
 
     testWidgets('kJ mode converts summary rows but keeps the formula in kcal', (
@@ -270,7 +287,7 @@ void main() {
       );
     });
 
-    testWidgets('custom macro split is rendered with its own percentages', (
+    testWidgets('custom factor, weigh-ins and ratio are rendered', (
       tester,
     ) async {
       final breakdown = KcalGoalBreakdownEntity.compute(
@@ -278,13 +295,25 @@ void main() {
         totalKcalActivities: 0,
         userCarbsGoalPct: 0.4,
         userFatsGoalPct: 0.3,
-        userProteinsGoalPct: 0.3,
+        userProteinGramsPerKg: 2.2,
+        proteinReferenceWeight: const ProteinReferenceWeight(
+          weightKg: 76.4,
+          sampleCount: 3,
+        ),
       );
       await _pump(tester, breakdown);
 
-      expect(find.textContaining('× 40 % ÷ 4'), findsOneWidget);
-      expect(find.textContaining('× 30 % ÷ 9'), findsOneWidget);
-      expect(find.textContaining('× 30 % ÷ 4'), findsOneWidget);
+      // 2.2 × 76.4 = 168.08 → 170 g; carbs take 40 / 70 = 57 % of the rest.
+      expect(
+        find.textContaining('2.2 g/kg × 76.4 kg = 168.1 → 170 g'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('× 57 % ÷ 4'), findsOneWidget);
+      expect(find.textContaining('× 43 % ÷ 9'), findsOneWidget);
+      expect(
+        find.text(l10nEn.kcalGoalInfoProteinWeightFromLog(3)),
+        findsOneWidget,
+      );
     });
   });
 }

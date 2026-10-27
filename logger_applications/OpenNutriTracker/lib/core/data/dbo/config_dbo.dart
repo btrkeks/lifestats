@@ -22,6 +22,9 @@ class ConfigDBO extends HiveObject {
   double? userKcalAdjustment;
   @HiveField(6)
   double? userCarbGoalPct;
+  // Legacy: protein's share of the kcal goal. The protein goal now follows
+  // body weight ([userProteinGramsPerKg]); this is no longer read or written
+  // and stays only so older records keep deserialising.
   @HiveField(7)
   double? userProteinGoalPct;
   @HiveField(8)
@@ -187,6 +190,28 @@ class ConfigDBO extends HiveObject {
   // user opts out, matching every install that predates the field.
   @HiveField(39)
   bool? defaultToRawFoodUnits;
+  // Daily protein goal in grams per kg of body weight. Null means the
+  // default (ProteinGoalCalc.defaultGramsPerKg). Personal, like the other
+  // macro goals.
+  @HiveField(40)
+  double? userProteinGramsPerKg;
+  // Base URL of the user's Lifestats server (e.g. http://100.64.0.1:3000).
+  // Null or empty turns Lifestats sync off. Personal: the weight it brings
+  // in belongs to one profile.
+  @HiveField(41)
+  String? lifestatsBaseUrl;
+  // When a Lifestats sync last succeeded.
+  @HiveField(42)
+  DateTime? lifestatsLastSyncAt;
+  // The last failed sync since the last success: when, why
+  // (`LifestatsErrorKind` name) and, for HTTP errors, the status. Cleared
+  // by the next success.
+  @HiveField(43)
+  DateTime? lifestatsLastErrorAt;
+  @HiveField(44)
+  String? lifestatsLastError;
+  @HiveField(45)
+  int? lifestatsLastErrorStatus;
 
   ConfigDBO(
     this.hasAcceptedDisclaimer,
@@ -226,6 +251,12 @@ class ConfigDBO extends HiveObject {
     this.policyNoticeRevisionSeen,
     this.healthDeletedWorkouts,
     this.defaultToRawFoodUnits,
+    this.userProteinGramsPerKg,
+    this.lifestatsBaseUrl,
+    this.lifestatsLastSyncAt,
+    this.lifestatsLastErrorAt,
+    this.lifestatsLastError,
+    this.lifestatsLastErrorStatus,
   });
 
   factory ConfigDBO.empty() =>

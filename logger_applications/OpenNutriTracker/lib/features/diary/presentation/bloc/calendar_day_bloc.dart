@@ -216,9 +216,10 @@ class CalendarDayBloc extends Bloc<CalendarDayEvent, CalendarDayState> {
     await _deleteUserActivityUsecase.deleteUserActivity(activityEntity);
     _addTrackedDayUsecase.reduceDayCalorieGoal(day, activityEntity.burnedKcal);
 
-    final carbsAmount = MacroCalc.getTotalCarbsGoal(activityEntity.burnedKcal);
-    final fatAmount = MacroCalc.getTotalFatsGoal(activityEntity.burnedKcal);
-    final proteinAmount = MacroCalc.getTotalProteinsGoal(
+    final carbsAmount = MacroCalc.getActivityCarbsIncrease(
+      activityEntity.burnedKcal,
+    );
+    final fatAmount = MacroCalc.getActivityFatsIncrease(
       activityEntity.burnedKcal,
     );
 
@@ -226,7 +227,6 @@ class CalendarDayBloc extends Bloc<CalendarDayEvent, CalendarDayState> {
       day,
       carbsAmount: carbsAmount,
       fatAmount: fatAmount,
-      proteinAmount: proteinAmount,
     );
     _updateDiaryPage(day);
   }
@@ -246,17 +246,15 @@ class CalendarDayBloc extends Bloc<CalendarDayEvent, CalendarDayState> {
       await _addTrackedDayUsecase.increaseDayCalorieGoal(day, kcalDiff);
       await _addTrackedDayUsecase.increaseDayMacroGoals(
         day,
-        carbsAmount: MacroCalc.getTotalCarbsGoal(kcalDiff),
-        fatAmount: MacroCalc.getTotalFatsGoal(kcalDiff),
-        proteinAmount: MacroCalc.getTotalProteinsGoal(kcalDiff),
+        carbsAmount: MacroCalc.getActivityCarbsIncrease(kcalDiff),
+        fatAmount: MacroCalc.getActivityFatsIncrease(kcalDiff),
       );
     } else if (kcalDiff < 0) {
       await _addTrackedDayUsecase.reduceDayCalorieGoal(day, kcalDiff.abs());
       await _addTrackedDayUsecase.reduceDayMacroGoals(
         day,
-        carbsAmount: MacroCalc.getTotalCarbsGoal(kcalDiff.abs()),
-        fatAmount: MacroCalc.getTotalFatsGoal(kcalDiff.abs()),
-        proteinAmount: MacroCalc.getTotalProteinsGoal(kcalDiff.abs()),
+        carbsAmount: MacroCalc.getActivityCarbsIncrease(kcalDiff.abs()),
+        fatAmount: MacroCalc.getActivityFatsIncrease(kcalDiff.abs()),
       );
     }
   }

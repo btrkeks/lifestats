@@ -338,9 +338,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       activityEntity.burnedKcal,
     );
 
-    final carbsAmount = MacroCalc.getTotalCarbsGoal(activityEntity.burnedKcal);
-    final fatAmount = MacroCalc.getTotalFatsGoal(activityEntity.burnedKcal);
-    final proteinAmount = MacroCalc.getTotalProteinsGoal(
+    final carbsAmount = MacroCalc.getActivityCarbsIncrease(
+      activityEntity.burnedKcal,
+    );
+    final fatAmount = MacroCalc.getActivityFatsIncrease(
       activityEntity.burnedKcal,
     );
 
@@ -348,7 +349,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       dateTime,
       carbsAmount: carbsAmount,
       fatAmount: fatAmount,
-      proteinAmount: proteinAmount,
     );
     _updateDiaryPage(dateTime);
     add(
@@ -371,17 +371,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       _addTrackedDayUseCase.increaseDayCalorieGoal(dateTime, kcalDiff);
       _addTrackedDayUseCase.increaseDayMacroGoals(
         dateTime,
-        carbsAmount: MacroCalc.getTotalCarbsGoal(kcalDiff),
-        fatAmount: MacroCalc.getTotalFatsGoal(kcalDiff),
-        proteinAmount: MacroCalc.getTotalProteinsGoal(kcalDiff),
+        carbsAmount: MacroCalc.getActivityCarbsIncrease(kcalDiff),
+        fatAmount: MacroCalc.getActivityFatsIncrease(kcalDiff),
       );
     } else if (kcalDiff < 0) {
       _addTrackedDayUseCase.reduceDayCalorieGoal(dateTime, kcalDiff.abs());
       _addTrackedDayUseCase.reduceDayMacroGoals(
         dateTime,
-        carbsAmount: MacroCalc.getTotalCarbsGoal(kcalDiff.abs()),
-        fatAmount: MacroCalc.getTotalFatsGoal(kcalDiff.abs()),
-        proteinAmount: MacroCalc.getTotalProteinsGoal(kcalDiff.abs()),
+        carbsAmount: MacroCalc.getActivityCarbsIncrease(kcalDiff.abs()),
+        fatAmount: MacroCalc.getActivityFatsIncrease(kcalDiff.abs()),
       );
     }
     _updateDiaryPage(dateTime);

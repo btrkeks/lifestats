@@ -12,7 +12,6 @@ import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
 import 'package:opennutritracker/core/utils/bounds/ranges_const.dart';
 import 'package:opennutritracker/core/utils/locale_units.dart';
 import 'package:opennutritracker/core/utils/calc/calorie_goal_calc.dart';
-import 'package:opennutritracker/core/utils/calc/macro_calc.dart';
 import 'package:opennutritracker/core/utils/url_const.dart';
 import 'package:opennutritracker/features/onboarding/domain/entity/user_data_mask_entity.dart';
 
@@ -156,35 +155,14 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     return calorieGoal;
   }
 
-  double? getOverviewCarbsGoal() {
-    final userEntity = userSelection.toUserEntity();
-    final calorieGoal = getOverviewCalorieGoal();
-    double? carbsGoal;
-    if (userEntity != null && calorieGoal != null) {
-      carbsGoal = MacroCalc.getTotalCarbsGoal(calorieGoal);
-    }
-    return carbsGoal;
-  }
+  // The overview's macro goals come from the same breakdown the "how is
+  // this calculated" link explains. No weigh-ins exist yet, so protein uses
+  // the weight entered here.
+  double? getOverviewCarbsGoal() => getOverviewBreakdown()?.carbsGoalGrams;
 
-  double? getOverviewFatGoal() {
-    final userEntity = userSelection.toUserEntity();
-    final calorieGoal = getOverviewCalorieGoal();
-    double? fatGoal;
-    if (userEntity != null && calorieGoal != null) {
-      fatGoal = MacroCalc.getTotalFatsGoal(calorieGoal);
-    }
-    return fatGoal;
-  }
+  double? getOverviewFatGoal() => getOverviewBreakdown()?.fatsGoalGrams;
 
-  double? getOverviewProteinGoal() {
-    final userEntity = userSelection.toUserEntity();
-    final calorieGoal = getOverviewCalorieGoal();
-    double? proteinGoal;
-    if (userEntity != null && calorieGoal != null) {
-      proteinGoal = MacroCalc.getTotalProteinsGoal(calorieGoal);
-    }
-    return proteinGoal;
-  }
+  double? getOverviewProteinGoal() => getOverviewBreakdown()?.proteinsGoalGrams;
 
   /// The full derivation of the goal shown on the overview page, computed
   /// from the in-progress selection. Nothing has been written to Hive yet at

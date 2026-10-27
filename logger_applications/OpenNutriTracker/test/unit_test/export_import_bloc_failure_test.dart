@@ -167,7 +167,11 @@ ExportImportBloc _bloc({
         configRepository,
         userActivityRepository,
       ),
-      GetMacroGoalUsecase(configRepository),
+      GetMacroGoalUsecase(
+        configRepository,
+        UserRepository(UserDataSource(_provider)),
+        WeightLogRepository(WeightLogDataSource(_provider)),
+      ),
       customMealDataSource,
     ),
     ImportRecipesJsonUsecase(saveRecipeUseCase),

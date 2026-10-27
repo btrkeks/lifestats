@@ -88,14 +88,36 @@ class ConfigRepository {
     await _configDataSource.setConfigShowActivityTracking(show);
   }
 
+  Future<void> setLifestatsBaseUrl(String? baseUrl) async {
+    await _configDataSource.setConfigLifestatsBaseUrl(baseUrl);
+  }
+
+  Future<void> setLifestatsSyncSucceeded(DateTime at) async {
+    await _configDataSource.setConfigLifestatsSyncSucceeded(at);
+  }
+
+  Future<void> setLifestatsSyncFailed(
+    DateTime at,
+    String error,
+    int? statusCode,
+  ) async {
+    await _configDataSource.setConfigLifestatsSyncFailed(at, error, statusCode);
+  }
+
   Future<void> setConfigShowMealMacros(bool show) async {
     await _configDataSource.setConfigShowMealMacros(show);
   }
 
-  Future<void> setUserMacroPct(double carbs, double protein, double fat) async {
-    await _configDataSource.setConfigCarbGoalPct(carbs);
-    await _configDataSource.setConfigProteinGoalPct(protein);
-    await _configDataSource.setConfigFatGoalPct(fat);
+  Future<void> setUserMacroGoals({
+    required double carbGoalPct,
+    required double fatGoalPct,
+    required double proteinGramsPerKg,
+  }) async {
+    await _configDataSource.setConfigMacroGoals(
+      carbGoalPct: carbGoalPct,
+      fatGoalPct: fatGoalPct,
+      proteinGramsPerKg: proteinGramsPerKg,
+    );
   }
 
   Future<void> setNotificationsEnabled(bool enabled) async {
