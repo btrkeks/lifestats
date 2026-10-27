@@ -1,12 +1,126 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), "Noto Sans CJK JP", "Noto Sans JP", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Lifestats palette (approved mockup) */
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-brand: var(--brand);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-line: var(--brand-line);
+  --color-met: var(--met);
+  --color-met-tint: var(--met-tint);
+  --color-missed: var(--missed);
+  --color-missed-tint: var(--missed-tint);
+  --color-open: var(--open);
+  --color-open-tint: var(--open-tint);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-body {
-  background: #f9fafb;
-  color: #171717;
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+:root {
+  --ink: #1c1b19;
+  --ink-2: #3a3833;
+  --faint: #a19d94;
+  --line: #e6e3dc;
+  --line-2: #efede8;
+  --brand: #3b4cd6;
+  --brand-tint: #eceefd;
+  --brand-line: #c9cef6;
+  --met: #24935f;
+  --met-tint: #e3f2ea;
+  --missed: #d5564b;
+  --missed-tint: #fbe8e5;
+  --open: #d9922a;
+  --open-tint: #fcf0da;
+  --hatch: repeating-linear-gradient(135deg, #eceae4 0 4px, #f7f6f2 4px 8px);
+
+  --background: #f3f2ee;
+  --foreground: var(--ink);
+  --card: #ffffff;
+  --card-foreground: var(--ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: #ffffff;
+  --secondary: var(--line-2);
+  --secondary-foreground: var(--ink);
+  --muted: var(--line-2);
+  --muted-foreground: #6e6a62;
+  --accent: var(--line-2);
+  --accent-foreground: var(--ink);
+  --destructive: var(--missed);
+  --border: var(--line);
+  --input: #dedad2;
+  --ring: var(--brand);
+  --chart-1: var(--met);
+  --chart-2: var(--missed);
+  --chart-3: var(--open);
+  --chart-4: var(--brand);
+  --chart-5: var(--faint);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    font-size: 13px;
+  }
+  /* Time fields show their own clock icon; the browser's picker stays on keyboard and click */
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@utility bg-hatch {
+  background: var(--hatch);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
 }
