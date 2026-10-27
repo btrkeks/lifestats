@@ -12,6 +12,10 @@ pub enum ScalarUnit {
     DurationSeconds,
     TimeOfDaySeconds,
     Percent,
+    /// Stored grams, displayed as kilograms with one decimal place.
+    Grams,
+    /// Stored tenths of a percentage point, displayed with one decimal place.
+    Permille,
 }
 
 /// A scalar plot value with its display semantics preserved.

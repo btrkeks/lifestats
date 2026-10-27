@@ -20,6 +20,15 @@ fn integer_amount_scalar(statistic: &AnyStatistic, value: i64) -> ScalarValue {
         )
     {
         ScalarValue::duration_seconds(value)
+    } else if metadata.get_tag("source").map(String::as_str) == Some("beurer") {
+        use plot_domain::plot::data::ScalarUnit;
+        match metadata.get_tag("metric").map(String::as_str) {
+            Some("weight") => ScalarValue::new(value, ScalarUnit::Grams),
+            Some("body_fat" | "muscle" | "body_water") => {
+                ScalarValue::new(value, ScalarUnit::Permille)
+            }
+            _ => ScalarValue::number(value),
+        }
     } else {
         ScalarValue::number(value)
     }

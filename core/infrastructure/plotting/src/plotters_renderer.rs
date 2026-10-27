@@ -86,6 +86,8 @@ impl PlottersRenderer {
             AxisLabelFormat::DurationHhMm => duration_seconds_to_hh_mm(value),
             AxisLabelFormat::TimeOfDayHhMm => time_of_day_seconds_to_hh_mm(value),
             AxisLabelFormat::Percent => percent_formatter(value),
+            AxisLabelFormat::KilogramsOneDecimal => format!("{:.1} kg", *value as f64 / 1000.0),
+            AxisLabelFormat::PercentOneDecimal => format!("{:.1} %", *value as f64 / 10.0),
         }
     }
 
@@ -101,7 +103,10 @@ impl PlottersRenderer {
             AxisLabelFormat::DurationHhMm | AxisLabelFormat::TimeOfDayHhMm => {
                 nice_seconds_ticks(y_min, y_max, plot_height, MIN_PX_PER_Y_TICK)
             }
-            AxisLabelFormat::Number | AxisLabelFormat::Percent => {
+            AxisLabelFormat::Number
+            | AxisLabelFormat::Percent
+            | AxisLabelFormat::KilogramsOneDecimal
+            | AxisLabelFormat::PercentOneDecimal => {
                 RangedCoordi64::from(y_min..y_max).key_points(BoldPoints(11))
             }
         }
@@ -766,6 +771,30 @@ mod tests {
 
     fn binary_goal(value: bool) -> DrawableGoal {
         DrawableGoal::Scalar(ScalarValue::binary(value))
+    }
+
+    #[test]
+    fn scale_axis_labels_use_one_decimal_human_units() {
+        assert_eq!(
+            PlottersRenderer::format_y_label(AxisLabelFormat::KilogramsOneDecimal, &67500),
+            "67.5 kg"
+        );
+        assert_eq!(
+            PlottersRenderer::format_y_label(AxisLabelFormat::PercentOneDecimal, &156),
+            "15.6 %"
+        );
+        assert_eq!(
+            PlottersRenderer::format_y_label(AxisLabelFormat::PercentOneDecimal, &0),
+            "0.0 %"
+        );
+        assert_eq!(
+            PlottersRenderer::format_y_label(AxisLabelFormat::PercentOneDecimal, &1000),
+            "100.0 %"
+        );
+        assert_eq!(
+            PlottersRenderer::format_y_label(AxisLabelFormat::Percent, &15),
+            "15%"
+        );
     }
 
     #[test]
