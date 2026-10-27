@@ -21,7 +21,7 @@ source tags. Only the source-owned `PUT` integration routes resolve statistics b
 nicotine from OpenNutriTracker need a per-day list of `(time, amount)` entries, which the source replaces
 day by day.
 
-- **Status:** implemented on branch `feature/timed-amounts-statistic` (not yet merged into `master`).
+- **Status:** implemented and merged into `master` (`aa53ebf`).
   `TimedAmounts` stores each day as a list of `{time, amount}` entries, where `time` is `HH:MM:SS` or
   `null` when unknown and `amount` is an integer in the smallest unit (mg). OpenNutriTracker writes it only
   through `PUT /integrations/opennutritracker/days/{day}`, which replaces both caffeine and nicotine lists
