@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:synchronized/synchronized.dart';
+
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:opennutritracker/core/data/data_source/custom_activity_template_dbo.dart';
@@ -36,6 +38,9 @@ import 'package:opennutritracker/hive_registrar.g.dart';
 /// boxes belonging to whoever is active right now.
 class HiveDBProvider extends ChangeNotifier {
   static bool _adaptersRegistered = false;
+
+  /// Box replacement and compound intake writes must never interleave.
+  final Lock intakeWriteLock = Lock();
 
   static const configBoxName = 'ConfigBox';
   static const intakeBoxName = 'IntakeBox';
@@ -190,25 +195,21 @@ class HiveDBProvider extends ChangeNotifier {
     await _openActiveProfileBoxes();
   }
 
-  /// Closes the current profile's box-set and opens [profileId]'s. The
-  /// `_switching` guard makes any racing read fail loudly rather than
-  /// hitting a half-open box. A second call while the first is still
-  /// in-flight is silently ignored to avoid interleaving close/open
-  /// cycles.
-  Future<void> switchProfile(String profileId, String boxSuffix) async {
-    if (profileId == _activeProfileId) return;
-    if (_switching) return;
-    _switching = true;
-    try {
-      await _closeActiveProfileBoxes();
-      _activeProfileId = profileId;
-      _activeBoxSuffix = boxSuffix;
-      await _openActiveProfileBoxes();
-    } finally {
-      _switching = false;
-    }
-    notifyListeners();
-  }
+  /// Waits for compound intake writes before replacing the active boxes.
+  Future<void> switchProfile(String profileId, String boxSuffix) =>
+      intakeWriteLock.synchronized(() async {
+        if (profileId == _activeProfileId) return;
+        _switching = true;
+        try {
+          await _closeActiveProfileBoxes();
+          _activeProfileId = profileId;
+          _activeBoxSuffix = boxSuffix;
+          await _openActiveProfileBoxes();
+        } finally {
+          _switching = false;
+        }
+        notifyListeners();
+      });
 
   Future<void> _openActiveProfileBoxes() async {
     final suffix = _activeBoxSuffix;

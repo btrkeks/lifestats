@@ -6,14 +6,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
 import 'package:opennutritracker/core/data/data_source/remote_search_cache_data_source.dart';
 import 'package:opennutritracker/core/data/dbo/meal_dbo.dart';
-import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
-import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/log_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_tracked_day_usecase.dart';
-import 'package:opennutritracker/core/utils/id_generator.dart';
 import 'package:opennutritracker/features/add_meal/data/repository/products_repository.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_entity.dart';
 import 'package:opennutritracker/features/meal_detail/util/meal_quantity_converter.dart';
@@ -25,19 +23,17 @@ part 'meal_detail_state.dart';
 
 class MealDetailBloc extends Bloc<MealDetailEvent, MealDetailState> {
   final log = Logger('MealDetailBloc');
-  final AddIntakeUsecase _addIntakeUseCase;
-  final AddTrackedDayUsecase _addTrackedDayUsecase;
+  final LogIntakeUsecase _logIntake;
   final GetKcalGoalUsecase _getKcalGoalUsecase;
-  final GetMacroGoalUsecase _getMacroGoalUsecase;
   final GetTrackedDayUsecase _getTrackedDayUsecase;
   final ProductsRepository _productsRepository;
   final RemoteSearchCacheDataSource _remoteSearchCacheDataSource;
 
   MealDetailBloc(
-    this._addIntakeUseCase,
-    this._addTrackedDayUsecase,
+    this._logIntake,
+    AddTrackedDayUsecase _,
     this._getKcalGoalUsecase,
-    this._getMacroGoalUsecase,
+    GetMacroGoalUsecase _,
     this._getTrackedDayUsecase,
     this._productsRepository,
     this._remoteSearchCacheDataSource,
@@ -147,11 +143,6 @@ class MealDetailBloc extends Bloc<MealDetailEvent, MealDetailState> {
     });
   }
 
-  /// Returns a future so callers writing more than one intake can await
-  /// each in turn. The tracked-day totals are accumulated with a
-  /// read-modify-write (`TrackedDayDataSource.addDayCaloriesTracked`), so
-  /// overlapping calls interleave their reads and silently lose updates —
-  /// a batch logged concurrently under-counts the day.
   Future<void> addIntake(
     BuildContext context,
     String unit,
@@ -160,24 +151,15 @@ class MealDetailBloc extends Bloc<MealDetailEvent, MealDetailState> {
     MealEntity meal,
     DateTime day,
   ) async {
-    final quantity = double.parse(amountText.replaceAll(',', '.'));
-
-    final intakeEntity = IntakeEntity(
-      id: IdGenerator.getUniqueID(),
-      unit: unit,
-      amount: quantity,
-      type: type,
-      meal: meal,
-      dateTime: day,
+    await _logIntake.log(
+      LogIntakeRequest(
+        meal: meal,
+        type: type,
+        day: day,
+        baseAmount: double.parse(amountText.replaceAll(',', '.')),
+        unit: unit,
+      ),
     );
-    // Write the intake immediately so the Home/Diary refresh that
-    // follows on the caller side picks it up. The cache refresh happens
-    // in the background — the user shouldn't wait for an OFF round-trip
-    // (up to 60 s timeout) before seeing their item logged. Stale meal
-    // data in the intake is fine; nutrition values rarely change, and
-    // the cache update means the next search shows the freshest data.
-    await _addIntakeUseCase.addIntake(intakeEntity);
-    await _updateTrackedDay(intakeEntity, day);
     unawaited(_refreshCacheForSelectedMeal(meal));
   }
 
@@ -205,44 +187,6 @@ class MealDetailBloc extends Bloc<MealDetailEvent, MealDetailState> {
       );
       await _remoteSearchCacheDataSource.touch(code);
     }
-  }
-
-  Future<void> _updateTrackedDay(
-    IntakeEntity intakeEntity,
-    DateTime day,
-  ) async {
-    final hasTrackedDay = await _addTrackedDayUsecase.hasTrackedDay(day);
-    if (!hasTrackedDay) {
-      final totalKcalGoal = await _getKcalGoalUsecase.getKcalGoal();
-      final totalCarbsGoal = await _getMacroGoalUsecase.getCarbsGoal(
-        totalKcalGoal,
-      );
-      final totalFatGoal = await _getMacroGoalUsecase.getFatsGoal(
-        totalKcalGoal,
-      );
-      final totalProteinGoal = await _getMacroGoalUsecase.getProteinsGoal(
-        totalKcalGoal,
-      );
-
-      await _addTrackedDayUsecase.addNewTrackedDay(
-        day,
-        totalKcalGoal,
-        totalCarbsGoal,
-        totalFatGoal,
-        totalProteinGoal,
-      );
-    }
-
-    await _addTrackedDayUsecase.addDayCaloriesTracked(
-      day,
-      intakeEntity.totalKcal,
-    );
-    await _addTrackedDayUsecase.addDayMacrosTracked(
-      day,
-      carbsTracked: intakeEntity.totalCarbsGram,
-      fatTracked: intakeEntity.totalFatsGram,
-      proteinTracked: intakeEntity.totalProteinsGram,
-    );
   }
 }
 

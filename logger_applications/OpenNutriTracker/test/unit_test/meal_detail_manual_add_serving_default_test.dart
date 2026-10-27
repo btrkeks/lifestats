@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opennutritracker/core/data/data_source/remote_search_cache_data_source.dart';
-import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/log_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
@@ -23,7 +23,7 @@ import 'package:opennutritracker/features/meal_detail/presentation/bloc/meal_det
 // reflects the screen's choice — that is, that the bloc honours the
 // load-time selection rather than collapsing it back to gml.
 
-class _FakeAddIntakeUsecase extends Fake implements AddIntakeUsecase {}
+class _FakeLogIntakeUsecase extends Fake implements LogIntakeUsecase {}
 
 class _FakeAddTrackedDayUsecase extends Fake implements AddTrackedDayUsecase {}
 
@@ -39,7 +39,7 @@ class _FakeRemoteSearchCacheDataSource extends Fake
     implements RemoteSearchCacheDataSource {}
 
 MealDetailBloc _buildBloc() => MealDetailBloc(
-  _FakeAddIntakeUsecase(),
+  _FakeLogIntakeUsecase(),
   _FakeAddTrackedDayUsecase(),
   _FakeGetKcalGoalUsecase(),
   _FakeGetMacroGoalUsecase(),

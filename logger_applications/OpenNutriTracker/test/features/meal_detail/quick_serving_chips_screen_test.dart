@@ -8,7 +8,7 @@ import 'package:opennutritracker/core/domain/entity/config_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/entity/tracked_day_entity.dart';
-import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/log_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_intake_usecase.dart';
@@ -66,7 +66,7 @@ void main() {
     bloc = null;
     getIt.registerLazySingleton<MealDetailBloc>(
       () => bloc = MealDetailBloc(
-        _FakeAddIntakeUsecase(),
+        _FakeLogIntakeUsecase(),
         _FakeAddTrackedDayUsecase(),
         _FakeGetKcalGoalUsecase(),
         _FakeGetMacroGoalUsecase(),
@@ -198,9 +198,15 @@ class _FakeGetConfigUsecase implements GetConfigUsecase {
       throw UnimplementedError('Unexpected call: ${invocation.memberName}');
 }
 
-class _FakeAddIntakeUsecase implements AddIntakeUsecase {
+class _FakeLogIntakeUsecase implements LogIntakeUsecase {
   @override
-  Future<void> addIntake(IntakeEntity intakeEntity) async {}
+  Future<IntakeReceipt> log(LogIntakeRequest request) async {
+    final intake = IntakeEntity(id: 'test', unit: request.unit,
+      amount: request.baseAmount, type: request.type, meal: request.meal,
+      dateTime: request.day);
+    return IntakeReceipt(intakeId: intake.id, profileId: 'test',
+      day: intake.dateTime, created: true, intake: intake);
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>

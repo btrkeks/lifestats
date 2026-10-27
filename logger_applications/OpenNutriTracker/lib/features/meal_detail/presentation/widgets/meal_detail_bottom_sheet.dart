@@ -327,7 +327,7 @@ class _MealDetailBottomSheetState extends State<MealDetailBottomSheet> {
       if (shouldAdd != true) return;
     }
 
-    widget.mealDetailBloc.addIntake(
+    await widget.mealDetailBloc.addIntake(
       context,
       widget.mealDetailBloc.state.selectedUnit,
       widget.mealDetailBloc.state.totalQuantityConverted,
@@ -335,6 +335,8 @@ class _MealDetailBottomSheetState extends State<MealDetailBottomSheet> {
       widget.product,
       widget.day,
     );
+
+    if (!context.mounted) return;
 
     // Refresh Home Page
     locator<HomeBloc>().add(const LoadItemsEvent());

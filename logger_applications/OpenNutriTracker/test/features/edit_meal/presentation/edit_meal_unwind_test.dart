@@ -11,7 +11,7 @@ import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/entity/recipe_entity.dart';
 import 'package:opennutritracker/core/domain/entity/tracked_day_entity.dart';
-import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/log_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_intake_usecase.dart';
@@ -89,7 +89,7 @@ void main() {
     loggedIntakes.clear();
     getIt.registerFactory<MealDetailBloc>(
       () => MealDetailBloc(
-        _FakeAddIntakeUsecase(loggedIntakes),
+        _FakeLogIntakeUsecase(loggedIntakes),
         _FakeAddTrackedDayUsecase(),
         _FakeGetKcalGoalUsecase(),
         _FakeGetMacroGoalUsecase(),
@@ -238,14 +238,20 @@ class _FakeCustomMealDataSource implements CustomMealDataSource {
       throw UnimplementedError('Unexpected call: ${invocation.memberName}');
 }
 
-class _FakeAddIntakeUsecase implements AddIntakeUsecase {
+class _FakeLogIntakeUsecase implements LogIntakeUsecase {
   final List<IntakeEntity> logged;
 
-  _FakeAddIntakeUsecase(this.logged);
+  _FakeLogIntakeUsecase(this.logged);
 
   @override
-  Future<void> addIntake(IntakeEntity intakeEntity) async {
-    logged.add(intakeEntity);
+  Future<IntakeReceipt> log(LogIntakeRequest request) async {
+    final intake = IntakeEntity(
+      id: 'logged', unit: request.unit, amount: request.baseAmount,
+      type: request.type, meal: request.meal, dateTime: request.day,
+    );
+    logged.add(intake);
+    return IntakeReceipt(intakeId: intake.id, profileId: 'test',
+      day: intake.dateTime, created: true, intake: intake);
   }
 
   @override
