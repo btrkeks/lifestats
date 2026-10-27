@@ -5,4 +5,12 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <application>
+        <!-- Engine probe (EngineProbeReceiver.kt). Exported so adb can reach
+             it; DUMP is held by the shell and the system, not by apps. -->
+        <receiver
+            android:name="com.opennutritracker.ont.opennutritracker.EngineProbeReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
 </manifest>

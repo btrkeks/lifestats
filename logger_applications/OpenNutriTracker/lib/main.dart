@@ -29,6 +29,7 @@ import 'package:opennutritracker/core/utils/energy_unit_provider.dart';
 import 'package:opennutritracker/core/utils/engine_readiness.dart';
 import 'package:opennutritracker/core/utils/locale_provider.dart';
 import 'package:opennutritracker/core/utils/theme_mode_provider.dart';
+import 'package:opennutritracker/dev/engine_probe.dart';
 import 'package:opennutritracker/features/activity_detail/activity_detail_screen.dart';
 import 'package:opennutritracker/features/add_meal/presentation/add_meal_screen.dart';
 import 'package:opennutritracker/features/add_meal/presentation/screens/bulk_add_screen.dart';
@@ -84,6 +85,7 @@ Future<void> _bootstrapApp() async {
   }
   // Before the rest of main(): native work waiting on storage needs only
   // initLocator, not notifications, Sentry or the first frame.
+  if (kDebugMode) EngineProbe.install();
   await EngineReadiness.signalReady();
 
   // Drop cached remote-search results that haven't been touched in 90
