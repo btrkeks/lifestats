@@ -8,6 +8,7 @@ use utoipa::OpenApi;
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        super::beurer::replace_day,
         yomikata::replace_day,
         ebook::descriptor,
         ebook::put_day,
@@ -15,6 +16,7 @@ use utoipa::OpenApi;
         ebook::retired_events
     ),
     components(schemas(
+        super::beurer::BeurerDayRequest,
         yomikata::YomikataDayRequest,
         ebook::EbookDescriptor,
         ebook::EbookDayRequest,

@@ -483,6 +483,20 @@ Use these read endpoints:
 - `POST /statistics/dashboard`
 - `GET /daily_summary/{date}`
 
+### Beurer Scale Sync
+
+The laptop Bluetooth service sends the day's first weigh-in to
+`PUT /integrations/beurer/days/{day}` with strict `YYYY-MM-DD` and
+`{"weight_grams":67500,"body_fat_permille":156,"muscle_permille":426,"body_water_permille":609}`.
+Weight is required (integer 1–500000); the other metrics are optional integers
+0–1000, with absent/null fields leaving existing values untouched. Success is
+`204`. The PUT provisions all four tagged statistics automatically and overwrites
+provided daily levels idempotently. Do not log scale readings manually.
+Plot JSON exposes `67.5` with unit `kilograms` and `15.6` with unit
+`percent_one_decimal`; format both to one decimal (`67.5 kg`, `15.6 %`).
+The [maintainer reference](../core/infrastructure/web_api/README.md#replacing-beurer-daily-scale-readings)
+documents validation, atomicity and the integration error envelope.
+
 ### Integration Bundle Provisioning
 
 Use bundle provisioning when your integration needs a repeatable set of
@@ -608,6 +622,7 @@ package wraps common statistics and goal operations. See
 
 | Method | Path | Notes |
 | --- | --- | --- |
+| `PUT` | `/integrations/beurer/days/{day}` | Provision and overwrite supplied daily scale readings |
 | `POST` | `/integrations/{source}` | Provision integration bundle |
 | `POST` | `/integrations/ebook/events` | Ingest ebook sync event |
 | `PUT` | `/integrations/liftlog/days` | Replace LiftLog workout time on the named days |

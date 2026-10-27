@@ -1,3 +1,4 @@
+use crate::dto::plot_number::PlotNumber;
 use axum::{
     extract::{Path, Query, State},
     http::{header, StatusCode},
@@ -71,8 +72,8 @@ pub struct DataPointDto {
 #[serde(tag = "type")]
 pub enum YAxisDto {
     Scalar {
-        min: i64,
-        max: i64,
+        min: PlotNumber,
+        max: PlotNumber,
         label_format: String,
     },
     TimeOfDay {
@@ -91,7 +92,7 @@ pub enum DrawableValueDto {
 
 #[derive(Debug, Serialize)]
 pub struct ScalarValueDto {
-    pub value: i64,
+    pub value: PlotNumber,
     pub unit: String,
 }
 
@@ -332,8 +333,8 @@ fn plot_data_to_dto(plot_data: plot_domain::plot::data::PlotData) -> PlotDataRes
             max,
             label_format,
         } => YAxisDto::Scalar {
-            min,
-            max,
+            min: PlotNumber::for_axis(min, label_format),
+            max: PlotNumber::for_axis(max, label_format),
             label_format: axis_label_format_to_string(label_format).to_string(),
         },
         YAxis::TimeOfDay {
@@ -370,7 +371,11 @@ fn plot_data_to_dto(plot_data: plot_domain::plot::data::PlotData) -> PlotDataRes
 impl From<ScalarValue> for ScalarValueDto {
     fn from(value: ScalarValue) -> Self {
         Self {
-            value: value.value(),
+            value: match value.unit() {
+                ScalarUnit::Grams => PlotNumber::Decimal(value.value() as f64 / 1000.0),
+                ScalarUnit::Permille => PlotNumber::Decimal(value.value() as f64 / 10.0),
+                _ => PlotNumber::Integer(value.value()),
+            },
             unit: scalar_unit_to_string(value.unit()).to_string(),
         }
     }
@@ -383,6 +388,8 @@ fn scalar_unit_to_string(unit: ScalarUnit) -> &'static str {
         ScalarUnit::DurationSeconds => "duration_seconds",
         ScalarUnit::TimeOfDaySeconds => "time_of_day_seconds",
         ScalarUnit::Percent => "percent",
+        ScalarUnit::Grams => "kilograms",
+        ScalarUnit::Permille => "percent_one_decimal",
     }
 }
 
@@ -392,6 +399,8 @@ fn axis_label_format_to_string(format: AxisLabelFormat) -> &'static str {
         AxisLabelFormat::DurationHhMm => "duration_hh_mm",
         AxisLabelFormat::TimeOfDayHhMm => "time_of_day_hh_mm",
         AxisLabelFormat::Percent => "percent",
+        AxisLabelFormat::KilogramsOneDecimal => "kilograms_one_decimal",
+        AxisLabelFormat::PercentOneDecimal => "percent_one_decimal",
     }
 }
 

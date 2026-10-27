@@ -5,6 +5,7 @@ pub mod goal;
 pub mod goal_performance;
 pub mod integer_amount;
 pub mod plot;
+pub mod plot_number;
 pub mod progress;
 pub mod session;
 pub mod statistic;

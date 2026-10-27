@@ -10,6 +10,8 @@ pub enum AxisLabelFormat {
     DurationHhMm,
     TimeOfDayHhMm,
     Percent,
+    KilogramsOneDecimal,
+    PercentOneDecimal,
 }
 
 /// Represents a configured Y-axis with range and label semantics.
@@ -141,6 +143,16 @@ fn default_scalar_axis(unit: ScalarUnit) -> YAxis {
             max_seconds: SECONDS_PER_DAY - 1,
             label_format: AxisLabelFormat::TimeOfDayHhMm,
         },
+        ScalarUnit::Grams => YAxis::Scalar {
+            min: 0,
+            max: 100_000,
+            label_format: AxisLabelFormat::KilogramsOneDecimal,
+        },
+        ScalarUnit::Permille => YAxis::Scalar {
+            min: 0,
+            max: 1000,
+            label_format: AxisLabelFormat::PercentOneDecimal,
+        },
         ScalarUnit::Percent => YAxis::Scalar {
             min: 0,
             max: 100,
@@ -180,6 +192,20 @@ fn axis_for_scalar_range(min: i64, max: i64, unit: ScalarUnit, plot_type: PlotTy
                 label_format: AxisLabelFormat::TimeOfDayHhMm,
             }
         }
+        ScalarUnit::Grams => YAxis::Scalar {
+            min: if plot_type == PlotType::BarChart {
+                0
+            } else {
+                min.saturating_sub(((max - min) / 10).max(1000)).max(0)
+            },
+            max: max.saturating_add(((max - min) / 10).max(1000)),
+            label_format: AxisLabelFormat::KilogramsOneDecimal,
+        },
+        ScalarUnit::Permille => YAxis::Scalar {
+            min: padded_min.max(0),
+            max: padded_max.max(1000),
+            label_format: AxisLabelFormat::PercentOneDecimal,
+        },
         ScalarUnit::Percent => YAxis::Scalar {
             min: padded_min.max(0),
             max: padded_max.max(100),
