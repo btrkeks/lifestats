@@ -8,7 +8,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
@@ -86,14 +85,11 @@ private val ButtonHeight = 48.dp
 
 /**
  * The mock's 4×2 is 208 dp tall; MIUI's is 177 dp. Below this the frame
- * and scan button tighten so the rings keep room for their centre text.
+ * and buttons tighten so the rings keep room for their centre text.
  */
 private val TightBelow = 200.dp
 private val TightPadding = 10.dp
 private val TightButtonHeight = 40.dp
-
-/** Narrowest status column that still fits the scan label on one line. */
-private val MinStatusWidth = 112.dp
 
 /** Under the mock's 70 dp: a real 4×2 cell is narrower than the mock's, and at 70 dp the subtitle ellipsized. */
 private val PillWidth = 62.dp
@@ -134,24 +130,32 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
             val padding = if (tight) TightPadding else Padding
             val buttonHeight = if (tight) TightButtonHeight else ButtonHeight
             val ringSize = min(StatusWidth, size.height - padding * 2 - buttonHeight - RowGap)
-            val statusWidth = max(ringSize, MinStatusWidth)
             Row(surface.padding(padding)) {
                 Column(
-                    GlanceModifier.width(statusWidth).fillMaxHeight(),
+                    GlanceModifier.width(ringSize).fillMaxHeight(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Rings(snapshot.status, ringSize)
                     Spacer(GlanceModifier.defaultWeight())
-                    Pill(
-                        icon = R.drawable.ql_ic_barcode,
-                        label = snapshot.labels.scanProduct,
-                        background = Palette.scan,
-                        content = Palette.onScan,
-                        fontSize = 13.sp,
-                        action = scan,
-                        modifier = GlanceModifier.width(statusWidth),
-                        height = buttonHeight,
-                    )
+                    Row(GlanceModifier.width(ringSize)) {
+                        IconButton(
+                            icon = R.drawable.ql_ic_search,
+                            description = snapshot.labels.searchFood,
+                            background = Palette.row,
+                            content = Palette.onRow,
+                            action = search,
+                            modifier = GlanceModifier.defaultWeight().height(buttonHeight).cornerRadius(buttonHeight / 2),
+                        )
+                        Spacer(GlanceModifier.width(RowGap))
+                        IconButton(
+                            icon = R.drawable.ql_ic_barcode,
+                            description = snapshot.labels.scanProduct,
+                            background = Palette.scan,
+                            content = Palette.onScan,
+                            action = scan,
+                            modifier = GlanceModifier.defaultWeight().height(buttonHeight).cornerRadius(buttonHeight / 2),
+                        )
+                    }
                 }
                 Spacer(GlanceModifier.width(ColumnGap))
                 LazyColumn(GlanceModifier.defaultWeight().fillMaxHeight()) {
@@ -240,21 +244,14 @@ private fun Compact(
                 }
             }
             Spacer(GlanceModifier.width(RowGap))
-            Box(
-                GlanceModifier
-                    .size(ButtonHeight)
-                    .background(Palette.scan)
-                    .cornerRadius(16.dp)
-                    .clickable(scan),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    provider = ImageProvider(R.drawable.ql_ic_barcode),
-                    contentDescription = snapshot.labels.scanProduct,
-                    modifier = GlanceModifier.size(24.dp),
-                    colorFilter = ColorFilter.tint(Palette.onScan),
-                )
-            }
+            IconButton(
+                icon = R.drawable.ql_ic_barcode,
+                description = snapshot.labels.scanProduct,
+                background = Palette.scan,
+                content = Palette.onScan,
+                action = scan,
+                modifier = GlanceModifier.size(ButtonHeight).cornerRadius(16.dp),
+            )
         }
     }
 }
@@ -569,7 +566,27 @@ private fun Empty(snapshot: WidgetSnapshot.Ready, scan: Action, search: Action) 
     }
 }
 
-/** A fully rounded button, 48 dp unless the frame is tight: icon then label, centred. */
+/** An icon-only button; [modifier] gives its size and shape. */
+@Composable
+private fun IconButton(
+    icon: Int,
+    description: String,
+    background: ColorProvider,
+    content: ColorProvider,
+    action: Action,
+    modifier: GlanceModifier,
+) {
+    Box(modifier.background(background).clickable(action), contentAlignment = Alignment.Center) {
+        Image(
+            provider = ImageProvider(icon),
+            contentDescription = description,
+            modifier = GlanceModifier.size(24.dp),
+            colorFilter = ColorFilter.tint(content),
+        )
+    }
+}
+
+/** A fully rounded 48 dp button: icon then label, centred. */
 @Composable
 private fun Pill(
     icon: Int,
@@ -579,11 +596,10 @@ private fun Pill(
     fontSize: TextUnit,
     action: Action,
     modifier: GlanceModifier,
-    height: Dp = ButtonHeight,
 ) {
     Row(
         modifier
-            .height(height)
+            .height(ButtonHeight)
             .background(background)
             .cornerRadius(24.dp)
             .clickable(action),
