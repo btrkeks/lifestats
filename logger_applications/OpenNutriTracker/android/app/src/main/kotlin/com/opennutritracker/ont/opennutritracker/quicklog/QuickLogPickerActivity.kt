@@ -11,6 +11,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.UUID
+import java.lang.ref.WeakReference
 
 /**
  * The amount sheet over the launcher (s6, s7), opened by a tap on a row's
@@ -26,6 +28,10 @@ import kotlinx.coroutines.launch
  * launcher.
  */
 class QuickLogPickerActivity : FlutterFragmentActivity() {
+
+    private val submissionKey: String by lazy {
+        intent.getStringExtra(EXTRA_SUBMISSION_KEY) ?: UUID.randomUUID().toString()
+    }
 
     override fun getDartEntrypointFunctionName(): String = "quickLogPickerMain"
 
@@ -50,12 +56,17 @@ class QuickLogPickerActivity : FlutterFragmentActivity() {
                         }
                         // Outlives the activity: a write already sent must
                         // still show Added if the user leaves meanwhile.
+                        val app = applicationContext
+                        val activity = WeakReference(this)
+                        val key = submissionKey
                         submits.launch {
-                            val reply = logFood(applicationContext, foodKey, profileId, baseAmount, unit)
+                            val reply = logFood(app, foodKey, profileId, baseAmount, unit, key)
                             // Unavailable is worth a retry; anything else is done.
                             val closing = reply !is QuickLogReply.Unavailable
-                            result.success(closing)
-                            if (closing) finish()
+                            activity.get()?.takeUnless { it.isDestroyed }?.let { host ->
+                                result.success(closing)
+                                if (closing) host.finish()
+                            }
                         }
                     }
                     "dismiss" -> {
@@ -87,6 +98,7 @@ class QuickLogPickerActivity : FlutterFragmentActivity() {
         private const val CHANNEL = "com.opennutritracker/quick_log_picker"
         private const val EXTRA_FOOD_KEY = "foodKey"
         private const val EXTRA_PROFILE_ID = "profileId"
+        private const val EXTRA_SUBMISSION_KEY = "submissionKey"
 
         private val submits = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -94,6 +106,7 @@ class QuickLogPickerActivity : FlutterFragmentActivity() {
             Intent(context, QuickLogPickerActivity::class.java)
                 .putExtra(EXTRA_FOOD_KEY, foodKey)
                 .putExtra(EXTRA_PROFILE_ID, profileId)
+                .putExtra(EXTRA_SUBMISSION_KEY, UUID.randomUUID().toString())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 }

@@ -14,10 +14,11 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Everything the widget renders, and the only code that writes it.
  *
- * Three facts with one owner each, merged when read rather than kept in one
+ * Facts with one owner each, merged when read rather than kept in one
  * blob that two writers rewrite:
  *  - snapshot: owned by Dart, written only by [publish].
  *  - recent action: owned by the widget's actions, [showAdded] / [clearAdded].
+ *  - pending logs: original commands retained until a definitive reply.
  *  - in flight: foods with a log waiting on Dart, kept in memory only.
  *
  * Writes use commit(), not apply(): the callback that wrote is about to
@@ -32,9 +33,10 @@ object QuickLogStore {
 
     const val UNDO_WINDOW_MS = 5_000L
 
-    private var state: MutableStateFlow<WidgetModel>? = null
+    private var state: QuickLogState? = null
+    private var pending: PendingLogs? = null
+    private const val KEY_PENDING = "pending_logs"
     private val repaints = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val inFlight = mutableSetOf<String>()
 
     /** The day boundary last handed to WorkManager in this process. */
     private var scheduledDayEnd: Long? = null
@@ -59,16 +61,21 @@ object QuickLogStore {
         update(context) { it.copy(snapshot = snapshot) }
     }
 
-    /** False when [foodKey] already has a log waiting: a double tap. */
-    fun beginLog(context: Context, foodKey: String): Boolean {
-        val began = synchronized(inFlight) { inFlight.add(foodKey) }
-        if (began) update(context) { it.copy(inFlight = inFlightNow()) }
-        return began
+    fun beginLog(context: Context, key: String, create: () -> QuickLogCommand.Log): QuickLogCommand.Log? {
+        val command = pending(context).begin(key, create)
+        if (command != null) update(context) { it.copy(inFlight = pending(context).inFlight()) }
+        return command
     }
 
-    fun endLog(context: Context, foodKey: String) {
-        synchronized(inFlight) { inFlight.remove(foodKey) }
-        update(context) { it.copy(inFlight = inFlightNow()) }
+    fun endLog(context: Context, key: String, reply: QuickLogReply) {
+        pending(context).finish(key, reply)
+        update(context) { it.copy(inFlight = pending(context).inFlight()) }
+    }
+
+    private fun pending(context: Context): PendingLogs = synchronized(this) {
+        pending ?: PendingLogs(PendingLogs.decode(prefs(context).getString(KEY_PENDING, null))) {
+            prefs(context).edit().putString(KEY_PENDING, PendingLogs.encode(it)).commit()
+        }.also { pending = it }
     }
 
     /**
@@ -84,43 +91,47 @@ object QuickLogStore {
         nowMs: Long = System.currentTimeMillis(),
     ): RecentAction {
         val action = RecentAction(opId, foodKey, profileId, addedText, nowMs, nowMs + UNDO_WINDOW_MS)
-        prefs(context).edit().putString(KEY_RECENT_ACTION, action.toJson()).commit()
+        state(context).show(action)
         Log.i(TAG, "added opId=$opId food=$foodKey expiresAtMs=${action.expiresAtMs}")
-        update(context) { it.copy(recentAction = action) }
+        repaint(context)
         return action
     }
 
     /** Clears only if [opId] is still the one shown, so a newer one survives. */
     fun clearAdded(context: Context, opId: String) {
-        synchronized(this) {
-            if (flow(context).value.recentAction?.opId != opId) return
-            prefs(context).edit().remove(KEY_RECENT_ACTION).commit()
-        }
-        update(context) { if (it.recentAction?.opId == opId) it.copy(recentAction = null) else it }
+        state(context).clear(opId)
+        repaint(context)
     }
 
     private fun update(context: Context, change: (WidgetModel) -> WidgetModel) {
-        val flow = flow(context)
-        synchronized(this) { flow.value = change(flow.value) }
+        state(context).update(change)
+        repaint(context)
+    }
+
+    private fun repaint(context: Context) {
         val app = context.applicationContext
         repaints.launch { QuickLogWidget.refreshAll(app) }
     }
 
-    private fun flow(context: Context): MutableStateFlow<WidgetModel> =
-        synchronized(this) {
-            state ?: MutableStateFlow(read(context)).also { state = it }
-        }
+    private fun flow(context: Context): MutableStateFlow<WidgetModel> = state(context).flow
+
+    private fun state(context: Context): QuickLogState = synchronized(this) {
+        state ?: QuickLogState(read(context)) { action ->
+            val editor = prefs(context).edit()
+            if (action == null) editor.remove(KEY_RECENT_ACTION)
+            else editor.putString(KEY_RECENT_ACTION, action.toJson())
+            editor.commit()
+        }.also { state = it }
+    }
 
     private fun read(context: Context): WidgetModel {
         val prefs = prefs(context)
         return WidgetModel(
             snapshot = WidgetSnapshot.parse(prefs.getString(KEY_SNAPSHOT, null)),
             recentAction = RecentAction.parse(prefs.getString(KEY_RECENT_ACTION, null)),
-            inFlight = inFlightNow(),
+            inFlight = pending(context).inFlight(),
         )
     }
-
-    private fun inFlightNow(): Set<String> = synchronized(inFlight) { inFlight.toSet() }
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

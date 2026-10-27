@@ -11,6 +11,7 @@ import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogReply
 import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogStore
 import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogTimers
 import com.opennutritracker.ont.opennutritracker.quicklog.WidgetSnapshot
+import com.opennutritracker.ont.opennutritracker.quicklog.undoSucceeded
 import java.util.UUID
 
 private const val TAG = "QuickLogActions"
@@ -50,29 +51,30 @@ suspend fun logFood(
     profileId: String,
     baseAmount: Double,
     unit: String,
+    actionKey: String? = null,
 ): QuickLogReply? {
-    if (!QuickLogStore.beginLog(context, foodKey)) {
-        Log.i(TAG, "log ignored: $foodKey already in flight")
-        return null
-    }
-    try {
-        val opId = UUID.randomUUID().toString()
-        val command = QuickLogCommand.Log(
-            opId = opId,
+    val key = actionKey ?: "pill:$profileId:$foodKey"
+    val command = QuickLogStore.beginLog(context, key) {
+        QuickLogCommand.Log(
+            opId = UUID.randomUUID().toString(),
             foodKey = foodKey,
             profileId = profileId,
             baseAmount = baseAmount,
             unit = unit,
             tappedAtMs = System.currentTimeMillis(),
         )
+    } ?: return null
+    var outcome: QuickLogReply = QuickLogReply.Unavailable("interrupted")
+    try {
         val reply = QuickLogBridge.send(context, command)
+        outcome = reply
         if (reply is QuickLogReply.Ok && reply.addedText != null) {
-            val action = QuickLogStore.showAdded(context, opId, foodKey, profileId, reply.addedText)
-            QuickLogTimers.scheduleUndoExpiry(context, opId, action.expiresAtMs)
+            val action = QuickLogStore.showAdded(context, command.opId, foodKey, profileId, reply.addedText)
+            QuickLogTimers.scheduleUndoExpiry(context, command.opId, action.expiresAtMs)
         }
         return reply
     } finally {
-        QuickLogStore.endLog(context, foodKey)
+        QuickLogStore.endLog(context, key, outcome)
     }
 }
 
@@ -85,11 +87,8 @@ class UndoAction : ActionCallback {
             Log.i(TAG, "undo ignored: $UNDO_ARM_MS ms not yet passed since Added")
             return
         }
-        // Unavailable leaves the intake in place, so the row keeps its Undo
-        // for the rest of the window rather than claiming it was undone.
-        when (QuickLogBridge.send(context, QuickLogCommand.Undo(opId, profileId))) {
-            is QuickLogReply.Unavailable -> Unit
-            else -> QuickLogStore.clearAdded(context, opId)
+        if (undoSucceeded(QuickLogBridge.send(context, QuickLogCommand.Undo(opId, profileId)))) {
+            QuickLogStore.clearAdded(context, opId)
         }
     }
 }

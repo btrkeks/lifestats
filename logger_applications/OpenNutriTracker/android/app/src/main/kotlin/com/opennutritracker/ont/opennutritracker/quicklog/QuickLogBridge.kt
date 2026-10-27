@@ -83,7 +83,7 @@ object QuickLogBridge {
      * storage, and runs [command]. Never throws.
      *
      * A timeout can land after Dart committed. The write is still published,
-     * so the rings move; only the "Added" confirmation is lost.
+     * so an uncertain caller retries the same command and operation id.
      */
     suspend fun send(context: Context, command: QuickLogCommand): QuickLogReply {
         val startedAt = System.currentTimeMillis()
@@ -127,25 +127,25 @@ object QuickLogBridge {
             else -> QuickLogReply.Unavailable("malformed_reply")
         }
     }
+}
 
-    private val QuickLogCommand.op: String
-        get() = when (this) {
-            is QuickLogCommand.Log -> "log"
-            is QuickLogCommand.Undo -> "undo"
-            QuickLogCommand.Refresh -> "refresh"
-        }
-
-    private fun QuickLogCommand.toWire(): Map<String, Any> = when (this) {
-        is QuickLogCommand.Log -> mapOf(
-            "op" to op,
-            "opId" to opId,
-            "foodKey" to foodKey,
-            "profileId" to profileId,
-            "baseAmount" to baseAmount,
-            "unit" to unit,
-            "tappedAtMs" to tappedAtMs,
-        )
-        is QuickLogCommand.Undo -> mapOf("op" to op, "opId" to opId, "profileId" to profileId)
-        QuickLogCommand.Refresh -> mapOf("op" to op)
+private val QuickLogCommand.op: String
+    get() = when (this) {
+        is QuickLogCommand.Log -> "log"
+        is QuickLogCommand.Undo -> "undo"
+        QuickLogCommand.Refresh -> "refresh"
     }
+
+internal fun QuickLogCommand.toWire(): Map<String, Any> = when (this) {
+    is QuickLogCommand.Log -> mapOf(
+        "op" to op,
+        "opId" to opId,
+        "foodKey" to foodKey,
+        "profileId" to profileId,
+        "baseAmount" to baseAmount,
+        "unit" to unit,
+        "tappedAtMs" to tappedAtMs,
+    )
+    is QuickLogCommand.Undo -> mapOf("op" to op, "opId" to opId, "profileId" to profileId)
+    QuickLogCommand.Refresh -> mapOf("op" to op)
 }
