@@ -38,8 +38,11 @@ class ConfigEntity extends Equatable {
   final BodyWeightUnit bodyWeightUnit;
   final double? userKcalAdjustment;
   final double? userCarbGoalPct;
-  final double? userProteinGoalPct;
   final double? userFatGoalPct;
+
+  /// Daily protein goal in grams per kg of body weight; null means
+  /// `ProteinGoalCalc.defaultGramsPerKg`.
+  final double? userProteinGramsPerKg;
   final bool showActivityTracking;
   final bool showMealMacros;
   final bool notificationsEnabled;
@@ -241,8 +244,8 @@ class ConfigEntity extends Equatable {
     this.bodyWeightUnit = BodyWeightUnit.kg,
     this.userKcalAdjustment,
     this.userCarbGoalPct,
-    this.userProteinGoalPct,
     this.userFatGoalPct,
+    this.userProteinGramsPerKg,
     this.showActivityTracking = true,
     this.showMealMacros = true,
     this.notificationsEnabled = false,
@@ -353,8 +356,8 @@ class ConfigEntity extends Equatable {
               : BodyWeightUnit.kg),
     userKcalAdjustment: dbo.userKcalAdjustment,
     userCarbGoalPct: dbo.userCarbGoalPct,
-    userProteinGoalPct: dbo.userProteinGoalPct,
     userFatGoalPct: dbo.userFatGoalPct,
+    userProteinGramsPerKg: dbo.userProteinGramsPerKg,
     showActivityTracking: dbo.showActivityTracking ?? true,
     showMealMacros: dbo.showMealMacros ?? true,
     notificationsEnabled: dbo.notificationsEnabled ?? false,
@@ -468,8 +471,8 @@ class ConfigEntity extends Equatable {
     bodyWeightUnit,
     userKcalAdjustment,
     userCarbGoalPct,
-    userProteinGoalPct,
     userFatGoalPct,
+    userProteinGramsPerKg,
     showActivityTracking,
     showMealMacros,
     notificationsEnabled,

@@ -3,16 +3,19 @@ import 'package:opennutritracker/core/data/data_source/intake_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/tracked_day_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/user_activity_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/user_data_source.dart';
+import 'package:opennutritracker/core/data/data_source/weight_log_data_source.dart';
 import 'package:opennutritracker/core/data/dbo/config_dbo.dart';
 import 'package:opennutritracker/core/data/data_source/user_activity_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/intake_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/tracked_day_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/user_dbo.dart';
+import 'package:opennutritracker/core/data/dbo/weight_log_dbo.dart';
 import 'package:opennutritracker/core/data/repository/config_repository.dart';
 import 'package:opennutritracker/core/data/repository/intake_repository.dart';
 import 'package:opennutritracker/core/data/repository/tracked_day_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_activity_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_repository.dart';
+import 'package:opennutritracker/core/data/repository/weight_log_repository.dart';
 import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/profile_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
@@ -75,6 +78,10 @@ class SendIntakeToProfilesUsecase {
         HiveDBProvider.userActivityBoxName,
         suffix,
       ),
+      weightLogBox: await _hiveDBProvider.openScopedBox<WeightLogDBO>(
+        HiveDBProvider.weightLogBoxName,
+        suffix,
+      ),
       // App config is shared, so the goal calc reads the same global box.
       appConfigBox: _hiveDBProvider.appConfigBox,
     );
@@ -99,7 +106,11 @@ class SendIntakeToProfilesUsecase {
         configRepository,
         UserActivityRepository(UserActivityDataSource(scoped)),
       );
-      final getMacroGoal = GetMacroGoalUsecase(configRepository);
+      final getMacroGoal = GetMacroGoalUsecase(
+        configRepository,
+        userRepository,
+        WeightLogRepository(WeightLogDataSource(scoped)),
+      );
 
       for (final intake in intakes) {
         final copy = IntakeEntity(
@@ -156,6 +167,10 @@ class SendIntakeToProfilesUsecase {
     ),
     _hiveDBProvider.closeScopedBox<UserActivityDBO>(
       HiveDBProvider.userActivityBoxName,
+      suffix,
+    ),
+    _hiveDBProvider.closeScopedBox<WeightLogDBO>(
+      HiveDBProvider.weightLogBoxName,
       suffix,
     ),
   ]);

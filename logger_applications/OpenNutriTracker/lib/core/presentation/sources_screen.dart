@@ -44,8 +44,17 @@ class SourcesScreen extends StatelessWidget {
       ),
       _SourceEntry(
         title: l10n.sourcesMacrosTitle,
-        description: l10n.sourcesMacrosDescription,
+        description: l10n.sourcesMacrosProteinDescription,
         sources: const [
+          _SourceLink(
+            citation:
+                'Morton RW, et al. (2018). A systematic review, meta-analysis '
+                'and meta-regression of the effect of protein supplementation '
+                'on resistance training-induced gains in muscle mass and '
+                'strength in healthy adults. British Journal of Sports '
+                'Medicine, 52(6):376–384.',
+            url: URLConst.sourceProteinMorton2018URL,
+          ),
           _SourceLink(
             citation:
                 'World Health Organization (2003). Diet, Nutrition and the '

@@ -7,6 +7,7 @@ import 'package:opennutritracker/core/domain/entity/user_pal_entity.dart';
 import 'package:opennutritracker/core/domain/entity/user_weight_goal_entity.dart';
 import 'package:opennutritracker/core/utils/calc/calorie_goal_calc.dart';
 import 'package:opennutritracker/core/utils/calc/macro_calc.dart';
+import 'package:opennutritracker/core/utils/calc/protein_goal_calc.dart';
 import 'package:opennutritracker/core/utils/calc/tdee_calc.dart';
 
 import '../fixture/user_entity_fixtures.dart';
@@ -171,39 +172,44 @@ void main() {
       totalKcalActivities: 200,
     );
 
+    // No weigh-ins passed: 1.8 g/kg × 80 kg profile weight = 144 → 145 g.
+    expect(breakdown.proteinsGoalGrams, 145);
+    expect(breakdown.proteinGramsPerKg, ProteinGoalCalc.defaultGramsPerKg);
+    expect(breakdown.proteinReferenceWeightKg, 80);
+    expect(breakdown.proteinWeightFromLog, isFalse);
     expect(
       breakdown.carbsGoalGrams,
-      MacroCalc.getTotalCarbsGoal(breakdown.totalKcalGoal),
+      MacroCalc.getTotalCarbsGoal(breakdown.totalKcalGoal, 145),
     );
     expect(
       breakdown.fatsGoalGrams,
-      MacroCalc.getTotalFatsGoal(breakdown.totalKcalGoal),
+      MacroCalc.getTotalFatsGoal(breakdown.totalKcalGoal, 145),
     );
-    expect(
-      breakdown.proteinsGoalGrams,
-      MacroCalc.getTotalProteinsGoal(breakdown.totalKcalGoal),
-    );
-    // Default split when the user has not customised it.
-    expect(breakdown.carbsFractionGoal, 0.6);
-    expect(breakdown.fatsFractionGoal, 0.25);
-    expect(breakdown.proteinsFractionGoal, 0.15);
+    expect(breakdown.carbsShareOfRemainder, closeTo(0.6 / 0.85, 1e-9));
+    expect(breakdown.nonProteinKcal, breakdown.totalKcalGoal - 145 * 4);
   });
 
-  test('custom macro split replaces the defaults', () {
+  test('custom factor, weigh-ins and carbs/fat ratio replace the defaults', () {
     final breakdown = KcalGoalBreakdownEntity.compute(
       user: buildUser(),
       totalKcalActivities: 0,
       userCarbsGoalPct: 0.4,
-      userFatsGoalPct: 0.3,
-      userProteinsGoalPct: 0.3,
+      userFatsGoalPct: 0.4,
+      userProteinGramsPerKg: 2.2,
+      proteinReferenceWeight: const ProteinReferenceWeight(
+        weightKg: 76.4,
+        sampleCount: 3,
+      ),
     );
 
-    expect(breakdown.carbsFractionGoal, 0.4);
-    expect(breakdown.fatsFractionGoal, 0.3);
-    expect(breakdown.proteinsFractionGoal, 0.3);
+    // 2.2 × 76.4 = 168.08 → 170 g.
+    expect(breakdown.proteinsGoalGrams, 170);
+    expect(breakdown.proteinWeightFromLog, isTrue);
+    expect(breakdown.proteinWeightSampleCount, 3);
+    expect(breakdown.carbsShareOfRemainder, 0.5);
     expect(
       breakdown.carbsGoalGrams,
-      MacroCalc.getTotalCarbsGoal(breakdown.totalKcalGoal, userCarbsGoal: 0.4),
+      closeTo((breakdown.totalKcalGoal - 170 * 4) * 0.5 / 4, 1e-9),
     );
   });
 
@@ -213,7 +219,8 @@ void main() {
       totalKcalActivities: 150,
     );
 
-    // 60/25/15 sums to 100 %, so grams × densities must rebuild the goal.
+    // Carbs and fat split exactly what protein leaves, so grams × densities
+    // must rebuild the goal.
     expect(
       breakdown.carbsGoalGrams * MacroCalc.carbsKcalPerGram +
           breakdown.fatsGoalGrams * MacroCalc.fatKcalPerGram +

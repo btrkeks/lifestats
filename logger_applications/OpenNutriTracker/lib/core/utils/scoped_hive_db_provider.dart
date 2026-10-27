@@ -4,6 +4,7 @@ import 'package:opennutritracker/core/data/dbo/config_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/intake_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/tracked_day_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/user_dbo.dart';
+import 'package:opennutritracker/core/data/dbo/weight_log_dbo.dart';
 import 'package:opennutritracker/core/utils/hive_db_provider.dart';
 
 /// A [HiveDBProvider] that points the per-profile box getters at a
@@ -13,7 +14,8 @@ import 'package:opennutritracker/core/utils/hive_db_provider.dart';
 /// currently active.
 ///
 /// Only the boxes needed for an intake copy (intake, tracked day, user,
-/// config, user activity) are wired up; touching any other box throws,
+/// config, user activity, and the weight log the protein goal reads) are
+/// wired up; touching any other box throws,
 /// which keeps callers honest about scope.
 class ScopedHiveDBProvider extends HiveDBProvider {
   final Box<IntakeDBO> _intake;
@@ -21,6 +23,7 @@ class ScopedHiveDBProvider extends HiveDBProvider {
   final Box<UserDBO> _user;
   final Box<ConfigDBO> _config;
   final Box<UserActivityDBO> _userActivity;
+  final Box<WeightLogDBO> _weightLog;
   // The shared app config is global, so it's the real box passed straight
   // through — the per-profile [configBox] above only holds personal goals.
   final Box<ConfigDBO> _appConfig;
@@ -31,12 +34,14 @@ class ScopedHiveDBProvider extends HiveDBProvider {
     required Box<UserDBO> userBox,
     required Box<ConfigDBO> configBox,
     required Box<UserActivityDBO> userActivityBox,
+    required Box<WeightLogDBO> weightLogBox,
     required Box<ConfigDBO> appConfigBox,
   })  : _intake = intakeBox,
         _trackedDay = trackedDayBox,
         _user = userBox,
         _config = configBox,
         _userActivity = userActivityBox,
+        _weightLog = weightLogBox,
         _appConfig = appConfigBox;
 
   @override
@@ -49,6 +54,8 @@ class ScopedHiveDBProvider extends HiveDBProvider {
   Box<ConfigDBO> get configBox => _config;
   @override
   Box<UserActivityDBO> get userActivityBox => _userActivity;
+  @override
+  Box<WeightLogDBO> get weightLogBox => _weightLog;
   @override
   Box<ConfigDBO> get appConfigBox => _appConfig;
 }

@@ -59,9 +59,8 @@ class LogUserActivityUsecase {
     await _addTrackedDayUsecase.increaseDayCalorieGoal(day, caloriesBurned);
     await _addTrackedDayUsecase.increaseDayMacroGoals(
       day,
-      carbsAmount: MacroCalc.getTotalCarbsGoal(caloriesBurned),
-      fatAmount: MacroCalc.getTotalFatsGoal(caloriesBurned),
-      proteinAmount: MacroCalc.getTotalProteinsGoal(caloriesBurned),
+      carbsAmount: MacroCalc.getActivityCarbsIncrease(caloriesBurned),
+      fatAmount: MacroCalc.getActivityFatsIncrease(caloriesBurned),
     );
   }
 }

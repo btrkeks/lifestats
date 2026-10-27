@@ -6,12 +6,14 @@ import 'package:opennutritracker/core/data/data_source/intake_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/tracked_day_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/user_activity_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/user_data_source.dart';
+import 'package:opennutritracker/core/data/data_source/weight_log_data_source.dart';
 import 'package:opennutritracker/core/data/dbo/meal_dbo.dart';
 import 'package:opennutritracker/core/data/repository/config_repository.dart';
 import 'package:opennutritracker/core/data/repository/intake_repository.dart';
 import 'package:opennutritracker/core/data/repository/tracked_day_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_activity_repository.dart';
 import 'package:opennutritracker/core/data/repository/user_repository.dart';
+import 'package:opennutritracker/core/data/repository/weight_log_repository.dart';
 import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
@@ -77,7 +79,11 @@ class _StubGetKcalGoalUsecase extends GetKcalGoalUsecase {
 }
 
 class _StubGetMacroGoalUsecase extends GetMacroGoalUsecase {
-  _StubGetMacroGoalUsecase(super.configRepo);
+  _StubGetMacroGoalUsecase(
+    super.configRepo,
+    super.userRepo,
+    super.weightLogRepo,
+  );
 
   @override
   Future<double> getCarbsGoal(double totalCalorieGoal) async => 250;
@@ -123,7 +129,11 @@ void main() {
         addIntake,
         _NoopAddTrackedDayUsecase(dummyTrackedRepo),
         _StubGetKcalGoalUsecase(dummyUserRepo, dummyConfigRepo, dummyActivityRepo),
-        _StubGetMacroGoalUsecase(dummyConfigRepo),
+        _StubGetMacroGoalUsecase(
+          dummyConfigRepo,
+          dummyUserRepo,
+          WeightLogRepository(WeightLogDataSource(FakeHiveDBProvider())),
+        ),
         customMealDataSource,
       );
     });

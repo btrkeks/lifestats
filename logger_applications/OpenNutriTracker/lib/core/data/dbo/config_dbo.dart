@@ -22,6 +22,9 @@ class ConfigDBO extends HiveObject {
   double? userKcalAdjustment;
   @HiveField(6)
   double? userCarbGoalPct;
+  // Legacy: protein's share of the kcal goal. The protein goal now follows
+  // body weight ([userProteinGramsPerKg]); this is no longer read or written
+  // and stays only so older records keep deserialising.
   @HiveField(7)
   double? userProteinGoalPct;
   @HiveField(8)
@@ -187,6 +190,11 @@ class ConfigDBO extends HiveObject {
   // user opts out, matching every install that predates the field.
   @HiveField(39)
   bool? defaultToRawFoodUnits;
+  // Daily protein goal in grams per kg of body weight. Null means the
+  // default (ProteinGoalCalc.defaultGramsPerKg). Personal, like the other
+  // macro goals.
+  @HiveField(40)
+  double? userProteinGramsPerKg;
 
   ConfigDBO(
     this.hasAcceptedDisclaimer,
@@ -226,6 +234,7 @@ class ConfigDBO extends HiveObject {
     this.policyNoticeRevisionSeen,
     this.healthDeletedWorkouts,
     this.defaultToRawFoodUnits,
+    this.userProteinGramsPerKg,
   });
 
   factory ConfigDBO.empty() =>

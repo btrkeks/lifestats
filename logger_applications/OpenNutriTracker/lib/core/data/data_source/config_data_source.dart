@@ -54,6 +54,7 @@ class ConfigDataSource {
       merged.userCarbGoalPct = profile.userCarbGoalPct;
       merged.userProteinGoalPct = profile.userProteinGoalPct;
       merged.userFatGoalPct = profile.userFatGoalPct;
+      merged.userProteinGramsPerKg = profile.userProteinGramsPerKg;
       merged.mealKcalSharesPct = profile.mealKcalSharesPct;
       merged.dailyWaterGoalMl = profile.dailyWaterGoalMl;
       merged.healthImportEnabled = profile.healthImportEnabled;
@@ -70,6 +71,7 @@ class ConfigDataSource {
       merged.userCarbGoalPct = null;
       merged.userProteinGoalPct = null;
       merged.userFatGoalPct = null;
+      merged.userProteinGramsPerKg = null;
       merged.mealKcalSharesPct = null;
       merged.dailyWaterGoalMl = null;
       merged.healthImportEnabled = null;
@@ -196,16 +198,16 @@ class ConfigDataSource {
     await _update((c) => c.userKcalAdjustment = kcalAdjustment);
   }
 
-  Future<void> setConfigCarbGoalPct(double carbGoalPct) async {
-    await _update((c) => c.userCarbGoalPct = carbGoalPct);
-  }
-
-  Future<void> setConfigProteinGoalPct(double proteinGoalPct) async {
-    await _update((c) => c.userProteinGoalPct = proteinGoalPct);
-  }
-
-  Future<void> setConfigFatGoalPct(double fatGoalPct) async {
-    await _update((c) => c.userFatGoalPct = fatGoalPct);
+  Future<void> setConfigMacroGoals({
+    required double carbGoalPct,
+    required double fatGoalPct,
+    required double proteinGramsPerKg,
+  }) async {
+    await _update((c) {
+      c.userCarbGoalPct = carbGoalPct;
+      c.userFatGoalPct = fatGoalPct;
+      c.userProteinGramsPerKg = proteinGramsPerKg;
+    });
   }
 
   Future<void> setConfigShowActivityTracking(bool show) async {

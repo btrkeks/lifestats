@@ -483,9 +483,12 @@ Future<void> initLocator() async {
     () => GetKcalGoalUsecase(locator(), locator(), locator()),
   );
   locator.registerLazySingleton(
-    () => GetKcalGoalBreakdownUsecase(locator(), locator(), locator()),
+    () =>
+        GetKcalGoalBreakdownUsecase(locator(), locator(), locator(), locator()),
   );
-  locator.registerLazySingleton(() => GetMacroGoalUsecase(locator()));
+  locator.registerLazySingleton(
+    () => GetMacroGoalUsecase(locator(), locator(), locator()),
+  );
   locator.registerLazySingleton(
     () => ExportDataUsecase(
       locator(),

@@ -115,32 +115,10 @@ kcal/kJ labels.
 
 ## 4. Test coverage — `MacroCalc` unit tests
 
-**Suggested title:** `test: unit tests for MacroCalc goal helpers`
-
-**Category:** test coverage
-
-**Why first-timer safe:** Pure static functions, no Hive/Flutter binding required.
-
-**Scope:**
-
-- Implementation: `lib/core/utils/calc/macro_calc.dart`
-  - `getTotalCarbsGoal`
-  - `getTotalFatsGoal`
-  - `getTotalProteinsGoal`
-  (and any other pure helpers in that file you can cover cheaply)
-- New file: `test/unit_test/macro_calc_test.dart`
-- Cover default macro percentages vs explicit overrides; include a non-trivial
-  kcal total (e.g. 2000 kcal) and assert expected gram totals.
-
-**Acceptance criteria:**
-
-- [ ] Tests fail if goal math regresses (not snapshot-of-nothing assertions).
-- [ ] `flutter test test/unit_test/macro_calc_test.dart` passes.
-
-**Out of scope:** Full TDEE / UI widget tests for macro rings.
-
-**Stretch (separate issue if large):** dedicated `test/unit_test/bmi_calc_test.dart`
-for `lib/core/utils/calc/bmi_calc.dart`.
+**Status:** done. The protein-by-body-weight rework added
+`test/unit_test/protein_goal_calc_test.dart`, which covers `MacroCalc` (carbs
+and fat split of the energy left after protein) and `ProteinGoalCalc`
+(reference weight and rounding). Don't file this one.
 
 ---
 
