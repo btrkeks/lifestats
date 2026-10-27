@@ -7,11 +7,14 @@ import 'package:opennutritracker/core/utils/launch_request_service.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/core/utils/meal_type_suggester.dart';
 import 'package:opennutritracker/core/utils/navigation_options.dart';
+import 'package:opennutritracker/features/add_meal/presentation/add_meal_screen.dart';
+import 'package:opennutritracker/features/add_meal/presentation/add_meal_type.dart';
 import 'package:opennutritracker/features/diary/diary_page.dart';
 import 'package:opennutritracker/core/presentation/widgets/home_appbar.dart';
 import 'package:opennutritracker/features/home/home_page.dart';
 import 'package:opennutritracker/core/presentation/widgets/main_appbar.dart';
 import 'package:opennutritracker/features/profile/profile_page.dart';
+import 'package:opennutritracker/features/scanner/scanner_screen.dart';
 import 'package:opennutritracker/features/trends/presentation/trends_page.dart';
 import 'package:opennutritracker/generated/l10n.dart';
 
@@ -98,6 +101,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         await Navigator.of(
           context,
         ).pushNamed(NavigationOptions.healthSyncRoute);
+      // Today and the meal of the hour, the same choice the widget's own
+      // logs make, since the widget never asks for a meal.
+      case LaunchRequest.scanProduct:
+        final now = DateTime.now();
+        await Navigator.of(context).pushNamed(
+          NavigationOptions.scannerRoute,
+          arguments: ScannerScreenArguments(
+            now,
+            MealTypeSuggester.suggestFromTime(now),
+          ),
+        );
+      case LaunchRequest.searchFood:
+        final now = DateTime.now();
+        await Navigator.of(context).pushNamed(
+          NavigationOptions.addMealRoute,
+          arguments: AddMealScreenArguments(
+            AddMealExtension.fromIntakeTypeEntity(
+              MealTypeSuggester.suggestFromTime(now),
+            ),
+            now,
+          ),
+        );
       case null:
         return;
     }

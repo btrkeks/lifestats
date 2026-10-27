@@ -7,6 +7,12 @@ enum LaunchRequest {
   /// without an answer the user is dropped on the diary having asked a
   /// question nothing answered.
   healthRationale,
+
+  /// The widget's or the launcher shortcut's "Scan Product".
+  scanProduct,
+
+  /// The widget's "Search food", shown while it has nothing to suggest.
+  searchFood,
 }
 
 /// Reads the launch the platform recorded and has not handed over yet.

@@ -1,5 +1,6 @@
 package com.opennutritracker.ont.opennutritracker
 
+import android.content.Context
 import android.content.Intent
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -31,9 +32,18 @@ object LaunchInbox {
     private const val ACTION_SHOW_PERMISSIONS_RATIONALE = "androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"
     private const val ACTION_VIEW_PERMISSION_USAGE = "android.intent.action.VIEW_PERMISSION_USAGE"
 
+    /**
+     * Sent by the widget and the launcher shortcut. MainActivity is exported,
+     * so another app could send them too; all they do is open a screen.
+     */
+    private const val ACTION_SCAN_PRODUCT = "com.opennutritracker.action.SCAN_PRODUCT"
+    private const val ACTION_SEARCH_FOOD = "com.opennutritracker.action.SEARCH_FOOD"
+
     /** Wire values match Dart's `LaunchRequest` enum names. */
     enum class Request(val wire: String) {
         HealthRationale("healthRationale"),
+        ScanProduct("scanProduct"),
+        SearchFood("searchFood"),
     }
 
     private var pending: Request? = null
@@ -42,6 +52,22 @@ object LaunchInbox {
     fun offer(intent: Intent?) {
         requestFor(intent)?.let { pending = it }
     }
+
+    /**
+     * Opens the app on [request]. By class, so it resolves under the
+     * develop flavour's application id too. Single top: a running app gets
+     * it through onNewIntent instead of a second activity.
+     */
+    fun intentFor(context: Context, request: Request): Intent =
+        Intent(context, MainActivity::class.java)
+            .setAction(
+                when (request) {
+                    Request.ScanProduct -> ACTION_SCAN_PRODUCT
+                    Request.SearchFood -> ACTION_SEARCH_FOOD
+                    Request.HealthRationale -> ACTION_SHOW_PERMISSIONS_RATIONALE
+                },
+            )
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
     fun register(engine: FlutterEngine) {
         MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
@@ -62,6 +88,8 @@ object LaunchInbox {
     private fun requestFor(intent: Intent?): Request? =
         when (intent?.action) {
             ACTION_SHOW_PERMISSIONS_RATIONALE, ACTION_VIEW_PERMISSION_USAGE -> Request.HealthRationale
+            ACTION_SCAN_PRODUCT -> Request.ScanProduct
+            ACTION_SEARCH_FOOD -> Request.SearchFood
             else -> null
         }
 }

@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Inside the adaptive icon's 66 dp safe zone. -->
+    <group
+        android:pivotX="480"
+        android:pivotY="480"
+        android:scaleX="0.4"
+        android:scaleY="0.4">
+        <group android:translateY="960">
+            <path
+                android:fillColor="#FF001F24"
+                android:pathData="M40-120v-200h80v120h120v80H40Zm680 0v-80h120v-120h80v200H720ZM160-240v-480h80v480h-80Zm120 0v-480h40v480h-40Zm120 0v-480h80v480h-80Zm120 0v-480h120v480H520Zm160 0v-480h40v480h-40Zm80 0v-480h40v480h-40ZM40-640v-200h200v80H120v120H40Zm800 0v-120H720v-80h200v200h-80Z" />
+        </group>
+    </group>
+</vector>

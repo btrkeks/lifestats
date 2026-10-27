@@ -46,6 +46,7 @@ object QuickLogStore {
         prefs(context).edit().putString(KEY_SNAPSHOT, json).commit()
         val snapshot = WidgetSnapshot.parse(json)
         Log.i(TAG, "publish ${describe(snapshot)}")
+        if (snapshot is WidgetSnapshot.Ready) QuickLogShortcut.update(context, snapshot.labels.scanProduct)
         update(context) { it.copy(snapshot = snapshot) }
     }
 

@@ -43,6 +43,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.opennutritracker.ont.opennutritracker.LaunchInbox
 import com.opennutritracker.ont.opennutritracker.MainActivity
 import com.opennutritracker.ont.opennutritracker.R
 import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogPickerActivity
@@ -96,6 +97,8 @@ private const val CompactChips = 3
 fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
     val context = LocalContext.current
     val openApp = actionStartActivity<MainActivity>()
+    val scan = actionStartActivity(LaunchInbox.intentFor(context, LaunchInbox.Request.ScanProduct))
+    val search = actionStartActivity(LaunchInbox.intentFor(context, LaunchInbox.Request.SearchFood))
     val surface = GlanceModifier
         .fillMaxSize()
         .appWidgetBackground()
@@ -104,7 +107,7 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
     val frame = surface.padding(Padding)
     when (val snapshot = model.snapshot) {
         is WidgetSnapshot.Ready -> if (size.height < CompactBelow) {
-            Compact(snapshot, model, nowMs, openApp, surface.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp))
+            Compact(snapshot, model, nowMs, scan, search, surface.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp))
         } else Row(frame) {
             val ringSize = min(StatusWidth, size.height - Padding * 2 - ButtonHeight - RowGap)
             if (snapshot.rows.isEmpty()) {
@@ -114,7 +117,7 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) { Rings(snapshot.status, min(StatusWidth, size.height - Padding * 2)) }
                 Spacer(GlanceModifier.width(ColumnGap))
-                Empty(snapshot, openApp)
+                Empty(snapshot, scan, search)
             } else {
                 Column(
                     GlanceModifier.width(StatusWidth).fillMaxHeight(),
@@ -128,7 +131,7 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
                         background = Palette.scan,
                         content = Palette.onScan,
                         fontSize = 13.sp,
-                        action = openApp,
+                        action = scan,
                         modifier = GlanceModifier.width(StatusWidth),
                     )
                 }
@@ -165,7 +168,14 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
 
 /** s4: one status line, the top foods as chips, an icon-only scan tile. */
 @Composable
-private fun Compact(snapshot: WidgetSnapshot.Ready, model: WidgetModel, nowMs: Long, scan: Action, modifier: GlanceModifier) {
+private fun Compact(
+    snapshot: WidgetSnapshot.Ready,
+    model: WidgetModel,
+    nowMs: Long,
+    scan: Action,
+    search: Action,
+    modifier: GlanceModifier,
+) {
     val status = snapshot.status
     Column(modifier) {
         Row(GlanceModifier.height(22.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -197,7 +207,7 @@ private fun Compact(snapshot: WidgetSnapshot.Ready, model: WidgetModel, nowMs: L
                     background = Palette.row,
                     content = Palette.onRow,
                     fontSize = 14.sp,
-                    action = scan,
+                    action = search,
                     modifier = GlanceModifier.defaultWeight(),
                 )
             }
@@ -500,7 +510,7 @@ private fun AddedRow(row: FoodRowData, action: RecentAction, undoLabel: String) 
 }
 
 @Composable
-private fun Empty(snapshot: WidgetSnapshot.Ready, action: Action) {
+private fun Empty(snapshot: WidgetSnapshot.Ready, scan: Action, search: Action) {
     Column(GlanceModifier.fillMaxHeight()) {
         Column(GlanceModifier.padding(start = 6.dp, end = 4.dp, top = 2.dp)) {
             Text(
@@ -522,7 +532,7 @@ private fun Empty(snapshot: WidgetSnapshot.Ready, action: Action) {
             background = Palette.accent,
             content = Palette.onAccent,
             fontSize = 14.sp,
-            action = action,
+            action = scan,
             modifier = GlanceModifier.fillMaxWidth(),
         )
         Spacer(GlanceModifier.height(RowGap))
@@ -532,7 +542,7 @@ private fun Empty(snapshot: WidgetSnapshot.Ready, action: Action) {
             background = Palette.row,
             content = Palette.onRow,
             fontSize = 14.sp,
-            action = action,
+            action = search,
             modifier = GlanceModifier.fillMaxWidth(),
         )
     }

@@ -49,6 +49,17 @@ void main() {
       expect(calls.single.method, 'consume');
     });
 
+    test('reports the widget\'s scan and search requests', () async {
+      for (final request in [
+        LaunchRequest.scanProduct,
+        LaunchRequest.searchFood,
+      ]) {
+        handleWith((_) async => request.name);
+
+        expect(await LaunchRequestService.consume(), request);
+      }
+    });
+
     test('reports nothing pending on an ordinary launch', () async {
       handleWith((_) async => null);
 
@@ -108,6 +119,12 @@ void main() {
             'LaunchInbox must recognise it',
       );
       expect(inbox, contains('"${LaunchRequest.healthRationale.name}"'));
+    });
+
+    test('the inbox can record every request Dart acts on', () {
+      for (final request in LaunchRequest.values) {
+        expect(inbox, contains('"${request.name}"'), reason: request.name);
+      }
     });
 
     test('the activity hands the inbox both kinds of launch', () {
