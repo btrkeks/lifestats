@@ -76,7 +76,9 @@ async def run(args) -> None:
                 notify("failing", f"Collecting from the scale failed {failures} times. If it keeps happening, run `beurer-scale-sync pair`.")
             await sleep_until(next_collection)
             continue
-        for reading in store.append_readings(readings):
+        new = store.append_readings(readings)
+        log(f"collected {len(readings)} reading(s), {len(new)} new")
+        for reading in new:
             log(f"new reading {reading.timestamp}: {reading.weight_kg} kg, body fat {reading.body_fat_pct} %")
         lifestats.sync_pending(credentials.user_index, log)
         await sleep_until(next_collection)
