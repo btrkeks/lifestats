@@ -5,16 +5,15 @@ import asyncio
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from bleak import BleakClient, BleakScanner
 
 from . import agent, lifestats, store
+from .schedule import Window, has_reading_on
 from .session import collect_readings, register_slot
 
-# The BF500 stays connectable around the clock and stores weigh-ins taken while nobody is
-# connected, so the service collects on a timer instead of reacting to advertisements.
-COLLECT_EVERY = 20 * 60
 FIND_TIMEOUT = 60
 FAILURES_BEFORE_WARNING = 3
 NOTIFY_INTERVAL = 3600
@@ -48,40 +47,51 @@ async def sleep_until(deadline: float) -> None:
         await asyncio.sleep(min(60, max(1, deadline - time.time())))
 
 
+async def collect_once(bus, credentials: store.Credentials, notify: Notifier, failures: int) -> int:
+    """One collection attempt. Returns the updated count of consecutive failures."""
+    await agent.ensure_agent_registered(bus)
+    device = await BleakScanner.find_device_by_address(credentials.address, timeout=FIND_TIMEOUT)
+    if device is None:
+        log("scale not in range")
+        return failures
+    try:
+        readings = await collect_readings(device, credentials, log)
+    except Exception as error:  # Bluetooth errors are varied and all mean "try again next time".
+        failures += 1
+        log(f"collection failed ({failures} in a row): {error!r}")
+        if failures >= FAILURES_BEFORE_WARNING:
+            notify("failing", f"Collecting from the scale failed {failures} times. If it keeps happening, run `beurer-scale-sync pair`.")
+        return failures
+    new = store.append_readings(readings)
+    log(f"collected {len(readings)} reading(s), {len(new)} new")
+    for reading in new:
+        log(f"new reading {reading.timestamp}: {reading.weight_kg} kg, body fat {reading.body_fat_pct} %")
+    return 0
+
+
 async def run(args) -> None:
     credentials = store.load_credentials()
+    window = Window(start=args.start, end=args.end)
     notify = Notifier()
     pairing_message = "The scale asked to pair again. Run `beurer-scale-sync pair` and press SET on the scale."
     bus = await agent.register_agent(
         credentials.address, confirm=False, on_pairing_request=lambda: notify("pairing", pairing_message), log=log
     )
-    log(f"collecting from scale {credentials.address}, slot {credentials.user_index}, every {COLLECT_EVERY // 60} min")
+    log(
+        f"collecting from scale {credentials.address}, slot {credentials.user_index}, "
+        f"daily from {window.start:%H:%M} until that day's reading arrives (last try {window.end:%H:%M})"
+    )
     failures = 0
     while True:
-        next_collection = time.time() + COLLECT_EVERY
-        await agent.ensure_agent_registered(bus)
         lifestats.sync_pending(credentials.user_index, log)
-        device = await BleakScanner.find_device_by_address(credentials.address, timeout=FIND_TIMEOUT)
-        if device is None:
-            log("scale not in range")
-            await sleep_until(next_collection)
-            continue
-        try:
-            readings = await collect_readings(device, credentials, log)
-            failures = 0
-        except Exception as error:  # Bluetooth errors are varied and all mean "try again next time".
-            failures += 1
-            log(f"collection failed ({failures} in a row): {error!r}")
-            if failures >= FAILURES_BEFORE_WARNING:
-                notify("failing", f"Collecting from the scale failed {failures} times. If it keeps happening, run `beurer-scale-sync pair`.")
-            await sleep_until(next_collection)
-            continue
-        new = store.append_readings(readings)
-        log(f"collected {len(readings)} reading(s), {len(new)} new")
-        for reading in new:
-            log(f"new reading {reading.timestamp}: {reading.weight_kg} kg, body fat {reading.body_fat_pct} %")
-        lifestats.sync_pending(credentials.user_index, log)
-        await sleep_until(next_collection)
+        today = datetime.now()
+        if window.should_collect(today, has_reading_on(store.load_readings(), today.date(), credentials.user_index)):
+            failures = await collect_once(bus, credentials, notify, failures)
+            lifestats.sync_pending(credentials.user_index, log)
+        now = datetime.now()
+        next_check = window.next_check(now, has_reading_on(store.load_readings(), now.date(), credentials.user_index))
+        log(f"next check {next_check:%Y-%m-%d %H:%M}")
+        await sleep_until(next_check.timestamp())
 
 
 RELABEL_HINT = """
@@ -143,10 +153,16 @@ def status(args) -> None:
         log(f"  {reading.timestamp}: {reading.weight_kg} kg, body fat {reading.body_fat_pct} %, muscle {reading.muscle_pct} %")
 
 
+def clock_time(text: str):
+    return datetime.strptime(text, "%H:%M").time()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="beurer-scale-sync", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("run", help="watch for the scale and sync every weigh-in (the systemd service)")
+    run_parser = commands.add_parser("run", help="collect each morning's weigh-in and sync it (the systemd service)")
+    run_parser.add_argument("--start", type=clock_time, default=Window.start, help="first collection each day, HH:MM (default 06:00)")
+    run_parser.add_argument("--end", type=clock_time, default=Window.end, help="last retry each day, HH:MM (default 23:00)")
     pair_parser = commands.add_parser("pair", help="pair the laptop with the scale (press SET on the scale)")
     pair_parser.add_argument("--address", help="scale address, defaults to the registered one")
     register_parser = commands.add_parser("register", help="register a user slot for this laptop on the scale")

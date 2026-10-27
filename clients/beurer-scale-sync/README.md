@@ -12,12 +12,17 @@ Lifestats acknowledged; delete a day from it to resend that day.
 
 1. You weigh yourself. The scale recognises its only user (this laptop's slot) and stores the
    reading.
-2. Every 20 minutes the service connects, sets the scale's clock, gives the consent code for its
-   slot, receives the stored readings and disconnects, usually within 10 seconds.
+2. From 06:00 the service connects, sets the scale's clock, gives the consent code for its slot,
+   receives the stored readings and disconnects, usually within 10 seconds. It retries every
+   15 minutes until a reading from that day has arrived (last try 23:00), then leaves the scale
+   alone until the next morning. `run --start HH:MM --end HH:MM` moves the window.
 3. It logs the readings and sends any day whose first weigh-in changed.
 
+A weigh-in before the start time is collected at the start time; a later one at the next retry.
+If the laptop is asleep at the start time, it collects within a minute of waking up.
+
 The BF500 stays connectable around the clock and its advertisements look the same before and
-after a weigh-in, so the service collects on a timer. It never asks the scale to measure: that
+after a weigh-in, so the service collects on a schedule. It never asks the scale to measure: that
 lights the display, and doing it on every connection kept the display on permanently.
 
 The laptop must be in Bluetooth range at some point after the weigh-in. Readings wait on the
@@ -58,7 +63,7 @@ change. The service then sends a desktop notification instead of failing silentl
 
 | Command | Does |
 | --- | --- |
-| `run` | The service: collect every 20 minutes and sync |
+| `run` | The service: collect each morning's weigh-in and sync it |
 | `pair` | Pair the laptop (press SET), then print the relabel command |
 | `register --address ADDR` | Register a user slot for this laptop |
 | `sync` | Send logged days Lifestats has not acknowledged |
