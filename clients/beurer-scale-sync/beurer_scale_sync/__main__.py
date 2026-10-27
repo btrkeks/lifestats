@@ -12,8 +12,10 @@ from bleak import BleakClient, BleakScanner
 from . import agent, lifestats, store
 from .session import collect_readings, register_slot
 
-SCAN_WINDOW = 300
-COOLDOWN_AFTER_SESSION = 90
+# The BF500 stays connectable around the clock and stores weigh-ins taken while nobody is
+# connected, so the service collects on a timer instead of reacting to advertisements.
+COLLECT_EVERY = 20 * 60
+FIND_TIMEOUT = 60
 FAILURES_BEFORE_WARNING = 3
 NOTIFY_INTERVAL = 3600
 
@@ -40,6 +42,12 @@ class Notifier:
             pass
 
 
+async def sleep_until(deadline: float) -> None:
+    """Sleep on the wall clock, so a laptop waking from suspend collects within a minute."""
+    while time.time() < deadline:
+        await asyncio.sleep(min(60, max(1, deadline - time.time())))
+
+
 async def run(args) -> None:
     credentials = store.load_credentials()
     notify = Notifier()
@@ -47,32 +55,31 @@ async def run(args) -> None:
     bus = await agent.register_agent(
         credentials.address, confirm=False, on_pairing_request=lambda: notify("pairing", pairing_message), log=log
     )
-    log(f"watching for scale {credentials.address}, slot {credentials.user_index}")
+    log(f"collecting from scale {credentials.address}, slot {credentials.user_index}, every {COLLECT_EVERY // 60} min")
     failures = 0
     while True:
+        next_collection = time.time() + COLLECT_EVERY
         await agent.ensure_agent_registered(bus)
         lifestats.sync_pending(credentials.user_index, log)
-        device = await BleakScanner.find_device_by_address(credentials.address, timeout=SCAN_WINDOW)
+        device = await BleakScanner.find_device_by_address(credentials.address, timeout=FIND_TIMEOUT)
         if device is None:
+            log("scale not in range")
+            await sleep_until(next_collection)
             continue
-        log("scale is awake, connecting")
         try:
             readings = await collect_readings(device, credentials, log)
             failures = 0
-        except Exception as error:  # Bluetooth errors are varied and all mean "try again next wake-up".
+        except Exception as error:  # Bluetooth errors are varied and all mean "try again next time".
             failures += 1
-            log(f"session failed ({failures} in a row): {error!r}")
+            log(f"collection failed ({failures} in a row): {error!r}")
             if failures >= FAILURES_BEFORE_WARNING:
-                notify("failing", f"Connecting to the scale failed {failures} times. If it keeps happening, run `beurer-scale-sync pair`.")
-            await asyncio.sleep(COOLDOWN_AFTER_SESSION)
+                notify("failing", f"Collecting from the scale failed {failures} times. If it keeps happening, run `beurer-scale-sync pair`.")
+            await sleep_until(next_collection)
             continue
-        new = store.append_readings(readings)
-        for reading in new:
+        for reading in store.append_readings(readings):
             log(f"new reading {reading.timestamp}: {reading.weight_kg} kg, body fat {reading.body_fat_pct} %")
-        if not readings:
-            log("session ended without a reading")
         lifestats.sync_pending(credentials.user_index, log)
-        await asyncio.sleep(COOLDOWN_AFTER_SESSION)
+        await sleep_until(next_collection)
 
 
 RELABEL_HINT = """

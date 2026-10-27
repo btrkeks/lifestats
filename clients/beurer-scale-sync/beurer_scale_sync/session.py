@@ -1,8 +1,9 @@
 """One Bluetooth session with the scale: consent with our slot, collect readings, disconnect.
 
-The BF500 shows APP and skips its own weigh-in while a session is open, so sessions stay short.
-Readings taken while the laptop was away arrive right after consent. If none do, the laptop asks
-the scale to measure whoever is standing on it.
+The BF500 weighs and stores readings on its own while no session is open; they arrive right
+after consent. The laptop never asks it to measure: that lights the display, and the scale stays
+connectable all the time, so a service that measured on every connection kept it switched on.
+Sessions stay short because the scale skips its own weigh-in while one is open.
 """
 
 import asyncio
@@ -16,9 +17,8 @@ from bleak.backends.device import BLEDevice
 from . import protocol as p
 from .store import Credentials
 
-STORED_READINGS_WAIT = 15
-MEASUREMENT_WAIT = 40
-QUIET_AFTER_LAST_PACKET = 4
+STORED_READINGS_WAIT = 8
+QUIET_AFTER_LAST_PACKET = 3
 
 
 class ConsentRefused(Exception):
@@ -94,11 +94,8 @@ async def collect_readings(
         )
         if not consent.ok:
             raise ConsentRefused(f"slot {credentials.user_index}: {consent.describe()}")
-        if not await _wait(lambda: collector.received_any, STORED_READINGS_WAIT):
-            log("no stored readings; asking the scale to measure")
-            await client.write_gatt_char(p.BEURER_TAKE_MEASUREMENT, b"\x00", response=True)
-            await _wait(lambda: collector.received_any, MEASUREMENT_WAIT)
-        await _wait(lambda: time.monotonic() - collector.last_packet > QUIET_AFTER_LAST_PACKET, 30)
+        if await _wait(lambda: collector.received_any, STORED_READINGS_WAIT):
+            await _wait(lambda: time.monotonic() - collector.last_packet > QUIET_AFTER_LAST_PACKET, 30)
     collector.flush()
     return collector.readings
 

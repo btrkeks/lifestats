@@ -10,14 +10,19 @@ Lifestats acknowledged; delete a day from it to resend that day.
 
 ## How a weigh-in reaches Lifestats
 
-1. You step on the scale. It wakes up and advertises for about a minute.
-2. The service connects, sets the scale's clock and gives the consent code for its slot.
-3. Readings the scale stored while the laptop was away arrive first. If there are none, the service
-   asks the scale to measure whoever is standing on it. The display shows APP meanwhile.
-4. The service disconnects, logs the readings and sends any day whose first weigh-in changed.
+1. You weigh yourself. The scale recognises its only user (this laptop's slot) and stores the
+   reading.
+2. Every 20 minutes the service connects, sets the scale's clock, gives the consent code for its
+   slot, receives the stored readings and disconnects, usually within 10 seconds.
+3. It logs the readings and sends any day whose first weigh-in changed.
 
-The laptop must be awake and within Bluetooth range. Readings taken while it is not arrive on the
-next connection.
+The BF500 stays connectable around the clock and its advertisements look the same before and
+after a weigh-in, so the service collects on a timer. It never asks the scale to measure: that
+lights the display, and doing it on every connection kept the display on permanently.
+
+The laptop must be in Bluetooth range at some point after the weigh-in. Readings wait on the
+scale until then. While the service is connected the scale skips its own weigh-in, so a weigh-in
+that starts during those few seconds shows APP; step off and on again.
 
 ## One-time setup
 
@@ -31,9 +36,11 @@ systemctl --user enable --now lifestats-beurer-sync.service
 
 `register` copies the profile (birth date, sex, height, activity level) of the scale's first user
 into the new slot; the scale needs it for body composition. The slot number and consent code are
-saved to `~/.config/lifestats-beurer/state.json`. Delete the other user slots on the scale
-(for example from the Beurer app), otherwise the scale alternates "U: 1" and "U: 2" when it
-cannot tell who is standing on it.
+saved to `~/.config/lifestats-beurer/state.json`.
+
+Then delete every other user slot on the scale, for example in the Beurer app (Device settings,
+User settings; the phone needs Bluetooth on). Otherwise the scale files weigh-ins under the other
+slot, or alternates "U: 1" and "U: 2" when two profiles match, and the laptop never sees them.
 
 ## Why `relabel-bond.sh` exists
 
@@ -51,7 +58,7 @@ change. The service then sends a desktop notification instead of failing silentl
 
 | Command | Does |
 | --- | --- |
-| `run` | The service: wait for the scale, collect, sync, repeat |
+| `run` | The service: collect every 20 minutes and sync |
 | `pair` | Pair the laptop (press SET), then print the relabel command |
 | `register --address ADDR` | Register a user slot for this laptop |
 | `sync` | Send logged days Lifestats has not acknowledged |
