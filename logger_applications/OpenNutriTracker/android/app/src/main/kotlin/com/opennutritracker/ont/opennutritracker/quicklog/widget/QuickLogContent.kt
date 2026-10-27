@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
@@ -83,6 +84,17 @@ private val RowGap = 6.dp
 private val StatusWidth = 124.dp
 private val ButtonHeight = 48.dp
 
+/**
+ * The mock's 4×2 is 208 dp tall; MIUI's is 177 dp. Below this the frame
+ * and scan button tighten so the rings keep room for their centre text.
+ */
+private val TightBelow = 200.dp
+private val TightPadding = 10.dp
+private val TightButtonHeight = 40.dp
+
+/** Narrowest status column that still fits the scan label on one line. */
+private val MinStatusWidth = 112.dp
+
 /** Under the mock's 70 dp: a real 4×2 cell is narrower than the mock's, and at 70 dp the subtitle ellipsized. */
 private val PillWidth = 62.dp
 
@@ -109,19 +121,23 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
         is WidgetSnapshot.Ready -> if (size.height < CompactBelow) {
             val verticalPadding = ((size.height - 22.dp - 6.dp - ButtonHeight) / 2f).coerceIn(0.dp, 10.dp)
             Compact(snapshot, model, nowMs, scan, search, surface.padding(start = 12.dp, end = 12.dp, top = verticalPadding, bottom = verticalPadding))
-        } else Row(frame) {
-            val ringSize = min(StatusWidth, size.height - Padding * 2 - ButtonHeight - RowGap)
-            if (snapshot.rows.isEmpty()) {
+        } else if (snapshot.rows.isEmpty()) Row(frame) {
+            Column(
+                GlanceModifier.width(StatusWidth).fillMaxHeight(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) { Rings(snapshot.status, min(StatusWidth, size.height - Padding * 2)) }
+            Spacer(GlanceModifier.width(ColumnGap))
+            Empty(snapshot, scan, search)
+        } else {
+            val tight = size.height < TightBelow
+            val padding = if (tight) TightPadding else Padding
+            val buttonHeight = if (tight) TightButtonHeight else ButtonHeight
+            val ringSize = min(StatusWidth, size.height - padding * 2 - buttonHeight - RowGap)
+            val statusWidth = max(ringSize, MinStatusWidth)
+            Row(surface.padding(padding)) {
                 Column(
-                    GlanceModifier.width(StatusWidth).fillMaxHeight(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) { Rings(snapshot.status, min(StatusWidth, size.height - Padding * 2)) }
-                Spacer(GlanceModifier.width(ColumnGap))
-                Empty(snapshot, scan, search)
-            } else {
-                Column(
-                    GlanceModifier.width(StatusWidth).fillMaxHeight(),
+                    GlanceModifier.width(statusWidth).fillMaxHeight(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Rings(snapshot.status, ringSize)
@@ -133,7 +149,8 @@ fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
                         content = Palette.onScan,
                         fontSize = 13.sp,
                         action = scan,
-                        modifier = GlanceModifier.width(StatusWidth),
+                        modifier = GlanceModifier.width(statusWidth),
+                        height = buttonHeight,
                     )
                 }
                 Spacer(GlanceModifier.width(ColumnGap))
@@ -313,30 +330,33 @@ private fun ChipBadge(text: String, background: ColorProvider, content: ColorPro
 
 @Composable
 private fun Rings(status: Status, size: Dp) {
+    // The text is sized for the mock's 124 dp ring; a smaller ring shrinks it with the ring so it stays inside.
+    val scale = size / StatusWidth
+    fun scaled(base: Float) = (base * scale).coerceAtLeast(10f).sp
     Box(GlanceModifier.size(size), contentAlignment = Alignment.Center) {
         RingImages(status.energyFraction, status.proteinFraction, size)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 status.energyValueText,
-                style = TextStyle(color = Palette.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = Palette.onBackground, fontSize = scaled(22f), fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
             Text(
                 status.energyLabelText,
-                style = TextStyle(color = Palette.onBackgroundVariant, fontSize = 12.sp),
+                style = TextStyle(color = Palette.onBackgroundVariant, fontSize = scaled(12f)),
                 maxLines = 1,
             )
             Spacer(GlanceModifier.height(2.dp))
-            ProteinProgress(status.proteinText)
+            ProteinProgress(status.proteinText, large = scaled(16f), small = scaled(12f))
         }
     }
 }
 
 /** "30/150 g" with the eaten part large, as in the mock. */
 @Composable
-private fun ProteinProgress(text: String, large: TextUnit = 16.sp) {
+private fun ProteinProgress(text: String, large: TextUnit = 16.sp, small: TextUnit = 12.sp) {
     val split = text.indexOf('/')
-    val style = TextStyle(color = Palette.protein, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    val style = TextStyle(color = Palette.protein, fontSize = small, fontWeight = FontWeight.Medium)
     if (split <= 0) {
         Text(text, style = style, maxLines = 1)
         return
@@ -549,7 +569,7 @@ private fun Empty(snapshot: WidgetSnapshot.Ready, scan: Action, search: Action) 
     }
 }
 
-/** A 48 dp fully rounded button: icon then label, centred. */
+/** A fully rounded button, 48 dp unless the frame is tight: icon then label, centred. */
 @Composable
 private fun Pill(
     icon: Int,
@@ -559,10 +579,11 @@ private fun Pill(
     fontSize: TextUnit,
     action: Action,
     modifier: GlanceModifier,
+    height: Dp = ButtonHeight,
 ) {
     Row(
         modifier
-            .height(ButtonHeight)
+            .height(height)
             .background(background)
             .cornerRadius(24.dp)
             .clickable(action),
