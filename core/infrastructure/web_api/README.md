@@ -276,9 +276,18 @@ The response uses typed drawable values so clients can distinguish counts from t
 }
 ```
 
-Scalar units are `number`, `binary`, `duration_seconds`, `time_of_day_seconds`, and `percent`.
+Scalar units are `number`, `binary`, `duration_seconds`, `time_of_day_seconds`,
+`percent`, `kilograms`, and `percent_one_decimal`. The existing `percent` unit
+uses whole percentage points. Beurer `kilograms` and `percent_one_decimal` values
+are JSON decimals in human units: stored `67500` grams becomes
+`{"value":67.5,"unit":"kilograms"}`, and stored `156` permille becomes
+`{"value":15.6,"unit":"percent_one_decimal"}`. Their scalar axis bounds also use
+human units. Format these values to one decimal place with ` kg` or ` %`.
+PNG axes and value labels apply the same conversion (`67.5 kg`, `15.6 %`);
+storage and generic logged-value endpoints retain the original integers.
 Habit values use `binary`, with `0` for false and `1` for true.
-Axis label formats are `number`, `duration_hh_mm`, `time_of_day_hh_mm`, and `percent`.
+Axis label formats are `number`, `duration_hh_mm`, `time_of_day_hh_mm`, `percent`,
+`kilograms_one_decimal`, and `percent_one_decimal`.
 
 ### Sessions
 
@@ -298,8 +307,9 @@ Heartbeat sessions track ongoing activity for a single statistic. Only one activ
 |--------|------|-------------|
 | `POST` | `/integrations/{source}` | Provision integration (e.g., Anki bundle) |
 | `POST` | `/integrations/ebook/events` | Ingest an idempotent ebook reading event and log per-book progress |
+| `PUT` | `/integrations/beurer/days/{day}` | Atomically provision scale metrics and overwrite supplied daily readings |
 | `PUT` | `/integrations/yomikata/days/{day}` | Atomically replace source-owned daily cards and exact study seconds |
-| `GET` | `/openapi.json` | Generated integration contract (Yomikata and ebook) |
+| `GET` | `/openapi.json` | Generated integration contract (Beurer, Yomikata and ebook) |
 | `GET` | `/integrations/ebook` | Persistent server UUID and protocol version |
 | `PUT` | `/integrations/ebook/producers/{producer}/books/{book_key}/days/{day}` | Merge read spans atomically |
 | `POST` | `/integrations/ebook` and `/integrations/ebook/events` | Retired clients receive 410 `client_upgrade_required` |
@@ -434,6 +444,44 @@ statistics by tag and return the same IDs, so a goal edited afterwards stays as 
   "study_minutes_id": 102
 }
 ```
+
+### Replacing Beurer daily scale readings
+
+```http
+PUT /integrations/beurer/days/2026-10-27
+Content-Type: application/json
+
+{"weight_grams":67500,"body_fat_permille":156,"muscle_permille":426,"body_water_permille":609}
+```
+
+`day` must be a strict valid `YYYY-MM-DD` calendar date. `weight_grams` is a
+required JSON integer in `1..=500000`. The three permille fields are optional
+JSON integers in `0..=1000`; absent or `null` fields leave the day's existing
+metric untouched. Unknown and duplicate fields are rejected, as are floats,
+strings and booleans. Success is `204 No Content`.
+
+No provisioning request is needed. The first valid PUT atomically creates all
+four `IntegerAmount` statistics in category `Beurer`, tagged `source=beurer`
+and the following `metric` values, without default goals:
+
+| Metric tag | Name | Storage unit |
+| --- | --- | --- |
+| `weight` | `[Beurer] Weight (kg)` | grams |
+| `body_fat` | `[Beurer] Body Fat (%)` | permille |
+| `muscle` | `[Beurer] Muscle (%)` | permille |
+| `body_water` | `[Beurer] Body Water (%)` | permille |
+
+Later PUTs resolve statistics by tags, regardless of names, and **overwrite**
+each supplied level for exactly that day. They never sum readings. Repeating a
+PUT changes nothing. Duplicate or wrongly typed tagged statistics return `409`,
+even for an omitted metric. All provisioning and writes share one SQLite
+transaction; a conflict or storage failure leaves the entire request unapplied.
+
+Errors reuse the Yomikata envelope `{"error":{"code":"...","field":"...","message":"..."}}`
+(`field` is omitted where inapplicable): `400` for malformed JSON/unreadable
+bodies, `415` for unsupported media type, `422 invalid_field` for invalid
+fields/dates, `409 bundle_conflict`, and sanitized `500 storage_error`.
+Scale readings sync automatically and should not be logged manually.
 
 ### Replacing Yomikata daily totals
 
