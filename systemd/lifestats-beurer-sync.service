@@ -1,0 +1,18 @@
+[Unit]
+Description=LifeStats Beurer scale sync
+Documentation=file://%h/.local/share/src/lifestats/clients/beurer-scale-sync/README.md
+After=bluetooth.target
+
+[Service]
+# Watches for the BF500 waking up, collects its readings and sends each day's first weigh-in
+# to the web API. See clients/beurer-scale-sync/README.md for the one-time pairing.
+ExecStart=%h/.local/bin/uv run --project %h/.local/share/src/lifestats/clients/beurer-scale-sync beurer-scale-sync run
+Restart=always
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lifestats-beurer-sync
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,16 @@
+[project]
+name = "beurer-scale-sync"
+version = "0.1.0"
+description = "Sync a Beurer BF500 bathroom scale to Lifestats over Bluetooth LE"
+requires-python = ">=3.12"
+dependencies = ["bleak>=1.0"]
+
+[project.scripts]
+beurer-scale-sync = "beurer_scale_sync.__main__:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
