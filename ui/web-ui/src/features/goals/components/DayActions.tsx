@@ -33,6 +33,7 @@ export function describeDayResult(day: Day, measure: Measure): string | null {
   if (!goal) return `${value} logged`;
   switch (goal.type) {
     case 'IntegerAmount':
+    case 'TimedAmounts':
     case 'Summing':
     case 'TimeDifference': {
       const unit = measure.kind === 'count' && measure.unit ? ` ${measure.unit}` : '';

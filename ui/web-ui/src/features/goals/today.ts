@@ -1,5 +1,5 @@
 import { formatClock, formatGoalTarget } from '@/lib/goalFormat';
-import { formatValue, type Measure } from '@/lib/measure';
+import { formatValue, formatValueWithUnit, type Measure } from '@/lib/measure';
 import type { Day } from './day';
 
 export type Tone = 'met' | 'open' | 'missed' | 'muted';
@@ -20,6 +20,16 @@ export function todayProgress(day: Day, measure: Measure): TodayText {
   const value = day.value;
 
   switch (goal.type) {
+    case 'TimedAmounts': {
+      if (value === null) return { text: 'No data', tone: 'muted' };
+      if (!goal.data.is_at_least) {
+        return { text: `${formatValueWithUnit(measure, value)} used`, tone: met ? 'met' : 'missed' };
+      }
+      return {
+        text: `${formatValue(measure, value)} of ${formatValueWithUnit(measure, goal.data.target)}`,
+        tone: met ? 'met' : 'open',
+      };
+    }
     case 'IntegerAmount':
     case 'Summing':
     case 'TimeDifference': {
@@ -50,6 +60,9 @@ export function todayFigure(day: Day, measure: Measure): string {
   if (!goal || day.status === 'none') return 'No goal';
   const value = day.value;
   switch (goal.type) {
+    case 'TimedAmounts':
+      if (value === null) return 'No data';
+      return `${formatValue(measure, value)} / ${formatValueWithUnit(measure, goal.data.target)}`;
     case 'IntegerAmount':
     case 'Summing':
     case 'TimeDifference':

@@ -9,6 +9,7 @@ use utoipa::OpenApi;
 #[openapi(
     paths(
         super::beurer::replace_day,
+        super::opennutritracker::replace_day,
         yomikata::replace_day,
         ebook::descriptor,
         ebook::put_day,
@@ -17,6 +18,8 @@ use utoipa::OpenApi;
     ),
     components(schemas(
         super::beurer::BeurerDayRequest,
+        super::opennutritracker::OpenNutriTrackerDayRequest,
+        super::opennutritracker::TimedMilligramsRequest,
         yomikata::YomikataDayRequest,
         ebook::EbookDescriptor,
         ebook::EbookDayRequest,

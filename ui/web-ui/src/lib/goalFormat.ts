@@ -28,6 +28,7 @@ function formatWindows(goal: Extract<GoalData, { type: 'TimeSpans' }>): string {
 export function formatGoalTarget(goal: GoalData, measure: Measure): string {
   switch (goal.type) {
     case 'IntegerAmount':
+    case 'TimedAmounts':
     case 'Summing':
     case 'TimeDifference':
       return formatAmount(goal.data.target, measure);
@@ -44,6 +45,7 @@ export function formatGoalTarget(goal: GoalData, measure: Measure): string {
 export function formatGoal(goal: GoalData, measure: Measure): string {
   switch (goal.type) {
     case 'IntegerAmount':
+    case 'TimedAmounts':
     case 'Summing':
     case 'TimeDifference':
       return `${goal.data.is_at_least ? '≥' : '≤'} ${formatAmount(goal.data.target, measure)}${unitSuffix(measure)}`;
@@ -63,6 +65,8 @@ export function describeGoal(goal: GoalData, measure: Measure): string {
     case 'Summing':
     case 'TimeDifference':
       return `${goal.data.is_at_least ? 'At least' : 'At most'} ${formatAmount(goal.data.target, measure)} a day.`;
+    case 'TimedAmounts':
+      return `${goal.data.is_at_least ? 'At least' : 'At most'} ${formatAmount(goal.data.target, measure)}${unitSuffix(measure)} a day.`;
     case 'Habit':
       return goal.data.occurred ? 'Done every day.' : 'Not done on any day.';
     case 'PointInTime':
@@ -80,6 +84,7 @@ function normalizeClock(time: string): string {
 export function goalsEqual(a: GoalData, b: GoalData): boolean {
   switch (a.type) {
     case 'IntegerAmount':
+    case 'TimedAmounts':
     case 'Summing':
     case 'TimeDifference':
       return (

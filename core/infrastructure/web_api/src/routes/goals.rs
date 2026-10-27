@@ -36,6 +36,7 @@ use lifestats_core::shared::percentage::Percentage;
 use lifestats_core::shared::seconds::Seconds;
 use lifestats_core::shared::time_frame_list::TimeFrameList;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
+use lifestats_core::statistic::value_objects::goals::timed_amounts_goal::TimedAmountsGoal;
 
 /// GET /statistics/:id/goals/default - Get the default goal for a statistic
 pub async fn get_default_goal<R, Rend, E, I>(
@@ -216,7 +217,8 @@ fn parse_hashmap_into_goal_payload(
     stat: lifestats_core::statistic::any_statistic::AnyStatistic,
 ) -> Result<lifestats_application::use_cases::commands::GoalPayload, ApiError> {
     let goal_payload = match stat {
-        AnyStatistic::IntegerAmount(_) => {
+        // A TimedAmounts goal caps or requires the daily total, like an amount goal.
+        AnyStatistic::IntegerAmount(_) | AnyStatistic::TimedAmounts(_) => {
             let target = payload
                 .get("target")
                 .ok_or_else(|| ApiError::BadRequest("Missing 'target' field".to_string()))?
@@ -233,6 +235,11 @@ fn parse_hashmap_into_goal_payload(
                     ApiError::BadRequest("'is_at_least' must be 'true' or 'false'".to_string())
                 })?
                 .unwrap_or(true);
+
+            if matches!(stat, AnyStatistic::TimedAmounts(_)) {
+                TimedAmountsGoal::new(target, is_at_least)
+                    .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+            }
 
             GoalPayload::IntegerAmount {
                 target,

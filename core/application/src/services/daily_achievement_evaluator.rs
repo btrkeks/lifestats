@@ -6,6 +6,7 @@ use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::percentage::Percentage;
 use lifestats_core::shared::seconds::Seconds;
 use lifestats_core::shared::time_frame_list::{TimeFrame, TimeFrameList};
+use lifestats_core::shared::timed_amount_list::TimedAmountList;
 use lifestats_core::statistic::any_statistic::{AnyGoal, AnyStatistic};
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
@@ -13,6 +14,7 @@ use lifestats_core::statistic::value_objects::goals::finished_in_time_goal::Fini
 use lifestats_core::statistic::value_objects::goals::goal_trait::Goal;
 use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
+use lifestats_core::statistic::value_objects::goals::timed_amounts_goal::TimedAmountsGoal;
 
 use crate::error::ApplicationResult;
 use crate::services::goal_resolver::GoalResolver;
@@ -263,6 +265,9 @@ where
                 let frames: TimeFrameList = serde_json::from_value(value)?;
                 DayValue::Duration(frames.get_total_duration().into())
             }
+            AnyStatistic::TimedAmounts(_) => {
+                DayValue::Amount(serde_json::from_value::<TimedAmountList>(value)?.total())
+            }
         })
     }
 
@@ -406,6 +411,18 @@ where
                     _ => None,
                 });
                 self.eval_range_time_spans(stat, range, goal, default_goal_valid_since)
+            }
+            AnyStatistic::TimedAmounts(_) => {
+                let goal = default_goal.and_then(|g| match g {
+                    AnyGoal::TimedAmounts(goal) => Some(goal),
+                    _ => None,
+                });
+                self.eval_range_typed::<TimedAmountList, TimedAmountsGoal>(
+                    stat,
+                    range,
+                    goal,
+                    default_goal_valid_since,
+                )
             }
             AnyStatistic::Summing(_) => {
                 let goal = default_goal.and_then(|g| match g {

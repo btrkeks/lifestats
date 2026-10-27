@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GoalData } from '@/types';
 import type { Day, DayStatus } from './day';
-import { anchoredMinutes, formatMinutes, metCount, trendPoints, trendReadout } from './insights';
+import { anchoredMinutes, formatMinutes, goalLevel, metCount, trendPoints, trendReadout } from './insights';
 
 const bedtime: GoalData = { type: 'PointInTime', data: { deadline: '22:05:00' } };
 
@@ -73,5 +73,15 @@ describe('trendPoints', () => {
     expect(trendPoints([day('a', 'met', 412)], { kind: 'count', unit: null }, 400)[0].y).toBe(412);
     expect(trendPoints([day('a', 'missed', '00:10:00')], { kind: 'clock' }, 1325)[0].y).toBe(1450);
     expect(trendPoints([day('a', 'met', 3600)], { kind: 'spans' }, 100)[0].y).toBe(100);
+  });
+});
+
+describe('TimedAmounts insights', () => {
+  it('plots scalar totals, including zero, and leaves missing values unplotted', () => {
+    const goal: GoalData = { type: 'TimedAmounts', data: { target: 400, is_at_least: false } };
+    expect(goalLevel(goal)).toBe(400);
+    expect(trendPoints([
+      day('2026-10-25', 'missed', null), day('2026-10-26', 'met', 0), day('2026-10-27', 'met', 180),
+    ], { kind: 'count', unit: 'mg' }, goalLevel(goal)).map((point) => point.y)).toEqual([null, 0, 180]);
   });
 });

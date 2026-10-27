@@ -2,6 +2,7 @@ import {
   ChartNoAxesColumn,
   CircleCheck,
   Clock,
+  Coffee,
   Hourglass,
   Sigma,
   SquareSplitHorizontal,
@@ -16,7 +17,7 @@ export interface StatisticTypeInfo {
   title: string;
   description: string;
   icon: LucideIcon;
-  derived: boolean;
+  origin: 'logged' | 'derived' | 'source';
 }
 
 export const STATISTIC_TYPES: Record<StatisticType, StatisticTypeInfo> = {
@@ -26,7 +27,15 @@ export const STATISTIC_TYPES: Record<StatisticType, StatisticTypeInfo> = {
     title: 'Count something',
     description: 'Push-ups, pages, cards',
     icon: ChartNoAxesColumn,
-    derived: false,
+    origin: 'logged',
+  },
+  TimedAmounts: {
+    type: 'TimedAmounts',
+    label: 'Intake',
+    title: 'Timed amounts',
+    description: 'Amounts with a time, synced from an app (caffeine, nicotine)',
+    icon: Coffee,
+    origin: 'source',
   },
   Habit: {
     type: 'Habit',
@@ -34,7 +43,7 @@ export const STATISTIC_TYPES: Record<StatisticType, StatisticTypeInfo> = {
     title: 'Track a habit',
     description: 'Done or not, once a day',
     icon: CircleCheck,
-    derived: false,
+    origin: 'logged',
   },
   PointInTime: {
     type: 'PointInTime',
@@ -42,7 +51,7 @@ export const STATISTIC_TYPES: Record<StatisticType, StatisticTypeInfo> = {
     title: 'Log a time',
     description: 'When it happened: bedtime, wake-up',
     icon: Clock,
-    derived: false,
+    origin: 'logged',
   },
   TimeSpans: {
     type: 'TimeSpans',
@@ -50,7 +59,7 @@ export const STATISTIC_TYPES: Record<StatisticType, StatisticTypeInfo> = {
     title: 'Measure time spans',
     description: 'Start/end windows like focus blocks',
     icon: SquareSplitHorizontal,
-    derived: false,
+    origin: 'logged',
   },
   Summing: {
     type: 'Summing',
@@ -58,7 +67,7 @@ export const STATISTIC_TYPES: Record<StatisticType, StatisticTypeInfo> = {
     title: 'Combine statistics',
     description: 'Adds up the daily values of others',
     icon: Sigma,
-    derived: true,
+    origin: 'derived',
   },
   TimeDifference: {
     type: 'TimeDifference',
@@ -66,12 +75,12 @@ export const STATISTIC_TYPES: Record<StatisticType, StatisticTypeInfo> = {
     title: 'Time difference',
     description: 'Time between two logged times',
     icon: Hourglass,
-    derived: true,
+    origin: 'derived',
   },
 };
 
-export const LOGGED_TYPES = Object.values(STATISTIC_TYPES).filter((info) => !info.derived);
-export const DERIVED_TYPES = Object.values(STATISTIC_TYPES).filter((info) => info.derived);
+export const LOGGED_TYPES = Object.values(STATISTIC_TYPES).filter((info) => info.origin === 'logged');
+export const DERIVED_TYPES = Object.values(STATISTIC_TYPES).filter((info) => info.origin === 'derived');
 
 /** Goal editing isn't implemented for time differences; they are shown read-only. */
 export function canEditGoals(type: StatisticType): boolean {

@@ -155,6 +155,56 @@
         ],
         "type": "object"
       },
+      "OpenNutriTrackerDayRequest": {
+        "additionalProperties": false,
+        "description": "The app's complete day for both metrics. `[]` is a confirmed zero.",
+        "properties": {
+          "caffeine": {
+            "items": {
+              "$ref": "#/components/schemas/TimedMilligramsRequest"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          },
+          "nicotine": {
+            "items": {
+              "$ref": "#/components/schemas/TimedMilligramsRequest"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "caffeine",
+          "nicotine"
+        ],
+        "type": "object"
+      },
+      "TimedMilligramsRequest": {
+        "additionalProperties": false,
+        "description": "One intake as the app recorded it.",
+        "properties": {
+          "amount_mg": {
+            "format": "int64",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "time": {
+            "description": "Exactly HH:MM:SS, the entry's local wall-clock time. `null` when the app knows\nthe day but not the time.",
+            "example": "08:12:00",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "time",
+          "amount_mg"
+        ],
+        "type": "object"
+      },
       "YomikataDayRequest": {
         "additionalProperties": false,
         "properties": {
@@ -441,6 +491,90 @@
         },
         "tags": [
           "ebook"
+        ]
+      }
+    },
+    "/integrations/opennutritracker/days/{day}": {
+      "put": {
+        "operationId": "replace_day",
+        "parameters": [
+          {
+            "description": "Strict valid YYYY-MM-DD date the app counts the entries toward",
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenNutriTrackerDayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Both lists stored (or already identical); statistics created on first sync"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed JSON or unreadable body"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Duplicate, wrongly typed or non-mg tagged statistics"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid date, field or daily total"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Storage failed without committing"
+          }
+        },
+        "tags": [
+          "super::opennutritracker"
         ]
       }
     },

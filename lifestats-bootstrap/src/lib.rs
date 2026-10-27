@@ -84,7 +84,8 @@ pub fn build_services() -> Result<Application> {
         )
         .with_yomikata_day_store(statistic_repo.clone())
         .with_beurer_day_store(statistic_repo.clone())
-        .with_ebook_reading_store(statistic_repo.clone()),
+        .with_ebook_reading_store(statistic_repo.clone())
+        .with_opennutritracker_day_store(statistic_repo.clone()),
     );
 
     // 2. Instantiate Fitbit integration components

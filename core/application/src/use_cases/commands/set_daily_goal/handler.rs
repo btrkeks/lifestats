@@ -8,7 +8,7 @@ use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
 use lifestats_core::statistic::value_objects::goals::{
     amount_goal::AmountGoal, finished_in_time_goal::FinishedInTimeGoal, habit_goal::HabitGoal,
-    time_spans_goal::TimeSpansGoal,
+    time_spans_goal::TimeSpansGoal, timed_amounts_goal::TimedAmountsGoal,
 };
 
 use super::command::{DailyGoalOverride, GoalPayload, SetDailyGoalCommand};
@@ -110,6 +110,19 @@ pub(crate) fn parse_goal_payload_to_json(
             },
         ) => {
             let goal = AmountGoal::new(target, is_at_least);
+            serde_json::to_value(&goal).map_err(|e| ApplicationError::Infrastructure(e.into()))?
+        }
+
+        // TimedAmounts goals cap or require a daily total, so they take the amount payload.
+        (
+            AnyStatistic::TimedAmounts(_),
+            GoalPayload::IntegerAmount {
+                target,
+                is_at_least,
+            },
+        ) => {
+            let goal = TimedAmountsGoal::new(target, is_at_least)
+                .map_err(|e| ApplicationError::InvalidInput(e.to_string()))?;
             serde_json::to_value(&goal).map_err(|e| ApplicationError::Infrastructure(e.into()))?
         }
 

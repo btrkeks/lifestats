@@ -14,7 +14,7 @@ import type {
   DailyAchievementsResponse,
   StatisticType,
 } from '@/types';
-import { parseDailyGoalState, parseGoalData } from './schemas';
+import { parseDailyGoalState, parseGoalData, statisticListSchema } from './schemas';
 
 // Base URL for the API - can be configured via environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -48,13 +48,13 @@ const api = axios.create({
 // ============================================================================
 
 export async function getAllStatistics(): Promise<StatisticMetadata[]> {
-  const { data } = await api.get<StatisticMetadata[]>('/statistics');
-  return data;
+  const { data } = await api.get<unknown>('/statistics');
+  return statisticListSchema.parse(data);
 }
 
 export async function getLoggableStatistics(): Promise<StatisticMetadata[]> {
-  const { data } = await api.get<StatisticMetadata[]>('/statistics/loggable');
-  return data;
+  const { data } = await api.get<unknown>('/statistics/loggable');
+  return statisticListSchema.parse(data);
 }
 
 export async function createStatistic(request: CreateStatisticRequest): Promise<StatisticMetadata> {

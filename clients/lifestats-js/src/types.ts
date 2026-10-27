@@ -3,17 +3,14 @@
  * These types mirror the backend DTOs defined in core/infrastructure/web_api/src/dto/
  */
 
+import type { z } from 'zod';
+import type { statisticTypeSchema } from './schemas';
+
 // ============================================================================
 // Statistic Types
 // ============================================================================
 
-export type StatisticType =
-  | 'IntegerAmount'
-  | 'Habit'
-  | 'PointInTime'
-  | 'TimeSpans'
-  | 'Summing'
-  | 'TimeDifference';
+export type StatisticType = z.infer<typeof statisticTypeSchema>;
 
 export type UpdatePolicy = 'sum' | 'overwrite' | 'max' | 'min';
 

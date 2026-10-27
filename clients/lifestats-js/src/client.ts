@@ -16,6 +16,7 @@ import {
 } from './types';
 import {
   statisticMetadataSchema,
+  statisticListSchema,
   createStatisticRequestSchema,
   logValueRequestSchema,
   logTimeFrameRequestSchema,
@@ -84,12 +85,12 @@ export class LifeStatsClient {
   // ==========================================================================
 
   /**
-   * Get all statistics
+   * Get all statistics; with response validation enabled, unknown types are skipped.
    */
   async getAllStatistics(): Promise<StatisticMetadata[]> {
     const data = await this.request<StatisticMetadata[]>('/statistics');
     if (this.validateResponses) {
-      return data.map((stat) => statisticMetadataSchema.parse(stat));
+      return statisticListSchema.parse(data);
     }
     return data;
   }

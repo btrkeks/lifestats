@@ -14,6 +14,7 @@ export const statisticTypeSchema = z.enum([
   'Habit',
   'PointInTime',
   'TimeSpans',
+  'TimedAmounts',
   'Summing',
   'TimeDifference',
 ]);
@@ -26,6 +27,15 @@ export const statisticMetadataSchema = z.object({
   category: z.string().min(1),
   statistic_type: statisticTypeSchema,
 });
+
+/** Skip future types in listings while retaining validation for every known type. */
+export const statisticListSchema = z
+  .array(z.object({ statistic_type: z.string() }).passthrough())
+  .transform((statistics) =>
+    statistics
+      .filter((statistic) => statisticTypeSchema.safeParse(statistic.statistic_type).success)
+      .map((statistic) => statisticMetadataSchema.parse(statistic)),
+  );
 
 export const createStatisticRequestSchema = z.object({
   name: z.string().min(1),

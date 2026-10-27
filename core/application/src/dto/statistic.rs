@@ -16,12 +16,13 @@ use crate::error::ApplicationError;
 /// This enum represents all possible statistic types in the system.
 /// It's used at the application boundary to communicate type information
 /// without exposing the full AnyStatistic enum to API consumers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum_macros::EnumIter)]
 pub enum StatisticType {
     IntegerAmount,
     Habit,
     PointInTime,
     TimeSpans,
+    TimedAmounts,
     Summing,
     TimeDifference,
 }
@@ -33,8 +34,19 @@ impl StatisticType {
             StatisticType::Habit => "Habit",
             StatisticType::PointInTime => "PointInTime",
             StatisticType::TimeSpans => "TimeSpans",
+            StatisticType::TimedAmounts => "TimedAmounts",
             StatisticType::Summing => "Summing",
             StatisticType::TimeDifference => "TimeDifference",
+        }
+    }
+
+    /// Whether users log values of this type by hand (`/statistics/loggable`).
+    /// Derived types compute their values; TimedAmounts days are written only by
+    /// their source integration.
+    pub fn is_manually_loggable(self) -> bool {
+        match self {
+            Self::IntegerAmount | Self::Habit | Self::PointInTime | Self::TimeSpans => true,
+            Self::TimedAmounts | Self::Summing | Self::TimeDifference => false,
         }
     }
 }
@@ -74,15 +86,11 @@ impl FromStr for StatisticType {
     type Err = StatisticTypeParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "IntegerAmount" => Ok(StatisticType::IntegerAmount),
-            "Habit" => Ok(StatisticType::Habit),
-            "PointInTime" => Ok(StatisticType::PointInTime),
-            "TimeSpans" => Ok(StatisticType::TimeSpans),
-            "Summing" => Ok(StatisticType::Summing),
-            "TimeDifference" => Ok(StatisticType::TimeDifference),
-            _ => Err(StatisticTypeParseError::new(s)),
-        }
+        // Derived from `as_str`, so a new variant cannot be printable but unparseable.
+        use strum::IntoEnumIterator;
+        Self::iter()
+            .find(|statistic_type| statistic_type.as_str() == s)
+            .ok_or_else(|| StatisticTypeParseError::new(s))
     }
 }
 
@@ -115,6 +123,7 @@ impl From<&AnyStatistic> for StatisticSummary {
             AnyStatistic::IntegerAmount(_) => StatisticType::IntegerAmount,
             AnyStatistic::PointInTime(_) => StatisticType::PointInTime,
             AnyStatistic::TimeSpans(_) => StatisticType::TimeSpans,
+            AnyStatistic::TimedAmounts(_) => StatisticType::TimedAmounts,
             AnyStatistic::Summing(_) => StatisticType::Summing,
             AnyStatistic::TimeDifference(_) => StatisticType::TimeDifference,
         };
@@ -193,20 +202,16 @@ mod tests {
 
     #[test]
     fn test_statistic_type_round_trip() {
-        let types = [
-            StatisticType::IntegerAmount,
-            StatisticType::Habit,
-            StatisticType::PointInTime,
-            StatisticType::TimeSpans,
-            StatisticType::Summing,
-            StatisticType::TimeDifference,
-        ];
-
-        for stat_type in &types {
+        use strum::IntoEnumIterator;
+        for stat_type in StatisticType::iter() {
             let str_repr = stat_type.as_str();
             let parsed = str_repr.parse::<StatisticType>().unwrap();
-            assert_eq!(&parsed, stat_type);
+            assert_eq!(parsed, stat_type);
         }
+        assert_eq!(
+            "TimedAmounts".parse::<StatisticType>().unwrap(),
+            StatisticType::TimedAmounts
+        );
     }
 
     #[test]

@@ -152,7 +152,9 @@ where
 
     let handler = GetPlotDataQueryHandler::new(state.statistic_repository.clone());
     let plot_data = handler.handle(query).map_err(|e| {
-        if e.to_string().contains("not found") {
+        if let lifestats_application::error::ApplicationError::InvalidInput(message) = e {
+            ApiError::BadRequest(message)
+        } else if e.to_string().contains("not found") {
             ApiError::NotFound(format!("Statistic {} not found", statistic_id.0))
         } else {
             ApiError::InternalError(format!("Failed to generate plot data: {}", e))
@@ -227,7 +229,9 @@ where
 
     let handler = GetPlotDataQueryHandler::new(state.statistic_repository.clone());
     let plot_data = handler.handle(query).map_err(|e| {
-        if e.to_string().contains("not found") {
+        if let lifestats_application::error::ApplicationError::InvalidInput(message) = e {
+            ApiError::BadRequest(message)
+        } else if e.to_string().contains("not found") {
             ApiError::NotFound(format!("Statistic {} not found", statistic_id.0))
         } else {
             ApiError::InternalError(format!("Failed to generate plot data: {}", e))

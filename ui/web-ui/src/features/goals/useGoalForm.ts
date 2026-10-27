@@ -20,6 +20,7 @@ export function goalFormValues(goal: GoalData): FieldValues {
         })),
       };
     case 'IntegerAmount':
+    case 'TimedAmounts':
     case 'Summing':
     case 'TimeDifference':
     case 'Habit':

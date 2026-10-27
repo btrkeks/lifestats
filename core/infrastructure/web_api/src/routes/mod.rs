@@ -6,6 +6,7 @@ pub mod goals;
 pub mod integration_error;
 pub mod integrations;
 pub mod openapi;
+pub mod opennutritracker;
 pub mod plots;
 pub mod progress;
 pub mod sessions;
@@ -34,6 +35,10 @@ where
     Router::new()
         .route("/openapi.json", get(openapi::openapi))
         .route("/integrations/beurer/days/{day}", put(beurer::replace_day))
+        .route(
+            "/integrations/opennutritracker/days/{day}",
+            put(opennutritracker::replace_day),
+        )
         .route(
             "/integrations/yomikata/days/{day}",
             put(yomikata::replace_day),

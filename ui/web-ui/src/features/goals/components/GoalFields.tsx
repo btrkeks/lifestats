@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Controller, useFieldArray, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { Clock, Plus, X } from 'lucide-react';
 import { cn } from 'cn';
@@ -298,9 +298,10 @@ export function GoalFields({
   statisticType: StatisticType;
   measure: Measure;
   compact?: boolean;
-}) {
+}): ReactNode {
   switch (statisticType) {
     case 'IntegerAmount':
+    case 'TimedAmounts':
     case 'Summing':
     case 'TimeDifference':
       return <AmountFields form={form} measure={measure} compact={compact} />;
@@ -311,4 +312,6 @@ export function GoalFields({
     case 'TimeSpans':
       return <WindowsFields form={form} />;
   }
+  const exhaustive: never = statisticType;
+  return exhaustive;
 }

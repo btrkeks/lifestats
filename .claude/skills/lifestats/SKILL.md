@@ -18,7 +18,7 @@ Quick liveness check: `curl -s http://localhost:3000/statistics` — if it fails
 
 ## Domain rules (read before writing data)
 
-- **Statistic types** — logable: `IntegerAmount`, `Habit`, `PointInTime`, `TimeSpans`; derived: `Summing`, `TimeDifference`. Logging to a derived statistic returns 400; they're computed from others. `GET /statistics/loggable` lists only logable ones.
+- **Statistic types** — logable: `IntegerAmount`, `Habit`, `PointInTime`, `TimeSpans`; derived: `Summing`, `TimeDifference`; source-owned: `TimedAmounts` (a per-day list of `{time, amount}` entries, e.g. caffeine in mg, written only by the OpenNutriTracker sync). Logging to a derived or `TimedAmounts` statistic returns 400. `GET /statistics/loggable` lists only the manually logable ones. Expect new types to appear; treat an unknown `statistic_type` as read-only rather than failing.
 - **Goals**: a statistic has an optional default goal with a history: each change applies from a "valid since" date onwards, and earlier days keep the goal they had. A daily goal for a specific date overrides the default for that date only.
 - **Progress items** are separate from statistics: bounded, absolute-position things (books read in pages/characters) logged via checkpoints, not daily values.
 
@@ -26,7 +26,7 @@ Quick liveness check: `curl -s http://localhost:3000/statistics` — if it fails
 
 ```bash
 curl -s http://localhost:3000/statistics           # all: [{id, name, category, statistic_type, default_goal}] (default_goal is null when unset)
-curl -s http://localhost:3000/statistics/loggable  # excludes derived
+curl -s http://localhost:3000/statistics/loggable  # excludes derived and TimedAmounts
 curl -s http://localhost:3000/statistics/42        # one
 ```
 
@@ -40,6 +40,7 @@ curl -s http://localhost:3000/statistics/42        # one
 | Habit | `"true"` / `"false"` | `overwrite`, `ignore` | `overwrite` |
 | PointInTime | `"23:15"` | `overwrite`, `ignore` | `overwrite` |
 | TimeSpans | don't use this route — see below | | |
+| TimedAmounts | not loggable here (400) — synced by OpenNutriTracker | | |
 
 ```bash
 curl -s -X POST http://localhost:3000/statistics/1/log/2026-08-01 \
@@ -60,11 +61,13 @@ The default (`append`) hits an unimplemented code path (`todo!()`) when the date
 
 ```bash
 # Has a value been logged? → {statistic_id, date, has_value, value?}
+# TimedAmounts value is the list: [{"time":"08:12:00","amount":120},{"time":null,"amount":40}]
+# (time null = time unknown); [] = confirmed zero; has_value false = never synced
 curl -s http://localhost:3000/statistics/1/logged/2026-08-01
 
 # Totals over a range (note param names differ per endpoint!)
 curl -s "http://localhost:3000/statistics/23/time_spans/total?start_date=2026-07-01&end_date=2026-07-31"
-curl -s "http://localhost:3000/statistics/1/integer_amount/total?start_date=2026-07-01&end_date=2026-07-31"
+curl -s "http://localhost:3000/statistics/1/integer_amount/total?start_date=2026-07-01&end_date=2026-07-31"  # also TimedAmounts: sum of daily totals
 
 # Goal achievement score (mean % of goal, params are start/end here!)
 # Optional daily_cap_percent=100: caps each day at 100% before averaging, so
@@ -75,7 +78,8 @@ curl -s "http://localhost:3000/statistics/1/score?start=2026-07-01&end=2026-07-3
 # Per-day achievement strip (params start/end). Each day: {date, has_goal, achieved,
 # percentage_achieved (null without goal), override: none|suppressed|goal,
 # value (logged value or null: number for counts, seconds for TimeSpans, true/false for habits,
-# "HH:MM:SS" for PointInTime), goal (the goal that applied, like goals/default goal_data, or null)}
+# "HH:MM:SS" for PointInTime, daily total for TimedAmounts), goal (the goal that applied, like goals/default goal_data, or null)}
+# A TimedAmounts day that was never synced has value null and misses its goal; [] counts as 0.
 curl -s "http://localhost:3000/statistics/1/achievements?start=2026-07-25&end=2026-07-31"
 
 # Performance + trend (params start_date/end_date; trend needs ≥14 data points)
@@ -100,7 +104,7 @@ curl -s -X POST http://localhost:3000/statistics/dashboard \
   -d '{"statistic_ids": [1, 23], "today": "2026-08-01", "performance_window_days": 14}'
 ```
 
-`today_value` units: IntegerAmount = raw value; Habit = 0/1; TimeSpans = total seconds; PointInTime = seconds since midnight. Derived statistics are rejected with 400.
+`today_value` units: IntegerAmount = raw value; Habit = 0/1; TimeSpans = total seconds; PointInTime = seconds since midnight; TimedAmounts = daily total (mg). Derived statistics are rejected with 400.
 
 ## Goals
 
@@ -108,7 +112,8 @@ curl -s -X POST http://localhost:3000/statistics/dashboard \
 curl -s http://localhost:3000/statistics/1/goals/default     # GET → {"goal_data": {...}, "valid_since": "YYYY-MM-DD"} | null; PUT / DELETE
 curl -s http://localhost:3000/statistics/1/goals/2026-08-01  # GET → {"kind": "not_set"} | {"kind": "suppressed"} | {"kind": "goal", "goal_data": {...}}
 # Set default (PUT, 204). goal_data values are all strings; fields per type:
-#   IntegerAmount/Summing/TimeDifference: target (+ optional is_at_least, default "true")
+#   IntegerAmount/Summing/TimeDifference/TimedAmounts: target (+ optional is_at_least, default "true");
+#   for TimedAmounts the target is the daily total, e.g. {"target": "400", "is_at_least": "false"} = at most 400 mg
 #   Habit: occurred | PointInTime: deadline "HH:MM" | TimeSpans: target (TimeFrameList JSON string), efficiency
 curl -s -X PUT http://localhost:3000/statistics/1/goals/default \
   -H "Content-Type: application/json" -d '{"goal_data": {"target": "480", "is_at_least": "true"}}'
@@ -153,7 +158,9 @@ Yomikata study syncs automatically through `PUT /integrations/yomikata/days/{day
 
 The daily PUT adopts all tagged legacy values once without changing their existing IDs or goals. Legacy minute values become seconds by multiplying by 60. Duplicate or wrongly typed tags return `409`. The daily ledger survives statistic deletion and the next PUT rebuilds projections. Existing generic logging and `POST /integrations/yomikata` remain available for legacy clients. Old Yomikata generic-overwrite writers must stop at cutover.
 
-Daily PUT errors use `{"error":{"code":"invalid_field","field":"cards_reviewed","message":"..."}}`. Statuses are `400` for malformed JSON, `415` for unsupported media, `422` for invalid fields, dates, or aggregate overflow, `409` for bundle conflicts, and `500` for sanitized storage failures. `GET /openapi.json` is the generated contract for this route only.
+Daily PUT errors use `{"error":{"code":"invalid_field","field":"cards_reviewed","message":"..."}}`. Statuses are `400` for malformed JSON, `415` for unsupported media, `422` for invalid fields, dates, or aggregate overflow, `409` for bundle conflicts, and `500` for sanitized storage failures. `GET /openapi.json` is the generated contract for the integration day routes (Beurer, OpenNutriTracker, Yomikata, ebook).
+
+Caffeine and nicotine sync automatically from OpenNutriTracker via `PUT /integrations/opennutritracker/days/{day}` with `{"caffeine":[{"time":"08:12:00","amount_mg":120},{"time":null,"amount_mg":40}],"nicotine":[]}`. Both arrays are required; each entry has exactly `time` (`HH:MM:SS` or `null` when unknown) and integer `amount_mg` (≥ 1); `[]` is a confirmed zero. The PUT replaces both lists on that day (other days untouched), provisions `[OpenNutriTracker] Caffeine (mg)` / `[OpenNutriTracker] Nicotine (mg)` (`TimedAmounts`, category `OpenNutriTracker`) on first use and returns `204`. The app resends about the last 14 days on every sync. Errors use the integration envelope with `field` paths like `caffeine[2].time`. Never write these statistics another way; there is no manual route.
 
 Gym workouts sync automatically via `PUT /integrations/liftlog/days` (the LiftLog app sends the finished workouts of every day it changed; the server replaces `[LiftLog] Workout Time` on exactly those days, and an empty `workouts` list clears a day) — don't log LiftLog workouts manually unless asked. `[LiftLog] Total Weight Lifted (kg)` is no longer written.
 
@@ -173,6 +180,7 @@ curl -s http://localhost:3000/sessions/25                          # status
 
 Fitbit sleep duration and total awake duration display as `HH:MM`. Stored values
 remain seconds; `/plot/data` reports `duration_seconds` for values and goals.
+TimedAmounts plot their daily total (bar/line/scatter only; `time_frames` returns 400).
 
 ```bash
 curl -s "http://localhost:3000/statistics/23/plot/image?plot_type=bar_chart" -o plot.png

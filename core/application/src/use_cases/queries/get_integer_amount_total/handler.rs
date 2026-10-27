@@ -34,9 +34,14 @@ where
     ) -> ApplicationResult<IntegerAmountTotalResult> {
         let statistic = self.repository.find_metadata_by_id(query.statistic_id)?;
 
-        if !matches!(statistic, AnyStatistic::IntegerAmount(_)) {
+        // A TimedAmounts day counts with its daily total, so "mg this week" works like
+        // any amount total.
+        if !matches!(
+            statistic,
+            AnyStatistic::IntegerAmount(_) | AnyStatistic::TimedAmounts(_)
+        ) {
             return Err(anyhow!(
-                "Statistic {} is not an IntegerAmount type",
+                "Statistic {} is not an IntegerAmount or TimedAmounts type",
                 query.statistic_id
             )
             .into());
@@ -48,9 +53,12 @@ where
 
         let mut total = 0_i64;
         for dated_value in log_values {
-            let amount = serde_json::from_value::<i64>(dated_value.value)
-                .map_err(|e| anyhow!("Failed to parse IntegerAmount value: {}", e))?;
-            total += amount;
+            let amount = statistic
+                .value_as_i64_from_json(&dated_value.value)
+                .map_err(|e| anyhow!("Failed to parse amount value: {}", e))?;
+            total = total
+                .checked_add(amount)
+                .ok_or_else(|| anyhow!("Total exceeds the supported integer range"))?;
         }
 
         Ok(IntegerAmountTotalResult { total })
@@ -67,6 +75,7 @@ mod tests {
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::logable_statistics::{
         habit::HabitStatistic, integer_amount::IntegerAmountStatistic,
+        timed_amounts::TimedAmountsStatistic,
     };
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use serde_json::json;
@@ -107,6 +116,46 @@ mod tests {
     }
 
     #[test]
+    fn test_timed_amounts_total_sums_daily_totals() {
+        let mut repo = MockStatisticRepository::new();
+        let stat_id = StatisticId::from(1);
+
+        let statistic = AnyStatistic::TimedAmounts(TimedAmountsStatistic::new(
+            StatisticMetadata::new(stat_id, "Test".into(), "Caffeine (mg)".into()),
+            None,
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        ));
+
+        repo.expect_find_metadata_by_id()
+            .returning(move |_| Ok(statistic.clone()));
+        repo.expect_find_log_values_in_range().returning(|_, _| {
+            Ok(vec![
+                DatedValue::new(
+                    NaiveDate::from_ymd_opt(2025, 10, 1).unwrap(),
+                    json!([{"time": "08:12:00", "amount": 120}, {"time": null, "amount": 60}]),
+                ),
+                DatedValue::new(NaiveDate::from_ymd_opt(2025, 10, 2).unwrap(), json!([])),
+                DatedValue::new(
+                    NaiveDate::from_ymd_opt(2025, 10, 3).unwrap(),
+                    json!([{"time": "09:00:00", "amount": 95}]),
+                ),
+            ])
+        });
+
+        let handler = GetIntegerAmountTotalQueryHandler::new(Arc::new(repo));
+        let query = GetIntegerAmountTotalQuery {
+            statistic_id: stat_id,
+            date_range: DateRange::new(
+                NaiveDate::from_ymd_opt(2025, 10, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 10, 10).unwrap(),
+            )
+            .unwrap(),
+        };
+
+        assert_eq!(handler.handle(query).unwrap().total, 275);
+    }
+
+    #[test]
     fn test_rejects_non_integer_amount_statistic() {
         let mut repo = MockStatisticRepository::new();
         let stat_id = StatisticId::from(1);
@@ -135,7 +184,7 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("not an IntegerAmount type"));
+            .contains("not an IntegerAmount or TimedAmounts type"));
     }
 
     #[test]
@@ -203,6 +252,6 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("Failed to parse IntegerAmount value"));
+            .contains("Failed to parse amount value"));
     }
 }

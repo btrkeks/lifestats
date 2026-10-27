@@ -14,22 +14,27 @@ use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
 use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_core::statistic::types::logable_statistics::point_in_time::PointInTimeStatistic;
 use lifestats_core::statistic::types::logable_statistics::time_spans::TimeSpansStatistic;
+use lifestats_core::statistic::types::logable_statistics::timed_amounts::TimedAmountsStatistic;
 use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
 use lifestats_core::statistic::value_objects::goals::finished_in_time_goal::FinishedInTimeGoal;
 use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
 use lifestats_core::statistic::value_objects::goals::time_spans_goal::TimeSpansGoal;
+use lifestats_core::statistic::value_objects::goals::timed_amounts_goal::TimedAmountsGoal;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::db::models::DefaultGoalRaw;
 
-#[derive(Debug, Serialize, Deserialize, AsExpression, FromSqlRow, Clone, Copy)]
+#[derive(
+    Debug, Serialize, Deserialize, AsExpression, FromSqlRow, Clone, Copy, strum_macros::EnumIter,
+)]
 #[diesel(sql_type = Text)]
 pub enum StatisticTypeDto {
     IntegerAmount,
     PointInTime,
     TimeSpans,
+    TimedAmounts,
     Habit,
 }
 
@@ -39,6 +44,7 @@ impl StatisticTypeDto {
             StatisticTypeDto::IntegerAmount => "IntegerAmount",
             StatisticTypeDto::PointInTime => "PointInTime",
             StatisticTypeDto::TimeSpans => "TimeSpans",
+            StatisticTypeDto::TimedAmounts => "TimedAmounts",
             StatisticTypeDto::Habit => "Habit",
         }
     }
@@ -54,13 +60,12 @@ impl ToSql<Text, Sqlite> for StatisticTypeDto {
 impl FromSql<Text, Sqlite> for StatisticTypeDto {
     fn from_sql(bytes: <Sqlite as Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let str_value = <String as FromSql<Text, Sqlite>>::from_sql(bytes)?;
-        match str_value.as_str() {
-            "IntegerAmount" => Ok(Self::IntegerAmount),
-            "PointInTime" => Ok(Self::PointInTime),
-            "TimeSpans" => Ok(Self::TimeSpans),
-            "Habit" => Ok(Self::Habit),
-            other => Err(anyhow!("Invalid statistic type '{other}'").into()),
-        }
+        // Derived from `as_str`: a type that can be written can always be read back.
+        // A row that fails here fails every metadata listing.
+        use strum::IntoEnumIterator;
+        Self::iter()
+            .find(|statistic_type| statistic_type.as_str() == str_value)
+            .ok_or_else(|| anyhow!("Invalid statistic type '{str_value}'").into())
     }
 }
 
@@ -94,7 +99,10 @@ impl StatisticDto {
                 (StatisticTypeDto::PointInTime, inner.get_metadata())
             }
             AnyStatistic::TimeSpans(inner) => (StatisticTypeDto::TimeSpans, inner.get_metadata()),
-            _ => {
+            AnyStatistic::TimedAmounts(inner) => {
+                (StatisticTypeDto::TimedAmounts, inner.get_metadata())
+            }
+            AnyStatistic::Summing(_) | AnyStatistic::TimeDifference(_) => {
                 return Err(anyhow!(
                     "SQLite persistence does not support this statistic variant yet"
                 ));
@@ -158,6 +166,12 @@ impl StatisticDto {
             StatisticTypeDto::TimeSpans => {
                 let (goal, _) = parse_default_goal::<TimeSpansGoal>(default_goal, start_date)?;
                 Ok(AnyStatistic::TimeSpans(TimeSpansStatistic::new(
+                    metadata, goal, start_date,
+                )))
+            }
+            StatisticTypeDto::TimedAmounts => {
+                let (goal, _) = parse_default_goal::<TimedAmountsGoal>(default_goal, start_date)?;
+                Ok(AnyStatistic::TimedAmounts(TimedAmountsStatistic::new(
                     metadata, goal, start_date,
                 )))
             }

@@ -21,5 +21,14 @@ source tags. Only the source-owned `PUT` integration routes resolve statistics b
 nicotine from OpenNutriTracker need a per-day list of `(time, amount)` entries, which the source replaces
 day by day.
 
-- **Status:** a `TimedAmounts` statistic type is being designed on branch `feature/timed-amounts-statistic`.
-  If the rewrite lands first, it should carry this value shape and the per-day replace semantics.
+- **Status:** implemented on branch `feature/timed-amounts-statistic` (not yet merged into `master`).
+  `TimedAmounts` stores each day as a list of `{time, amount}` entries, where `time` is `HH:MM:SS` or
+  `null` when unknown and `amount` is an integer in the smallest unit (mg). OpenNutriTracker writes it only
+  through `PUT /integrations/opennutritracker/days/{day}`, which replaces both caffeine and nicotine lists
+  for the day; the app resends about the last 14 days on every sync. Readers see the daily total. Design and
+  contract: `docs/plans/timed-amounts-statistic/`.
+- **Rewrite should keep:** the list value shape, whole-day replace by the source, `[]` as a confirmed zero
+  distinct from a never-sent day, and the daily total as the scalar projection.
+- **Still open:** a "nothing after 14:00" cutoff goal, the logical-day boundary (a 00:30 entry counted
+  toward the previous day sorts first), adding single entries by hand, and a derived "caffeine remaining
+  at bedtime" statistic.

@@ -71,3 +71,24 @@ describe('goalsEqual', () => {
     ).toBe(true);
   });
 });
+
+describe('TimedAmounts formatting', () => {
+  const mg = { kind: 'count', unit: 'mg' } as const;
+  const cap: GoalData = { type: 'TimedAmounts', data: { target: 400, is_at_least: false } };
+
+  it('uses total targets, direction and mg', () => {
+    expect(formatGoalTarget(cap, mg)).toBe('400');
+    expect(formatGoal(cap, mg)).toBe('≤ 400 mg');
+    expect(describeGoal(cap, mg)).toBe('At most 400 mg a day.');
+    const minimum: GoalData = { type: 'TimedAmounts', data: { target: 100, is_at_least: true } };
+    expect(formatGoal(minimum, mg)).toBe('≥ 100 mg');
+    expect(describeGoal(minimum, mg)).toBe('At least 100 mg a day.');
+  });
+
+  it('compares amount and direction without equating other statistic types', () => {
+    expect(goalsEqual(cap, { ...cap })).toBe(true);
+    expect(goalsEqual(cap, { type: 'TimedAmounts', data: { target: 200, is_at_least: false } })).toBe(false);
+    expect(goalsEqual(cap, { type: 'TimedAmounts', data: { target: 400, is_at_least: true } })).toBe(false);
+    expect(goalsEqual(cap, { type: 'IntegerAmount', data: cap.data })).toBe(false);
+  });
+});

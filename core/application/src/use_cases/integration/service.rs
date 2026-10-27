@@ -28,6 +28,16 @@ pub trait IntegrationServiceTrait: Send + Sync {
         reading: lifestats_core::beurer::BeurerDayReading,
     ) -> Result<lifestats_core::beurer::BeurerDayReplacement, lifestats_core::beurer::BeurerDayError>;
 
+    /// Replaces OpenNutriTracker's complete caffeine and nicotine lists for one day.
+    fn replace_opennutritracker_day(
+        &self,
+        day: NaiveDate,
+        values: lifestats_core::opennutritracker::OpenNutriTrackerDay,
+    ) -> Result<
+        lifestats_core::opennutritracker::OpenNutriTrackerDayReplacement,
+        lifestats_core::opennutritracker::OpenNutriTrackerDayError,
+    >;
+
     fn ebook_server_id(&self) -> Result<String, EbookError>;
     fn record_ebook_day(
         &self,
@@ -73,6 +83,8 @@ pub trait IntegrationServiceTrait: Send + Sync {
 pub struct IntegrationService {
     beurer_day_store: Option<Arc<dyn lifestats_core::beurer::BeurerDayStore>>,
     ebook_reading_store: Option<Arc<dyn EbookReadingStore>>,
+    opennutritracker_day_store:
+        Option<Arc<dyn lifestats_core::opennutritracker::OpenNutriTrackerDayStore>>,
     yomikata_day_store: Option<Arc<dyn lifestats_core::yomikata::YomikataDayStore>>,
     repository: Arc<dyn StatisticRepository + Send + Sync>,
     factories: HashMap<String, Arc<dyn BundleFactory>>,
@@ -93,6 +105,7 @@ impl IntegrationService {
         Self {
             beurer_day_store: None,
             ebook_reading_store: None,
+            opennutritracker_day_store: None,
             yomikata_day_store: None,
             repository,
             factories: factories_map,
@@ -119,6 +132,14 @@ impl IntegrationService {
                 ),
             )
         })
+    }
+
+    pub fn with_opennutritracker_day_store(
+        mut self,
+        store: Arc<dyn lifestats_core::opennutritracker::OpenNutriTrackerDayStore>,
+    ) -> Self {
+        self.opennutritracker_day_store = Some(store);
+        self
     }
 
     pub fn with_yomikata_day_store(
@@ -239,6 +260,24 @@ impl IntegrationServiceTrait for IntegrationService {
                 chrono::Local::now().date_naive(),
             ),
         )
+    }
+
+    fn replace_opennutritracker_day(
+        &self,
+        day: NaiveDate,
+        values: lifestats_core::opennutritracker::OpenNutriTrackerDay,
+    ) -> Result<
+        lifestats_core::opennutritracker::OpenNutriTrackerDayReplacement,
+        lifestats_core::opennutritracker::OpenNutriTrackerDayError,
+    > {
+        let store = self.opennutritracker_day_store.as_ref().ok_or_else(|| {
+            lifestats_core::opennutritracker::OpenNutriTrackerDayError::Storage(
+                lifestats_core::shared::ports::error::RepositoryError::OperationFailed(
+                    anyhow::anyhow!("OpenNutriTracker day store is not configured"),
+                ),
+            )
+        })?;
+        store.replace_day(day, chrono::Local::now().date_naive(), values)
     }
 
     fn ebook_server_id(&self) -> Result<String, EbookError> {
