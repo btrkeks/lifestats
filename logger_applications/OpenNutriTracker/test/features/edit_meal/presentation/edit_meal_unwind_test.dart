@@ -12,11 +12,9 @@ import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/entity/recipe_entity.dart';
 import 'package:opennutritracker/core/domain/entity/tracked_day_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/log_intake_usecase.dart';
-import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart';
-import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/utils/energy_unit_provider.dart';
 import 'package:opennutritracker/core/utils/navigation_options.dart';
@@ -90,9 +88,7 @@ void main() {
     getIt.registerFactory<MealDetailBloc>(
       () => MealDetailBloc(
         _FakeLogIntakeUsecase(loggedIntakes),
-        _FakeAddTrackedDayUsecase(),
         _FakeGetKcalGoalUsecase(),
-        _FakeGetMacroGoalUsecase(),
         _FakeGetTrackedDayUsecase(),
         _FakeProductsRepository(),
         _FakeRemoteSearchCacheDataSource(),
@@ -259,33 +255,7 @@ class _FakeLogIntakeUsecase implements LogIntakeUsecase {
       throw UnimplementedError('Unexpected call: ${invocation.memberName}');
 }
 
-class _FakeAddTrackedDayUsecase implements AddTrackedDayUsecase {
-  @override
-  Future<bool> hasTrackedDay(DateTime day) async => true;
-
-  @override
-  Future<void> addDayCaloriesTracked(DateTime day, double kcal) async {}
-
-  @override
-  Future<void> addDayMacrosTracked(
-    DateTime day, {
-    double? carbsTracked,
-    double? fatTracked,
-    double? proteinTracked,
-  }) async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('Unexpected call: ${invocation.memberName}');
-}
-
 class _FakeGetKcalGoalUsecase implements GetKcalGoalUsecase {
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('Unexpected call: ${invocation.memberName}');
-}
-
-class _FakeGetMacroGoalUsecase implements GetMacroGoalUsecase {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('Unexpected call: ${invocation.memberName}');

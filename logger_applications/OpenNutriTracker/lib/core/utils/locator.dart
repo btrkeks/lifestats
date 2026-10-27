@@ -323,8 +323,6 @@ Future<void> initLocator() async {
       locator(),
       locator(),
       locator(),
-      locator(),
-      locator(),
     ),
   );
   locator.registerFactory<ScannerBloc>(() => ScannerBloc(locator(), locator()));

@@ -8,9 +8,7 @@ import 'package:opennutritracker/core/data/data_source/remote_search_cache_data_
 import 'package:opennutritracker/core/data/dbo/meal_dbo.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/log_intake_usecase.dart';
-import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_kcal_goal_usecase.dart';
-import 'package:opennutritracker/core/domain/usecase/get_macro_goal_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/get_tracked_day_usecase.dart';
 import 'package:opennutritracker/features/add_meal/data/repository/products_repository.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_entity.dart';
@@ -31,9 +29,7 @@ class MealDetailBloc extends Bloc<MealDetailEvent, MealDetailState> {
 
   MealDetailBloc(
     this._logIntake,
-    AddTrackedDayUsecase _,
     this._getKcalGoalUsecase,
-    GetMacroGoalUsecase _,
     this._getTrackedDayUsecase,
     this._productsRepository,
     this._remoteSearchCacheDataSource,
