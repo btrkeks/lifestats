@@ -1,0 +1,338 @@
+package com.opennutritracker.ont.opennutritracker.quicklog.widget
+
+import android.graphics.Bitmap
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
+import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
+import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.action.Action
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
+import androidx.glance.background
+import androidx.glance.color.ColorProvider
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxHeight
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
+import androidx.glance.layout.padding
+import androidx.glance.layout.size
+import androidx.glance.layout.width
+import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
+import com.opennutritracker.ont.opennutritracker.MainActivity
+import com.opennutritracker.ont.opennutritracker.R
+import com.opennutritracker.ont.opennutritracker.quicklog.Row as FoodRowData
+import com.opennutritracker.ont.opennutritracker.quicklog.Status
+import com.opennutritracker.ont.opennutritracker.quicklog.WidgetModel
+import com.opennutritracker.ont.opennutritracker.quicklog.WidgetSnapshot
+
+/**
+ * The app's colour scheme (lib/core/styles/color_schemes.dart) as the mock
+ * uses it. Day/night pairs resolve on the launcher side, so the widget
+ * follows system dark mode even when the app is not running.
+ */
+private object Palette {
+    private fun pair(day: Long, night: Long) = ColorProvider(day = Color(day), night = Color(night))
+
+    val background = pair(0xFFFCFDF7, 0xFF1A1C19)
+    val onBackground = pair(0xFF1A1C19, 0xFFE2E3DD)
+    val onBackgroundVariant = pair(0xFF424940, 0xFFC1C9BE)
+    val accent = pair(0xFF006E2B, 0xFF33E36A)
+    val onAccent = pair(0xFFFFFFFF, 0xFF003913)
+    val row = pair(0xFFD4E8D1, 0xFF3A4B3A)
+    val onRow = pair(0xFF0F1F11, 0xFFD4E8D1)
+    val onRowMuted = pair(0xC70F1F11, 0xC7D4E8D1)
+    val scan = pair(0xFFBDEAF3, 0xFF1F4D54)
+    val onScan = pair(0xFF001F24, 0xFFBDEAF3)
+    val track = pair(0xFFDDE5D9, 0xFF424940)
+    val protein = ColorProvider(Color(0xFF2A8C82))
+    val onProtein = ColorProvider(Color.White)
+}
+
+private val Padding = 14.dp
+private val ColumnGap = 12.dp
+private val RowGap = 6.dp
+private val StatusWidth = 124.dp
+private val ButtonHeight = 48.dp
+
+/** Under the mock's 70 dp: a real 4×2 cell is narrower than the mock's, and at 70 dp the subtitle ellipsized. */
+private val PillWidth = 62.dp
+
+/** Pure presentation of [model] at [nowMs]; reads no storage and no clock. */
+@Composable
+fun QuickLogContent(model: WidgetModel, nowMs: Long, size: DpSize) {
+    val context = LocalContext.current
+    val openApp = actionStartActivity<MainActivity>()
+    val frame = GlanceModifier
+        .fillMaxSize()
+        .appWidgetBackground()
+        .background(Palette.background)
+        .cornerRadius(android.R.dimen.system_app_widget_background_radius)
+        .padding(Padding)
+    when (val snapshot = model.snapshot) {
+        is WidgetSnapshot.Ready -> Row(frame) {
+            val ringSize = min(StatusWidth, size.height - Padding * 2 - ButtonHeight - RowGap)
+            if (snapshot.rows.isEmpty()) {
+                Column(
+                    GlanceModifier.width(StatusWidth).fillMaxHeight(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) { Rings(snapshot.status, min(StatusWidth, size.height - Padding * 2)) }
+                Spacer(GlanceModifier.width(ColumnGap))
+                Empty(snapshot, openApp)
+            } else {
+                Column(
+                    GlanceModifier.width(StatusWidth).fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Rings(snapshot.status, ringSize)
+                    Spacer(GlanceModifier.defaultWeight())
+                    Pill(
+                        icon = R.drawable.ql_ic_barcode,
+                        label = snapshot.labels.scanProduct,
+                        background = Palette.scan,
+                        content = Palette.onScan,
+                        fontSize = 13.sp,
+                        action = openApp,
+                        modifier = GlanceModifier.width(StatusWidth),
+                    )
+                }
+                Spacer(GlanceModifier.width(ColumnGap))
+                LazyColumn(GlanceModifier.defaultWeight().fillMaxHeight()) {
+                    items(snapshot.rows, itemId = { it.foodKey.hashCode().toLong() }) { row ->
+                        Box(GlanceModifier.fillMaxWidth().padding(bottom = RowGap)) {
+                            FoodRow(row)
+                        }
+                    }
+                }
+            }
+        }
+        // Not set up, unreadable or never published: zero rings and a way in.
+        else -> Row(frame.clickable(openApp), verticalAlignment = Alignment.CenterVertically) {
+            Box(GlanceModifier.width(StatusWidth), contentAlignment = Alignment.Center) {
+                RingImages(0f, 0f, min(StatusWidth, size.height - Padding * 2))
+            }
+            Spacer(GlanceModifier.width(ColumnGap))
+            Text(
+                text = (snapshot as? WidgetSnapshot.NeedsSetup)?.title
+                    ?: context.getString(R.string.app_name),
+                style = TextStyle(color = Palette.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                maxLines = 2,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Rings(status: Status, size: Dp) {
+    Box(GlanceModifier.size(size), contentAlignment = Alignment.Center) {
+        RingImages(status.energyFraction, status.proteinFraction, size)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                status.energyValueText,
+                style = TextStyle(color = Palette.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+            Text(
+                status.energyLabelText,
+                style = TextStyle(color = Palette.onBackgroundVariant, fontSize = 12.sp),
+                maxLines = 1,
+            )
+            Spacer(GlanceModifier.height(2.dp))
+            ProteinProgress(status.proteinText)
+        }
+    }
+}
+
+/** "30/150 g" with the eaten part large, as in the mock. */
+@Composable
+private fun ProteinProgress(text: String) {
+    val split = text.indexOf('/')
+    val style = TextStyle(color = Palette.protein, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    if (split <= 0) {
+        Text(text, style = style, maxLines = 1)
+        return
+    }
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(
+            text.substring(0, split),
+            style = style.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1,
+        )
+        Text(text.substring(split), style = style, maxLines = 1)
+    }
+}
+
+@Composable
+private fun RingImages(energyFraction: Float, proteinFraction: Float, size: Dp) {
+    val context = LocalContext.current
+    val px = remember(size) { (size.value * context.resources.displayMetrics.density).toInt().coerceAtLeast(1) }
+    val tracks = remember(px) { RingBitmap.tracks(px) }
+    val energy = remember(px, energyFraction) { RingBitmap.arc(px, RingBitmap.OUTER_RADIUS, energyFraction) }
+    val protein = remember(px, proteinFraction) { RingBitmap.arc(px, RingBitmap.INNER_RADIUS, proteinFraction) }
+    Box(GlanceModifier.size(size)) {
+        RingLayer(tracks, Palette.track, size)
+        RingLayer(energy, Palette.accent, size)
+        RingLayer(protein, Palette.protein, size)
+    }
+}
+
+@Composable
+private fun RingLayer(bitmap: Bitmap, color: ColorProvider, size: Dp) {
+    Image(
+        provider = ImageProvider(bitmap),
+        contentDescription = null,
+        modifier = GlanceModifier.size(size),
+        colorFilter = ColorFilter.tint(color),
+    )
+}
+
+@Composable
+private fun FoodRow(row: FoodRowData) {
+    Row(
+        GlanceModifier
+            .fillMaxWidth()
+            .height(ButtonHeight)
+            .background(Palette.row)
+            .cornerRadius(16.dp)
+            .padding(start = 14.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(GlanceModifier.defaultWeight()) {
+            Text(
+                row.title,
+                style = TextStyle(color = Palette.onRow, fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                maxLines = 1,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    row.amountText,
+                    style = TextStyle(color = Palette.onRow, fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                    maxLines = 1,
+                )
+                Image(
+                    provider = ImageProvider(R.drawable.ql_ic_dropdown),
+                    contentDescription = null,
+                    modifier = GlanceModifier.width(10.dp).height(16.dp),
+                    colorFilter = ColorFilter.tint(Palette.onRow),
+                )
+                Spacer(GlanceModifier.width(2.dp))
+                Text(
+                    "· ${row.energyText}",
+                    style = TextStyle(color = Palette.onRowMuted, fontSize = 12.sp),
+                    maxLines = 1,
+                )
+            }
+        }
+        Spacer(GlanceModifier.width(8.dp))
+        Box(
+            GlanceModifier
+                .width(PillWidth)
+                .height(32.dp)
+                .background(Palette.protein)
+                .cornerRadius(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                row.pillText,
+                style = TextStyle(color = Palette.onProtein, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Empty(snapshot: WidgetSnapshot.Ready, action: Action) {
+    Column(GlanceModifier.fillMaxHeight()) {
+        Column(GlanceModifier.padding(start = 6.dp, end = 4.dp, top = 2.dp)) {
+            Text(
+                snapshot.labels.emptyTitle,
+                style = TextStyle(color = Palette.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                maxLines = 1,
+            )
+            Spacer(GlanceModifier.height(4.dp))
+            Text(
+                snapshot.labels.emptyBody,
+                style = TextStyle(color = Palette.onBackgroundVariant, fontSize = 13.sp),
+                maxLines = 3,
+            )
+        }
+        Spacer(GlanceModifier.defaultWeight())
+        Pill(
+            icon = R.drawable.ql_ic_barcode,
+            label = snapshot.labels.scanProduct,
+            background = Palette.accent,
+            content = Palette.onAccent,
+            fontSize = 14.sp,
+            action = action,
+            modifier = GlanceModifier.fillMaxWidth(),
+        )
+        Spacer(GlanceModifier.height(RowGap))
+        Pill(
+            icon = R.drawable.ql_ic_search,
+            label = snapshot.labels.searchFood,
+            background = Palette.row,
+            content = Palette.onRow,
+            fontSize = 14.sp,
+            action = action,
+            modifier = GlanceModifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** A 48 dp fully rounded button: icon then label, centred. */
+@Composable
+private fun Pill(
+    icon: Int,
+    label: String,
+    background: ColorProvider,
+    content: ColorProvider,
+    fontSize: TextUnit,
+    action: Action,
+    modifier: GlanceModifier,
+) {
+    Row(
+        modifier
+            .height(ButtonHeight)
+            .background(background)
+            .cornerRadius(24.dp)
+            .clickable(action),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(
+            provider = ImageProvider(icon),
+            contentDescription = null,
+            modifier = GlanceModifier.size(20.dp),
+            colorFilter = ColorFilter.tint(content),
+        )
+        Spacer(GlanceModifier.width(6.dp))
+        Text(
+            label,
+            style = TextStyle(color = content, fontSize = fontSize, fontWeight = FontWeight.Medium),
+            maxLines = 1,
+        )
+    }
+}

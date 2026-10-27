@@ -1,0 +1,15 @@
+<!-- Cropped to the triangle (x 140–740 of the 960 grid): the mock pulls the
+     icon in with negative margins, which a widget layout cannot. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="10dp"
+    android:height="16dp"
+    android:viewportWidth="600"
+    android:viewportHeight="960">
+    <group
+        android:translateX="-140"
+        android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M480-360 280-560h400L480-360Z" />
+    </group>
+</vector>

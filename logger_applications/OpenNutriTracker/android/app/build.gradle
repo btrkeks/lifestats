@@ -4,6 +4,7 @@ import java.util.Properties
 plugins {
     id "com.android.application"
     id "kotlin-android"
+    id "org.jetbrains.kotlin.plugin.compose"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -52,6 +53,11 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // The home-screen widget is Glance, which is Compose.
+    buildFeatures {
+        compose true
     }
 
     sourceSets {
@@ -155,6 +161,10 @@ dependencies {
     // readRecords is a suspend function, and MainActivity answers the method
     // channel from the main dispatcher.
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+
+    // The quick-log home-screen widget, and the jobs that refresh it.
+    implementation 'androidx.glance:glance-appwidget:1.2.0'
+    implementation 'androidx.work:work-runtime-ktx:2.10.0'
 
     testImplementation 'junit:junit:4.13.2'
     // android.jar's org.json is stubs on the JVM; QuickLogModelTest needs the real one.

@@ -3,7 +3,12 @@ package com.opennutritracker.ont.opennutritracker.quicklog
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.opennutritracker.ont.opennutritracker.quicklog.widget.QuickLogWidget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -16,7 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
  *  - in flight: foods with a log waiting on Dart, kept in memory only.
  *
  * Writes use commit(), not apply(): the callback that wrote is about to
- * return, and the process may die right after it.
+ * return, and the process may die right after it. Every write repaints the
+ * widget, so no caller can forget to.
  */
 object QuickLogStore {
     private const val TAG = "QuickLogStore"
@@ -27,6 +33,7 @@ object QuickLogStore {
     const val UNDO_WINDOW_MS = 5_000L
 
     private var state: MutableStateFlow<WidgetModel>? = null
+    private val repaints = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val inFlight = mutableSetOf<String>()
 
     /** The merged model. Emits on every write in this process. */
@@ -84,6 +91,8 @@ object QuickLogStore {
     private fun update(context: Context, change: (WidgetModel) -> WidgetModel) {
         val flow = flow(context)
         synchronized(this) { flow.value = change(flow.value) }
+        val app = context.applicationContext
+        repaints.launch { QuickLogWidget.refreshAll(app) }
     }
 
     private fun flow(context: Context): MutableStateFlow<WidgetModel> =
