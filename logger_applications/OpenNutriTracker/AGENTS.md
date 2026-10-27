@@ -252,7 +252,7 @@ lib/
                   # attribution) — used by both lib/dev/ and the shipped
                   # onboarding "try it" flow, see "Demo data" above
   features/       # One folder per screen/flow
-    home/         # Dashboard with daily kcal/macro summary, water chip, fasting chip
+    home/         # Dashboard with daily kcal/macro summary, water chip
     diary/        # Calendar-based food diary, micronutrient panel, sort controls
     profile/      # User stats, BMI, goals, weight history chart
     add_meal/     # Food search (text + barcode) and meal logging
@@ -261,7 +261,6 @@ lib/
     scanner/      # Barcode camera scanner (with manual entry fallback)
     add_activity/ # Log physical activity, including custom kcal templates
     activity_detail/ # View logged activity
-    fasting/      # Intermittent-fasting timer with content-warning gate
     recipes/      # Reusable recipes with photo, brand, ingredient picker
     settings/     # App settings, data export/import, day-start, theme picker
     onboarding/   # First-run user setup flow
@@ -309,7 +308,6 @@ Named routes are defined in `NavigationOptions` and registered in `main.dart`. T
 | `CustomActivityTemplateBox`    | `CustomActivityTemplateDBO` | Reusable templates for custom-kcal activities                        |
 | `WeightLogBox`                 | `WeightLogDBO`              | Weight history points for the profile trend chart                    |
 | `WaterIntakeBox`               | `WaterIntakeDBO`            | Water log entries powering the home chip                             |
-| `FastingBox`                   | `FastingSessionDBO`         | Fasting sessions (current and historical) for the timer              |
 
 When adding a new `@HiveType`, assign a unique `typeId`. Check all existing DBOs to avoid collisions — IDs are currently scattered across 0–30+.
 

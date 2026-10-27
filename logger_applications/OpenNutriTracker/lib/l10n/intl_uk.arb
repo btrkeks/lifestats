@@ -233,9 +233,7 @@
   "dataCollectionLabel": "Надсилати звіти про збої, щоб допомогти виправляти помилки. Жодні дані про їжу чи вагу не передаються.",
   "deleteAllLabel": "Видалити все",
   "settingsDeleteAllDataLabel": "Скинути дані профілю",
-  "settingsDeleteAllDataSubtitle": "Профіль, прийоми їжі, активності, історія ваги та пости",
   "settingsDeleteAllDataConfirmTitle": "Скинути дані профілю?",
-  "settingsDeleteAllDataConfirmContent": "Це видалить ваш профіль, прийоми їжі, активності, історію ваги та пости – лише для поточного профілю. Також буде видалено ключ API та адресу сервера для функцій ШІ, які спільні для всіх профілів на цьому пристрої. Спільний вміст (власні страви, рецепти, шаблони активностей) і каталоги Open Food Facts та USDA Food Data Central залишаться без змін. Цю дію не можна скасувати.",
   "policyChangeNoticeTitle": "Ми оновили політику конфіденційності",
   "policyChangeNoticeBody": "У тому, що робить застосунок, нічого не змінилося. Змінилося те, скільки ми тобі про це розповідаємо.\n\nСервіси, які завжди отримували твої пошукові запити, тепер названі поіменно. З’явився новий розділ про дані про здоров’я — для імпорту тренувань, який ти можеш увімкнути. А ще ми тепер розкриваємо приблизне місцеперебування, яке наш бекенд пошуку продуктів записує разом із запитом і зберігає 24 години.\n\nТвій щоденник залишається на твоєму пристрої, як і завжди.",
   "policyChangeNoticeReadAction": "Прочитати політику",
@@ -1092,40 +1090,6 @@
   "settingsWaterGoalLabel": "Денна ціль вживання води",
   "waterChipLabel": "{current} / {goal} мл",
   "zincLabel": "цинк",
-  "profileFastingEntry": "Таймер посту",
-  "fastingTitle": "Таймер посту",
-  "fastingSubtitle": "Простий таймер для часу між прийомами їжі. Без серій, без цілей, лише годинник.",
-  "fastingWarningTitle": "Перш ніж почати",
-  "fastingWarningBody": "Відстеження часу посту комусь допомагає, а декому може шкодити, особливо людям із досвідом розладів харчової поведінки. Якщо це про вас, будь ласка, спершу подбайте про себе. Підтримку надають BEAT (UK) і NEDA (US).",
-  "fastingWarningDecline": "Це не для мене",
-  "fastingWarningAccept": "Розумію, увімкнути таймер",
-  "fastingPresetCustom": "Власний",
-  "fastingStart": "Запустити таймер",
-  "fastingCancel": "Завершити піст",
-  "fastingCancelConfirmTitle": "Завершити піст зараз?",
-  "fastingCancelConfirmBody": "Поточну сесію буде закрито.",
-  "fastingComplete": "Сесію завершено",
-  "fastingLinkBeat": "BEAT (UK)",
-  "fastingLinkNeda": "NEDA (US)",
-  "fastingElapsedLabel": "Минуло",
-  "fastingRemainingValue": "Залишилося {value}",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Ціль: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "години",
-  "dialogCloseLabel": "Закрити",
   "customMealsRowMoreTooltip": "Більше дій",
   "customMealsMergeAction": "Об’єднати з іншою власною стравою",
   "customMealsMergePickerTitle": "Виберіть власну страву для об’єднання",
@@ -1163,18 +1127,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Голодування · залишилось {remaining}",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Таймер голодування",
-  "fastingNotificationChannelDescription": "Одноразові сповіщення, коли голодування досягає своєї мети.",
-  "fastingNotificationCompleteTitle": "Сесія голодування завершена",
-  "fastingNotificationCompleteBody": "Цільовий час досягнуто.",
   "profileImageLabel": "Додати фото",
   "profileImageReplace": "Змінити фото",
   "profileImageRemove": "Видалити фото",

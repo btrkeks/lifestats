@@ -417,8 +417,8 @@ the prompt:
   the user's intake pattern, body or progress. That is the "critique anyone's
   body shape or size" limb, and it is where a "coach" feature would land.
 
-The app already ships a low-kcal warning and an intermittent-fasting content
-gate. Those instincts are correct and should extend to the prompt.
+The app already ships a low-kcal warning. That instinct is correct and should
+extend to the prompt.
 
 **D3 — The High-Risk disclosure and human-review duties do *not* attach to this
 feature. Clean.** The AUP's structure is three sections: Universal Usage

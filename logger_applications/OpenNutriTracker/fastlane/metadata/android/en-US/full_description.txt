@@ -13,9 +13,8 @@ OpenNutriTracker is a calorie counter and food diary with no account, no subscri
 📷 Barcode scanner: Scan packaged items for instant lookup, paste a barcode manually, or attach a barcode to a custom meal so future scans recognise your own foods.
 🏃 Activities and workout import: Log workouts from a categorised catalogue or define custom activities with direct kcal entry and templates. Optionally import finished workouts from Health Connect — read-only, off by default, nothing is written back, and they stay on your device.
 💧 Water tracker: A water chip on the home screen with quick-add increments, an editable goal, and undo for the last entry.
-⏱️ Fasting timer: Optional intermittent-fasting timer with a content-warning gate, a home chip showing time remaining, and a completion notification.
 ⚖️ Weight history: Capture weight during onboarding and on demand, see the trend against your target, and optionally taper the calorie goal as you approach it.
 🎨 Material You & themes: Adopt the system accent colour on Android 12+, or pick from sixteen built-in presets.
 🔢 kcal or kJ: Switch the energy unit globally; every diary entry, target, and chart reflects the choice.
-📤 Export & import: Export diary entries, activities and tracked days as a JSON zip you can re-import, or as flat CSVs. Recipes and weight log are JSON only. Paste a JSON blob to import meals, or share a meal or activity as a QR code. Your profile, custom meals, water and fasting history stay out of the bundle.
+📤 Export & import: Export diary entries, activities and tracked days as a JSON zip you can re-import, or as flat CSVs. Recipes and weight log are JSON only. Paste a JSON blob to import meals, or share a meal or activity as a QR code. Your profile, custom meals, and water history stay out of the bundle.
 ⚕️ Not a medical device: OpenNutriTracker is not a medical device and does not diagnose, treat, cure, or prevent any medical condition. Figures are estimates from public databases and published equations. Always consult a healthcare professional for medical advice, diagnosis, or treatment.

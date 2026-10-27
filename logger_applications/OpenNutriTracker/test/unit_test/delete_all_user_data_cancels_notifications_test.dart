@@ -4,7 +4,6 @@ import 'package:opennutritracker/core/data/data_source/config_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/user_activity_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/app_theme_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/config_dbo.dart';
-import 'package:opennutritracker/core/data/dbo/fasting_session_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/intake_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/tracked_day_dbo.dart';
 import 'package:opennutritracker/core/data/dbo/user_dbo.dart';
@@ -98,7 +97,6 @@ void main() {
         trackedDayBox: await Hive.openBox<TrackedDayDBO>('delete_all_days'),
         weightLogBox: await Hive.openBox<WeightLogDBO>('delete_all_weight'),
         waterIntakeBox: await Hive.openBox<WaterIntakeDBO>('delete_all_water'),
-        fastingBox: await Hive.openBox<FastingSessionDBO>('delete_all_fast'),
       );
       final configDataSource = ConfigDataSource(provider);
       configRepository = ConfigRepository(configDataSource);

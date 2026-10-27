@@ -253,7 +253,6 @@
   "dailyKjAdjustmentLabel": "Ajuste diario de kJ:",
   "deleteAllLabel": "Eliminar todo",
   "settingsDeleteAllDataLabel": "Reiniciar datos del perfil",
-  "settingsDeleteAllDataSubtitle": "Perfil, comidas, actividades, historial de peso y sesiones de ayuno",
   "settingsDeleteAllDataConfirmTitle": "¿Reiniciar datos del perfil?",
   "settingsDeleteAllDataConfirmAction": "Reiniciar perfil",
   "lowKcalWarningTitle": "Este objetivo diario es algo bajo",
@@ -398,7 +397,6 @@
     }
   },
   "dataCollectionLabel": "Enviar reportes anónimos de errores para ayudar a arreglar bugs e incidencias. En ningún caso se enviará el peso, la comida u otros datos personales.",
-  "settingsDeleteAllDataConfirmContent": "Esto eliminará tu perfil, comidas, actividades, historial de peso y sesiones de ayuno solo para el perfil actual. El contenido compartido (comidas personalizadas, recetas, plantillas de actividad) y los catálogos de Open Food Facts y USDA FoodData Central no se verán afectados. Esta acción no se puede deshacer.",
   "policyChangeNoticeTitle": "Hemos actualizado la política de privacidad",
   "policyChangeNoticeBody": "Nada de lo que hace la aplicación ha cambiado. Lo que ha cambiado es cuánto te contamos de ello.\n\nLos servicios que siempre recibían tus búsquedas ahora están nombrados. Hay una nueva sección sobre datos de salud, para la importación de entrenamientos que puedes activar. Y ahora revelamos la ubicación aproximada que nuestro backend de búsqueda de alimentos registra junto a una petición y conserva durante 24 horas.\n\nTu diario permanece en tu dispositivo, como siempre.",
   "policyChangeNoticeReadAction": "Leer la política",
@@ -1250,40 +1248,6 @@
     }
   },
   "zincLabel": "zinc",
-  "profileFastingEntry": "Temporizador de ayuno",
-  "fastingTitle": "Temporizador de ayuno",
-  "fastingSubtitle": "Un temporizador sencillo para medir el tiempo entre comidas. Sin rachas ni objetivos, solo el reloj.",
-  "fastingWarningTitle": "Antes de empezar",
-  "fastingWarningBody": "Medir el tiempo de ayuno puede ser útil para algunas personas y angustiante para otras, especialmente si has tenido trastornos alimentarios. Si es tu caso, cuídate primero. Hay apoyo disponible en BEAT (Reino Unido) y NEDA (EE. UU.).",
-  "fastingWarningDecline": "No es para mí",
-  "fastingWarningAccept": "Entiendo, activar el temporizador",
-  "fastingPresetCustom": "Personalizado",
-  "fastingStart": "Iniciar temporizador",
-  "fastingCancel": "Terminar ayuno",
-  "fastingCancelConfirmTitle": "¿Terminar el ayuno ahora?",
-  "fastingCancelConfirmBody": "Esto cerrará la sesión actual.",
-  "fastingComplete": "Sesión completada",
-  "fastingLinkBeat": "BEAT (Reino Unido)",
-  "fastingLinkNeda": "NEDA (EE. UU.)",
-  "fastingElapsedLabel": "Transcurrido",
-  "fastingRemainingValue": "Quedan {value}",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Objetivo: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "horas",
-  "dialogCloseLabel": "Cerrar",
   "customMealsRowMoreTooltip": "Más acciones",
   "customMealsMergeAction": "Fusionar con otra comida personalizada",
   "customMealsMergePickerTitle": "Elige la comida personalizada con la que fusionar",
@@ -1321,18 +1285,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Ayuno · quedan {remaining}",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Temporizador de ayuno",
-  "fastingNotificationChannelDescription": "Avisos puntuales cuando una sesión de ayuno alcanza su objetivo.",
-  "fastingNotificationCompleteTitle": "Sesión de ayuno completada",
-  "fastingNotificationCompleteBody": "Has alcanzado tu tiempo objetivo.",
   "profileImageLabel": "Añadir una foto",
   "profileImageReplace": "Cambiar foto",
   "profileImageRemove": "Quitar foto",

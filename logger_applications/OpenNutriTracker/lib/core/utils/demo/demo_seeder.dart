@@ -35,9 +35,6 @@ import 'package:opennutritracker/core/utils/id_generator.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/core/utils/user_image_storage.dart';
 import 'package:opennutritracker/core/utils/url_const.dart';
-import 'package:opennutritracker/features/fasting/data/repository/fasting_repository.dart';
-import 'package:opennutritracker/features/fasting/domain/entity/fasting_session_entity.dart';
-import 'package:opennutritracker/features/fasting/domain/usecase/acknowledge_fasting_warning_usecase.dart';
 import 'package:path_provider/path_provider.dart';
 
 final _log = Logger('DemoSeeder');
@@ -98,7 +95,7 @@ class DemoSeedOptions {
 /// profile, daily meals sized to hit (and, per [options], rarely or never
 /// exceed) both the calorie and macro goals, activities on roughly half
 /// the days, noisy (not cyclical) weight/water history, several recipes,
-/// a saved activity template, and fasting sessions in every state.
+/// and a saved activity template.
 ///
 /// Builds every day's records in memory first and writes each box with a
 /// single bulk `addAll` call — a sequential per-day/per-usecase await loop
@@ -120,7 +117,6 @@ Future<void> seedDemoData(DemoSeedOptions options) async {
   final startOfToday = DateTime(now.year, now.month, now.day);
   final user = _demoUser(startOfToday);
   await locator<AddUserUsecase>().addUser(user);
-  await locator<AcknowledgeFastingWarningUseCase>()();
 
   // Hand-picked Unsplash photos, reused across every day's intake entries
   // — see unsplash_attribution.dart for why these are hardcoded URLs
@@ -272,11 +268,6 @@ Future<void> seedDemoData(DemoSeedOptions options) async {
   await locator<WeightLogRepository>().addAllEntries(
     _buildWeightLog(startOfToday, user.weightKG, options),
   );
-
-  final fastingRepository = locator<FastingRepository>();
-  for (final session in _buildFastingSessions(now, options.daysOfHistory)) {
-    await fastingRepository.addSession(session);
-  }
 
   await seedRecipes(now, foods);
   await seedCustomActivityTemplate();
@@ -455,44 +446,4 @@ List<WeightLogDBO> _buildWeightLog(
     ),
   );
   return entries;
-}
-
-/// A fasting session roughly every 9-14 days across [daysOfHistory] —
-/// mostly completed, occasionally broken early — plus one still in
-/// progress so the fasting timer has something live to show right after
-/// seeding.
-List<FastingSessionEntity> _buildFastingSessions(
-  DateTime now,
-  int daysOfHistory,
-) {
-  final sessions = <FastingSessionEntity>[];
-  var daysAgo = daysOfHistory - 1;
-  while (daysAgo >= 3) {
-    final start = now.subtract(Duration(days: daysAgo, hours: 8));
-    final targetMinutes = 14 * 60 + demoRng.nextInt(181); // 14-17h
-    final brokeEarly = demoRng.nextDouble() < 0.08;
-    sessions.add(
-      FastingSessionEntity(
-        id: IdGenerator.getUniqueID(),
-        startedAt: start,
-        targetDurationMinutes: targetMinutes,
-        completedAt: brokeEarly
-            ? null
-            : start.add(Duration(minutes: targetMinutes + 5)),
-        cancelledAt: brokeEarly
-            ? start.add(Duration(hours: 3 + demoRng.nextInt(3)))
-            : null,
-      ),
-    );
-    daysAgo -= 9 + demoRng.nextInt(6);
-  }
-
-  sessions.add(
-    FastingSessionEntity(
-      id: IdGenerator.getUniqueID(),
-      startedAt: now.subtract(const Duration(hours: 5)),
-      targetDurationMinutes: 16 * 60,
-    ),
-  );
-  return sessions;
 }

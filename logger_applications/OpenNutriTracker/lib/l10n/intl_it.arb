@@ -233,9 +233,7 @@
   "dataCollectionLabel": "Invia segnalazioni di arresto per aiutarci a correggere i bug. Non vengono inclusi diario alimentare o peso.",
   "deleteAllLabel": "Elimina tutto",
   "settingsDeleteAllDataLabel": "Reimposta i dati del profilo",
-  "settingsDeleteAllDataSubtitle": "Profilo, pasti, attività, cronologia del peso e digiuni",
   "settingsDeleteAllDataConfirmTitle": "Reimpostare i dati del profilo?",
-  "settingsDeleteAllDataConfirmContent": "Questa operazione rimuove il tuo profilo, i pasti, le attività, la cronologia del peso e i digiuni, solo per il profilo corrente. Rimuove anche l'eventuale chiave API e l'indirizzo del server delle funzioni IA, condivisi da tutti i profili su questo dispositivo. I contenuti condivisi (pasti personalizzati, ricette, modelli di attività) e i cataloghi Open Food Facts e USDA Food Data Central non vengono modificati. L'operazione non può essere annullata.",
   "policyChangeNoticeTitle": "Abbiamo aggiornato l’informativa sulla privacy",
   "policyChangeNoticeBody": "Non è cambiato nulla in ciò che fa l’app. È cambiato quanto te ne diciamo.\n\nI servizi che hanno sempre ricevuto le tue ricerche ora sono indicati per nome. C’è una nuova sezione sui dati sanitari, per l’importazione degli allenamenti che puoi attivare. E ora dichiariamo la posizione approssimativa che il nostro backend di ricerca alimenti registra insieme a una richiesta e conserva per 24 ore.\n\nIl tuo diario resta sul tuo dispositivo, come sempre.",
   "policyChangeNoticeReadAction": "Leggi l’informativa",
@@ -1092,40 +1090,6 @@
   "settingsWaterGoalLabel": "Obiettivo idrico giornaliero",
   "waterChipLabel": "{current} / {goal} ml",
   "zincLabel": "zinco",
-  "profileFastingEntry": "Timer di digiuno",
-  "fastingTitle": "Timer di digiuno",
-  "fastingSubtitle": "Un semplice timer per il tempo tra i pasti. Nessuna serie, nessun obiettivo, solo l'orologio.",
-  "fastingWarningTitle": "Prima di iniziare",
-  "fastingWarningBody": "Tenere traccia dei tempi di digiuno può aiutare alcune persone e turbarne altre, in particolare chi ha alle spalle un disturbo alimentare. Se è il tuo caso, prenditi prima cura di te. Puoi trovare sostegno presso BEAT (UK) e NEDA (US).",
-  "fastingWarningDecline": "Non fa per me",
-  "fastingWarningAccept": "Ho capito, attiva il timer",
-  "fastingPresetCustom": "Personalizzato",
-  "fastingStart": "Avvia timer",
-  "fastingCancel": "Termina digiuno",
-  "fastingCancelConfirmTitle": "Terminare il digiuno?",
-  "fastingCancelConfirmBody": "Chiuderà la sessione corrente.",
-  "fastingComplete": "Sessione completata",
-  "fastingLinkBeat": "BEAT (UK)",
-  "fastingLinkNeda": "NEDA (US)",
-  "fastingElapsedLabel": "Trascorso",
-  "fastingRemainingValue": "{value} rimanenti",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Obiettivo: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "ore",
-  "dialogCloseLabel": "Chiudi",
   "customMealsRowMoreTooltip": "Altre azioni",
   "customMealsMergeAction": "Unisci a un altro alimento personalizzato",
   "customMealsMergePickerTitle": "Scegli l'alimento personalizzato da unire",
@@ -1163,18 +1127,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Digiuno · {remaining} rimanenti",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Timer del digiuno",
-  "fastingNotificationChannelDescription": "Notifiche occasionali quando un digiuno raggiunge il suo obiettivo.",
-  "fastingNotificationCompleteTitle": "Sessione di digiuno completata",
-  "fastingNotificationCompleteBody": "Il tuo tempo obiettivo è stato raggiunto.",
   "profileImageLabel": "Aggiungi una foto",
   "profileImageReplace": "Cambia foto",
   "profileImageRemove": "Rimuovi foto",

@@ -233,9 +233,7 @@
   "dataCollectionLabel": "Hataların düzeltilmesine yardımcı olmak için çökme raporları gönderin. Yemek günlüğü veya kilo bilgileri dahil edilmez.",
   "deleteAllLabel": "Tümünü sil",
   "settingsDeleteAllDataLabel": "Profil verilerini sıfırla",
-  "settingsDeleteAllDataSubtitle": "Profil, öğünler, aktiviteler, kilo geçmişi ve oruç kayıtları",
   "settingsDeleteAllDataConfirmTitle": "Profil verileri sıfırlansın mı?",
-  "settingsDeleteAllDataConfirmContent": "Bu işlem profilinizi, öğünlerinizi, aktivitelerinizi, kilo geçmişinizi ve oruç kayıtlarınızı yalnızca geçerli profil için siler. Ayrıca yapay zekâ özelliklerine ait API anahtarını ve sunucu adresini de siler; bunlar bu cihazdaki tüm profiller tarafından paylaşılır. Paylaşılan içerik (özel öğünler, tarifler, aktivite şablonları) ve Open Food Facts ile USDA Food Data Central katalogları bundan etkilenmez. Bu işlem geri alınamaz.",
   "policyChangeNoticeTitle": "Gizlilik politikasını güncelledik",
   "policyChangeNoticeBody": "Uygulamanın yaptığı işte hiçbir şey değişmedi. Değişen, bunun ne kadarını sana anlattığımız.\n\nAramalarını en başından beri alan hizmetler artık adlarıyla belirtiliyor. Açabileceğin antrenman içe aktarma özelliği için sağlık verilerine dair yeni bir bölüm var. Ayrıca besin arama sunucumuzun bir istekle birlikte kaydettiği ve 24 saat sakladığı yaklaşık konumu artık açıkça belirtiyoruz.\n\nGünlüğün her zamanki gibi cihazında kalıyor.",
   "policyChangeNoticeReadAction": "Politikayı oku",
@@ -1123,40 +1121,6 @@
   "settingsWaterGoalLabel": "Günlük su hedefi",
   "waterChipLabel": "{current} / {goal} ml",
   "zincLabel": "çinko",
-  "profileFastingEntry": "Oruç zamanlayıcısı",
-  "fastingTitle": "Oruç zamanlayıcısı",
-  "fastingSubtitle": "Öğünler arası süreyi izlemek için basit bir zamanlayıcı. Seri yok, hedef yok, sadece saat.",
-  "fastingWarningTitle": "Başlamadan önce",
-  "fastingWarningBody": "Oruç sürelerini takip etmek bazı insanlara iyi gelirken, özellikle yeme bozukluğu geçmişi olanlar için zorlayıcı olabilir. Bu sen olabilirsen lütfen önce kendine iyi bak. Destek için BEAT (UK) ve NEDA (US) yardımcı olabilir.",
-  "fastingWarningDecline": "Bana göre değil",
-  "fastingWarningAccept": "Anladım, zamanlayıcıyı aç",
-  "fastingPresetCustom": "Özel",
-  "fastingStart": "Zamanlayıcıyı başlat",
-  "fastingCancel": "Orucu sonlandır",
-  "fastingCancelConfirmTitle": "Orucu şimdi sonlandırılsın mı?",
-  "fastingCancelConfirmBody": "Bu, mevcut oturumu kapatacak.",
-  "fastingComplete": "Oturum tamamlandı",
-  "fastingLinkBeat": "BEAT (UK)",
-  "fastingLinkNeda": "NEDA (US)",
-  "fastingElapsedLabel": "Geçen",
-  "fastingRemainingValue": "{value} kaldı",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Hedef: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "saat",
-  "dialogCloseLabel": "Kapat",
   "customMealsRowMoreTooltip": "Diğer eylemler",
   "customMealsMergeAction": "Başka bir özel yiyecekle birleştir",
   "customMealsMergePickerTitle": "Birleştirilecek özel yiyeceği seç",
@@ -1194,18 +1158,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Oruç · {remaining} kaldı",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Oruç zamanlayıcısı",
-  "fastingNotificationChannelDescription": "Bir oruç hedefe ulaştığında tek seferlik bildirimler.",
-  "fastingNotificationCompleteTitle": "Oruç süresi tamamlandı",
-  "fastingNotificationCompleteBody": "Hedef sürene ulaştın.",
   "profileImageLabel": "Fotoğraf ekle",
   "profileImageReplace": "Fotoğrafı değiştir",
   "profileImageRemove": "Fotoğrafı kaldır",

@@ -233,9 +233,7 @@
   "dataCollectionLabel": "Posielať hlásenia o páde, aby sme mohli opravovať chyby. Nezahŕňajú sa žiadne záznamy o jedle ani hmotnosti.",
   "deleteAllLabel": "Zmazať všetko",
   "settingsDeleteAllDataLabel": "Resetovať údaje profilu",
-  "settingsDeleteAllDataSubtitle": "Profil, jedlá, aktivity, história hmotnosti a pôsty",
   "settingsDeleteAllDataConfirmTitle": "Resetovať údaje profilu?",
-  "settingsDeleteAllDataConfirmContent": "Týmto sa odstráni váš profil, jedlá, aktivity, história hmotnosti a pôsty – iba pre aktuálny profil. Odstráni sa aj prípadný API kľúč a adresa servera pre funkcie AI, ktoré zdieľajú všetky profily v tomto zariadení. Zdieľaný obsah (vlastné jedlá, recepty, šablóny aktivít) ani katalógy Open Food Facts a USDA Food Data Central tým nie sú ovplyvnené. Túto akciu nie je možné vrátiť späť.",
   "policyChangeNoticeTitle": "Aktualizovali sme zásady ochrany osobných údajov",
   "policyChangeNoticeBody": "Na tom, čo aplikácia robí, sa nič nezmenilo. Zmenilo sa, koľko ti o tom hovoríme.\n\nSlužby, ktoré tvoje vyhľadávania dostávali odjakživa, sú teraz uvedené menom. Pribudla nová časť o zdravotných údajoch pre import tréningov, ktorý si môžeš zapnúť. A po novom uvádzame približnú polohu, ktorú náš backend na vyhľadávanie potravín zaznamenáva k požiadavke a uchováva 24 hodín.\n\nTvoj denník zostáva v tvojom zariadení, ako vždy.",
   "policyChangeNoticeReadAction": "Prečítať zásady",
@@ -1123,40 +1121,6 @@
   "settingsWaterGoalLabel": "Denný cieľ pitia vody",
   "waterChipLabel": "{current} / {goal} ml",
   "zincLabel": "zinok",
-  "profileFastingEntry": "Časovač pôstu",
-  "fastingTitle": "Časovač pôstu",
-  "fastingSubtitle": "Jednoduchý časovač na sledovanie času medzi jedlami. Žiadne série, žiadne ciele, len hodiny.",
-  "fastingWarningTitle": "Skôr než začneš",
-  "fastingWarningBody": "Sledovanie času pôstu môže byť niekomu užitočné a niekoho zraniť, najmä ak má za sebou poruchu príjmu potravy. Ak si to ty, postaraj sa najprv o seba. Podporu poskytujú BEAT (UK) a NEDA (US).",
-  "fastingWarningDecline": "Nie je to pre mňa",
-  "fastingWarningAccept": "Rozumiem, zapnúť časovač",
-  "fastingPresetCustom": "Vlastné",
-  "fastingStart": "Spustiť časovač",
-  "fastingCancel": "Ukončiť pôst",
-  "fastingCancelConfirmTitle": "Ukončiť pôst teraz?",
-  "fastingCancelConfirmBody": "Aktuálna relácia bude uzavretá.",
-  "fastingComplete": "Relácia dokončená",
-  "fastingLinkBeat": "BEAT (UK)",
-  "fastingLinkNeda": "NEDA (US)",
-  "fastingElapsedLabel": "Uplynulo",
-  "fastingRemainingValue": "Zostáva {value}",
-  "@fastingRemainingValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingTargetValue": "Cieľ: {value}",
-  "@fastingTargetValue": {
-    "placeholders": {
-      "value": {
-        "type": "String"
-      }
-    }
-  },
-  "hoursLabel": "hodiny",
-  "dialogCloseLabel": "Zavrieť",
   "customMealsRowMoreTooltip": "Ďalšie akcie",
   "customMealsMergeAction": "Zlúčiť s iným vlastným jedlom",
   "customMealsMergePickerTitle": "Vyberte vlastné jedlo na zlúčenie",
@@ -1194,18 +1158,6 @@
       }
     }
   },
-  "fastingHomeChipBody": "Pôst · zostáva {remaining}",
-  "@fastingHomeChipBody": {
-    "placeholders": {
-      "remaining": {
-        "type": "String"
-      }
-    }
-  },
-  "fastingNotificationChannelName": "Časovač pôstu",
-  "fastingNotificationChannelDescription": "Jednorazové upozornenia, keď pôst dosiahne svoj cieľ.",
-  "fastingNotificationCompleteTitle": "Pôst dokončený",
-  "fastingNotificationCompleteBody": "Cieľový čas bol dosiahnutý.",
   "profileImageLabel": "Pridať fotku",
   "profileImageReplace": "Zmeniť fotku",
   "profileImageRemove": "Odstrániť fotku",
