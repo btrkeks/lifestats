@@ -19,6 +19,7 @@ import 'package:opennutritracker/core/presentation/widgets/edit_dialog.dart';
 import 'package:opennutritracker/core/presentation/widgets/delete_dialog.dart';
 import 'package:opennutritracker/core/presentation/widgets/disclaimer_dialog.dart';
 import 'package:opennutritracker/core/domain/usecase/import_workouts_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/sync_lifestats_weight_usecase.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/features/add_meal/presentation/add_meal_type.dart';
 import 'package:opennutritracker/features/diary/presentation/bloc/calendar_day_bloc.dart';
@@ -30,6 +31,7 @@ import 'package:opennutritracker/features/home/presentation/widgets/fasting_home
 import 'package:opennutritracker/features/home/presentation/widgets/quick_water_widget.dart';
 import 'package:opennutritracker/core/domain/entity/body_weight_unit_entity.dart';
 import 'package:opennutritracker/features/home/presentation/widgets/quick_weight_widget.dart';
+import 'package:opennutritracker/features/profile/presentation/bloc/profile_bloc.dart';
 import 'package:opennutritracker/generated/l10n.dart';
 
 class HomePage extends StatefulWidget {
@@ -55,6 +57,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // from here rather than from bootstrap so a launch import reaches the
     // same diary refresh a resume import does.
     unawaited(_importHealthWorkouts());
+    unawaited(_syncLifestatsWeight());
     super.initState();
   }
 
@@ -124,6 +127,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       log.info('App resumed');
       _refreshPageOnDayChange();
       unawaited(_importHealthWorkouts());
+      unawaited(_syncLifestatsWeight());
     }
     super.didChangeAppLifecycleState(state);
   }
@@ -545,5 +549,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _homeBloc.add(const LoadItemsEvent());
     locator<DiaryBloc>().add(const LoadDiaryYearEvent());
     locator<CalendarDayBloc>().add(RefreshCalendarDayEvent());
+  }
+
+  /// Pulls scale readings from Lifestats into the weight log at launch and
+  /// on resume. Off unless a Lifestats address is set, debounced, and quiet
+  /// on failure inside the use case (Settings shows the last error). New
+  /// weigh-ins can move the protein goal, so home and profile reload.
+  Future<void> _syncLifestatsWeight() async {
+    final written = await locator<SyncLifestatsWeightUsecase>().syncIfDue();
+    if (written == 0 || !mounted) return;
+    _homeBloc.add(const LoadItemsEvent());
+    locator<ProfileBloc>().add(LoadProfileEvent());
   }
 }

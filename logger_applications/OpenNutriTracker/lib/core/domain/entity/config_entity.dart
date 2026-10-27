@@ -175,6 +175,19 @@ class ConfigEntity extends Equatable {
   /// Settings → Meal Detail.
   final bool defaultToRawFoodUnits;
 
+  /// Base URL of the user's Lifestats server; null or empty means Lifestats
+  /// sync is off.
+  final String? lifestatsBaseUrl;
+  final DateTime? lifestatsLastSyncAt;
+
+  /// The last failed Lifestats sync since the last success, if any.
+  /// [lifestatsLastError] is a `LifestatsErrorKind` name.
+  final DateTime? lifestatsLastErrorAt;
+  final String? lifestatsLastError;
+  final int? lifestatsLastErrorStatus;
+
+  bool get lifestatsEnabled => (lifestatsBaseUrl?.trim() ?? '').isNotEmpty;
+
   /// Which revision of the privacy policy the user has been shown a *notice*
   /// about. Zero for every install that predates the field, which is exactly
   /// who the notice is for.
@@ -273,6 +286,11 @@ class ConfigEntity extends Equatable {
     this.legacyHealthDeletedExternalIds = const <String>{},
     this.policyNoticeRevisionSeen = 0,
     this.defaultToRawFoodUnits = false,
+    this.lifestatsBaseUrl,
+    this.lifestatsLastSyncAt,
+    this.lifestatsLastErrorAt,
+    this.lifestatsLastError,
+    this.lifestatsLastErrorStatus,
   });
 
   /// The multiplier the importer actually applies. Falls back to crediting
@@ -395,6 +413,11 @@ class ConfigEntity extends Equatable {
         ? Set<String>.from(dbo.healthDeletedExternalIds!)
         : const <String>{},
     defaultToRawFoodUnits: dbo.defaultToRawFoodUnits ?? false,
+    lifestatsBaseUrl: dbo.lifestatsBaseUrl,
+    lifestatsLastSyncAt: dbo.lifestatsLastSyncAt,
+    lifestatsLastErrorAt: dbo.lifestatsLastErrorAt,
+    lifestatsLastError: dbo.lifestatsLastError,
+    lifestatsLastErrorStatus: dbo.lifestatsLastErrorStatus,
   );
 
   /// Returns the recommended kcal target for [mealKey] given a daily goal.
@@ -500,5 +523,10 @@ class ConfigEntity extends Equatable {
     legacyHealthDeletedExternalIds,
     policyNoticeRevisionSeen,
     defaultToRawFoodUnits,
+    lifestatsBaseUrl,
+    lifestatsLastSyncAt,
+    lifestatsLastErrorAt,
+    lifestatsLastError,
+    lifestatsLastErrorStatus,
   ];
 }

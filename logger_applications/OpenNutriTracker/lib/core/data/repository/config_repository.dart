@@ -88,6 +88,22 @@ class ConfigRepository {
     await _configDataSource.setConfigShowActivityTracking(show);
   }
 
+  Future<void> setLifestatsBaseUrl(String? baseUrl) async {
+    await _configDataSource.setConfigLifestatsBaseUrl(baseUrl);
+  }
+
+  Future<void> setLifestatsSyncSucceeded(DateTime at) async {
+    await _configDataSource.setConfigLifestatsSyncSucceeded(at);
+  }
+
+  Future<void> setLifestatsSyncFailed(
+    DateTime at,
+    String error,
+    int? statusCode,
+  ) async {
+    await _configDataSource.setConfigLifestatsSyncFailed(at, error, statusCode);
+  }
+
   Future<void> setConfigShowMealMacros(bool show) async {
     await _configDataSource.setConfigShowMealMacros(show);
   }

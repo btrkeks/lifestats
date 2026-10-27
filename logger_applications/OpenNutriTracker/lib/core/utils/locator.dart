@@ -27,6 +27,7 @@ import 'package:opennutritracker/core/data/repository/user_activity_repository.d
 import 'package:opennutritracker/core/data/repository/user_repository.dart';
 import 'package:opennutritracker/core/data/repository/water_intake_repository.dart';
 import 'package:opennutritracker/core/data/repository/weight_log_repository.dart';
+import 'package:opennutritracker/core/data/data_source/lifestats/lifestats_client.dart';
 import 'package:opennutritracker/core/domain/usecase/add_config_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_custom_activity_template_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_intake_usecase.dart';
@@ -65,6 +66,7 @@ import 'package:opennutritracker/core/domain/usecase/import_workouts_usecase.dar
 import 'package:opennutritracker/core/domain/usecase/log_user_activity_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/save_recipe_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/send_intake_to_profiles_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/sync_lifestats_weight_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/switch_profile_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/update_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/update_profile_usecase.dart';
@@ -469,6 +471,17 @@ Future<void> initLocator() async {
   );
   locator.registerLazySingleton<DeleteWeightLogUsecase>(
     () => DeleteWeightLogUsecase(locator()),
+  );
+  locator.registerLazySingleton<LifestatsClient>(
+    () => LifestatsClient(
+      locator<http.Client>(),
+      () async =>
+          (await locator<ConfigRepository>().getConfig()).lifestatsBaseUrl,
+    ),
+  );
+  locator.registerLazySingleton<SyncLifestatsWeightUsecase>(
+    () =>
+        SyncLifestatsWeightUsecase(locator(), locator(), locator(), locator()),
   );
   locator.registerLazySingleton<AddWaterIntakeUsecase>(
     () => AddWaterIntakeUsecase(locator()),

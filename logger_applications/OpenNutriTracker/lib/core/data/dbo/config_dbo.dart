@@ -195,6 +195,23 @@ class ConfigDBO extends HiveObject {
   // macro goals.
   @HiveField(40)
   double? userProteinGramsPerKg;
+  // Base URL of the user's Lifestats server (e.g. http://100.64.0.1:3000).
+  // Null or empty turns Lifestats sync off. Personal: the weight it brings
+  // in belongs to one profile.
+  @HiveField(41)
+  String? lifestatsBaseUrl;
+  // When a Lifestats sync last succeeded.
+  @HiveField(42)
+  DateTime? lifestatsLastSyncAt;
+  // The last failed sync since the last success: when, why
+  // (`LifestatsErrorKind` name) and, for HTTP errors, the status. Cleared
+  // by the next success.
+  @HiveField(43)
+  DateTime? lifestatsLastErrorAt;
+  @HiveField(44)
+  String? lifestatsLastError;
+  @HiveField(45)
+  int? lifestatsLastErrorStatus;
 
   ConfigDBO(
     this.hasAcceptedDisclaimer,
@@ -235,6 +252,11 @@ class ConfigDBO extends HiveObject {
     this.healthDeletedWorkouts,
     this.defaultToRawFoodUnits,
     this.userProteinGramsPerKg,
+    this.lifestatsBaseUrl,
+    this.lifestatsLastSyncAt,
+    this.lifestatsLastErrorAt,
+    this.lifestatsLastError,
+    this.lifestatsLastErrorStatus,
   });
 
   factory ConfigDBO.empty() =>
