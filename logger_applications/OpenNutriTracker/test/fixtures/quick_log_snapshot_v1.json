@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "kind": "ready",
+  "profileId": "default",
+  "logicalDay": "2026-10-27",
+  "validUntilMs": 1793145600000,
+  "status": {
+    "energyValueText": "2,232",
+    "energyLabelText": "kcal left",
+    "energyFraction": 0.07,
+    "proteinText": "30/150 g",
+    "proteinCompactText": "30/150 g protein",
+    "proteinFraction": 0.2
+  },
+  "labels": {
+    "scanProduct": "Scan Product",
+    "searchFood": "Search food",
+    "undo": "Undo",
+    "emptyTitle": "No meals recently added",
+    "emptyBody": "Foods you log will show up here with their protein, one tap to add."
+  },
+  "rows": [
+    {
+      "foodKey": "src:off:4005500000000",
+      "title": "Speisequark",
+      "amountText": "250 g",
+      "energyText": "168 kcal",
+      "pillText": "+ 30 g",
+      "chipText": "+30 g",
+      "baseAmount": 250.0,
+      "unit": "g",
+      "picker": {
+        "foodKey": "src:off:4005500000000",
+        "title": "Speisequark",
+        "proteinPerBase": 0.12,
+        "proteinKnown": true,
+        "energyPerBase": 0.67,
+        "usesKilojoules": false,
+        "units": [
+          {
+            "token": "g",
+            "label": "g",
+            "basePerUnit": 1.0
+          }
+        ],
+        "recent": [
+          {
+            "quantity": 150,
+            "unit": "g"
+          },
+          {
+            "quantity": 200,
+            "unit": "g"
+          },
+          {
+            "quantity": 250,
+            "unit": "g"
+          },
+          {
+            "quantity": 300,
+            "unit": "g"
+          }
+        ],
+        "initial": {
+          "quantity": 250,
+          "unit": "g"
+        },
+        "appearance": {
+          "localeTag": "en",
+          "themeMode": "system",
+          "useMaterialYou": false,
+          "accentColor": null
+        }
+      }
+    },
+    {
+      "foodKey": "name:protein shake",
+      "title": "Protein Shake",
+      "amountText": "1 serving",
+      "energyText": "230 kcal",
+      "pillText": "+ 40 g",
+      "chipText": "+40 g",
+      "baseAmount": 60.0,
+      "unit": "serving",
+      "picker": {
+        "foodKey": "name:protein shake",
+        "title": "Protein Shake",
+        "proteinPerBase": 0.6666666666666665,
+        "proteinKnown": true,
+        "energyPerBase": 3.833333333333334,
+        "usesKilojoules": false,
+        "units": [
+          {
+            "token": "g",
+            "label": "g",
+            "basePerUnit": 1.0
+          },
+          {
+            "token": "serving",
+            "label": "Serving",
+            "basePerUnit": 60.0
+          }
+        ],
+        "recent": [
+          {
+            "quantity": 1.0,
+            "unit": "serving"
+          }
+        ],
+        "initial": {
+          "quantity": 1.0,
+          "unit": "serving"
+        },
+        "appearance": {
+          "localeTag": "en",
+          "themeMode": "system",
+          "useMaterialYou": false,
+          "accentColor": null
+        }
+      }
+    }
+  ]
+}
