@@ -20,12 +20,15 @@ use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::error::RepositoryError;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
+use lifestats_core::statistic::value_objects::goals::default_goal_timeline::{
+    DefaultGoalSegment, DefaultGoalTimeline,
+};
 use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 
 use crate::db::mappers::{InsertStatisticDto, StatisticDto};
-use crate::db::models::{DefaultGoalRaw, GoalDataRaw, LoggingDataRaw};
+use crate::db::models::{DefaultGoalRaw, DefaultGoalSegmentRaw, GoalDataRaw, LoggingDataRaw};
 use crate::db::queries;
-use crate::db::schema::{default_goals, goals, logging_data, statistics};
+use crate::db::schema::{default_goal_segments, default_goals, goals, logging_data, statistics};
 
 type SqlitePool = Pool<ConnectionManager<SqliteConnection>>;
 
@@ -136,6 +139,76 @@ impl SqliteStatisticRepository {
 
         Ok(())
     }
+
+    /// Stored segments, or, for statistics that never had one stored, the
+    /// timeline implied by `default_goals` + `statistics.default_goal_valid_since`.
+    fn read_default_goal_timeline(
+        conn: &mut SqliteConnection,
+        id: StatisticId,
+    ) -> anyhow::Result<DefaultGoalTimeline<serde_json::Value>> {
+        let rows = default_goal_segments::table
+            .filter(default_goal_segments::statistic_id.eq(id.0 as i32))
+            .load::<DefaultGoalSegmentRaw>(conn)
+            .context("failed to load default goal segments")?;
+
+        if rows.is_empty() {
+            let Some(default_goal) = queries::fetch_default_goal(conn, id)? else {
+                return Ok(DefaultGoalTimeline::default());
+            };
+            let valid_since: String = statistics::table
+                .find(id.0 as i32)
+                .select(statistics::default_goal_valid_since)
+                .first(conn)
+                .context("failed to load default goal start")?;
+            return Ok(DefaultGoalTimeline::new(vec![DefaultGoalSegment::new(
+                parse_date(&valid_since)?,
+                Some(serde_json::from_str(&default_goal.goal)?),
+            )]));
+        }
+
+        let segments = rows
+            .into_iter()
+            .map(|row| {
+                let goal = row
+                    .goal
+                    .map(|goal| serde_json::from_str(&goal))
+                    .transpose()
+                    .context("failed to parse default goal segment JSON")?;
+                Ok(DefaultGoalSegment::new(parse_date(&row.valid_since)?, goal))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(DefaultGoalTimeline::new(segments))
+    }
+
+    fn upsert_goal(
+        conn: &mut SqliteConnection,
+        id: StatisticId,
+        date: NaiveDate,
+        goal: Option<&serde_json::Value>,
+    ) -> anyhow::Result<()> {
+        // goal: Some(..) = override, goal: None = suppressed (stored as NULL)
+        let record = GoalDataRaw {
+            statistic_id: id.0 as i32,
+            date: date.to_string(),
+            goal: goal
+                .map(serde_json::to_string)
+                .transpose()
+                .context("failed to serialize goal to JSON")?,
+        };
+
+        diesel::insert_into(goals::table)
+            .values(&record)
+            .on_conflict((goals::statistic_id, goals::date))
+            .do_update()
+            .set(&record) // will set goal to Some(...) or NULL accordingly
+            .execute(conn)?;
+        Ok(())
+    }
+}
+
+fn parse_date(date: &str) -> anyhow::Result<NaiveDate> {
+    date.parse::<NaiveDate>()
+        .with_context(|| format!("failed to parse date: {}", date))
 }
 
 impl StatisticRepository for SqliteStatisticRepository {
@@ -285,6 +358,68 @@ impl StatisticRepository for SqliteStatisticRepository {
         Ok(())
     }
 
+    fn find_default_goal_timeline(
+        &self,
+        id: StatisticId,
+    ) -> Result<DefaultGoalTimeline<serde_json::Value>, RepositoryError> {
+        let mut conn = self.connection()?;
+        Self::read_default_goal_timeline(&mut conn, id).map_err(RepositoryError::OperationFailed)
+    }
+
+    fn save_default_goal_timeline(
+        &self,
+        id: StatisticId,
+        timeline: &DefaultGoalTimeline<serde_json::Value>,
+    ) -> Result<(), RepositoryError> {
+        let mut conn = self.connection()?;
+        conn.transaction::<_, anyhow::Error, _>(|conn| {
+            let rows = timeline
+                .segments()
+                .iter()
+                .map(|segment| {
+                    Ok(DefaultGoalSegmentRaw {
+                        statistic_id: id.0 as i32,
+                        valid_since: segment.valid_since.to_string(),
+                        goal: segment
+                            .goal
+                            .as_ref()
+                            .map(serde_json::to_string)
+                            .transpose()?,
+                    })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+
+            diesel::delete(
+                default_goal_segments::table
+                    .filter(default_goal_segments::statistic_id.eq(id.0 as i32)),
+            )
+            .execute(conn)?;
+            if !rows.is_empty() {
+                diesel::insert_into(default_goal_segments::table)
+                    .values(&rows)
+                    .execute(conn)?;
+            }
+
+            // Keep the current default goal (metadata, find_default_goal) on the latest segment
+            match timeline.latest() {
+                Some(DefaultGoalSegment {
+                    valid_since,
+                    goal: Some(goal),
+                }) => {
+                    Self::upsert_default_goal(conn, id, goal)?;
+                    diesel::update(statistics::table.find(id.0 as i32))
+                        .set(statistics::default_goal_valid_since.eq(valid_since.to_string()))
+                        .execute(conn)?;
+                }
+                _ => {
+                    diesel::delete(default_goals::table.find(id.0 as i32)).execute(conn)?;
+                }
+            }
+            Ok(())
+        })
+        .map_err(RepositoryError::OperationFailed)
+    }
+
     fn delete_metadata(&self, id: StatisticId) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
 
@@ -300,6 +435,11 @@ impl StatisticRepository for SqliteStatisticRepository {
 
             // Delete default goal for this statistic
             diesel::delete(default_goals::table.find(id.0 as i32)).execute(conn)?;
+            diesel::delete(
+                default_goal_segments::table
+                    .filter(default_goal_segments::statistic_id.eq(id.0 as i32)),
+            )
+            .execute(conn)?;
 
             diesel::sql_query(
                 "UPDATE yomikata_metric_bindings SET statistic_id=NULL WHERE statistic_id=?",
@@ -465,36 +605,24 @@ impl StatisticRepository for SqliteStatisticRepository {
         goal: Option<serde_json::Value>,
     ) -> Result<(), RepositoryError> {
         let mut conn = self.connection()?;
+        Self::upsert_goal(&mut conn, id, date, goal.as_ref())
+            .map_err(RepositoryError::OperationFailed)
+    }
 
-        // Build the record; goal: Some(..) = override, goal: None = suppressed
-        let record = match goal {
-            Some(goal_value) => {
-                let goal_str = serde_json::to_string(&goal_value)
-                    .context("failed to serialize goal to JSON")
-                    .map_err(RepositoryError::OperationFailed)?;
-
-                GoalDataRaw {
-                    statistic_id: id.0 as i32,
-                    date: date.to_string(),
-                    goal: Some(goal_str),
-                }
+    fn save_goals_in_range(
+        &self,
+        id: StatisticId,
+        range: DateRange,
+        goal: Option<serde_json::Value>,
+    ) -> Result<(), RepositoryError> {
+        let mut conn = self.connection()?;
+        conn.transaction::<_, anyhow::Error, _>(|conn| {
+            for date in range.start().iter_days().take_while(|d| *d <= range.end()) {
+                Self::upsert_goal(conn, id, date, goal.as_ref())?;
             }
-            None => GoalDataRaw {
-                statistic_id: id.0 as i32,
-                date: date.to_string(),
-                goal: None, // stored as NULL => "suppressed"
-            },
-        };
-
-        diesel::insert_into(goals::table)
-            .values(&record)
-            .on_conflict((goals::statistic_id, goals::date))
-            .do_update()
-            .set(&record) // will set goal to Some(...) or NULL accordingly
-            .execute(&mut conn)
-            .map_err(diesel_to_repository_error)?;
-
-        Ok(())
+            Ok(())
+        })
+        .map_err(RepositoryError::OperationFailed)
     }
 
     fn find_goals_in_range(
@@ -835,6 +963,128 @@ mod tests {
             let fetched_value = fetched.unwrap();
             assert_eq!(fetched_value["target"], 50);
             assert_eq!(fetched_value["extra_data1"], "default_data");
+            Ok(())
+        }
+    }
+
+    mod default_goal_timeline_tests {
+        use super::*;
+        use serde_json::json;
+
+        fn date(month: u32, day: u32) -> NaiveDate {
+            NaiveDate::from_ymd_opt(2026, month, day).unwrap()
+        }
+
+        #[test]
+        fn legacy_default_goal_reads_as_a_single_segment() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+            repo.save_default_goal(statistic_id, json!({"target_amount": 400}))?;
+
+            let timeline = repo.find_default_goal_timeline(statistic_id)?;
+
+            assert_eq!(
+                timeline.segments(),
+                &[DefaultGoalSegment::new(
+                    NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                    Some(json!({"target_amount": 400}))
+                )]
+            );
+            Ok(())
+        }
+
+        #[test]
+        fn statistic_without_default_goal_has_an_empty_timeline() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+
+            assert!(repo
+                .find_default_goal_timeline(statistic_id)?
+                .segments()
+                .is_empty());
+            Ok(())
+        }
+
+        #[test]
+        fn saved_timeline_round_trips_and_updates_the_current_goal() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+            let timeline = DefaultGoalTimeline::new(vec![
+                DefaultGoalSegment::new(
+                    date(9, 9),
+                    Some(json!({"target_amount": 400, "is_at_least": true})),
+                ),
+                DefaultGoalSegment::new(
+                    date(10, 22),
+                    Some(json!({"target_amount": 450, "is_at_least": true})),
+                ),
+            ]);
+
+            repo.save_default_goal_timeline(statistic_id, &timeline)?;
+
+            assert_eq!(repo.find_default_goal_timeline(statistic_id)?, timeline);
+            assert_eq!(
+                repo.find_default_goal(statistic_id)?,
+                Some(json!({"target_amount": 450, "is_at_least": true}))
+            );
+            assert_eq!(
+                repo.find_metadata_by_id(statistic_id)?
+                    .get_default_goal_valid_since(),
+                date(10, 22)
+            );
+            Ok(())
+        }
+
+        #[test]
+        fn removed_goal_clears_the_current_goal_but_keeps_history() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+            repo.save_default_goal(statistic_id, json!({"target_amount": 400}))?;
+            let timeline = DefaultGoalTimeline::new(vec![
+                DefaultGoalSegment::new(date(9, 9), Some(json!({"target_amount": 400}))),
+                DefaultGoalSegment::new(date(10, 22), None),
+            ]);
+
+            repo.save_default_goal_timeline(statistic_id, &timeline)?;
+
+            assert_eq!(repo.find_default_goal(statistic_id)?, None);
+            assert_eq!(repo.find_default_goal_timeline(statistic_id)?, timeline);
+            Ok(())
+        }
+
+        #[test]
+        fn saving_an_empty_timeline_removes_every_default_goal() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+            repo.save_default_goal(statistic_id, json!({"target_amount": 400}))?;
+
+            repo.save_default_goal_timeline(statistic_id, &DefaultGoalTimeline::default())?;
+
+            assert_eq!(repo.find_default_goal(statistic_id)?, None);
+            assert!(repo
+                .find_default_goal_timeline(statistic_id)?
+                .segments()
+                .is_empty());
+            Ok(())
+        }
+
+        #[test]
+        fn save_goals_in_range_writes_every_day() -> Result<()> {
+            let repo = setup_repository();
+            let statistic_id = persist_stat(&repo, integer_stat(0))?;
+            repo.save_goal(statistic_id, date(10, 14), None)?;
+            let range = DateRange::new(date(10, 12), date(10, 21))?;
+
+            repo.save_goals_in_range(statistic_id, range, Some(json!({"target": "22:05:00"})))?;
+
+            let goals = repo
+                .find_goals_in_range(statistic_id, DateRange::new(date(10, 11), date(10, 22))?)?;
+            let dates: Vec<NaiveDate> = goals.iter().map(|goal| goal.date).collect();
+            assert_eq!(dates.first(), Some(&date(10, 12)));
+            assert_eq!(dates.len(), 10);
+            assert!(goals
+                .iter()
+                .all(|goal| goal.value == GoalQueryResult::Goal(json!({"target": "22:05:00"}))));
             Ok(())
         }
     }

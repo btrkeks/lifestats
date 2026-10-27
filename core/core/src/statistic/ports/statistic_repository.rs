@@ -3,6 +3,7 @@ use crate::shared::date_range::DateRange;
 use crate::shared::dated_value::DatedValue;
 use crate::shared::ids::StatisticId;
 use crate::statistic::any_statistic::AnyStatistic;
+use crate::statistic::value_objects::goals::default_goal_timeline::DefaultGoalTimeline;
 use crate::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 use chrono::NaiveDate;
 use std::collections::HashMap;
@@ -63,6 +64,13 @@ pub trait StatisticRepository {
         date: NaiveDate,
         goal: Option<serde_json::Value>,
     ) -> Result<(), RepositoryError>;
+    /// Stores the same daily override (`None` = suppressed) on every day of `range`, atomically.
+    fn save_goals_in_range(
+        &self,
+        id: StatisticId,
+        range: DateRange,
+        goal: Option<serde_json::Value>,
+    ) -> Result<(), RepositoryError>;
     fn delete_goal(&self, id: StatisticId, date: NaiveDate) -> Result<(), RepositoryError>;
     fn find_goals_in_range(
         &self,
@@ -79,6 +87,18 @@ pub trait StatisticRepository {
         goal: serde_json::Value,
     ) -> Result<(), RepositoryError>;
     fn delete_default_goal(&self, id: StatisticId) -> Result<(), RepositoryError>;
+    /// The statistic's default goal over time (goals as stored JSON).
+    fn find_default_goal_timeline(
+        &self,
+        id: StatisticId,
+    ) -> Result<DefaultGoalTimeline<serde_json::Value>, RepositoryError>;
+    /// Replaces the default goal timeline. Also updates the current default goal
+    /// (`find_default_goal`, metadata) to the timeline's latest segment.
+    fn save_default_goal_timeline(
+        &self,
+        id: StatisticId,
+        timeline: &DefaultGoalTimeline<serde_json::Value>,
+    ) -> Result<(), RepositoryError>;
 
     // --- Metadata Deletion ---
     fn delete_metadata(&self, id: StatisticId) -> Result<(), RepositoryError>;

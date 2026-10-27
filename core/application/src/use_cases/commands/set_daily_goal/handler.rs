@@ -96,7 +96,8 @@ where
     }
 }
 
-fn parse_goal_payload_to_json(
+/// Validates `goal_payload` against the statistic's type and serializes it the way goals are stored.
+pub(crate) fn parse_goal_payload_to_json(
     goal_payload: GoalPayload,
     statistic: AnyStatistic,
 ) -> Result<serde_json::Value, ApplicationError> {

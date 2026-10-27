@@ -31,6 +31,19 @@ pub struct DayEval {
     pub percentage_achieved: Option<Percentage>,
 }
 
+/// What was logged on one day, typed per statistic type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DayValue {
+    /// IntegerAmount and Summing statistics
+    Amount(i64),
+    /// Habit statistics
+    Occurred(bool),
+    /// PointInTime statistics
+    Time(chrono::NaiveTime),
+    /// TimeSpans (total of the day's merged frames) and TimeDifference statistics
+    Duration(Seconds),
+}
+
 /// Trait for evaluating daily achievement across a date range.
 /// Provides bulk evaluation with efficient data fetching (no N+1 queries).
 #[cfg_attr(test, mockall::automock)]
@@ -42,6 +55,13 @@ pub trait DailyAchievementEvaluator: Send + Sync {
     /// - Resolves goals per day: daily override > default goal (if date >= valid_since) > no goal
     /// - Returns one DayEval per day in the range
     fn eval_range(&self, stat: &AnyStatistic, range: DateRange) -> ApplicationResult<Vec<DayEval>>;
+
+    /// The logged value of each day in the range that has one (one bulk fetch).
+    fn values_in_range(
+        &self,
+        stat: &AnyStatistic,
+        range: DateRange,
+    ) -> ApplicationResult<HashMap<NaiveDate, DayValue>>;
 }
 
 /// Default implementation of DailyAchievementEvaluator
@@ -227,6 +247,25 @@ where
         Ok(result)
     }
 
+    fn parse_day_value(
+        stat: &AnyStatistic,
+        value: serde_json::Value,
+    ) -> serde_json::Result<DayValue> {
+        Ok(match stat {
+            AnyStatistic::IntegerAmount(_) => DayValue::Amount(serde_json::from_value(value)?),
+            AnyStatistic::Summing(_) => {
+                DayValue::Amount(serde_json::from_value::<Seconds>(value)?.into())
+            }
+            AnyStatistic::Habit(_) => DayValue::Occurred(serde_json::from_value(value)?),
+            AnyStatistic::PointInTime(_) => DayValue::Time(serde_json::from_value(value)?),
+            AnyStatistic::TimeDifference(_) => DayValue::Duration(serde_json::from_value(value)?),
+            AnyStatistic::TimeSpans(_) => {
+                let frames: TimeFrameList = serde_json::from_value(value)?;
+                DayValue::Duration(frames.get_total_duration().into())
+            }
+        })
+    }
+
     /// Merges multiple TimeFrameLists into a single list with coalesced frames.
     ///
     /// Algorithm:
@@ -281,6 +320,45 @@ impl<R> DailyAchievementEvaluator for DefaultDailyAchievementEvaluator<R>
 where
     R: StatisticRepository + Send + Sync + 'static,
 {
+    fn values_in_range(
+        &self,
+        stat: &AnyStatistic,
+        range: DateRange,
+    ) -> ApplicationResult<HashMap<NaiveDate, DayValue>> {
+        let log_values = self
+            .repo
+            .find_log_values_in_range(stat.get_metadata().id(), range)?;
+
+        if matches!(stat, AnyStatistic::TimeSpans(_)) {
+            // Same-day frames are merged first so overlaps aren't counted twice
+            let mut frames_by_day: HashMap<NaiveDate, Vec<TimeFrameList>> = HashMap::new();
+            for dated_value in log_values {
+                let frames: TimeFrameList = serde_json::from_value(dated_value.value)
+                    .map_err(|e| anyhow::anyhow!("Failed to deserialize TimeFrameList: {}", e))?;
+                frames_by_day
+                    .entry(dated_value.date)
+                    .or_default()
+                    .push(frames);
+            }
+            return Ok(frames_by_day
+                .into_iter()
+                .map(|(date, lists)| {
+                    let total = Self::merge_time_frame_lists(lists).get_total_duration();
+                    (date, DayValue::Duration(total.into()))
+                })
+                .collect());
+        }
+
+        log_values
+            .into_iter()
+            .map(|dated_value| {
+                let value = Self::parse_day_value(stat, dated_value.value)
+                    .map_err(|e| anyhow::anyhow!("Failed to deserialize log value: {}", e))?;
+                Ok((dated_value.date, value))
+            })
+            .collect()
+    }
+
     fn eval_range(&self, stat: &AnyStatistic, range: DateRange) -> ApplicationResult<Vec<DayEval>> {
         let default_goal = stat.get_default_goal();
         let default_goal_valid_since = stat.get_default_goal_valid_since();

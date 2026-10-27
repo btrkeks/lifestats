@@ -7,6 +7,7 @@ pub mod delete_statistic;
 pub mod log_progress_checkpoint;
 pub mod log_value;
 pub mod set_daily_goal;
+pub mod set_daily_goal_range;
 pub mod set_default_goal;
 pub mod sync_fitbit_data;
 pub mod update_progress_target;
@@ -27,6 +28,7 @@ pub use log_progress_checkpoint::{
 };
 pub use log_value::{LogValueCommand, LogValueCommandHandler, LogValuePayload};
 pub use set_daily_goal::{GoalPayload, SetDailyGoalCommand, SetDailyGoalCommandHandler};
+pub use set_daily_goal_range::{SetDailyGoalRangeCommand, SetDailyGoalRangeCommandHandler};
 pub use set_default_goal::{SetDefaultGoalCommand, SetDefaultGoalCommandHandler};
 pub use sync_fitbit_data::{SyncFitbitDataCommand, SyncFitbitDataCommandHandler};
 pub use update_progress_target::{UpdateProgressTargetCommand, UpdateProgressTargetCommandHandler};

@@ -4,6 +4,8 @@ use lifestats_core::shared::date_range::DateRange;
 use lifestats_core::shared::ids::StatisticId;
 use lifestats_core::shared::percentage::Percentage;
 
+use crate::services::DayValue;
+
 /// Query for per-day goal achievement plus daily-override state over a date range.
 ///
 /// Powers UIs that show a "last N days" strip per statistic and let the user act on
@@ -24,7 +26,7 @@ pub enum DailyGoalOverrideKind {
     Goal,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DailyAchievement {
     pub date: NaiveDate,
     /// Whether any goal (default or daily) applied on this day
@@ -34,6 +36,10 @@ pub struct DailyAchievement {
     /// Achievement percentage, `None` when no goal applied
     pub percentage_achieved: Option<Percentage>,
     pub override_kind: DailyGoalOverrideKind,
+    /// What was logged that day, `None` when nothing was
+    pub value: Option<DayValue>,
+    /// The goal that applied that day (as stored), `None` when no goal applied
+    pub goal: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

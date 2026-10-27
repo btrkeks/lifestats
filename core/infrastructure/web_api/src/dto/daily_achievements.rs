@@ -1,3 +1,4 @@
+use lifestats_application::services::DayValue;
 use lifestats_application::use_cases::queries::get_daily_achievements::DailyGoalOverrideKind;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -35,6 +36,18 @@ impl From<DailyGoalOverrideKind> for DailyGoalOverrideResponse {
     }
 }
 
+/// The JSON form of a logged day value: a number for counts (IntegerAmount,
+/// Summing) and durations in seconds (TimeSpans, TimeDifference), a boolean for
+/// habits, and `"HH:MM:SS"` for PointInTime.
+pub fn day_value_json(value: DayValue) -> serde_json::Value {
+    match value {
+        DayValue::Amount(amount) => amount.into(),
+        DayValue::Occurred(occurred) => occurred.into(),
+        DayValue::Time(time) => time.format("%H:%M:%S").to_string().into(),
+        DayValue::Duration(seconds) => i64::from(seconds).into(),
+    }
+}
+
 /// One day of goal achievement
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DailyAchievementResponse {
@@ -49,6 +62,11 @@ pub struct DailyAchievementResponse {
     /// `override` is a reserved keyword in Rust, hence the rename
     #[serde(rename = "override")]
     pub override_kind: DailyGoalOverrideResponse,
+    /// What was logged that day (see `day_value_json`), null when nothing was
+    pub value: Option<serde_json::Value>,
+    /// The goal that applied that day, same shape as `GET /statistics/{id}/goals/default`
+    /// `goal_data`; null when no goal applied
+    pub goal: Option<serde_json::Value>,
 }
 
 /// Response DTO for `GET /statistics/{id}/achievements`
@@ -84,10 +102,33 @@ mod tests {
             achieved: false,
             percentage_achieved: None,
             override_kind: DailyGoalOverrideResponse::Suppressed,
+            value: Some(day_value_json(DayValue::Amount(244))),
+            goal: None,
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"override\":\"suppressed\""));
         assert!(json.contains("\"percentage_achieved\":null"));
+        assert!(json.contains("\"value\":244"));
+        assert!(json.contains("\"goal\":null"));
+    }
+
+    #[test]
+    fn test_day_value_json_per_type() {
+        use chrono::NaiveTime;
+        use lifestats_core::shared::seconds::Seconds;
+
+        assert_eq!(
+            day_value_json(DayValue::Occurred(true)),
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            day_value_json(DayValue::Time(NaiveTime::from_hms_opt(22, 37, 0).unwrap())),
+            serde_json::json!("22:37:00")
+        );
+        assert_eq!(
+            day_value_json(DayValue::Duration(Seconds::from_i64(5940))),
+            serde_json::json!(5940)
+        );
     }
 }

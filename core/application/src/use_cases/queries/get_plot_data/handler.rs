@@ -212,6 +212,9 @@ mod tests {
     use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+    use lifestats_core::statistic::value_objects::goals::default_goal_timeline::{
+        DefaultGoalSegment, DefaultGoalTimeline,
+    };
     use lifestats_core::statistic::value_objects::goals::habit_goal::HabitGoal;
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use plot_domain::plot::axis::AxisLabelFormat;
@@ -256,6 +259,14 @@ mod tests {
         stat_repo
             .expect_find_goals_in_range()
             .returning(|_, _| Ok(vec![]));
+        stat_repo
+            .expect_find_default_goal_timeline()
+            .returning(move |_| {
+                Ok(DefaultGoalTimeline::new(vec![DefaultGoalSegment::new(
+                    start,
+                    Some(json!({"target_amount": 10, "is_at_least": true})),
+                )]))
+            });
 
         let handler = GetPlotDataQueryHandler::new(Arc::new(stat_repo));
         let query = GetPlotDataQuery {
@@ -348,6 +359,9 @@ mod tests {
         stat_repo
             .expect_find_goals_in_range()
             .returning(|_, _| Ok(vec![]));
+        stat_repo
+            .expect_find_default_goal_timeline()
+            .returning(|_| Ok(DefaultGoalTimeline::default()));
 
         let handler = GetPlotDataQueryHandler::new(Arc::new(stat_repo));
         let query = GetPlotDataQuery {
@@ -416,6 +430,14 @@ mod tests {
         stat_repo
             .expect_find_goals_in_range()
             .returning(|_, _| Ok(vec![]));
+        stat_repo
+            .expect_find_default_goal_timeline()
+            .returning(move |_| {
+                Ok(DefaultGoalTimeline::new(vec![DefaultGoalSegment::new(
+                    date_with_value,
+                    Some(json!({"target": true})),
+                )]))
+            });
 
         let handler = GetPlotDataQueryHandler::new(Arc::new(stat_repo));
         let query = GetPlotDataQuery {

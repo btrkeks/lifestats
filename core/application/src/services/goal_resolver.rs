@@ -40,8 +40,8 @@ pub fn any_goal_to_json(goal: &AnyGoal) -> serde_json::Result<serde_json::Value>
 /// - If a daily override exists with a concrete goal → return Some(goal)
 /// - If a daily override is suppressed → return None (even if default goal exists)
 /// - If no daily override exists (NotSet):
-///   - If date >= default_goal_valid_since → return default goal (if set)
-///   - Otherwise → return None
+///   - Return the default goal that applied on that date (from the default goal
+///     timeline), or None if none did
 pub struct GoalResolver<R: StatisticRepository> {
     repository: Arc<R>,
 }
@@ -75,11 +75,8 @@ impl<R: StatisticRepository> GoalResolver<R> {
             daily_goal_map.insert(dated_goal.date, dated_goal.value);
         }
 
-        // Get default goal information from the statistic
-        let default_goal_valid_since = statistic.get_default_goal_valid_since();
-        let default_goal_json = statistic
-            .get_default_goal()
-            .and_then(|any_goal| any_goal_to_json(&any_goal).ok());
+        // The default goal over time (each day is judged by the goal that applied then)
+        let default_goals = self.repository.find_default_goal_timeline(stat_id)?;
 
         // Resolve goal for each date in the range
         let mut result = HashMap::new();
@@ -98,13 +95,7 @@ impl<R: StatisticRepository> GoalResolver<R> {
                 Some(GoalQueryResult::Suppressed) => None,
 
                 // Case 3: No daily override - check if default goal applies
-                Some(GoalQueryResult::NotSet) | None => {
-                    if current >= default_goal_valid_since {
-                        default_goal_json.clone()
-                    } else {
-                        None
-                    }
-                }
+                Some(GoalQueryResult::NotSet) | None => default_goals.goal_on(current).cloned(),
             };
 
             result.insert(current, goal_for_date);
@@ -128,8 +119,24 @@ mod tests {
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
     use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+    use lifestats_core::statistic::value_objects::goals::default_goal_timeline::{
+        DefaultGoalSegment, DefaultGoalTimeline,
+    };
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use serde_json::json;
+
+    /// Mocks the stored timeline as the statistic's single default goal segment.
+    fn expect_timeline_of(repo: &mut MockStatisticRepository, stat: &AnyStatistic) {
+        let goal = stat
+            .get_default_goal()
+            .map(|goal| any_goal_to_json(&goal).unwrap());
+        let timeline = DefaultGoalTimeline::new(vec![DefaultGoalSegment::new(
+            stat.get_default_goal_valid_since(),
+            goal,
+        )]);
+        repo.expect_find_default_goal_timeline()
+            .returning(move |_| Ok(timeline.clone()));
+    }
 
     fn create_test_statistic(
         default_goal: Option<AmountGoal<i64>>,
@@ -164,6 +171,7 @@ mod tests {
             .expect_find_goals_in_range()
             .returning(|_, _| Ok(vec![]));
 
+        expect_timeline_of(&mut mock_repo, &stat);
         let resolver = GoalResolver::new(Arc::new(mock_repo));
         let result = resolver.resolve_goals_for_range(&stat, range).unwrap();
 
@@ -202,6 +210,7 @@ mod tests {
             .expect_find_goals_in_range()
             .returning(|_, _| Ok(vec![]));
 
+        expect_timeline_of(&mut mock_repo, &stat);
         let resolver = GoalResolver::new(Arc::new(mock_repo));
         let result = resolver.resolve_goals_for_range(&stat, range).unwrap();
 
@@ -246,6 +255,7 @@ mod tests {
             )])
         });
 
+        expect_timeline_of(&mut mock_repo, &stat);
         let resolver = GoalResolver::new(Arc::new(mock_repo));
         let result = resolver.resolve_goals_for_range(&stat, range).unwrap();
 
@@ -299,6 +309,7 @@ mod tests {
             )])
         });
 
+        expect_timeline_of(&mut mock_repo, &stat);
         let resolver = GoalResolver::new(Arc::new(mock_repo));
         let result = resolver.resolve_goals_for_range(&stat, range).unwrap();
 
@@ -342,6 +353,7 @@ mod tests {
             .expect_find_goals_in_range()
             .returning(|_, _| Ok(vec![]));
 
+        expect_timeline_of(&mut mock_repo, &stat);
         let resolver = GoalResolver::new(Arc::new(mock_repo));
         let result = resolver.resolve_goals_for_range(&stat, range).unwrap();
 
@@ -385,6 +397,7 @@ mod tests {
             )])
         });
 
+        expect_timeline_of(&mut mock_repo, &stat);
         let resolver = GoalResolver::new(Arc::new(mock_repo));
         let result = resolver.resolve_goals_for_range(&stat, range).unwrap();
 
@@ -409,5 +422,33 @@ mod tests {
             result.get(&NaiveDate::from_ymd_opt(2025, 1, 3).unwrap()),
             Some(&None)
         );
+    }
+
+    #[test]
+    fn test_resolve_uses_the_goal_that_applied_on_each_day() {
+        let mut mock_repo = MockStatisticRepository::new();
+        let stat = create_test_statistic(None, None);
+        let date = |day| NaiveDate::from_ymd_opt(2025, 1, day).unwrap();
+
+        mock_repo
+            .expect_find_goals_in_range()
+            .returning(|_, _| Ok(vec![]));
+        mock_repo
+            .expect_find_default_goal_timeline()
+            .returning(move |_| {
+                Ok(DefaultGoalTimeline::new(vec![
+                    DefaultGoalSegment::new(date(2), Some(json!({"target_amount": 10}))),
+                    DefaultGoalSegment::new(date(4), Some(json!({"target_amount": 20}))),
+                ]))
+            });
+
+        let resolver = GoalResolver::new(Arc::new(mock_repo));
+        let range = DateRange::new(date(1), date(5)).unwrap();
+        let result = resolver.resolve_goals_for_range(&stat, range).unwrap();
+
+        assert_eq!(result[&date(1)], None);
+        assert_eq!(result[&date(3)], Some(json!({"target_amount": 10})));
+        assert_eq!(result[&date(4)], Some(json!({"target_amount": 20})));
+        assert_eq!(result[&date(5)], Some(json!({"target_amount": 20})));
     }
 }

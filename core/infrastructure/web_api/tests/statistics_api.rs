@@ -11,6 +11,9 @@ use lifestats_core::statistic::ports::statistic_repository::MockStatisticReposit
 use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
 use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
 use lifestats_core::statistic::value_objects::goals::amount_goal::AmountGoal;
+use lifestats_core::statistic::value_objects::goals::default_goal_timeline::{
+    DefaultGoalSegment, DefaultGoalTimeline,
+};
 use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
 use lifestats_web_api::dto::statistic::StatisticMetadataResponse;
@@ -21,6 +24,16 @@ use std::sync::Arc;
 // ============================================================================
 // GET /statistics Tests
 // ============================================================================
+
+/// Mocks a stored default goal of at least 10, valid since 2024-01-01.
+fn expect_push_up_goal_timeline(repo: &mut MockStatisticRepository) {
+    repo.expect_find_default_goal_timeline().returning(|_| {
+        Ok(DefaultGoalTimeline::new(vec![DefaultGoalSegment::new(
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            Some(json!({"target_amount": 10, "is_at_least": true})),
+        )]))
+    });
+}
 
 #[tokio::test]
 async fn test_get_all_statistics_happy_path() {
@@ -438,6 +451,7 @@ async fn test_get_streak_success() {
         .expect_find_goals_in_range()
         .times(1)
         .returning(|_, _| Ok(vec![]));
+    expect_push_up_goal_timeline(&mut mock_repo);
 
     let app_state = mock_app_state(Arc::new(mock_repo));
     let app = create_router(app_state);
@@ -748,20 +762,23 @@ async fn test_get_daily_achievements_happy_path() {
         .expect_find_metadata_by_id()
         .times(1)
         .returning(move |_| Ok(stat.clone()));
+    // Once to evaluate the days, once for their values
     mock_repo
         .expect_find_log_values_in_range()
-        .times(1)
+        .times(2)
         .returning(move |_, _| {
             Ok(vec![
                 DatedValue::new(day1, json!(10)),
                 DatedValue::new(day2, json!(5)),
             ])
         });
-    // Called once by the evaluator's GoalResolver and once by the query handler
+    // Called by the evaluator's GoalResolver, the query handler, and the handler's GoalResolver
     mock_repo
         .expect_find_goals_in_range()
-        .times(2)
+        .times(3)
         .returning(move |_, _| Ok(vec![DatedValue::new(day3, GoalQueryResult::Suppressed)]));
+
+    expect_push_up_goal_timeline(&mut mock_repo);
 
     let app = create_router(mock_app_state(Arc::new(mock_repo)));
     let server = TestServer::new(app).unwrap();
@@ -778,9 +795,12 @@ async fn test_get_daily_achievements_happy_path() {
     assert_eq!(
         body["days"],
         json!([
-            {"date": "2025-01-01", "has_goal": true, "achieved": true, "percentage_achieved": 100, "override": "none"},
-            {"date": "2025-01-02", "has_goal": true, "achieved": false, "percentage_achieved": 50, "override": "none"},
-            {"date": "2025-01-03", "has_goal": false, "achieved": false, "percentage_achieved": null, "override": "suppressed"},
+            {"date": "2025-01-01", "has_goal": true, "achieved": true, "percentage_achieved": 100, "override": "none",
+             "value": 10, "goal": {"target_amount": 10, "is_at_least": true}},
+            {"date": "2025-01-02", "has_goal": true, "achieved": false, "percentage_achieved": 50, "override": "none",
+             "value": 5, "goal": {"target_amount": 10, "is_at_least": true}},
+            {"date": "2025-01-03", "has_goal": false, "achieved": false, "percentage_achieved": null, "override": "suppressed",
+             "value": null, "goal": null},
         ])
     );
 }

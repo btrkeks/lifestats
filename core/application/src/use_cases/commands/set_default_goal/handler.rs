@@ -1,25 +1,18 @@
 use std::sync::Arc;
 
 use crate::cqrs::CommandHandler;
-use crate::error::{ApplicationError, ApplicationResult};
-use anyhow::anyhow;
+use crate::error::ApplicationResult;
 use chrono::Local;
 use events::event_port::{Event, EventPublisher};
-use lifestats_core::statistic::any_statistic::AnyStatistic;
 use lifestats_core::statistic::ports::statistic_repository::StatisticRepository;
-use lifestats_core::statistic::traits::base_statistic::Statistic;
-use lifestats_core::statistic::value_objects::goals::{
-    amount_goal::AmountGoal, finished_in_time_goal::FinishedInTimeGoal, habit_goal::HabitGoal,
-    time_spans_goal::TimeSpansGoal,
-};
 
-use super::super::set_daily_goal::GoalPayload;
+use super::super::set_daily_goal::parse_goal_payload_to_json;
 use super::command::SetDefaultGoalCommand;
 
 /// Handler for SetDefaultGoalCommand
 ///
-/// This handler updates both the domain entity's default goal and
-/// persists it to the repository.
+/// Applies the goal from `valid_since` onwards in the statistic's default goal
+/// timeline, so days before it keep the goal they had. Daily overrides are untouched.
 pub struct SetDefaultGoalCommandHandler<R, E>
 where
     R: StatisticRepository + Send + Sync + 'static,
@@ -48,94 +41,19 @@ where
     E: EventPublisher + 'static,
 {
     fn handle(&self, command: SetDefaultGoalCommand) -> ApplicationResult<()> {
-        // 1. Fetch the statistic
-        let mut statistic = self.repository.find_metadata_by_id(command.statistic_id)?;
+        let statistic = self.repository.find_metadata_by_id(command.statistic_id)?;
+        let goal_json = parse_goal_payload_to_json(command.goal, statistic)?;
+        let valid_since = command
+            .valid_since
+            .unwrap_or_else(|| Local::now().date_naive());
 
-        let start_date = Local::now().date_naive();
-
-        // 2. Create typed goal and update the domain entity
-        let goal_json = match (&mut statistic, command.goal) {
-            (
-                AnyStatistic::IntegerAmount(s),
-                GoalPayload::IntegerAmount {
-                    target,
-                    is_at_least,
-                },
-            ) => {
-                let goal = AmountGoal::new(target, is_at_least);
-                s.set_new_default_goal(goal.clone(), start_date)
-                    .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?;
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            (AnyStatistic::Habit(s), GoalPayload::Habit { occurred }) => {
-                let goal = HabitGoal::new(occurred);
-                s.set_new_default_goal(goal.clone(), start_date)
-                    .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?;
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            (AnyStatistic::PointInTime(s), GoalPayload::FinishedInTime { deadline }) => {
-                let goal = FinishedInTimeGoal::new(deadline);
-                s.set_new_default_goal(goal.clone(), start_date)
-                    .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?;
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            (AnyStatistic::TimeSpans(s), GoalPayload::TimeSpans { target, efficiency }) => {
-                let goal =
-                    TimeSpansGoal::new(target, efficiency).map_err(ApplicationError::Domain)?;
-                s.set_new_default_goal(goal.clone(), start_date)
-                    .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?;
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            (
-                AnyStatistic::Summing(s),
-                GoalPayload::SecondsAmount {
-                    target,
-                    is_at_least,
-                },
-            ) => {
-                let goal = AmountGoal::new(target, is_at_least);
-                s.set_new_default_goal(goal.clone(), start_date)
-                    .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?;
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            (
-                AnyStatistic::TimeDifference(s),
-                GoalPayload::SecondsAmount {
-                    target,
-                    is_at_least,
-                },
-            ) => {
-                let goal = AmountGoal::new(target, is_at_least);
-                s.set_new_default_goal(goal.clone(), start_date)
-                    .map_err(|e| ApplicationError::Infrastructure(anyhow::Error::new(e)))?;
-                serde_json::to_value(&goal)
-                    .map_err(|e| ApplicationError::Infrastructure(e.into()))?
-            }
-
-            // Mismatched types
-            _ => {
-                return Err(ApplicationError::Infrastructure(anyhow!(
-                    "Goal type does not match statistic type"
-                )));
-            }
-        };
-
-        // 3. Save updated metadata and default goal
-        self.repository.update_metadata(statistic)?;
+        let mut timeline = self
+            .repository
+            .find_default_goal_timeline(command.statistic_id)?;
+        timeline.set_from(valid_since, Some(goal_json));
         self.repository
-            .save_default_goal(command.statistic_id, goal_json)?;
+            .save_default_goal_timeline(command.statistic_id, &timeline)?;
 
-        // 4. Publish event
         self.event_publisher
             .publish_event_async(Event::GoalUpdated(command.statistic_id));
 
@@ -146,61 +64,119 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
+    use crate::use_cases::commands::set_daily_goal::GoalPayload;
+    use chrono::NaiveDate;
     use events::event_port::MockEventPublisher;
     use lifestats_core::shared::ids::StatisticId;
+    use lifestats_core::statistic::any_statistic::AnyStatistic;
     use lifestats_core::statistic::ports::statistic_repository::MockStatisticRepository;
+    use lifestats_core::statistic::types::logable_statistics::habit::HabitStatistic;
     use lifestats_core::statistic::types::logable_statistics::integer_amount::IntegerAmountStatistic;
+    use lifestats_core::statistic::value_objects::goals::default_goal_timeline::{
+        DefaultGoalSegment, DefaultGoalTimeline,
+    };
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
+    use serde_json::json;
 
-    fn create_test_metadata(id: u32, name: &str) -> StatisticMetadata {
-        StatisticMetadata::new(StatisticId(id), "test".into(), name.into())
+    fn date(month: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, month, day).unwrap()
+    }
+
+    fn integer_statistic(id: StatisticId) -> AnyStatistic {
+        let metadata = StatisticMetadata::new(id, "test".into(), "test_integer".into());
+        AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(metadata, None, date(1, 1)))
+    }
+
+    fn command(id: StatisticId, valid_since: Option<NaiveDate>) -> SetDefaultGoalCommand {
+        SetDefaultGoalCommand {
+            statistic_id: id,
+            goal: GoalPayload::IntegerAmount {
+                target: 450,
+                is_at_least: true,
+            },
+            valid_since,
+        }
+    }
+
+    fn publisher_expecting_one_event() -> MockEventPublisher {
+        let mut publisher = MockEventPublisher::new();
+        publisher
+            .expect_publish_event_async()
+            .times(1)
+            .return_const(());
+        publisher
     }
 
     #[test]
-    fn test_set_default_goal_happy_path() {
-        // Arrange
-        let mut repo = MockStatisticRepository::new();
-        let mut event_publisher = MockEventPublisher::new();
-
+    fn test_set_default_goal_keeps_the_old_goal_before_valid_since() {
         let stat_id = StatisticId(1);
-        let test_date = Local::now().date_naive();
-        let metadata = create_test_metadata(1, "test_integer");
-        let stat =
-            AnyStatistic::IntegerAmount(IntegerAmountStatistic::new(metadata, None, test_date));
-
+        let mut repo = MockStatisticRepository::new();
+        let stat = integer_statistic(stat_id);
         repo.expect_find_metadata_by_id()
-            .times(1)
             .return_once(move |_| Ok(stat));
-
-        repo.expect_update_metadata()
+        repo.expect_find_default_goal_timeline().return_once(|_| {
+            Ok(DefaultGoalTimeline::new(vec![DefaultGoalSegment::new(
+                date(9, 9),
+                Some(json!({"target_amount": 400, "is_at_least": true})),
+            )]))
+        });
+        repo.expect_save_default_goal_timeline()
             .times(1)
-            .return_once(|_| Ok(()));
-
-        repo.expect_save_default_goal()
-            .times(1)
-            .withf(move |id, goal| *id == stat_id && goal.is_object())
+            .withf(move |id, timeline| {
+                *id == stat_id
+                    && timeline.goal_on(date(10, 11))
+                        == Some(&json!({"target_amount": 400, "is_at_least": true}))
+                    && timeline.goal_on(date(10, 12))
+                        == Some(&json!({"target_amount": 450, "is_at_least": true}))
+            })
             .return_once(|_, _| Ok(()));
 
-        event_publisher
-            .expect_publish_event_async()
+        let handler = SetDefaultGoalCommandHandler::new(
+            Arc::new(repo),
+            Arc::new(publisher_expecting_one_event()),
+        );
+
+        assert!(handler.handle(command(stat_id, Some(date(10, 12)))).is_ok());
+    }
+
+    #[test]
+    fn test_set_default_goal_without_valid_since_starts_today() {
+        let stat_id = StatisticId(1);
+        let today = Local::now().date_naive();
+        let mut repo = MockStatisticRepository::new();
+        let stat = integer_statistic(stat_id);
+        repo.expect_find_metadata_by_id()
+            .return_once(move |_| Ok(stat));
+        repo.expect_find_default_goal_timeline()
+            .return_once(|_| Ok(DefaultGoalTimeline::default()));
+        repo.expect_save_default_goal_timeline()
             .times(1)
-            .return_once(|_| ());
+            .withf(move |_, timeline| {
+                timeline.latest().map(|segment| segment.valid_since) == Some(today)
+            })
+            .return_once(|_, _| Ok(()));
 
-        let handler = SetDefaultGoalCommandHandler::new(Arc::new(repo), Arc::new(event_publisher));
+        let handler = SetDefaultGoalCommandHandler::new(
+            Arc::new(repo),
+            Arc::new(publisher_expecting_one_event()),
+        );
 
-        let command = SetDefaultGoalCommand {
-            statistic_id: stat_id,
-            goal: GoalPayload::IntegerAmount {
-                target: 100,
-                is_at_least: true,
-            },
-        };
+        assert!(handler.handle(command(stat_id, None)).is_ok());
+    }
 
-        // Act
-        let result = handler.handle(command);
+    #[test]
+    fn test_set_default_goal_rejects_a_goal_of_the_wrong_type() {
+        let stat_id = StatisticId(1);
+        let mut repo = MockStatisticRepository::new();
+        let metadata = StatisticMetadata::new(stat_id, "test".into(), "habit".into());
+        let stat = AnyStatistic::Habit(HabitStatistic::new(metadata, None, date(1, 1)));
+        repo.expect_find_metadata_by_id()
+            .return_once(move |_| Ok(stat));
+        repo.expect_save_default_goal_timeline().never();
 
-        // Assert
-        assert!(result.is_ok());
+        let handler =
+            SetDefaultGoalCommandHandler::new(Arc::new(repo), Arc::new(MockEventPublisher::new()));
+
+        assert!(handler.handle(command(stat_id, None)).is_err());
     }
 }

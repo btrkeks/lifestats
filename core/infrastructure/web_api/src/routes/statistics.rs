@@ -711,7 +711,9 @@ where
     E: EventPublisher + 'static,
     I: IntegrationServiceTrait + 'static,
 {
-    use crate::dto::daily_achievements::{DailyAchievementResponse, DailyAchievementsResponse};
+    use crate::dto::daily_achievements::{
+        day_value_json, DailyAchievementResponse, DailyAchievementsResponse,
+    };
     use lifestats_application::cqrs::QueryHandler;
     use lifestats_application::services::DefaultDailyAchievementEvaluator;
     use lifestats_application::use_cases::queries::get_daily_achievements::{
@@ -765,6 +767,8 @@ where
                 achieved: day.achieved,
                 percentage_achieved: day.percentage_achieved.map(|p| p.as_num()),
                 override_kind: day.override_kind.into(),
+                value: day.value.map(day_value_json),
+                goal: day.goal,
             })
             .collect(),
     }))
