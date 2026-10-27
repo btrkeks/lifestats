@@ -61,6 +61,7 @@ See `logger_applications/AnkiLogger/INTEGRATION.md` for the Anki bundle architec
 2. Implement `Logable` or `Computable`
 3. Update `AnyStatistic` enum if needed
 4. Add domain tests (pure business logic, no mocking)
+5. Wire the variant through every layer. `docs/plans/timed-amounts-statistic/touchpoints.md` lists the files `TimedAmounts` touched; the compiler finds most of them, but not the router, bootstrap injection, docs, or the web UI's and SDK's type lists.
 
 ### Adding a New Use Case
 

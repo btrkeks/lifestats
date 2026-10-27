@@ -209,6 +209,13 @@ None of those capabilities is needed now. The chosen list JSON is exactly the pr
 5. **Names:** `[OpenNutriTracker] Caffeine (mg)` / `[OpenNutriTracker] Nicotine (mg)`, category `OpenNutriTracker`.
 6. **Old SDK builds:** none known. Before finishing, every in-repo consumer of `GET /statistics` must tolerate an unknown or new `statistic_type` without failing the whole listing.
 
+## Deviations from the sketch during implementation
+
+- **`/statistics/{id}/integer_amount/total` accepts TimedAmounts** and returns the sum of daily totals. The sketch excluded it; the Obsidian vault's totals panels need it to treat caffeine like any amount.
+- **Policy name:** `TimedAmountsUpdatePolicy` with the single variant `Overwrite`, matching the repo's `…UpdatePolicy` enums, instead of a `Replace` struct.
+- **Goal target validation also happens in the goal route**, so an out-of-range target is `400`; the existing goal routes map handler errors to `500`.
+- **Plot routes and `POST /statistics` now map `InvalidInput` to `400`**; both mapped every handler error to `500` before.
+
 ## Verification plan (for implementation)
 
 1. **Pure domain tests.**
