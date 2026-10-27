@@ -8,6 +8,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    default_goal_segments (statistic_id, valid_since) {
+        statistic_id -> Integer,
+        valid_since -> Text,
+        goal -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     ebook_sync_events (event_id) {
         event_id -> Text,
         source_name -> Text,
@@ -92,12 +100,14 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(default_goal_segments -> statistics (statistic_id));
 diesel::joinable!(default_goals -> statistics (statistic_id));
 diesel::joinable!(ebook_sync_events -> statistics (statistic_id));
 diesel::joinable!(goals -> statistics (statistic_id));
 diesel::joinable!(progress_checkpoints -> progress_items (progress_item_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    default_goal_segments,
     default_goals,
     ebook_sync_events,
     goals,

@@ -109,6 +109,15 @@ pub struct DefaultGoalRaw {
     pub goal: String, // The single JSON blob
 }
 
+/// One row of `default_goal_segments`; `goal` NULL means no default goal from `valid_since`.
+#[derive(Debug, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::db::schema::default_goal_segments)]
+pub struct DefaultGoalSegmentRaw {
+    pub statistic_id: i32,
+    pub valid_since: String,
+    pub goal: Option<String>,
+}
+
 #[derive(Debug, Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::db::schema::ebook_sync_events)]
 pub struct EbookSyncEventRow {

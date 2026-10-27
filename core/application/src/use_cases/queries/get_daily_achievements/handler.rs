@@ -7,7 +7,7 @@ use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQuer
 
 use crate::cqrs::QueryHandler;
 use crate::error::ApplicationResult;
-use crate::services::DailyAchievementEvaluator;
+use crate::services::{DailyAchievementEvaluator, GoalResolver};
 
 use super::query::{
     DailyAchievement, DailyAchievementsResult, DailyGoalOverrideKind, GetDailyAchievementsQuery,
@@ -17,7 +17,8 @@ use super::query::{
 ///
 /// Responsibilities:
 /// - Delegate per-day evaluation to DailyAchievementEvaluator
-/// - Attach the daily override state (none / suppressed / goal) for each day
+/// - Attach the daily override state (none / suppressed / goal), the logged value
+///   and the applicable goal for each day
 pub struct GetDailyAchievementsQueryHandler<R, E>
 where
     R: StatisticRepository + Send + Sync + 'static,
@@ -62,6 +63,11 @@ where
         let statistic = self.repository.find_metadata_by_id(query.statistic_id)?;
 
         let evals = self.evaluator.eval_range(&statistic, query.date_range)?;
+        let mut values = self
+            .evaluator
+            .values_in_range(&statistic, query.date_range)?;
+        let mut goals = GoalResolver::new(self.repository.clone())
+            .resolve_goals_for_range(&statistic, query.date_range)?;
 
         let overrides: HashMap<NaiveDate, DailyGoalOverrideKind> = self
             .repository
@@ -81,6 +87,8 @@ where
                     .get(&eval.date)
                     .copied()
                     .unwrap_or(DailyGoalOverrideKind::None),
+                value: values.remove(&eval.date),
+                goal: goals.remove(&eval.date).flatten(),
             })
             .collect();
 
@@ -107,7 +115,8 @@ mod tests {
     use lifestats_core::statistic::value_objects::statistic_metadata::StatisticMetadata;
     use serde_json::json;
 
-    use crate::services::{DayEval, MockDailyAchievementEvaluator};
+    use crate::services::{DayEval, DayValue, MockDailyAchievementEvaluator};
+    use lifestats_core::statistic::value_objects::goals::default_goal_timeline::DefaultGoalTimeline;
 
     fn date(day: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(2025, 1, day).unwrap()
@@ -154,8 +163,9 @@ mod tests {
         repo.expect_find_metadata_by_id()
             .times(1)
             .return_once(move |_| Ok(stat));
+        // once for the override kinds, once by the goal resolver
         repo.expect_find_goals_in_range()
-            .times(1)
+            .times(2)
             .returning(|_, _| {
                 Ok(vec![
                     DatedValue::new(
@@ -166,11 +176,18 @@ mod tests {
                 ])
             });
 
+        repo.expect_find_default_goal_timeline()
+            .returning(|_| Ok(DefaultGoalTimeline::default()));
+
         let mut evaluator = MockDailyAchievementEvaluator::new();
         evaluator
             .expect_eval_range()
             .times(1)
             .returning(|_, _| Ok(three_day_evals()));
+        evaluator
+            .expect_values_in_range()
+            .times(1)
+            .returning(|_, _| Ok(HashMap::from([(date(1), DayValue::Amount(7))])));
 
         let handler = GetDailyAchievementsQueryHandler::new(Arc::new(repo), Arc::new(evaluator));
         let result = handler
@@ -192,7 +209,14 @@ mod tests {
             Some(Percentage::new(100))
         );
 
+        assert_eq!(result.days[0].value, Some(DayValue::Amount(7)));
+        assert_eq!(
+            result.days[0].goal,
+            Some(json!({"target_amount": 5, "is_at_least": true}))
+        );
+
         assert_eq!(result.days[1].override_kind, DailyGoalOverrideKind::None);
+        assert_eq!(result.days[1].value, None);
         assert!(result.days[1].has_goal);
         assert!(!result.days[1].achieved);
         assert_eq!(
@@ -205,6 +229,7 @@ mod tests {
             DailyGoalOverrideKind::Suppressed
         );
         assert!(!result.days[2].has_goal);
+        assert_eq!(result.days[2].goal, None);
         assert_eq!(result.days[2].percentage_achieved, None);
     }
 
@@ -218,15 +243,23 @@ mod tests {
         repo.expect_find_metadata_by_id()
             .times(1)
             .return_once(move |_| Ok(stat));
+        // once for the override kinds, once by the goal resolver
         repo.expect_find_goals_in_range()
-            .times(1)
+            .times(2)
             .returning(|_, _| Ok(vec![]));
+
+        repo.expect_find_default_goal_timeline()
+            .returning(|_| Ok(DefaultGoalTimeline::default()));
 
         let mut evaluator = MockDailyAchievementEvaluator::new();
         evaluator
             .expect_eval_range()
             .times(1)
             .returning(|_, _| Ok(three_day_evals()));
+        evaluator
+            .expect_values_in_range()
+            .times(1)
+            .returning(|_, _| Ok(HashMap::from([(date(1), DayValue::Amount(7))])));
 
         let handler = GetDailyAchievementsQueryHandler::new(Arc::new(repo), Arc::new(evaluator));
         let result = handler

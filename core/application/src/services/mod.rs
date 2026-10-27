@@ -7,7 +7,7 @@ pub mod statistic_score_calculator;
 pub mod value_averaging;
 
 pub use daily_achievement_evaluator::{
-    DailyAchievementEvaluator, DayEval, DefaultDailyAchievementEvaluator,
+    DailyAchievementEvaluator, DayEval, DayValue, DefaultDailyAchievementEvaluator,
 };
 pub use ewma_calculator::Ewma;
 pub use goal_performance_analyzer::GoalPerformanceAnalyzer;

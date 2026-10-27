@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createGoalRequest,
+  formGoal,
   parseDailyGoalState,
   parseGoalData,
   parseStatisticDefaultGoal,
@@ -91,5 +92,23 @@ describe('request serialization', () => {
       kind: 'goal',
       goal_data: { target: '5', is_at_least: 'true' },
     });
+  });
+});
+
+describe('formGoal', () => {
+  it('reads valid form values as a goal', () => {
+    expect(formGoal('PointInTime', { deadline: '22:05' })).toEqual({
+      type: 'PointInTime',
+      data: { deadline: '22:05' },
+    });
+    expect(formGoal('IntegerAmount', { target: '400', is_at_least: 'true' })).toEqual({
+      type: 'IntegerAmount',
+      data: { target: 400, is_at_least: true },
+    });
+  });
+
+  it('returns null while the form is invalid', () => {
+    expect(formGoal('PointInTime', { deadline: '' })).toBeNull();
+    expect(formGoal('TimeSpans', { target: [], efficiency: 80 })).toBeNull();
   });
 });

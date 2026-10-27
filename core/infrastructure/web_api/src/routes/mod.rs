@@ -125,6 +125,10 @@ where
                 .delete(goals::delete_default_goal),
         )
         .route(
+            "/statistics/{id}/goals/range",
+            put(goals::set_daily_goal_range),
+        )
+        .route(
             "/statistics/{id}/goals/{date}",
             get(goals::get_daily_goal)
                 .put(goals::set_daily_goal)

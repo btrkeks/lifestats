@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use lifestats_core::statistic::value_objects::goals::goal_query_result::GoalQueryResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -14,6 +15,10 @@ use validator::Validate;
 #[derive(Debug, Deserialize, Validate)]
 pub struct SetDefaultGoalRequest {
     pub goal_data: HashMap<String, String>,
+    /// First day the goal applies to (YYYY-MM-DD); defaults to today. Earlier days
+    /// keep the default goal they had.
+    #[serde(default)]
+    pub valid_since: Option<NaiveDate>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -23,10 +28,23 @@ pub enum SetDailyGoalRequest {
     Suppressed,
 }
 
-/// Response DTO for goal data
+/// Request DTO for `PUT /statistics/{id}/goals/range`: the same daily override
+/// for every day from `start` to `end` (inclusive), e.g.
+/// `{"start": "2026-10-12", "end": "2026-10-21", "kind": "suppressed"}`
+#[derive(Debug, Deserialize)]
+pub struct SetDailyGoalRangeRequest {
+    pub start: NaiveDate,
+    pub end: NaiveDate,
+    #[serde(flatten)]
+    pub goal: SetDailyGoalRequest,
+}
+
+/// Response DTO for `GET /statistics/{id}/goals/default`
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GoalResponse {
     pub goal_data: serde_json::Value,
+    /// First day the current default goal applies to (YYYY-MM-DD)
+    pub valid_since: NaiveDate,
 }
 
 #[cfg(test)]
@@ -38,6 +56,29 @@ mod tests {
         let json = r#"{"goal_data": {"target": "100", "is_at_least": "true"}}"#;
         let req: SetDefaultGoalRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.goal_data.get("target").unwrap(), "100");
+        assert_eq!(req.valid_since, None);
+    }
+
+    #[test]
+    fn test_set_goal_request_with_valid_since() {
+        let json = r#"{"goal_data": {"deadline": "22:05"}, "valid_since": "2026-10-12"}"#;
+        let req: SetDefaultGoalRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.valid_since, NaiveDate::from_ymd_opt(2026, 10, 12));
+    }
+
+    #[test]
+    fn test_set_daily_goal_range_request_deserialization() {
+        let json = r#"{"start": "2026-10-12", "end": "2026-10-21", "kind": "goal", "goal_data": {"deadline": "22:05"}}"#;
+        let req: SetDailyGoalRangeRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.start, NaiveDate::from_ymd_opt(2026, 10, 12).unwrap());
+        assert!(matches!(
+            req.goal,
+            SetDailyGoalRequest::Goal { ref goal_data } if goal_data["deadline"] == "22:05"
+        ));
+
+        let json = r#"{"start": "2026-10-12", "end": "2026-10-21", "kind": "suppressed"}"#;
+        let req: SetDailyGoalRangeRequest = serde_json::from_str(json).unwrap();
+        assert!(matches!(req.goal, SetDailyGoalRequest::Suppressed));
     }
 }
 

@@ -19,7 +19,7 @@ Quick liveness check: `curl -s http://localhost:3000/statistics` — if it fails
 ## Domain rules (read before writing data)
 
 - **Statistic types** — logable: `IntegerAmount`, `Habit`, `PointInTime`, `TimeSpans`; derived: `Summing`, `TimeDifference`. Logging to a derived statistic returns 400; they're computed from others. `GET /statistics/loggable` lists only logable ones.
-- **Goals**: a statistic has one optional default goal; a daily goal for a specific date overrides the default for that date only.
+- **Goals**: a statistic has an optional default goal with a history: each change applies from a "valid since" date onwards, and earlier days keep the goal they had. A daily goal for a specific date overrides the default for that date only.
 - **Progress items** are separate from statistics: bounded, absolute-position things (books read in pages/characters) logged via checkpoints, not daily values.
 
 ## Finding statistics
@@ -73,7 +73,9 @@ curl -s "http://localhost:3000/statistics/1/integer_amount/total?start_date=2026
 curl -s "http://localhost:3000/statistics/1/score?start=2026-07-01&end=2026-07-31&daily_cap_percent=100"
 
 # Per-day achievement strip (params start/end). Each day: {date, has_goal, achieved,
-# percentage_achieved (null without goal), override: none|suppressed|goal}
+# percentage_achieved (null without goal), override: none|suppressed|goal,
+# value (logged value or null: number for counts, seconds for TimeSpans, true/false for habits,
+# "HH:MM:SS" for PointInTime), goal (the goal that applied, like goals/default goal_data, or null)}
 curl -s "http://localhost:3000/statistics/1/achievements?start=2026-07-25&end=2026-07-31"
 
 # Performance + trend (params start_date/end_date; trend needs ≥14 data points)
@@ -103,19 +105,26 @@ curl -s -X POST http://localhost:3000/statistics/dashboard \
 ## Goals
 
 ```bash
-curl -s http://localhost:3000/statistics/1/goals/default     # GET → {"goal_data": {...}} | null; PUT / DELETE
+curl -s http://localhost:3000/statistics/1/goals/default     # GET → {"goal_data": {...}, "valid_since": "YYYY-MM-DD"} | null; PUT / DELETE
 curl -s http://localhost:3000/statistics/1/goals/2026-08-01  # GET → {"kind": "not_set"} | {"kind": "suppressed"} | {"kind": "goal", "goal_data": {...}}
 # Set default (PUT, 204). goal_data values are all strings; fields per type:
 #   IntegerAmount/Summing/TimeDifference: target (+ optional is_at_least, default "true")
 #   Habit: occurred | PointInTime: deadline "HH:MM" | TimeSpans: target (TimeFrameList JSON string), efficiency
 curl -s -X PUT http://localhost:3000/statistics/1/goals/default \
   -H "Content-Type: application/json" -d '{"goal_data": {"target": "480", "is_at_least": "true"}}'
+# Optional "valid_since" (default today) backdates or schedules the change; days before it keep their
+# old default goal, daily overrides stay. DELETE ends the default goal from today (past days keep it).
+curl -s -X PUT http://localhost:3000/statistics/20/goals/default \
+  -H "Content-Type: application/json" -d '{"goal_data": {"deadline": "22:05"}, "valid_since": "2026-10-12"}'
 # Daily override (PUT, 204) — overrides the default for that date only; DELETE removes the override
 curl -s -X PUT http://localhost:3000/statistics/1/goals/2026-08-01 \
   -H "Content-Type: application/json" -d '{"kind": "goal", "goal_data": {"target": "200"}}'
 # Suppress = "no goal applies that day" (e.g. travelling). Shows as override: suppressed in /achievements
 curl -s -X PUT http://localhost:3000/statistics/1/goals/2026-08-01 \
   -H "Content-Type: application/json" -d '{"kind": "suppressed"}'
+# Same override for every day of a range (PUT, 204, all or nothing, at most 366 days)
+curl -s -X PUT http://localhost:3000/statistics/1/goals/range \
+  -H "Content-Type: application/json" -d '{"start": "2026-08-01", "end": "2026-08-07", "kind": "suppressed"}'
 ```
 
 ## Progress items (books etc.)

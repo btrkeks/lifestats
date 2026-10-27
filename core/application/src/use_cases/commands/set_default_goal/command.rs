@@ -1,4 +1,5 @@
 use crate::cqrs::Command;
+use chrono::NaiveDate;
 use lifestats_core::shared::ids::StatisticId;
 
 use super::super::set_daily_goal::GoalPayload;
@@ -10,6 +11,9 @@ use super::super::set_daily_goal::GoalPayload;
 pub struct SetDefaultGoalCommand {
     pub statistic_id: StatisticId,
     pub goal: GoalPayload,
+    /// First day the goal applies to; `None` means today. Earlier days keep
+    /// the default goal they had.
+    pub valid_since: Option<NaiveDate>,
 }
 
 impl Command for SetDefaultGoalCommand {

@@ -207,8 +207,9 @@ web_api/
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/statistics/{id}/goals/default` | Get default goal |
-| `PUT` | `/statistics/{id}/goals/default` | Set default goal |
-| `DELETE` | `/statistics/{id}/goals/default` | Delete default goal |
+| `PUT` | `/statistics/{id}/goals/default` | Set default goal from a date (`valid_since`, default today) onwards |
+| `DELETE` | `/statistics/{id}/goals/default` | End the default goal from today (earlier days keep it) |
+| `PUT` | `/statistics/{id}/goals/range` | Set the same daily goal override (goal or suppressed) on every day of a date range |
 | `GET` | `/statistics/{id}/goals/{date}` | Get daily goal override state for a date (`not_set` / `suppressed` / `goal`) |
 | `PUT` | `/statistics/{id}/goals/{date}` | Set daily goal for specific date |
 | `DELETE` | `/statistics/{id}/goals/{date}` | Delete daily goal |
@@ -696,6 +697,14 @@ All `goal_data` values are strings; the fields depend on the statistic type:
 - PointInTime: `deadline` (`"HH:MM"` or `"HH:MM:SS"`)
 - TimeSpans: `target` (JSON string of a TimeFrameList, e.g. `"[{\"start\":\"09:00:00\",\"end\":\"17:00:00\"}]"`), `efficiency` (`"0"`-`"100"`)
 
+Optional `valid_since` (`YYYY-MM-DD`, default today) is the first day the goal applies to. The default goal keeps a history: days before `valid_since` keep the default goal they had, and a later change from an earlier date replaces the later one. Daily overrides are never touched. To backfill a new bedtime from 12 Oct:
+
+```json
+{ "goal_data": { "deadline": "22:05" }, "valid_since": "2026-10-12" }
+```
+
+`DELETE /statistics/{id}/goals/default` ends the default goal from today; earlier days keep it.
+
 **Daily goal:** `PUT /statistics/{id}/goals/{date}` overrides the default for that date only.
 
 ```json
@@ -708,11 +717,20 @@ All `goal_data` values are strings; the fields depend on the statistic type:
 
 `suppressed` means no goal applies on that date even though a default goal exists (useful to excuse a missed day). `DELETE /statistics/{id}/goals/{date}` removes the override so the default applies again.
 
+**Range of days:** `PUT /statistics/{id}/goals/range` writes the same override on every day from `start` to `end` (inclusive) in one transaction. The body is a daily goal request plus the range:
+
+```json
+{ "start": "2026-10-12", "end": "2026-10-21", "kind": "goal", "goal_data": { "deadline": "22:05" } }
+{ "start": "2026-10-24", "end": "2026-10-26", "kind": "suppressed" }
+```
+
+Returns 400 when `start > end`, the range covers more than 366 days or `goal_data` is invalid for the statistic type, and 404 for unknown statistics.
+
 **Response:** `204 No Content`
 
 ### Getting a Goal
 
-`GET /statistics/{id}/goals/default` returns `{"goal_data": {"target_amount": 100, "is_at_least": true}}`, or `null` when unset. Note the stored shape uses the domain field names (`target_amount`), not the request's `target`.
+`GET /statistics/{id}/goals/default` returns the current (latest) default goal and the first day it applies to, `{"goal_data": {"target_amount": 100, "is_at_least": true}, "valid_since": "2026-10-22"}`, or `null` when unset. Note the stored shape uses the domain field names (`target_amount`), not the request's `target`.
 
 `GET /statistics/{id}/goals/{date}` returns one of:
 
@@ -738,15 +756,20 @@ All `goal_data` values are strings; the fields depend on the statistic type:
   "start_date": "2025-01-01",
   "end_date": "2025-01-03",
   "days": [
-    { "date": "2025-01-01", "has_goal": true,  "achieved": true,  "percentage_achieved": 100,  "override": "none" },
-    { "date": "2025-01-02", "has_goal": true,  "achieved": false, "percentage_achieved": 50,   "override": "none" },
-    { "date": "2025-01-03", "has_goal": false, "achieved": false, "percentage_achieved": null, "override": "suppressed" }
+    { "date": "2025-01-01", "has_goal": true,  "achieved": true,  "percentage_achieved": 100,  "override": "none",
+      "value": 10, "goal": { "target_amount": 10, "is_at_least": true } },
+    { "date": "2025-01-02", "has_goal": true,  "achieved": false, "percentage_achieved": 50,   "override": "none",
+      "value": 5, "goal": { "target_amount": 10, "is_at_least": true } },
+    { "date": "2025-01-03", "has_goal": false, "achieved": false, "percentage_achieved": null, "override": "suppressed",
+      "value": null, "goal": null }
   ]
 }
 ```
 
 **Notes:**
 - One entry per day in the range, ascending. `percentage_achieved` is 0-255 (can exceed 100) or `null` when no goal applied that day.
+- `value` is what was logged that day, or `null`: a number for IntegerAmount and Summing, total seconds for TimeSpans (same-day frames merged) and TimeDifference, `true`/`false` for Habit, `"HH:MM:SS"` for PointInTime.
+- `goal` is the goal that applied that day (daily override, else the default goal valid then), in the same shape as `goal_data` from `GET /statistics/{id}/goals/default`; `null` when no goal applied.
 - `override` is `none` (default goal applies), `suppressed`, or `goal` (a daily override is set). Use `PUT /statistics/{id}/goals/{date}` with `{"kind": "suppressed"}` to excuse a missed day.
 - Returns 404 for unknown statistics and 400 for malformed dates or `start > end`.
 

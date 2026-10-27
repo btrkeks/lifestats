@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, formatDuration, formatGoal } from './goalFormat';
+import type { GoalData } from '@/types';
+import { describeGoal, formatClock, formatGoal, formatGoalTarget, goalsEqual } from './goalFormat';
+
+const cards = { kind: 'count', unit: 'cards' } as const;
+const plain = { kind: 'count', unit: null } as const;
+const seconds = { kind: 'duration' } as const;
+const clock = { kind: 'clock' } as const;
+
+const atLeast400: GoalData = { type: 'IntegerAmount', data: { target: 400, is_at_least: true } };
+const bedtime: GoalData = { type: 'PointInTime', data: { deadline: '22:05:00' } };
+const reading: GoalData = {
+  type: 'TimeSpans',
+  data: { target: [{ start: '21:15:00', end: '21:45:00' }], efficiency: 80 },
+};
 
 describe('formatClock', () => {
   it('drops zero seconds', () => {
@@ -11,48 +24,50 @@ describe('formatClock', () => {
   });
 });
 
-describe('formatDuration', () => {
-  it('formats hours, minutes and seconds', () => {
-    expect(formatDuration(5400)).toBe('1h 30m');
-    expect(formatDuration(45)).toBe('45s');
-    expect(formatDuration(0)).toBe('0s');
-    expect(formatDuration(-60)).toBe('-1m');
+describe('formatGoal', () => {
+  it('formats amount goals with a sign and unit', () => {
+    expect(formatGoal(atLeast400, cards)).toBe('≥ 400 cards');
+    expect(
+      formatGoal({ type: 'Summing', data: { target: 27000, is_at_least: false } }, plain)
+    ).toBe('≤ 27,000');
+  });
+  it('formats second-based amounts as durations', () => {
+    expect(
+      formatGoal({ type: 'IntegerAmount', data: { target: 25200, is_at_least: true } }, seconds)
+    ).toBe('≥ 7 h');
+  });
+  it('formats habits, deadlines and windows', () => {
+    expect(formatGoal({ type: 'Habit', data: { occurred: true } }, { kind: 'habit' })).toBe('Done');
+    expect(formatGoal(bedtime, clock)).toBe('by 22:05');
+    expect(formatGoal(reading, { kind: 'spans' })).toBe('21:15–21:45 · 80%');
   });
 });
 
-describe('formatGoal', () => {
-  it('formats amount goals with a comparison sign', () => {
+describe('formatGoalTarget and describeGoal', () => {
+  it('reads the bare target', () => {
+    expect(formatGoalTarget(atLeast400, cards)).toBe('400');
+    expect(formatGoalTarget(bedtime, clock)).toBe('22:05');
+  });
+  it('describes the goal in a sentence', () => {
+    expect(describeGoal(atLeast400, cards)).toBe('At least 400 a day.');
+    expect(describeGoal(bedtime, clock)).toBe('Logged by 22:05 each day.');
+  });
+});
+
+describe('goalsEqual', () => {
+  it('ignores missing seconds on clock times', () => {
+    expect(goalsEqual(bedtime, { type: 'PointInTime', data: { deadline: '22:05' } })).toBe(true);
+    expect(goalsEqual(bedtime, { type: 'PointInTime', data: { deadline: '22:10' } })).toBe(false);
+  });
+  it('compares amounts and windows field by field', () => {
     expect(
-      formatGoal({ type: 'IntegerAmount', data: { target: 27000, is_at_least: true } })
-    ).toBe('≥ 27,000');
-    expect(formatGoal({ type: 'Summing', data: { target: 3600, is_at_least: false } })).toBe(
-      '≤ 3,600'
-    );
-  });
-  it('formats time difference goals as durations', () => {
+      goalsEqual(atLeast400, { ...atLeast400, data: { target: 400, is_at_least: false } })
+    ).toBe(false);
     expect(
-      formatGoal({ type: 'TimeDifference', data: { target: 5400, is_at_least: true } })
-    ).toBe('≥ 1h 30m');
-  });
-  it('formats habit goals', () => {
-    expect(formatGoal({ type: 'Habit', data: { occurred: true } })).toBe('Done');
-    expect(formatGoal({ type: 'Habit', data: { occurred: false } })).toBe('Not done');
-  });
-  it('formats point-in-time goals as deadlines', () => {
-    expect(formatGoal({ type: 'PointInTime', data: { deadline: '22:00:00' } })).toBe('by 22:00');
-  });
-  it('formats time spans goals as frame list with efficiency', () => {
-    expect(
-      formatGoal({
+      goalsEqual(reading, {
         type: 'TimeSpans',
-        data: {
-          target: [
-            { start: '07:45:00', end: '08:45:00' },
-            { start: '12:30', end: '14:00' },
-          ],
-          efficiency: 90,
-        },
+        data: { target: [{ start: '21:15', end: '21:45' }], efficiency: 80 },
       })
-    ).toBe('07:45–08:45, 12:30–14:00 · 90% eff.');
+    ).toBe(true);
   });
 });
