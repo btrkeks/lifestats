@@ -31,6 +31,7 @@ object QuickLogTimers {
      * Firing late only delays the repaint; renders hide an expired action.
      */
     fun scheduleUndoExpiry(context: Context, opId: String, atMs: Long) {
+        if (!QuickLogPresence.isPlaced(context)) return
         WorkManager.getInstance(context).enqueueUniqueWork(
             UNDO,
             ExistingWorkPolicy.REPLACE,
@@ -44,13 +45,16 @@ object QuickLogTimers {
     /**
      * Asks Dart for a new snapshot once the logical day the current one
      * describes is over: new totals, and the order derived for the new day.
-     * REPLACE: each publish carries the boundary that is due next.
+     * Boundary identity keeps a successful worker from cancelling itself
+     * when its publish schedules tomorrow. KEEP deduplicates repeated publishes.
      */
     fun scheduleDayRefresh(context: Context, atMs: Long) {
+        if (!QuickLogPresence.isPlaced(context)) return
         WorkManager.getInstance(context).enqueueUniqueWork(
-            DAY,
-            ExistingWorkPolicy.REPLACE,
+            "$DAY:$atMs",
+            ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<QuickLogTimerWorker>()
+                .addTag(DAY)
                 .setInitialDelay(
                     (atMs + DAY_MARGIN_MS - System.currentTimeMillis()).coerceAtLeast(0),
                     TimeUnit.MILLISECONDS,
@@ -65,6 +69,7 @@ object QuickLogTimers {
      * running. KEEP: requests that arrive while one is queued share it.
      */
     fun requestRefresh(context: Context) {
+        if (!QuickLogPresence.isPlaced(context)) return
         WorkManager.getInstance(context).enqueueUniqueWork(
             REFRESH,
             ExistingWorkPolicy.KEEP,
@@ -73,13 +78,20 @@ object QuickLogTimers {
                 .build(),
         )
     }
+    fun cancelAll(context: Context) {
+        val work = WorkManager.getInstance(context)
+        for (name in listOf(DAY, UNDO, REFRESH)) work.cancelUniqueWork(name)
+        work.cancelAllWorkByTag(DAY)
+    }
+
 }
 
 class QuickLogTimerWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        if (!QuickLogPresence.isPlaced(applicationContext)) return Result.success()
         when (inputData.getString(QuickLogTimers.KIND)) {
-            QuickLogTimers.KIND_REFRESH -> QuickLogBridge.send(applicationContext, QuickLogCommand.Refresh)
+            QuickLogTimers.KIND_REFRESH -> return refresh { QuickLogBridge.send(applicationContext, QuickLogCommand.Refresh) }
             QuickLogTimers.KIND_UNDO_EXPIRY -> inputData.getString(QuickLogTimers.OP_ID)?.let {
                 Log.i("QuickLogTimers", "undo window over for $it")
                 QuickLogStore.clearAdded(applicationContext, it)
@@ -87,5 +99,11 @@ class QuickLogTimerWorker(context: Context, params: WorkerParameters) :
             else -> Log.w("QuickLogTimers", "unknown job ${inputData.keyValueMap}")
         }
         return Result.success()
+    }
+
+    companion object {
+        internal suspend fun refresh(send: suspend () -> QuickLogReply): Result {
+            return if (send() is QuickLogReply.Ok) Result.success() else Result.retry()
+        }
     }
 }

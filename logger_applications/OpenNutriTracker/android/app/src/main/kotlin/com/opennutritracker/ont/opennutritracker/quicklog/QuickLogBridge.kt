@@ -68,14 +68,18 @@ object QuickLogBridge {
                         if (json == null) {
                             result.error("invalid_arguments", "publish needs a JSON string", null)
                         } else {
-                            QuickLogStore.publish(appContext, json)
-                            result.success(null)
+                            result.success(QuickLogStore.publish(appContext, json))
                         }
                     }
+                    "isPlaced" -> result.success(QuickLogPresence.isPlaced(appContext))
                     else -> result.notImplemented()
                 }
             }
         }
+    }
+
+    fun presenceChanged() {
+        channel?.invokeMethod("presenceChanged", null)
     }
 
     /**

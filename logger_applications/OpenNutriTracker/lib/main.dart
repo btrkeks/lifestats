@@ -17,6 +17,7 @@ import 'package:opennutritracker/core/presentation/widgets/image_full_screen.dar
 import 'package:opennutritracker/core/styles/app_palette.dart';
 import 'package:opennutritracker/core/styles/app_palette_resolver.dart';
 import 'package:opennutritracker/core/styles/app_theme.dart';
+import 'package:opennutritracker/core/utils/activity_resume.dart';
 import 'package:opennutritracker/core/utils/app_locale_service.dart';
 import 'package:opennutritracker/core/utils/app_locale_sync.dart';
 import 'package:opennutritracker/core/utils/env.dart';
@@ -97,6 +98,9 @@ Future<void> _bootstrapApp() async {
     locator<QuickLogBridge>().install();
   }
   await EngineReadiness.signalReady();
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    await waitForActivityResume();
+  }
 
   // Drop cached remote-search results that haven't been touched in 90
   // days. Done once per app start; no need to schedule a recurring task.

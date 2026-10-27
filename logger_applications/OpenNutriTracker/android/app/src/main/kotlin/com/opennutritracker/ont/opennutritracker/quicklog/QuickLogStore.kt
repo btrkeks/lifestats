@@ -21,8 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
  *  - pending logs: original commands retained until a definitive reply.
  *  - in flight: foods with a log waiting on Dart, kept in memory only.
  *
- * Writes use commit(), not apply(): the callback that wrote is about to
- * return, and the process may die right after it. Every write repaints the
+ * Action writes use commit() before a callback returns; snapshots are
+ * rebuildable and use apply() off the platform thread. Every write repaints the
  * widget, so no caller can forget to.
  */
 object QuickLogStore {
@@ -38,27 +38,23 @@ object QuickLogStore {
     private const val KEY_PENDING = "pending_logs"
     private val repaints = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** The day boundary last handed to WorkManager in this process. */
-    private var scheduledDayEnd: Long? = null
-
     /** The merged model. Emits on every write in this process. */
     fun model(context: Context): StateFlow<WidgetModel> = flow(context)
 
     fun current(context: Context): WidgetModel = flow(context).value
 
     /** Replaces the snapshot with what Dart just published. */
-    fun publish(context: Context, json: String) {
-        prefs(context).edit().putString(KEY_SNAPSHOT, json).commit()
+    fun publish(context: Context, json: String): Boolean {
+        if (!QuickLogPresence.isPlaced(context)) return false
+        prefs(context).edit().putString(KEY_SNAPSHOT, json).apply()
         val snapshot = WidgetSnapshot.parse(json)
         Log.i(TAG, "publish ${describe(snapshot)}")
         if (snapshot is WidgetSnapshot.Ready) {
             QuickLogShortcut.update(context, snapshot.labels.scanProduct)
-            if (snapshot.validUntilMs != scheduledDayEnd) {
-                QuickLogTimers.scheduleDayRefresh(context, snapshot.validUntilMs)
-                scheduledDayEnd = snapshot.validUntilMs
-            }
+            QuickLogTimers.scheduleDayRefresh(context, snapshot.validUntilMs)
         }
         update(context) { it.copy(snapshot = snapshot) }
+        return true
     }
 
     fun beginLog(context: Context, key: String, create: () -> QuickLogCommand.Log): QuickLogCommand.Log? {

@@ -540,6 +540,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// swallowed by [ImportWorkoutsUsecase.importIfDue]: there is no user
   /// waiting on this and nowhere to show an error.
   Future<void> _importHealthWorkouts() async {
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
     final imported = await locator<ImportWorkoutsUsecase>().importIfDue();
     if (imported == 0 || !mounted) return;
     _homeBloc.add(const LoadItemsEvent());

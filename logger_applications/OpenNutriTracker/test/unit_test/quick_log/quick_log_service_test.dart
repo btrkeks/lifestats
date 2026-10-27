@@ -45,9 +45,11 @@ class _PathProvider extends PathProviderPlatform {
 
 class _Config extends Fake implements GetConfigUsecase {
   final HiveDBProvider db;
+  int reads = 0;
   _Config(this.db);
   @override
   Future<ConfigEntity> getConfig() async {
+    reads++;
     db.configBox;
     return const ConfigEntity(true, true, false, AppThemeEntity.system);
   }
@@ -99,6 +101,7 @@ void main() {
   late _User user;
   late QuickLogService service;
   late _KcalGoal kcalGoal;
+  late _Config config;
   final now = DateTime(2026, 10, 27, 20);
   final yesterday = DateTime(2026, 10, 26, 12);
   final quark = food(code: '4005500000000', name: 'Speisequark');
@@ -131,6 +134,7 @@ void main() {
     await db.openProfileBoxes('a', '');
     user = _User(db);
     kcalGoal = _KcalGoal();
+    config = _Config(db);
     final intakes = IntakeRepository(IntakeDataSource(db));
     service = QuickLogService(
       db,
@@ -144,7 +148,7 @@ void main() {
         _MacroGoal(),
         db,
       ),
-      _Config(db),
+      config,
       user,
       _KcalGoal(),
       _MacroGoal(),
@@ -330,13 +334,23 @@ void main() {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     late List<String> events;
+    late bool placed;
+    late bool failPublish;
+    late Map published;
 
     setUp(() {
       events = [];
+      placed = true;
+      failPublish = false;
+      published = {};
       messenger.setMockMethodCallHandler(QuickLogBridge.channel, (call) async {
+        if (call.method == 'isPlaced') return placed;
         if (call.method == 'publish') {
+          if (failPublish) throw PlatformException(code: 'snapshot_failed');
           final json = jsonDecode(call.arguments as String) as Map;
+          published = json;
           events.add('publish ${(json['status'] as Map)['proteinText']}');
+          return true;
         }
         return null;
       });
@@ -357,6 +371,63 @@ void main() {
       events.add('reply ${result['status']}');
       return result;
     }
+
+    test(
+      'refresh failure stays retryable, then recovery publishes the next boundary',
+      () async {
+        final bridge = QuickLogBridge(service, db)..install();
+        addTearDown(bridge.dispose);
+        await bridge.publish();
+        failPublish = true;
+        await expectLater(
+          run({'op': 'refresh'}),
+          throwsA(isA<PlatformException>()),
+        );
+        failPublish = false;
+        expect((await run({'op': 'refresh'}))['status'], 'ok');
+        expect(
+          published['validUntilMs'],
+          DateTime(2026, 10, 28).millisecondsSinceEpoch,
+        );
+      },
+    );
+
+    test(
+      'a rendering failure cannot invalidate a committed mutation',
+      () async {
+        final bridge = QuickLogBridge(service, db)..install();
+        addTearDown(bridge.dispose);
+        failPublish = true;
+        final result = await run({
+          'op': 'log',
+          'opId': 'render-failed',
+          'foodKey': quarkKey.value,
+          'profileId': 'a',
+          'baseAmount': 250.0,
+          'unit': 'g',
+          'tappedAtMs': now.millisecondsSinceEpoch,
+        });
+        expect(result['status'], 'ok');
+        expect(db.intakeBox.values.map((i) => i.id), contains('render-failed'));
+      },
+    );
+
+    test(
+      'without a widget neither startup nor writes build snapshots',
+      () async {
+        placed = false;
+        final bridge = QuickLogBridge(service, db)..install();
+        addTearDown(bridge.dispose);
+        await bridge.publish();
+        await seed(intake('absent', now, meal: quark));
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        expect(config.reads, 0);
+        expect(events, isEmpty);
+        placed = true;
+        await bridge.publish();
+        expect(events, ['publish 30/150 g']);
+      },
+    );
 
     test('publishes the new snapshot before it replies', () async {
       final bridge = QuickLogBridge(service, db)..install();

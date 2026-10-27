@@ -11,6 +11,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogBridge
 import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogStore
 import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogTimers
 import com.opennutritracker.ont.opennutritracker.quicklog.WidgetSnapshot
@@ -53,6 +54,13 @@ class QuickLogWidgetReceiver : GlanceAppWidgetReceiver() {
     /** The first widget placed fills in without the user opening the app. */
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
+        QuickLogBridge.presenceChanged()
         QuickLogTimers.requestRefresh(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        QuickLogTimers.cancelAll(context)
+        QuickLogBridge.presenceChanged()
     }
 }

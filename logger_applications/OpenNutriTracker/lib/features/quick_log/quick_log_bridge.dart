@@ -33,7 +33,6 @@ class QuickLogBridge {
 
   void install() {
     channel.setMethodCallHandler(_onCall);
-    _publisher ??= QuickLogPublisher(_db, publish)..start();
     unawaited(publish());
   }
 
@@ -43,35 +42,62 @@ class QuickLogBridge {
     _publisher = null;
   }
 
-  Future<void> publish() => _serial.synchronized(_publishNow);
+  Future<void> publish() async {
+    await _serial.synchronized(_publishNow);
+  }
+
+  Future<bool> _syncPresence() async {
+    final placed = await channel.invokeMethod<bool>('isPlaced') ?? false;
+    await _db.intakeWriteLock.synchronized(() {
+      if (placed) {
+        _publisher ??= QuickLogPublisher(_db, publish)..start();
+      } else {
+        _publisher?.stop();
+        _publisher = null;
+      }
+    });
+    return placed;
+  }
 
   Future<Object?> _onCall(MethodCall call) async {
+    if (call.method == 'presenceChanged') {
+      await publish();
+      return null;
+    }
     if (call.method != 'run') throw MissingPluginException();
     final command = QuickLogCommand.fromWire(call.arguments);
     if (command == null) {
       return const QuickLogRejected(RejectReason.invalid).toWire();
     }
     return _serial.synchronized(() async {
+      if (command is RefreshCommand) {
+        if (!await _publishNow()) {
+          throw PlatformException(code: 'snapshot_unavailable');
+        }
+        return const QuickLogOk().toWire();
+      }
       final result = await _service.run(command);
       await _publishNow();
       return result.toWire();
     });
   }
 
-  /// Never throws: a snapshot that fails to build must not turn a committed
-  /// write into an error reply.
-  Future<void> _publishNow() async {
+  /// Mutations keep their acknowledgement even when rendering fails.
+  Future<bool> _publishNow() async {
     try {
+      if (!await _syncPresence()) return false;
       final snapshot = await _service.snapshot();
-      await channel.invokeMethod<void>(
-        'publish',
-        jsonEncode(snapshot.toJson()),
-      );
+      return await channel.invokeMethod<bool>(
+            'publish',
+            jsonEncode(snapshot.toJson()),
+          ) ??
+          false;
     } on MissingPluginException {
       // No widget host: iOS, or a test.
     } catch (error, stackTrace) {
       _log.warning('publish failed', error, stackTrace);
     }
+    return false;
   }
 }
 
