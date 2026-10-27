@@ -57,7 +57,9 @@ export const secondsAmountGoalSchema = z.object({
 });
 
 /** The form validation schema for a statistic type. */
-export function goalFormSchemaFor(statisticType: StatisticType): z.ZodType<FieldValues, FieldValues> {
+export function goalFormSchemaFor(
+  statisticType: StatisticType
+): z.ZodType<FieldValues, FieldValues> {
   switch (statisticType) {
     case 'IntegerAmount':
     case 'Summing':
@@ -83,9 +85,33 @@ export function goalFormDefaultsFor(statisticType: StatisticType): FieldValues {
     case 'Habit':
       return { occurred: true };
     case 'PointInTime':
-      return { deadline: '12:00:00' };
+      return { deadline: '22:00' };
     case 'TimeSpans':
       return { target: [{ start: '09:00', end: '17:00' }], efficiency: 80 };
+  }
+}
+
+/** The goal the form currently describes, or null while it doesn't validate. */
+export function formGoal(statisticType: StatisticType, values: unknown): GoalData | null {
+  switch (statisticType) {
+    case 'IntegerAmount':
+    case 'Summing':
+    case 'TimeDifference': {
+      const parsed = integerAmountGoalSchema.safeParse(values);
+      return parsed.success ? { type: statisticType, data: parsed.data } : null;
+    }
+    case 'Habit': {
+      const parsed = habitGoalSchema.safeParse(values);
+      return parsed.success ? { type: 'Habit', data: parsed.data } : null;
+    }
+    case 'PointInTime': {
+      const parsed = pointInTimeGoalSchema.safeParse(values);
+      return parsed.success ? { type: 'PointInTime', data: parsed.data } : null;
+    }
+    case 'TimeSpans': {
+      const parsed = timeSpansGoalSchema.safeParse(values);
+      return parsed.success ? { type: 'TimeSpans', data: parsed.data } : null;
+    }
   }
 }
 

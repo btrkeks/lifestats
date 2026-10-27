@@ -14,12 +14,7 @@ export interface StatisticMetadata {
 
 // Statistic types matching backend enums
 export type StatisticType =
-  | 'IntegerAmount'
-  | 'Habit'
-  | 'PointInTime'
-  | 'TimeSpans'
-  | 'Summing'
-  | 'TimeDifference';
+  'IntegerAmount' | 'Habit' | 'PointInTime' | 'TimeSpans' | 'Summing' | 'TimeDifference';
 
 export interface CreateStatisticRequest {
   name: string;
@@ -67,6 +62,7 @@ export type GoalData =
 /** Raw `GET /statistics/{id}/goals/default` body (before parsing) */
 export interface GoalResponseRaw {
   goal_data: Record<string, unknown>;
+  valid_since: string; // YYYY-MM-DD
 }
 
 /** Parsed goal with type information */
@@ -75,15 +71,28 @@ export interface GoalResponse {
   goal_data: GoalData;
 }
 
-/** Request to set a default goal (all values are strings on the wire) */
+/** The current default goal and the first day it applies to */
+export interface DefaultGoal {
+  goal: GoalData;
+  validSince: string; // YYYY-MM-DD
+}
+
+/** Request to set a default goal (all goal values are strings on the wire) */
 export interface SetGoalRequest {
   goal_data: Record<string, string>;
+  /** First day the goal applies to (YYYY-MM-DD); the backend defaults to today */
+  valid_since?: string;
 }
 
 /** Request body of `PUT /statistics/{id}/goals/{date}` (serde tag "kind") */
 export type SetDailyGoalRequest =
-  | { kind: 'goal'; goal_data: Record<string, string> }
-  | { kind: 'suppressed' };
+  { kind: 'goal'; goal_data: Record<string, string> } | { kind: 'suppressed' };
+
+/** Request body of `PUT /statistics/{id}/goals/range`: one override for every day */
+export type SetDailyGoalRangeRequest = SetDailyGoalRequest & {
+  start: string; // YYYY-MM-DD
+  end: string; // YYYY-MM-DD, inclusive
+};
 
 /** Raw `GET /statistics/{id}/goals/{date}` body */
 export type DailyGoalStateRaw =
@@ -93,15 +102,19 @@ export type DailyGoalStateRaw =
 
 /** Parsed daily goal override state for one date */
 export type DailyGoalState =
-  | { kind: 'not_set' }
-  | { kind: 'suppressed' }
-  | { kind: 'goal'; goal: GoalResponse };
+  { kind: 'not_set' } | { kind: 'suppressed' } | { kind: 'goal'; goal: GoalResponse };
 
 // ============================================================================
 // Daily achievements (`GET /statistics/{id}/achievements`)
 // ============================================================================
 
 export type DayOverride = 'none' | 'suppressed' | 'goal';
+
+/**
+ * What was logged on a day: a number for counts and durations (seconds), a
+ * boolean for habits, "HH:MM:SS" for point-in-time statistics.
+ */
+export type DayValue = number | boolean | string;
 
 export interface DailyAchievement {
   date: string; // YYYY-MM-DD
@@ -110,11 +123,23 @@ export interface DailyAchievement {
   /** 0-255 (can exceed 100), null when no goal applied that day */
   percentage_achieved: number | null;
   override: DayOverride;
+  /** Logged value, null when nothing was logged */
+  value: DayValue | null;
+  /** The goal that applied (stored shape, like `GoalResponseRaw.goal_data`) */
+  goal: Record<string, unknown> | null;
 }
+
+/** A day of `/achievements` with its goal parsed for the statistic's type */
+export type AchievementDay = Omit<DailyAchievement, 'goal'> & { goal: GoalData | null };
 
 export interface DailyAchievementsResponse {
   statistic_id: number;
   start_date: string;
   end_date: string;
   days: DailyAchievement[];
+}
+
+export interface StreakResponse {
+  statistic_id: number;
+  current_streak_days: number;
 }

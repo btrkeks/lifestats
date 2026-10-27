@@ -4,10 +4,13 @@ import type {
   CreateStatisticRequest,
   SetGoalRequest,
   SetDailyGoalRequest,
-  GoalResponse,
+  DefaultGoal,
   GoalResponseRaw,
+  SetDailyGoalRangeRequest,
+  StreakResponse,
   DailyGoalState,
   DailyGoalStateRaw,
+  AchievementDay,
   DailyAchievementsResponse,
   StatisticType,
 } from '@/types';
@@ -15,6 +18,23 @@ import { parseDailyGoalState, parseGoalData } from './schemas';
 
 // Base URL for the API - can be configured via environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+/** A readable message for a failed request (the API answers `{ "error": "..." }`). */
+export function errorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const body: unknown = error.response?.data;
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      typeof body.error === 'string'
+    ) {
+      return body.error;
+    }
+    return error.message;
+  }
+  return error instanceof Error ? error.message : 'Something went wrong.';
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -37,9 +57,7 @@ export async function getLoggableStatistics(): Promise<StatisticMetadata[]> {
   return data;
 }
 
-export async function createStatistic(
-  request: CreateStatisticRequest
-): Promise<StatisticMetadata> {
+export async function createStatistic(request: CreateStatisticRequest): Promise<StatisticMetadata> {
   const { data } = await api.post<StatisticMetadata>('/statistics', request);
   return data;
 }
@@ -48,11 +66,11 @@ export async function createStatistic(
 // Goals API (parsed through Zod at the boundary)
 // ============================================================================
 
-/** Fetches the default goal; null when none is set. */
+/** Fetches the current default goal and its start; null when none is set. */
 export async function getDefaultGoal(
   statisticId: number,
   statisticType: StatisticType
-): Promise<GoalResponse | null> {
+): Promise<DefaultGoal | null> {
   const { data } = await api.get<GoalResponseRaw | null>(
     `/statistics/${statisticId}/goals/default`
   );
@@ -60,15 +78,12 @@ export async function getDefaultGoal(
     return null;
   }
   return {
-    statistic_type: statisticType,
-    goal_data: parseGoalData(statisticType, data.goal_data),
+    goal: parseGoalData(statisticType, data.goal_data),
+    validSince: data.valid_since,
   };
 }
 
-export async function setDefaultGoal(
-  statisticId: number,
-  goal: SetGoalRequest
-): Promise<void> {
+export async function setDefaultGoal(statisticId: number, goal: SetGoalRequest): Promise<void> {
   await api.put(`/statistics/${statisticId}/goals/default`, goal);
 }
 
@@ -82,9 +97,7 @@ export async function getDailyGoal(
   date: string, // YYYY-MM-DD
   statisticType: StatisticType
 ): Promise<DailyGoalState> {
-  const { data } = await api.get<DailyGoalStateRaw>(
-    `/statistics/${statisticId}/goals/${date}`
-  );
+  const { data } = await api.get<DailyGoalStateRaw>(`/statistics/${statisticId}/goals/${date}`);
   return parseDailyGoalState(statisticType, data);
 }
 
@@ -94,6 +107,14 @@ export async function setDailyGoal(
   request: SetDailyGoalRequest
 ): Promise<void> {
   await api.put(`/statistics/${statisticId}/goals/${date}`, request);
+}
+
+/** Sets the same override on every day from `start` to `end`, all or nothing. */
+export async function setDailyGoalRange(
+  statisticId: number,
+  request: SetDailyGoalRangeRequest
+): Promise<void> {
+  await api.put(`/statistics/${statisticId}/goals/range`, request);
 }
 
 export async function deleteDailyGoal(
@@ -107,15 +128,28 @@ export async function deleteDailyGoal(
 // Achievements API
 // ============================================================================
 
-/** Per-day goal achievement and override state over an inclusive date range. */
+/**
+ * Per-day goal achievement, override state, logged value and applicable goal
+ * over an inclusive date range, with each day's goal parsed.
+ */
 export async function getDailyAchievements(
   statisticId: number,
+  statisticType: StatisticType,
   start: string, // YYYY-MM-DD
   end: string // YYYY-MM-DD
-): Promise<DailyAchievementsResponse> {
+): Promise<AchievementDay[]> {
   const { data } = await api.get<DailyAchievementsResponse>(
     `/statistics/${statisticId}/achievements`,
     { params: { start, end } }
   );
+  return data.days.map((day) => ({
+    ...day,
+    goal: day.goal ? parseGoalData(statisticType, day.goal) : null,
+  }));
+}
+
+/** Current goal-achievement streak in days. */
+export async function getStreak(statisticId: number): Promise<StreakResponse> {
+  const { data } = await api.get<StreakResponse>(`/statistics/${statisticId}/streak`);
   return data;
 }
