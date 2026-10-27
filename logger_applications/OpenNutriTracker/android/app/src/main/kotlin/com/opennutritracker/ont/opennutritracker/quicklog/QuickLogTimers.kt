@@ -17,6 +17,10 @@ import java.util.concurrent.TimeUnit
 object QuickLogTimers {
     private const val REFRESH = "quick_log_refresh"
     private const val UNDO = "quick_log_undo"
+    private const val DAY = "quick_log_day"
+
+    /** After the boundary, not on it: Dart must already see the new day. */
+    private const val DAY_MARGIN_MS = 1_000L
     const val KIND = "kind"
     const val KIND_REFRESH = "refresh"
     const val KIND_UNDO_EXPIRY = "undoExpiry"
@@ -33,6 +37,25 @@ object QuickLogTimers {
             OneTimeWorkRequestBuilder<QuickLogTimerWorker>()
                 .setInitialDelay((atMs - System.currentTimeMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
                 .setInputData(workDataOf(KIND to KIND_UNDO_EXPIRY, OP_ID to opId))
+                .build(),
+        )
+    }
+
+    /**
+     * Asks Dart for a new snapshot once the logical day the current one
+     * describes is over: new totals, and the order derived for the new day.
+     * REPLACE: each publish carries the boundary that is due next.
+     */
+    fun scheduleDayRefresh(context: Context, atMs: Long) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            DAY,
+            ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<QuickLogTimerWorker>()
+                .setInitialDelay(
+                    (atMs + DAY_MARGIN_MS - System.currentTimeMillis()).coerceAtLeast(0),
+                    TimeUnit.MILLISECONDS,
+                )
+                .setInputData(workDataOf(KIND to KIND_REFRESH))
                 .build(),
         )
     }

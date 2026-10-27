@@ -168,6 +168,14 @@ data class WidgetModel(
             it.expiresAtMs > nowMs && (snapshot as? WidgetSnapshot.Ready)?.profileId == it.profileId
         }
 
+    /**
+     * True once the logical day the snapshot describes is over. The day job
+     * normally replaces it first; this covers a render that comes before
+     * the job does.
+     */
+    fun isStale(nowMs: Long): Boolean =
+        snapshot is WidgetSnapshot.Ready && nowMs >= snapshot.validUntilMs
+
     fun row(foodKey: String): Row? =
         (snapshot as? WidgetSnapshot.Ready)?.rows?.firstOrNull { it.foodKey == foodKey }
 }

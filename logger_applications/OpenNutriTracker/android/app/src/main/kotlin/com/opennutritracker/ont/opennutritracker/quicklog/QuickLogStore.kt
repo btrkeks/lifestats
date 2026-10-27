@@ -36,6 +36,9 @@ object QuickLogStore {
     private val repaints = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val inFlight = mutableSetOf<String>()
 
+    /** The day boundary last handed to WorkManager in this process. */
+    private var scheduledDayEnd: Long? = null
+
     /** The merged model. Emits on every write in this process. */
     fun model(context: Context): StateFlow<WidgetModel> = flow(context)
 
@@ -46,7 +49,13 @@ object QuickLogStore {
         prefs(context).edit().putString(KEY_SNAPSHOT, json).commit()
         val snapshot = WidgetSnapshot.parse(json)
         Log.i(TAG, "publish ${describe(snapshot)}")
-        if (snapshot is WidgetSnapshot.Ready) QuickLogShortcut.update(context, snapshot.labels.scanProduct)
+        if (snapshot is WidgetSnapshot.Ready) {
+            QuickLogShortcut.update(context, snapshot.labels.scanProduct)
+            if (snapshot.validUntilMs != scheduledDayEnd) {
+                QuickLogTimers.scheduleDayRefresh(context, snapshot.validUntilMs)
+                scheduledDayEnd = snapshot.validUntilMs
+            }
+        }
         update(context) { it.copy(snapshot = snapshot) }
     }
 

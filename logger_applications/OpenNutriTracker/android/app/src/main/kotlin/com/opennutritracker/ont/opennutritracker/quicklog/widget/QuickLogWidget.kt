@@ -1,6 +1,7 @@
 package com.opennutritracker.ont.opennutritracker.quicklog.widget
 
 import android.content.Context
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
@@ -30,7 +31,11 @@ class QuickLogWidget : GlanceAppWidget() {
         if (store.value.snapshot is WidgetSnapshot.None) QuickLogTimers.requestRefresh(context)
         provideContent {
             val model by store.collectAsState()
-            QuickLogContent(model, System.currentTimeMillis(), LocalSize.current)
+            val now = System.currentTimeMillis()
+            if (model.isStale(now)) {
+                LaunchedEffect(model.snapshot) { QuickLogTimers.requestRefresh(context) }
+            }
+            QuickLogContent(model, now, LocalSize.current)
         }
     }
 

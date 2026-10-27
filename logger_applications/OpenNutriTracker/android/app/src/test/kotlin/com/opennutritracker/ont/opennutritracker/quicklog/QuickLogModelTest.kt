@@ -2,8 +2,10 @@ package com.opennutritracker.ont.opennutritracker.quicklog
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -42,6 +44,15 @@ class QuickLogModelTest {
             WidgetSnapshot.NeedsSetup("OpenNutriTracker"),
             WidgetSnapshot.parse("""{"v":1,"kind":"needsSetup","title":"OpenNutriTracker"}"""),
         )
+    }
+
+    @Test
+    fun aSnapshotIsStaleFromTheStartOfTheNextLogicalDay() {
+        val snapshot = WidgetSnapshot.parse(fixture) as WidgetSnapshot.Ready
+        val model = WidgetModel(snapshot, null, emptySet())
+        assertFalse(model.isStale(snapshot.validUntilMs - 1))
+        assertTrue(model.isStale(snapshot.validUntilMs))
+        assertFalse(model.copy(snapshot = WidgetSnapshot.None).isStale(Long.MAX_VALUE))
     }
 
     @Test
