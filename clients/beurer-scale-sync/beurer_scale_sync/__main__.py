@@ -162,7 +162,7 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     run_parser = commands.add_parser("run", help="collect each morning's weigh-in and sync it (the systemd service)")
     run_parser.add_argument("--start", type=clock_time, default=Window.start, help="first collection each day, HH:MM (default 06:00)")
-    run_parser.add_argument("--end", type=clock_time, default=Window.end, help="last retry each day, HH:MM (default 23:00)")
+    run_parser.add_argument("--end", type=clock_time, default=Window.end, help="stop retrying each day, HH:MM (default 08:00)")
     pair_parser = commands.add_parser("pair", help="pair the laptop with the scale (press SET on the scale)")
     pair_parser.add_argument("--address", help="scale address, defaults to the registered one")
     register_parser = commands.add_parser("register", help="register a user slot for this laptop on the scale")

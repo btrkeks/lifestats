@@ -14,12 +14,16 @@ Lifestats acknowledged; delete a day from it to resend that day.
    reading.
 2. From 06:00 the service connects, sets the scale's clock, gives the consent code for its slot,
    receives the stored readings and disconnects, usually within 10 seconds. It retries every
-   15 minutes until a reading from that day has arrived (last try 23:00), then leaves the scale
-   alone until the next morning. `run --start HH:MM --end HH:MM` moves the window.
+   15 minutes until a reading from that day has arrived, at most until 08:00, then leaves the
+   scale alone until the next morning. `run --start HH:MM --end HH:MM` moves the window.
 3. It logs the readings and sends any day whose first weigh-in changed.
 
-A weigh-in before the start time is collected at the start time; a later one at the next retry.
-If the laptop is asleep at the start time, it collects within a minute of waking up.
+A weigh-in before the start time is collected at the start time; one inside the window at the
+next retry. A weigh-in after 08:00, or on a day the laptop is away, waits on the scale and is
+collected the next morning; it still lands on its own day, because readings carry the scale's
+timestamp. If the laptop is asleep at the start time, it collects within a minute of waking up,
+as long as that is before 08:00. Outside the window the service never connects, so the scale's
+battery is only used for those few short morning connections.
 
 The BF500 stays connectable around the clock and its advertisements look the same before and
 after a weigh-in, so the service collects on a schedule. It never asks the scale to measure: that

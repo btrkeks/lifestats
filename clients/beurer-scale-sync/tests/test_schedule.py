@@ -25,14 +25,14 @@ def test_stops_for_the_day_once_the_reading_is_in():
     assert WINDOW.next_check(at("06:00:10"), have_todays_reading=True) == datetime(2026, 10, 29, 6, 0)
 
 
-def test_a_laptop_waking_late_collects_at_once():
-    assert WINDOW.should_collect(at("09:41"), have_todays_reading=False)
+def test_a_laptop_waking_late_in_the_window_collects_at_once():
+    assert WINDOW.should_collect(at("07:41"), have_todays_reading=False)
 
 
-def test_gives_up_at_the_end_of_the_day():
-    assert WINDOW.next_check(at("22:50"), have_todays_reading=False) == at("23:00")
-    assert not WINDOW.should_collect(at("23:00"), have_todays_reading=False)
-    assert WINDOW.next_check(at("23:00"), have_todays_reading=False) == datetime(2026, 10, 29, 6, 0)
+def test_gives_up_at_eight_and_tries_again_next_morning():
+    assert WINDOW.next_check(at("07:50"), have_todays_reading=False) == at("08:00")
+    assert not WINDOW.should_collect(at("08:00"), have_todays_reading=False)
+    assert WINDOW.next_check(at("08:00"), have_todays_reading=False) == datetime(2026, 10, 29, 6, 0)
 
 
 def test_only_this_slots_readings_from_that_day_count():

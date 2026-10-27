@@ -15,7 +15,7 @@ from .protocol import Reading
 @dataclass(frozen=True)
 class Window:
     start: time = time(6, 0)
-    end: time = time(23, 0)
+    end: time = time(8, 0)
     retry: timedelta = timedelta(minutes=15)
 
     def should_collect(self, now: datetime, have_todays_reading: bool) -> bool:
