@@ -36,6 +36,7 @@ import 'package:opennutritracker/features/add_meal/presentation/screens/bulk_add
 import 'package:opennutritracker/features/add_activity/presentation/add_activity_screen.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/edit_meal_screen.dart';
 import 'package:opennutritracker/features/onboarding/onboarding_screen.dart';
+import 'package:opennutritracker/features/quick_log/quick_log_bridge.dart';
 import 'package:opennutritracker/features/fasting/presentation/fasting_screen.dart';
 import 'package:opennutritracker/features/profile/presentation/screens/manage_profiles_screen.dart';
 import 'package:opennutritracker/features/profile/presentation/weight_history_screen.dart';
@@ -86,6 +87,9 @@ Future<void> _bootstrapApp() async {
   // Before the rest of main(): native work waiting on storage needs only
   // initLocator, not notifications, Sentry or the first frame.
   if (kDebugMode) EngineProbe.install();
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    locator<QuickLogBridge>().install();
+  }
   await EngineReadiness.signalReady();
 
   // Drop cached remote-search results that haven't been touched in 90
@@ -319,7 +323,8 @@ class _OpenNutriTrackerAppState extends State<OpenNutriTrackerApp>
         NavigationOptions.settingsRoute: (context) => const SettingsScreen(),
         NavigationOptions.accentColourRoute: (context) =>
             const AccentColourScreen(),
-        NavigationOptions.healthSyncRoute: (context) => const HealthSyncScreen(),
+        NavigationOptions.healthSyncRoute: (context) =>
+            const HealthSyncScreen(),
         NavigationOptions.addMealRoute: (context) => const AddMealScreen(),
         NavigationOptions.bulkAddRoute: (context) => const BulkAddScreen(),
         NavigationOptions.scannerRoute: (context) => const ScannerScreen(),

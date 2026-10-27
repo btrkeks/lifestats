@@ -155,4 +155,8 @@ dependencies {
     // readRecords is a suspend function, and MainActivity answers the method
     // channel from the main dispatcher.
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    // android.jar's org.json is stubs on the JVM; QuickLogModelTest needs the real one.
+    testImplementation 'org.json:json:20240303'
 }

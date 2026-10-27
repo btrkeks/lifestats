@@ -8,6 +8,7 @@ import 'package:opennutritracker/core/utils/engine_readiness.dart';
 import 'package:opennutritracker/core/utils/demo/demo_seeder.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/core/utils/logger_config.dart';
+import 'package:opennutritracker/features/quick_log/quick_log_bridge.dart';
 import 'package:opennutritracker/generated/l10n.dart';
 import 'package:opennutritracker/main.dart';
 
@@ -31,6 +32,9 @@ Future<void> main() async {
   await initLocator();
 
   await seedDemoData(DemoSeedOptions.dev);
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    locator<QuickLogBridge>().install();
+  }
   await EngineReadiness.signalReady();
 
   final configRepo = locator<ConfigRepository>();

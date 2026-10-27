@@ -3,6 +3,7 @@ package com.opennutritracker.ont.opennutritracker
 import android.content.Context
 import android.util.Log
 import androidx.annotation.MainThread
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogBridge
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -57,9 +58,10 @@ object OntEngine {
         val app = context.applicationContext
         val created = FlutterEngine(app)
         // Before Dart runs: a boot with no activity attached still calls the
-        // locale and launch channels from main().
+        // locale, launch and quick-log channels from main().
         LocaleChannel.register(app, created)
         LaunchInbox.register(created)
+        QuickLogBridge.register(app, created)
         registerReadiness(created)
         created.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
         engine = created
