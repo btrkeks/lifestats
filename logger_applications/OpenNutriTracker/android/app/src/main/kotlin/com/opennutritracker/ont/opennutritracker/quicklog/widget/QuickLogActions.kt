@@ -35,28 +35,44 @@ class LogPillAction : ActionCallback {
         val row = model.row(foodKey) ?: return
         // A second callback may arrive after the first write has already acked.
         if (model.visibleAction(System.currentTimeMillis())?.foodKey == foodKey) return
-        if (!QuickLogStore.beginLog(context, foodKey)) {
-            Log.i(TAG, "log ignored: $foodKey already in flight")
-            return
+        logFood(context, foodKey, snapshot.profileId, row.baseAmount, row.unit)
+    }
+}
+
+/**
+ * Logs [foodKey] through Dart and, once Dart acked, shows Added with Undo on
+ * its row. The pill and the amount picker both log through here. Null when
+ * a log of the same food is still waiting on Dart: a double tap.
+ */
+suspend fun logFood(
+    context: Context,
+    foodKey: String,
+    profileId: String,
+    baseAmount: Double,
+    unit: String,
+): QuickLogReply? {
+    if (!QuickLogStore.beginLog(context, foodKey)) {
+        Log.i(TAG, "log ignored: $foodKey already in flight")
+        return null
+    }
+    try {
+        val opId = UUID.randomUUID().toString()
+        val command = QuickLogCommand.Log(
+            opId = opId,
+            foodKey = foodKey,
+            profileId = profileId,
+            baseAmount = baseAmount,
+            unit = unit,
+            tappedAtMs = System.currentTimeMillis(),
+        )
+        val reply = QuickLogBridge.send(context, command)
+        if (reply is QuickLogReply.Ok && reply.addedText != null) {
+            val action = QuickLogStore.showAdded(context, opId, foodKey, profileId, reply.addedText)
+            QuickLogTimers.scheduleUndoExpiry(context, opId, action.expiresAtMs)
         }
-        try {
-            val opId = UUID.randomUUID().toString()
-            val command = QuickLogCommand.Log(
-                opId = opId,
-                foodKey = foodKey,
-                profileId = snapshot.profileId,
-                baseAmount = row.baseAmount,
-                unit = row.unit,
-                tappedAtMs = System.currentTimeMillis(),
-            )
-            val reply = QuickLogBridge.send(context, command)
-            if (reply is QuickLogReply.Ok && reply.addedText != null) {
-                val action = QuickLogStore.showAdded(context, opId, foodKey, snapshot.profileId, reply.addedText)
-                QuickLogTimers.scheduleUndoExpiry(context, opId, action.expiresAtMs)
-            }
-        } finally {
-            QuickLogStore.endLog(context, foodKey)
-        }
+        return reply
+    } finally {
+        QuickLogStore.endLog(context, foodKey)
     }
 }
 

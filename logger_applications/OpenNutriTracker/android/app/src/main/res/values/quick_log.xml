@@ -3,4 +3,13 @@
     <style name="Glance.AppWidget.List" parent="">
         <item name="android:scrollbars">none</item>
     </style>
+    <!-- The amount picker: Flutter draws the scrim and the sheet, the launcher
+         shows through everything else. -->
+    <style name="QuickLogPickerTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

@@ -100,6 +100,18 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        <!-- The widget's amount picker, over the launcher: its own task, never
+             in recents, so the app's task does not come forward. -->
+        <activity
+            android:name="com.opennutritracker.ont.opennutritracker.quicklog.QuickLogPickerActivity"
+            android:exported="false"
+            android:theme="@style/QuickLogPickerTheme"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize" />
         <!-- The quick-log home-screen widget. Full class name: the develop
              flavour changes the application id, not the Kotlin package. -->
         <receiver

@@ -20,6 +20,7 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -44,6 +45,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.opennutritracker.ont.opennutritracker.MainActivity
 import com.opennutritracker.ont.opennutritracker.R
+import com.opennutritracker.ont.opennutritracker.quicklog.QuickLogPickerActivity
 import com.opennutritracker.ont.opennutritracker.quicklog.RecentAction
 import com.opennutritracker.ont.opennutritracker.quicklog.Row as FoodRowData
 import com.opennutritracker.ont.opennutritracker.quicklog.Status
@@ -379,13 +381,15 @@ private fun RingLayer(bitmap: Bitmap, color: ColorProvider, size: Dp) {
 
 @Composable
 private fun FoodRow(row: FoodRowData, profileId: String, logging: Boolean) {
+    val context = LocalContext.current
     Row(
         GlanceModifier
             .fillMaxWidth()
             .height(ButtonHeight)
             .background(Palette.row)
             .cornerRadius(16.dp)
-            .padding(start = 14.dp, end = 8.dp),
+            .padding(start = 14.dp, end = 8.dp)
+            .clickable(actionStartActivity(QuickLogPickerActivity.intentFor(context, row.foodKey, profileId))),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(GlanceModifier.defaultWeight()) {

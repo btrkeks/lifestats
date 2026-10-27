@@ -15,6 +15,7 @@ import 'package:opennutritracker/core/presentation/splash_screen.dart';
 import 'package:opennutritracker/core/presentation/storage_recovery_app.dart';
 import 'package:opennutritracker/core/presentation/widgets/image_full_screen.dart';
 import 'package:opennutritracker/core/styles/app_palette.dart';
+import 'package:opennutritracker/core/styles/app_palette_resolver.dart';
 import 'package:opennutritracker/core/styles/app_theme.dart';
 import 'package:opennutritracker/core/utils/app_locale_service.dart';
 import 'package:opennutritracker/core/utils/app_locale_sync.dart';
@@ -35,6 +36,7 @@ import 'package:opennutritracker/features/add_meal/presentation/screens/bulk_add
 import 'package:opennutritracker/features/add_activity/presentation/add_activity_screen.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/edit_meal_screen.dart';
 import 'package:opennutritracker/features/onboarding/onboarding_screen.dart';
+import 'package:opennutritracker/features/quick_log/picker/quick_log_picker.dart';
 import 'package:opennutritracker/features/quick_log/quick_log_bridge.dart';
 import 'package:opennutritracker/features/fasting/presentation/fasting_screen.dart';
 import 'package:opennutritracker/features/profile/presentation/screens/manage_profiles_screen.dart';
@@ -64,6 +66,12 @@ Future<void> main() async {
   LoggerConfig.intiLogger();
   await _bootstrapApp();
 }
+
+/// The widget's amount picker, which `QuickLogPickerActivity` starts in its
+/// own engine. Here rather than in the picker's library so that both flavours'
+/// AOT builds keep it: lib/dev/main_dev.dart imports this library.
+@pragma('vm:entry-point')
+Future<void> quickLogPickerMain() => runQuickLogPicker();
 
 Future<void> _bootstrapApp() async {
   final log = Logger('main');
@@ -274,20 +282,13 @@ class _OpenNutriTrackerAppState extends State<OpenNutriTrackerApp>
     final accentColor = themeProvider.accentColor;
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
-        // The friendly-flat canvas, surfaces and macro colours are fixed; only
-        // the single vivid accent follows the user. Material You (when enabled)
-        // or a picked accent drives that one role, otherwise the brand green.
-        AppPalette light = AppPalette.light;
-        AppPalette dark = AppPalette.dark;
-        if (useMaterialYou && lightDynamic != null && darkDynamic != null) {
-          light = light.withAccent(lightDynamic.harmonized().primary);
-          dark = dark.withAccent(darkDynamic.harmonized().primary);
-        } else if (accentColor != null) {
-          final seed = Color(accentColor);
-          light = light.withAccent(seed);
-          dark = dark.withAccent(seed);
-        }
-        return _buildMaterialApp(context, light, dark);
+        final palettes = resolveAppPalettes(
+          useMaterialYou: useMaterialYou,
+          accentColor: accentColor,
+          lightDynamicAccent: lightDynamic?.harmonized().primary,
+          darkDynamicAccent: darkDynamic?.harmonized().primary,
+        );
+        return _buildMaterialApp(context, palettes.light, palettes.dark);
       },
     );
   }
