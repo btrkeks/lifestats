@@ -32,6 +32,15 @@ Most `logger_applications/*`, `events/*`, and `ui/*` crates are excluded from th
 
 The web API server is running locally at `http://localhost:3000` — query it directly to inspect live behavior. See `core/infrastructure/web_api/README.md` for the full route reference, DTO shapes, error mapping, and handler patterns.
 
+### Android emulators and device
+
+This machine is shared with other projects' agents.
+
+- Start emulators only through `~/.local/bin/agent-emulator` (read its header for usage), never with bare `emulator` or `systemd-run`. It holds a machine-wide slot and caps memory and runtime. Exit code 75 means every slot is busy: wait and retry, never bypass it.
+- Use the AVD `ont-widget` (Pixel 8, Android 37) for the Android apps here, started `-read-only` with `-memory 3072`. Stop it when you are done or idle for more than about 10 minutes.
+- The owner's phone is often attached over USB. Always pass `-s emulator-<port>` to `adb`, and never install to or modify the phone without the owner's explicit go-ahead.
+- Do not build or run tests while the emulator boots. Run heavy builds and test suites under `nice`, and cap Gradle with `-Porg.gradle.workers.max=2`.
+
 ## Data & Persistence
 
 - **Engine**: SQLite via Diesel ORM; WAL mode configured in `core/infrastructure/persistence/src/pool.rs`
