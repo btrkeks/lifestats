@@ -23,6 +23,7 @@ mock! {
     pub IntegrationSvc {}
 
     impl IntegrationServiceTrait for IntegrationSvc {
+        fn replace_beurer_day(&self, day: NaiveDate, reading: lifestats_core::beurer::BeurerDayReading) -> Result<lifestats_core::beurer::BeurerDayReplacement, lifestats_core::beurer::BeurerDayError>;
         fn ebook_server_id(&self) -> Result<String, lifestats_core::ebook::EbookError>;
         fn record_ebook_day(&self, producer: lifestats_core::ebook::ProducerId, book: lifestats_core::ebook::BookKey, day: NaiveDate, report: lifestats_core::ebook::EbookDayReport) -> Result<lifestats_core::ebook::EbookWriteOutcome, lifestats_core::ebook::EbookError>;
 

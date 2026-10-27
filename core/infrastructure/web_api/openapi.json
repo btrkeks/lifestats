@@ -1,6 +1,48 @@
 {
   "components": {
     "schemas": {
+      "BeurerDayRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body_fat_permille": {
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "body_water_permille": {
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "muscle_permille": {
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "weight_grams": {
+            "format": "int64",
+            "maximum": 500000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "weight_grams"
+        ],
+        "type": "object"
+      },
       "EbookDayRequest": {
         "additionalProperties": false,
         "properties": {
@@ -148,6 +190,90 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/integrations/beurer/days/{day}": {
+      "put": {
+        "operationId": "replace_day",
+        "parameters": [
+          {
+            "description": "Strict valid YYYY-MM-DD calendar date",
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeurerDayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Daily readings and all four statistics committed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed JSON or unreadable body"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Duplicate or wrongly typed tagged statistics"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid date or field"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Storage failed without committing"
+          }
+        },
+        "tags": [
+          "super::beurer"
+        ]
+      }
+    },
     "/integrations/ebook": {
       "get": {
         "operationId": "descriptor",

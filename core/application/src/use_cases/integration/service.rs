@@ -22,6 +22,12 @@ use mockall::automock;
 /// This trait allows for dependency injection and testability.
 #[cfg_attr(test, automock)]
 pub trait IntegrationServiceTrait: Send + Sync {
+    fn replace_beurer_day(
+        &self,
+        day: NaiveDate,
+        reading: lifestats_core::beurer::BeurerDayReading,
+    ) -> Result<lifestats_core::beurer::BeurerDayReplacement, lifestats_core::beurer::BeurerDayError>;
+
     fn ebook_server_id(&self) -> Result<String, EbookError>;
     fn record_ebook_day(
         &self,
@@ -65,6 +71,7 @@ pub trait IntegrationServiceTrait: Send + Sync {
 /// This service ensures that multiple calls with the same source and context
 /// return the same statistic IDs without creating duplicates.
 pub struct IntegrationService {
+    beurer_day_store: Option<Arc<dyn lifestats_core::beurer::BeurerDayStore>>,
     ebook_reading_store: Option<Arc<dyn EbookReadingStore>>,
     yomikata_day_store: Option<Arc<dyn lifestats_core::yomikata::YomikataDayStore>>,
     repository: Arc<dyn StatisticRepository + Send + Sync>,
@@ -84,11 +91,20 @@ impl IntegrationService {
             .collect();
 
         Self {
+            beurer_day_store: None,
             ebook_reading_store: None,
             yomikata_day_store: None,
             repository,
             factories: factories_map,
         }
+    }
+
+    pub fn with_beurer_day_store(
+        mut self,
+        store: Arc<dyn lifestats_core::beurer::BeurerDayStore>,
+    ) -> Self {
+        self.beurer_day_store = Some(store);
+        self
     }
 
     pub fn with_ebook_reading_store(mut self, store: Arc<dyn EbookReadingStore>) -> Self {
@@ -203,6 +219,28 @@ fn day_time_frames(date: NaiveDate, workouts: &[LiftLogWorkout]) -> TimeFrameLis
 }
 
 impl IntegrationServiceTrait for IntegrationService {
+    fn replace_beurer_day(
+        &self,
+        day: NaiveDate,
+        reading: lifestats_core::beurer::BeurerDayReading,
+    ) -> Result<lifestats_core::beurer::BeurerDayReplacement, lifestats_core::beurer::BeurerDayError>
+    {
+        let store = self.beurer_day_store.as_ref().ok_or_else(|| {
+            lifestats_core::beurer::BeurerDayError::Storage(
+                lifestats_core::shared::ports::error::RepositoryError::OperationFailed(
+                    anyhow::anyhow!("Beurer day store is not configured"),
+                ),
+            )
+        })?;
+        store.replace_day(
+            day,
+            reading,
+            super::beurer_bundle_factory::BeurerBundleFactory::definitions(
+                chrono::Local::now().date_naive(),
+            ),
+        )
+    }
+
     fn ebook_server_id(&self) -> Result<String, EbookError> {
         self.ebook_store()?.server_id()
     }

@@ -1,4 +1,5 @@
 pub mod anki_bundle_factory;
+pub mod beurer_bundle_factory;
 pub mod bundle_factory;
 mod ebook_definitions;
 pub mod fitbit_bundle_factory;

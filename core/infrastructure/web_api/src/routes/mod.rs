@@ -1,3 +1,4 @@
+pub mod beurer;
 pub mod daily_summary;
 pub mod dashboard;
 pub mod ebook;
@@ -32,6 +33,7 @@ where
 {
     Router::new()
         .route("/openapi.json", get(openapi::openapi))
+        .route("/integrations/beurer/days/{day}", put(beurer::replace_day))
         .route(
             "/integrations/yomikata/days/{day}",
             put(yomikata::replace_day),

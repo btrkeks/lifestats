@@ -83,6 +83,7 @@ pub fn build_services() -> Result<Application> {
             factories,
         )
         .with_yomikata_day_store(statistic_repo.clone())
+        .with_beurer_day_store(statistic_repo.clone())
         .with_ebook_reading_store(statistic_repo.clone()),
     );
 
